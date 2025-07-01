@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Package, Edit, Trash2, AlertTriangle, ShoppingBag, TrendingUp, Calendar, FileText, Truck, CheckCircle, Clock, XCircle } from 'lucide-react';
-import { supabase, db } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 const Products: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'products' | 'purchases' | 'suppliers'>('products');
@@ -24,7 +24,7 @@ const Products: React.FC = () => {
     price: 0,
     cost: 0,
     stock: 0,
-    minStock: 0,
+    min_stock: 0,
     barcode: '',
     description: '',
     supplier_id: ''
@@ -295,7 +295,7 @@ const Products: React.FC = () => {
         price: 0,
         cost: 0,
         stock: 0,
-        minStock: 0,
+        min_stock: 0,
         barcode: '',
         description: '',
         supplier_id: ''
@@ -997,8 +997,8 @@ const Products: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Min. Stok</label>
                     <input
                       type="number"
-                      value={newProduct.minStock}
-                      onChange={(e) => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
+                      value={newProduct.min_stock}
+                      onChange={(e) => setNewProduct({...newProduct, min_stock: Number(e.target.value)})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0"
                     />
@@ -1285,7 +1285,7 @@ const Products: React.FC = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700  mb-1">Alamat</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
                   <textarea
                     value={newSupplier.address}
                     onChange={(e) => setNewSupplier({...newSupplier, address: e.target.value})}
