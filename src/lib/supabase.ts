@@ -150,7 +150,7 @@ export const db = {
     async create(product: any) {
       const user = await getCurrentUserSafe();
       if (!user) {
-        throw new Error('No authenticated user found. Please log in to continue.');
+        throw new Error('Authentication error');
       }
       return db.insert('products', {
         ...product,

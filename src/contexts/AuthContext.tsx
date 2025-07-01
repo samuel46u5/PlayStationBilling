@@ -42,12 +42,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkSession = async () => {
       try {
         const currentUser = await auth.getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-        }
+        setUser(currentUser);
       } catch (err: any) {
-        console.error('Session check error:', err);
-        setError(err.message || 'Failed to check authentication session');
+        // If the error is "Auth session missing!", this is normal for unauthenticated users
+        if (err.message === "Auth session missing!") {
+          console.log("No active session found, user is not logged in");
+        } else {
+          console.error('Session check error:', err);
+          setError(err.message || 'Failed to check authentication session');
+        }
       } finally {
         setIsLoading(false);
       }
