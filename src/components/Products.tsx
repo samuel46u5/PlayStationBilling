@@ -11,12 +11,12 @@ const Products: React.FC = () => {
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // State for data
+  // Data states
   const [products, setProducts] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -26,7 +26,8 @@ const Products: React.FC = () => {
     stock: 0,
     minStock: 0,
     barcode: '',
-    description: ''
+    description: '',
+    supplierId: ''
   });
 
   const [newPurchase, setNewPurchase] = useState({
@@ -76,7 +77,7 @@ const Products: React.FC = () => {
     try {
       setLoading(true);
       
-      // Load products
+      // Load products with suppliers
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select(`
@@ -87,7 +88,6 @@ const Products: React.FC = () => {
 
       if (productsError) {
         console.error('Error loading products:', productsError);
-        // Use empty array if error
         setProducts([]);
       } else {
         setProducts(productsData || []);
@@ -107,27 +107,24 @@ const Products: React.FC = () => {
       }
 
       // Load purchase orders
-      const { data: purchaseData, error: purchaseError } = await supabase
+      const { data: purchaseOrdersData, error: purchaseOrdersError } = await supabase
         .from('purchase_orders')
         .select(`
           *,
           suppliers(name),
           purchase_order_items(*)
-        `);
+        `)
+        .order('created_at', { ascending: false });
 
-      if (purchaseError) {
-        console.error('Error loading purchase orders:', purchaseError);
+      if (purchaseOrdersError) {
+        console.error('Error loading purchase orders:', purchaseOrdersError);
         setPurchaseOrders([]);
       } else {
-        setPurchaseOrders(purchaseData || []);
+        setPurchaseOrders(purchaseOrdersData || []);
       }
 
     } catch (error) {
       console.error('Error loading data:', error);
-      // Set empty arrays on error
-      setProducts([]);
-      setSuppliers([]);
-      setPurchaseOrders([]);
     } finally {
       setLoading(false);
     }
@@ -255,26 +252,29 @@ const Products: React.FC = () => {
     }
     
     try {
+      setLoading(true);
+      
+      const productData = {
+        name: newProduct.name,
+        category: newProduct.category,
+        price: newProduct.price,
+        cost: newProduct.cost,
+        stock: newProduct.stock,
+        min_stock: newProduct.minStock,
+        barcode: newProduct.barcode || null,
+        description: newProduct.description || null,
+        supplier_id: newProduct.supplierId || null,
+        is_active: true
+      };
+
       const { data, error } = await supabase
         .from('products')
-        .insert([{
-          name: newProduct.name,
-          category: newProduct.category,
-          price: newProduct.price,
-          cost: newProduct.cost,
-          stock: newProduct.stock,
-          min_stock: newProduct.minStock,
-          barcode: newProduct.barcode || null,
-          description: newProduct.description || null,
-          is_active: true
-        }])
+        .insert(productData)
         .select()
         .single();
 
       if (error) {
-        console.error('Error adding product:', error);
-        alert('Gagal menambahkan produk: ' + error.message);
-        return;
+        throw error;
       }
 
       alert('Produk berhasil ditambahkan!');
@@ -287,14 +287,18 @@ const Products: React.FC = () => {
         stock: 0,
         minStock: 0,
         barcode: '',
-        description: ''
+        description: '',
+        supplierId: ''
       });
       
-      // Reload products
-      loadData();
-    } catch (error) {
+      // Reload data
+      await loadData();
+      
+    } catch (error: any) {
       console.error('Error adding product:', error);
-      alert('Terjadi kesalahan saat menambahkan produk');
+      alert(`Gagal menambahkan produk: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -311,33 +315,35 @@ const Products: React.FC = () => {
     }
     
     try {
+      setLoading(true);
+
       // Generate PO number
       const { data: poNumber } = await supabase.rpc('generate_po_number');
       
       // Create purchase order
+      const purchaseOrderData = {
+        po_number: poNumber,
+        supplier_id: newPurchase.supplierId,
+        expected_date: newPurchase.expectedDate,
+        subtotal: purchaseSubtotal,
+        tax: purchaseTax,
+        total_amount: purchaseTotal,
+        notes: newPurchase.notes || null,
+        status: 'pending'
+      };
+
       const { data: purchaseOrder, error: poError } = await supabase
         .from('purchase_orders')
-        .insert([{
-          po_number: poNumber,
-          supplier_id: newPurchase.supplierId,
-          expected_date: newPurchase.expectedDate,
-          subtotal: purchaseSubtotal,
-          tax: purchaseTax,
-          total_amount: purchaseTotal,
-          notes: newPurchase.notes || null,
-          status: 'pending'
-        }])
+        .insert(purchaseOrderData)
         .select()
         .single();
 
       if (poError) {
-        console.error('Error creating purchase order:', poError);
-        alert('Gagal membuat purchase order: ' + poError.message);
-        return;
+        throw poError;
       }
 
       // Create purchase order items
-      const itemsToInsert = newPurchase.items.map(item => ({
+      const itemsData = newPurchase.items.map(item => ({
         po_id: purchaseOrder.id,
         product_id: item.productId,
         product_name: item.productName,
@@ -348,12 +354,10 @@ const Products: React.FC = () => {
 
       const { error: itemsError } = await supabase
         .from('purchase_order_items')
-        .insert(itemsToInsert);
+        .insert(itemsData);
 
       if (itemsError) {
-        console.error('Error creating purchase order items:', itemsError);
-        alert('Gagal membuat item purchase order: ' + itemsError.message);
-        return;
+        throw itemsError;
       }
 
       alert(`Purchase Order ${poNumber} berhasil dibuat!\nSubtotal: Rp ${purchaseSubtotal.toLocaleString('id-ID')}\nPajak: Rp ${purchaseTax.toLocaleString('id-ID')}\nTotal: Rp ${purchaseTotal.toLocaleString('id-ID')}`);
@@ -366,10 +370,13 @@ const Products: React.FC = () => {
       });
       
       // Reload data
-      loadData();
-    } catch (error) {
+      await loadData();
+      
+    } catch (error: any) {
       console.error('Error creating purchase order:', error);
-      alert('Terjadi kesalahan saat membuat purchase order');
+      alert(`Gagal membuat purchase order: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -380,24 +387,26 @@ const Products: React.FC = () => {
     }
     
     try {
+      setLoading(true);
+      
+      const supplierData = {
+        name: newSupplier.name,
+        contact_person: newSupplier.contact,
+        phone: newSupplier.phone,
+        email: newSupplier.email || null,
+        address: newSupplier.address || null,
+        category: newSupplier.category,
+        is_active: true
+      };
+
       const { data, error } = await supabase
         .from('suppliers')
-        .insert([{
-          name: newSupplier.name,
-          contact_person: newSupplier.contact,
-          phone: newSupplier.phone,
-          email: newSupplier.email || null,
-          address: newSupplier.address || null,
-          category: newSupplier.category,
-          is_active: true
-        }])
+        .insert(supplierData)
         .select()
         .single();
 
       if (error) {
-        console.error('Error adding supplier:', error);
-        alert('Gagal menambahkan supplier: ' + error.message);
-        return;
+        throw error;
       }
 
       alert('Supplier berhasil ditambahkan!');
@@ -411,24 +420,16 @@ const Products: React.FC = () => {
         category: 'beverage'
       });
       
-      // Reload suppliers
-      loadData();
-    } catch (error) {
+      // Reload data
+      await loadData();
+      
+    } catch (error: any) {
       console.error('Error adding supplier:', error);
-      alert('Terjadi kesalahan saat menambahkan supplier');
+      alert(`Gagal menambahkan supplier: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Memuat data...</p>
-        </div>
-      </div>
-    );
-  }
 
   const renderProductsTab = () => (
     <div className="space-y-6">
@@ -440,7 +441,8 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddForm(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          disabled={loading}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="h-5 w-5" />
           Tambah Produk
@@ -483,6 +485,14 @@ const Products: React.FC = () => {
             {lowStockProducts.length} produk memiliki stok di bawah minimum: {' '}
             {lowStockProducts.map(p => p.name).join(', ')}
           </p>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-gray-600">Loading products...</span>
         </div>
       )}
 
@@ -567,6 +577,14 @@ const Products: React.FC = () => {
                     <p className="font-mono text-sm text-gray-700">{product.barcode}</p>
                   </div>
                 )}
+
+                {/* Supplier */}
+                {product.suppliers && (
+                  <div className="pt-2">
+                    <p className="text-xs text-gray-500">Supplier</p>
+                    <p className="text-sm text-gray-700">{product.suppliers.name}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -585,7 +603,8 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowPurchaseForm(true)}
-          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          disabled={loading}
+          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <ShoppingBag className="h-5 w-5" />
           Buat Purchase Order
@@ -603,6 +622,14 @@ const Products: React.FC = () => {
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+          <span className="ml-2 text-gray-600">Loading purchase orders...</span>
+        </div>
+      )}
 
       {/* Purchase Orders List */}
       <div className="space-y-4">
@@ -721,6 +748,8 @@ const Products: React.FC = () => {
                       <div className="text-sm space-y-1">
                         <div><strong>PO Number:</strong> {purchase.po_number}</div>
                         <div><strong>Status:</strong> {purchase.status}</div>
+                        <div><strong>Subtotal:</strong> Rp {purchase.subtotal.toLocaleString('id-ID')}</div>
+                        <div><strong>Pajak:</strong> Rp {purchase.tax.toLocaleString('id-ID')}</div>
                         <div><strong>Total:</strong> Rp {purchase.total_amount.toLocaleString('id-ID')}</div>
                       </div>
                     </div>
@@ -751,7 +780,8 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowSupplierForm(true)}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          disabled={loading}
+          className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="h-5 w-5" />
           Tambah Supplier
@@ -769,6 +799,14 @@ const Products: React.FC = () => {
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <span className="ml-2 text-gray-600">Loading suppliers...</span>
+        </div>
+      )}
 
       {/* Suppliers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -802,10 +840,12 @@ const Products: React.FC = () => {
                   <p className="font-medium">{supplier.phone}</p>
                 </div>
                 
-                <div className="text-sm">
-                  <p className="text-gray-600">Email</p>
-                  <p className="font-medium">{supplier.email}</p>
-                </div>
+                {supplier.email && (
+                  <div className="text-sm">
+                    <p className="text-gray-600">Email</p>
+                    <p className="font-medium">{supplier.email}</p>
+                  </div>
+                )}
                 
                 {supplier.address && (
                   <div className="text-sm">
@@ -961,6 +1001,20 @@ const Products: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier (Opsional)</label>
+                  <select 
+                    value={newProduct.supplierId}
+                    onChange={(e) => setNewProduct({...newProduct, supplierId: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Pilih Supplier</option>
+                    {suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                    ))}
+                  </select>
+                </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Barcode (Opsional)</label>
@@ -994,9 +1048,10 @@ const Products: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleAddProduct}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  disabled={loading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  Simpan Produk
+                  {loading ? 'Menyimpan...' : 'Simpan Produk'}
                 </button>
               </div>
             </div>
@@ -1161,9 +1216,10 @@ const Products: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleCreatePurchase}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  disabled={loading}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  Buat Purchase Order
+                  {loading ? 'Membuat...' : 'Buat Purchase Order'}
                 </button>
               </div>
             </div>
@@ -1260,9 +1316,10 @@ const Products: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleAddSupplier}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  disabled={loading}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  Tambah Supplier
+                  {loading ? 'Menyimpan...' : 'Tambah Supplier'}
                 </button>
               </div>
             </div>
@@ -1285,7 +1342,7 @@ const Products: React.FC = () => {
             <ShoppingBag className="h-6 w-6 text-green-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {purchaseOrders?.length || 0}
+            {purchaseOrders.length}
           </h3>
           <p className="text-gray-600 text-sm">Purchase Order</p>
         </div>
@@ -1295,7 +1352,7 @@ const Products: React.FC = () => {
             <Truck className="h-6 w-6 text-purple-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {suppliers?.length || 0}
+            {suppliers.length}
           </h3>
           <p className="text-gray-600 text-sm">Supplier</p>
         </div>
