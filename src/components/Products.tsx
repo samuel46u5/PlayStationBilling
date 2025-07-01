@@ -27,7 +27,7 @@ const Products: React.FC = () => {
     minStock: 0,
     barcode: '',
     description: '',
-    supplierId: ''
+    supplier_id: ''
   });
 
   const [newPurchase, setNewPurchase] = useState({
@@ -45,7 +45,7 @@ const Products: React.FC = () => {
 
   const [newSupplier, setNewSupplier] = useState({
     name: '',
-    contact: '',
+    contact_person: '',
     phone: '',
     email: '',
     address: '',
@@ -68,46 +68,71 @@ const Products: React.FC = () => {
     setPurchaseTotal(total);
   }, [newPurchase.items]);
 
-  // Load data on component mount
+  // Load data on component mount and tab change
   useEffect(() => {
     loadData();
-  }, []);
+  }, [activeTab]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // Load products with suppliers
-      const { data: productsData, error: productsError } = await supabase
+      if (activeTab === 'products' || activeTab === 'purchases') {
+        await Promise.all([
+          loadProducts(),
+          loadSuppliers()
+        ]);
+      }
+      if (activeTab === 'purchases') {
+        await loadPurchaseOrders();
+      }
+      if (activeTab === 'suppliers') {
+        await loadSuppliers();
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadProducts = async () => {
+    try {
+      const { data, error } = await supabase
         .from('products')
         .select(`
           *,
           suppliers(name)
         `)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
 
-      if (productsError) {
-        console.error('Error loading products:', productsError);
-        setProducts([]);
-      } else {
-        setProducts(productsData || []);
-      }
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error loading products:', error);
+      setProducts([]);
+    }
+  };
 
-      // Load suppliers
-      const { data: suppliersData, error: suppliersError } = await supabase
+  const loadSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
         .from('suppliers')
         .select('*')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
 
-      if (suppliersError) {
-        console.error('Error loading suppliers:', suppliersError);
-        setSuppliers([]);
-      } else {
-        setSuppliers(suppliersData || []);
-      }
+      if (error) throw error;
+      setSuppliers(data || []);
+    } catch (error) {
+      console.error('Error loading suppliers:', error);
+      setSuppliers([]);
+    }
+  };
 
-      // Load purchase orders
-      const { data: purchaseOrdersData, error: purchaseOrdersError } = await supabase
+  const loadPurchaseOrders = async () => {
+    try {
+      const { data, error } = await supabase
         .from('purchase_orders')
         .select(`
           *,
@@ -116,17 +141,11 @@ const Products: React.FC = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (purchaseOrdersError) {
-        console.error('Error loading purchase orders:', purchaseOrdersError);
-        setPurchaseOrders([]);
-      } else {
-        setPurchaseOrders(purchaseOrdersData || []);
-      }
-
+      if (error) throw error;
+      setPurchaseOrders(data || []);
     } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading purchase orders:', error);
+      setPurchaseOrders([]);
     }
   };
 
@@ -251,31 +270,22 @@ const Products: React.FC = () => {
       return;
     }
     
+    setLoading(true);
     try {
-      setLoading(true);
+      const { data: user } = await supabase.auth.getUser();
       
       const productData = {
-        name: newProduct.name,
-        category: newProduct.category,
-        price: newProduct.price,
-        cost: newProduct.cost,
-        stock: newProduct.stock,
-        min_stock: newProduct.minStock,
-        barcode: newProduct.barcode || null,
-        description: newProduct.description || null,
-        supplier_id: newProduct.supplierId || null,
-        is_active: true
+        ...newProduct,
+        created_by: user.user?.id
       };
 
       const { data, error } = await supabase
         .from('products')
-        .insert(productData)
+        .insert([productData])
         .select()
         .single();
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       alert('Produk berhasil ditambahkan!');
       setShowAddForm(false);
@@ -288,12 +298,11 @@ const Products: React.FC = () => {
         minStock: 0,
         barcode: '',
         description: '',
-        supplierId: ''
+        supplier_id: ''
       });
       
-      // Reload data
-      await loadData();
-      
+      // Reload products
+      await loadProducts();
     } catch (error: any) {
       console.error('Error adding product:', error);
       alert(`Gagal menambahkan produk: ${error.message}`);
@@ -314,37 +323,36 @@ const Products: React.FC = () => {
       return;
     }
     
+    setLoading(true);
     try {
-      setLoading(true);
-
+      const { data: user } = await supabase.auth.getUser();
+      
       // Generate PO number
       const { data: poNumber } = await supabase.rpc('generate_po_number');
       
       // Create purchase order
-      const purchaseOrderData = {
+      const purchaseData = {
         po_number: poNumber,
         supplier_id: newPurchase.supplierId,
         expected_date: newPurchase.expectedDate,
         subtotal: purchaseSubtotal,
         tax: purchaseTax,
         total_amount: purchaseTotal,
-        notes: newPurchase.notes || null,
-        status: 'pending'
+        notes: newPurchase.notes,
+        created_by: user.user?.id
       };
 
-      const { data: purchaseOrder, error: poError } = await supabase
+      const { data: purchase, error: purchaseError } = await supabase
         .from('purchase_orders')
-        .insert(purchaseOrderData)
+        .insert([purchaseData])
         .select()
         .single();
 
-      if (poError) {
-        throw poError;
-      }
+      if (purchaseError) throw purchaseError;
 
       // Create purchase order items
       const itemsData = newPurchase.items.map(item => ({
-        po_id: purchaseOrder.id,
+        po_id: purchase.id,
         product_id: item.productId,
         product_name: item.productName,
         quantity: item.quantity,
@@ -356,9 +364,7 @@ const Products: React.FC = () => {
         .from('purchase_order_items')
         .insert(itemsData);
 
-      if (itemsError) {
-        throw itemsError;
-      }
+      if (itemsError) throw itemsError;
 
       alert(`Purchase Order ${poNumber} berhasil dibuat!\nSubtotal: Rp ${purchaseSubtotal.toLocaleString('id-ID')}\nPajak: Rp ${purchaseTax.toLocaleString('id-ID')}\nTotal: Rp ${purchaseTotal.toLocaleString('id-ID')}`);
       setShowPurchaseForm(false);
@@ -369,9 +375,8 @@ const Products: React.FC = () => {
         expectedDate: new Date().toISOString().split('T')[0]
       });
       
-      // Reload data
-      await loadData();
-      
+      // Reload purchase orders
+      await loadPurchaseOrders();
     } catch (error: any) {
       console.error('Error creating purchase order:', error);
       alert(`Gagal membuat purchase order: ${error.message}`);
@@ -381,48 +386,34 @@ const Products: React.FC = () => {
   };
 
   const handleAddSupplier = async () => {
-    if (!newSupplier.name || !newSupplier.contact) {
+    if (!newSupplier.name || !newSupplier.contact_person) {
       alert('Nama supplier dan kontak wajib diisi');
       return;
     }
     
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      const supplierData = {
-        name: newSupplier.name,
-        contact_person: newSupplier.contact,
-        phone: newSupplier.phone,
-        email: newSupplier.email || null,
-        address: newSupplier.address || null,
-        category: newSupplier.category,
-        is_active: true
-      };
-
       const { data, error } = await supabase
         .from('suppliers')
-        .insert(supplierData)
+        .insert([newSupplier])
         .select()
         .single();
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       alert('Supplier berhasil ditambahkan!');
       setShowSupplierForm(false);
       setNewSupplier({
         name: '',
-        contact: '',
+        contact_person: '',
         phone: '',
         email: '',
         address: '',
         category: 'beverage'
       });
       
-      // Reload data
-      await loadData();
-      
+      // Reload suppliers
+      await loadSuppliers();
     } catch (error: any) {
       console.error('Error adding supplier:', error);
       alert(`Gagal menambahkan supplier: ${error.message}`);
@@ -445,7 +436,7 @@ const Products: React.FC = () => {
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="h-5 w-5" />
-          Tambah Produk
+          {loading ? 'Loading...' : 'Tambah Produk'}
         </button>
       </div>
 
@@ -492,7 +483,7 @@ const Products: React.FC = () => {
       {loading && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2 text-gray-600">Loading products...</span>
+          <span className="ml-2 text-gray-600">Memuat data...</span>
         </div>
       )}
 
@@ -570,19 +561,19 @@ const Products: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Supplier */}
+                {product.suppliers && (
+                  <div className="pt-2">
+                    <p className="text-xs text-gray-500">Supplier</p>
+                    <p className="font-medium text-sm text-gray-700">{product.suppliers.name}</p>
+                  </div>
+                )}
+
                 {/* Barcode */}
                 {product.barcode && (
                   <div className="pt-2">
                     <p className="text-xs text-gray-500">Barcode</p>
                     <p className="font-mono text-sm text-gray-700">{product.barcode}</p>
-                  </div>
-                )}
-
-                {/* Supplier */}
-                {product.suppliers && (
-                  <div className="pt-2">
-                    <p className="text-xs text-gray-500">Supplier</p>
-                    <p className="text-sm text-gray-700">{product.suppliers.name}</p>
                   </div>
                 )}
               </div>
@@ -607,7 +598,7 @@ const Products: React.FC = () => {
           className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <ShoppingBag className="h-5 w-5" />
-          Buat Purchase Order
+          {loading ? 'Loading...' : 'Buat Purchase Order'}
         </button>
       </div>
 
@@ -627,7 +618,7 @@ const Products: React.FC = () => {
       {loading && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-          <span className="ml-2 text-gray-600">Loading purchase orders...</span>
+          <span className="ml-2 text-gray-600">Memuat data...</span>
         </div>
       )}
 
@@ -784,7 +775,7 @@ const Products: React.FC = () => {
           className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="h-5 w-5" />
-          Tambah Supplier
+          {loading ? 'Loading...' : 'Tambah Supplier'}
         </button>
       </div>
 
@@ -804,7 +795,7 @@ const Products: React.FC = () => {
       {loading && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-          <span className="ml-2 text-gray-600">Loading suppliers...</span>
+          <span className="ml-2 text-gray-600">Memuat data...</span>
         </div>
       )}
 
@@ -840,12 +831,10 @@ const Products: React.FC = () => {
                   <p className="font-medium">{supplier.phone}</p>
                 </div>
                 
-                {supplier.email && (
-                  <div className="text-sm">
-                    <p className="text-gray-600">Email</p>
-                    <p className="font-medium">{supplier.email}</p>
-                  </div>
-                )}
+                <div className="text-sm">
+                  <p className="text-gray-600">Email</p>
+                  <p className="font-medium">{supplier.email}</p>
+                </div>
                 
                 {supplier.address && (
                   <div className="text-sm">
@@ -956,6 +945,20 @@ const Products: React.FC = () => {
                   </select>
                 </div>
                 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                  <select 
+                    value={newProduct.supplier_id}
+                    onChange={(e) => setNewProduct({...newProduct, supplier_id: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Pilih Supplier</option>
+                    {suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Harga Modal *</label>
@@ -1000,20 +1003,6 @@ const Products: React.FC = () => {
                       placeholder="0"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier (Opsional)</label>
-                  <select 
-                    value={newProduct.supplierId}
-                    onChange={(e) => setNewProduct({...newProduct, supplierId: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Pilih Supplier</option>
-                    {suppliers.map(supplier => (
-                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                    ))}
-                  </select>
                 </div>
                 
                 <div>
@@ -1250,8 +1239,8 @@ const Products: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kontak Person *</label>
                   <input
                     type="text"
-                    value={newSupplier.contact}
-                    onChange={(e) => setNewSupplier({...newSupplier, contact: e.target.value})}
+                    value={newSupplier.contact_person}
+                    onChange={(e) => setNewSupplier({...newSupplier, contact_person: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Nama kontak person"
                   />
@@ -1296,7 +1285,7 @@ const Products: React.FC = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
+                  <label className="block text-sm font-medium text-gray-700  mb-1">Alamat</label>
                   <textarea
                     value={newSupplier.address}
                     onChange={(e) => setNewSupplier({...newSupplier, address: e.target.value})}
