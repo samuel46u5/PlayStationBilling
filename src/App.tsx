@@ -1,7 +1,5 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
-import LoginPage from './pages/LoginPage';
 import Dashboard from './components/Dashboard';
 import Navigation from './components/Navigation';
 import Cashier from './components/Cashier';
@@ -20,37 +18,17 @@ import UserManagement from './components/UserManagement';
 import VoucherManagement from './components/VoucherManagement';
 import Settings from './components/Settings';
 import MaintenanceManagement from './components/MaintenanceManagement';
-import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
       <Route path="/*" element={<AppLayout />} />
     </Routes>
   );
 };
 
 const AppLayout: React.FC = () => {
-  const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = React.useState('dashboard');
-
-  // Show loading spinner while authentication status is being determined
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirect to login if user is not authenticated
-  if (!user) {
-    return <LoginPage />;
-  }
 
   const renderContent = () => {
     switch (activeTab) {
