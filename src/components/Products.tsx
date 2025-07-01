@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Package, Edit, Trash2, AlertTriangle, ShoppingBag, TrendingUp, Calendar, FileText, Truck, CheckCircle, Clock, XCircle, Eye, X, Phone, Mail, MapPin, User, Building, Loader } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Plus, Search, Package, Edit, Trash2, AlertTriangle, ShoppingBag, TrendingUp, Calendar, FileText, Truck, CheckCircle, Clock, XCircle, Grid, List, Eye, X } from 'lucide-react';
+import { mockProducts, mockPurchaseOrders, mockSuppliers } from '../data/mockData';
 import Swal from 'sweetalert2';
 
 const Products: React.FC = () => {
@@ -11,15 +11,13 @@ const Products: React.FC = () => {
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
-  const [showSupplierDetails, setShowSupplierDetails] = useState<string | null>(null);
+  const [showEditSupplierForm, setShowEditSupplierForm] = useState<string | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Data states
-  const [products, setProducts] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+  // View mode states
+  const [productsViewMode, setProductsViewMode] = useState<'grid' | 'list'>('grid');
+  const [suppliersViewMode, setSuppliersViewMode] = useState<'grid' | 'list'>('grid');
 
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -27,7 +25,19 @@ const Products: React.FC = () => {
     price: 0,
     cost: 0,
     stock: 0,
-    min_stock: 0,
+    minStock: 0,
+    barcode: '',
+    description: ''
+  });
+
+  const [editProduct, setEditProduct] = useState({
+    id: '',
+    name: '',
+    category: 'beverage' as 'beverage' | 'food' | 'snack' | 'other',
+    price: 0,
+    cost: 0,
+    stock: 0,
+    minStock: 0,
     barcode: '',
     description: ''
   });
@@ -47,7 +57,7 @@ const Products: React.FC = () => {
 
   const [newSupplier, setNewSupplier] = useState({
     name: '',
-    contact_person: '',
+    contact: '',
     phone: '',
     email: '',
     address: '',
@@ -57,7 +67,7 @@ const Products: React.FC = () => {
   const [editSupplier, setEditSupplier] = useState({
     id: '',
     name: '',
-    contact_person: '',
+    contact: '',
     phone: '',
     email: '',
     address: '',
@@ -80,91 +90,6 @@ const Products: React.FC = () => {
     setPurchaseTotal(total);
   }, [newPurchase.items]);
 
-  // Load data
-  useEffect(() => {
-    loadSuppliers();
-    loadProducts();
-    loadPurchaseOrders();
-  }, []);
-
-  const loadSuppliers = async () => {
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      
-      if (error) throw error;
-      setSuppliers(data || []);
-    } catch (error) {
-      console.error('Error loading suppliers:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Gagal memuat data supplier',
-        icon: 'error',
-        confirmButtonText: 'OK'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadProducts = async () => {
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          suppliers(name)
-        `)
-        .eq('is_active', true)
-        .order('name');
-      
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (error) {
-      console.error('Error loading products:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Gagal memuat data produk',
-        icon: 'error',
-        confirmButtonText: 'OK'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadPurchaseOrders = async () => {
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('purchase_orders')
-        .select(`
-          *,
-          suppliers(name),
-          purchase_order_items(*)
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setPurchaseOrders(data || []);
-    } catch (error) {
-      console.error('Error loading purchase orders:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Gagal memuat data purchase order',
-        icon: 'error',
-        confirmButtonText: 'OK'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const categories = [
     { value: 'all', label: 'Semua Kategori' },
     { value: 'beverage', label: 'Minuman' },
@@ -173,23 +98,22 @@ const Products: React.FC = () => {
     { value: 'other', label: 'Lainnya' }
   ];
 
-  const filteredProducts = products.filter(product => {
+  const filteredProducts = mockProducts.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.barcode?.includes(searchTerm);
     const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const filteredPurchases = purchaseOrders.filter(purchase => {
-    const supplier = suppliers.find(s => s.id === purchase.supplier_id);
+  const filteredPurchases = mockPurchaseOrders.filter(purchase => {
+    const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
     return supplier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           purchase.po_number.toLowerCase().includes(searchTerm.toLowerCase());
+           purchase.poNumber.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  const filteredSuppliers = suppliers.filter(supplier =>
+  const filteredSuppliers = mockSuppliers.filter(supplier =>
     supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supplier.contact_person.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supplier.phone.includes(searchTerm)
+    supplier.contact.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getCategoryColor = (category: string) => {
@@ -221,7 +145,7 @@ const Products: React.FC = () => {
     }
   };
 
-  const lowStockProducts = products.filter(p => p.stock <= p.min_stock);
+  const lowStockProducts = mockProducts.filter(p => p.stock <= p.minStock);
 
   const addItemToPurchase = () => {
     const newItem = {
@@ -248,7 +172,7 @@ const Products: React.FC = () => {
       
       // Handle product selection
       if (field === 'productId') {
-        const product = products.find(p => p.id === value);
+        const product = mockProducts.find(p => p.id === value);
         if (product) {
           item.productName = product.name;
           item.unitCost = product.cost;
@@ -283,28 +207,26 @@ const Products: React.FC = () => {
 
   const handleAddProduct = async () => {
     if (!newProduct.name || newProduct.price <= 0) {
-      Swal.fire({
-        title: 'Validasi Gagal',
+      await Swal.fire({
+        icon: 'error',
+        title: 'Data Tidak Lengkap',
         text: 'Nama produk dan harga wajib diisi',
-        icon: 'warning',
-        confirmButtonText: 'OK'
+        confirmButtonColor: '#3B82F6'
       });
       return;
     }
     
     setIsLoading(true);
+    
     try {
-      const { error } = await supabase
-        .from('products')
-        .insert([newProduct]);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (error) throw error;
-      
-      Swal.fire({
+      await Swal.fire({
+        icon: 'success',
         title: 'Berhasil!',
         text: 'Produk berhasil ditambahkan',
-        icon: 'success',
-        confirmButtonText: 'OK'
+        confirmButtonColor: '#10B981'
       });
       
       setShowAddForm(false);
@@ -314,92 +236,147 @@ const Products: React.FC = () => {
         price: 0,
         cost: 0,
         stock: 0,
-        min_stock: 0,
+        minStock: 0,
         barcode: '',
         description: ''
       });
-      loadProducts();
-    } catch (error: any) {
-      console.error('Error adding product:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Gagal menambahkan produk: ' + error.message,
+    } catch (error) {
+      await Swal.fire({
         icon: 'error',
-        confirmButtonText: 'OK'
+        title: 'Gagal!',
+        text: 'Terjadi kesalahan saat menambahkan produk',
+        confirmButtonColor: '#EF4444'
       });
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleEditProduct = async (productId: string) => {
+    if (!editProduct.name || editProduct.price <= 0) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Data Tidak Lengkap',
+        text: 'Nama produk dan harga wajib diisi',
+        confirmButtonColor: '#3B82F6'
+      });
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Berhasil!',
+        text: 'Produk berhasil diperbarui',
+        confirmButtonColor: '#10B981'
+      });
+      
+      setShowEditForm(null);
+      setEditProduct({
+        id: '',
+        name: '',
+        category: 'beverage',
+        price: 0,
+        cost: 0,
+        stock: 0,
+        minStock: 0,
+        barcode: '',
+        description: ''
+      });
+    } catch (error) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Gagal!',
+        text: 'Terjadi kesalahan saat memperbarui produk',
+        confirmButtonColor: '#EF4444'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (productId: string, productName: string) => {
+    const result = await Swal.fire({
+      title: 'Hapus Produk?',
+      text: `Apakah Anda yakin ingin menghapus produk "${productName}"?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#EF4444',
+      cancelButtonColor: '#6B7280',
+      confirmButtonText: 'Ya, Hapus!',
+      cancelButtonText: 'Batal'
+    });
+
+    if (result.isConfirmed) {
+      setIsLoading(true);
+      
+      try {
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        await Swal.fire({
+          icon: 'success',
+          title: 'Terhapus!',
+          text: 'Produk berhasil dihapus',
+          confirmButtonColor: '#10B981'
+        });
+      } catch (error) {
+        await Swal.fire({
+          icon: 'error',
+          title: 'Gagal!',
+          text: 'Terjadi kesalahan saat menghapus produk',
+          confirmButtonColor: '#EF4444'
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
   const handleCreatePurchase = async () => {
     if (!newPurchase.supplierId || newPurchase.items.length === 0) {
-      Swal.fire({
-        title: 'Validasi Gagal',
+      await Swal.fire({
+        icon: 'error',
+        title: 'Data Tidak Lengkap',
         text: 'Supplier dan item pembelian wajib diisi',
-        icon: 'warning',
-        confirmButtonText: 'OK'
+        confirmButtonColor: '#3B82F6'
       });
       return;
     }
     
     const invalidItems = newPurchase.items.some(item => !item.productId || item.quantity <= 0);
     if (invalidItems) {
-      Swal.fire({
-        title: 'Validasi Gagal',
+      await Swal.fire({
+        icon: 'error',
+        title: 'Data Tidak Valid',
         text: 'Semua item harus memiliki produk dan quantity yang valid',
-        icon: 'warning',
-        confirmButtonText: 'OK'
+        confirmButtonColor: '#3B82F6'
       });
       return;
     }
     
     setIsLoading(true);
+    
     try {
-      // Generate PO number
-      const { data: poData } = await supabase.rpc('generate_po_number');
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Create purchase order
-      const { data: purchaseOrder, error: poError } = await supabase
-        .from('purchase_orders')
-        .insert([{
-          po_number: poData,
-          supplier_id: newPurchase.supplierId,
-          expected_date: newPurchase.expectedDate,
-          subtotal: purchaseSubtotal,
-          tax: purchaseTax,
-          total_amount: purchaseTotal,
-          notes: newPurchase.notes
-        }])
-        .select()
-        .single();
-      
-      if (poError) throw poError;
-      
-      // Create purchase order items
-      const items = newPurchase.items.map(item => ({
-        po_id: purchaseOrder.id,
-        product_id: item.productId,
-        product_name: item.productName,
-        quantity: item.quantity,
-        unit_cost: item.unitCost,
-        total: item.total
-      }));
-      
-      const { error: itemsError } = await supabase
-        .from('purchase_order_items')
-        .insert(items);
-      
-      if (itemsError) throw itemsError;
-      
-      Swal.fire({
-        title: 'Berhasil!',
-        html: `Purchase Order <strong>${poData}</strong> berhasil dibuat!<br><br>
-               <strong>Subtotal:</strong> Rp ${purchaseSubtotal.toLocaleString('id-ID')}<br>
-               <strong>Pajak:</strong> Rp ${purchaseTax.toLocaleString('id-ID')}<br>
-               <strong>Total:</strong> Rp ${purchaseTotal.toLocaleString('id-ID')}`,
+      await Swal.fire({
         icon: 'success',
-        confirmButtonText: 'OK'
+        title: 'Purchase Order Berhasil Dibuat!',
+        html: `
+          <div class="text-left">
+            <p><strong>Subtotal:</strong> Rp ${purchaseSubtotal.toLocaleString('id-ID')}</p>
+            <p><strong>Pajak:</strong> Rp ${purchaseTax.toLocaleString('id-ID')}</p>
+            <p><strong>Total:</strong> Rp ${purchaseTotal.toLocaleString('id-ID')}</p>
+          </div>
+        `,
+        confirmButtonColor: '#10B981'
       });
       
       setShowPurchaseForm(false);
@@ -409,14 +386,12 @@ const Products: React.FC = () => {
         notes: '',
         expectedDate: new Date().toISOString().split('T')[0]
       });
-      loadPurchaseOrders();
-    } catch (error: any) {
-      console.error('Error creating purchase order:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Gagal membuat purchase order: ' + error.message,
+    } catch (error) {
+      await Swal.fire({
         icon: 'error',
-        confirmButtonText: 'OK'
+        title: 'Gagal!',
+        text: 'Terjadi kesalahan saat membuat purchase order',
+        confirmButtonColor: '#EF4444'
       });
     } finally {
       setIsLoading(false);
@@ -424,168 +399,469 @@ const Products: React.FC = () => {
   };
 
   const handleAddSupplier = async () => {
-    if (!newSupplier.name || !newSupplier.contact_person || !newSupplier.phone) {
-      Swal.fire({
-        title: 'Validasi Gagal',
-        text: 'Nama supplier, kontak person, dan telepon wajib diisi',
-        icon: 'warning',
-        confirmButtonText: 'OK'
+    if (!newSupplier.name || !newSupplier.contact) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Data Tidak Lengkap',
+        text: 'Nama supplier dan kontak wajib diisi',
+        confirmButtonColor: '#3B82F6'
       });
       return;
     }
     
     setIsLoading(true);
+    
     try {
-      const { error } = await supabase
-        .from('suppliers')
-        .insert([newSupplier]);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (error) throw error;
-      
-      Swal.fire({
+      await Swal.fire({
+        icon: 'success',
         title: 'Berhasil!',
         text: 'Supplier berhasil ditambahkan',
-        icon: 'success',
-        confirmButtonText: 'OK'
+        confirmButtonColor: '#10B981'
       });
       
       setShowSupplierForm(false);
       setNewSupplier({
         name: '',
-        contact_person: '',
+        contact: '',
         phone: '',
         email: '',
         address: '',
         category: 'beverage'
       });
-      loadSuppliers();
-    } catch (error: any) {
-      console.error('Error adding supplier:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Gagal menambahkan supplier: ' + error.message,
+    } catch (error) {
+      await Swal.fire({
         icon: 'error',
-        confirmButtonText: 'OK'
+        title: 'Gagal!',
+        text: 'Terjadi kesalahan saat menambahkan supplier',
+        confirmButtonColor: '#EF4444'
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEditSupplier = async () => {
-    if (!editSupplier.name || !editSupplier.contact_person || !editSupplier.phone) {
-      Swal.fire({
-        title: 'Validasi Gagal',
-        text: 'Nama supplier, kontak person, dan telepon wajib diisi',
-        icon: 'warning',
-        confirmButtonText: 'OK'
+  const handleEditSupplier = async (supplierId: string) => {
+    if (!editSupplier.name || !editSupplier.contact) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Data Tidak Lengkap',
+        text: 'Nama supplier dan kontak wajib diisi',
+        confirmButtonColor: '#3B82F6'
       });
       return;
     }
     
     setIsLoading(true);
+    
     try {
-      const { error } = await supabase
-        .from('suppliers')
-        .update({
-          name: editSupplier.name,
-          contact_person: editSupplier.contact_person,
-          phone: editSupplier.phone,
-          email: editSupplier.email,
-          address: editSupplier.address,
-          category: editSupplier.category
-        })
-        .eq('id', editSupplier.id);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (error) throw error;
-      
-      Swal.fire({
+      await Swal.fire({
+        icon: 'success',
         title: 'Berhasil!',
         text: 'Supplier berhasil diperbarui',
-        icon: 'success',
-        confirmButtonText: 'OK'
+        confirmButtonColor: '#10B981'
       });
       
-      setShowEditForm(null);
+      setShowEditSupplierForm(null);
       setEditSupplier({
         id: '',
         name: '',
-        contact_person: '',
+        contact: '',
         phone: '',
         email: '',
         address: '',
         category: 'beverage'
       });
-      loadSuppliers();
-    } catch (error: any) {
-      console.error('Error updating supplier:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Gagal memperbarui supplier: ' + error.message,
+    } catch (error) {
+      await Swal.fire({
         icon: 'error',
-        confirmButtonText: 'OK'
+        title: 'Gagal!',
+        text: 'Terjadi kesalahan saat memperbarui supplier',
+        confirmButtonColor: '#EF4444'
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDeleteSupplier = async (supplierId: string) => {
-    Swal.fire({
-      title: 'Konfirmasi Hapus',
-      text: 'Apakah Anda yakin ingin menghapus supplier ini? Tindakan ini tidak dapat dibatalkan.',
+  const handleDeleteSupplier = async (supplierId: string, supplierName: string) => {
+    const result = await Swal.fire({
+      title: 'Hapus Supplier?',
+      text: `Apakah Anda yakin ingin menghapus supplier "${supplierName}"?`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#3085d6',
+      confirmButtonColor: '#EF4444',
+      cancelButtonColor: '#6B7280',
       confirmButtonText: 'Ya, Hapus!',
       cancelButtonText: 'Batal'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        setIsDeleting(true);
-        try {
-          const { error } = await supabase
-            .from('suppliers')
-            .update({ is_active: false })
-            .eq('id', supplierId);
-          
-          if (error) throw error;
-          
-          Swal.fire({
-            title: 'Berhasil!',
-            text: 'Supplier berhasil dihapus',
-            icon: 'success',
-            confirmButtonText: 'OK'
-          });
-          
-          loadSuppliers();
-        } catch (error: any) {
-          console.error('Error deleting supplier:', error);
-          Swal.fire({
-            title: 'Error!',
-            text: 'Gagal menghapus supplier: ' + error.message,
-            icon: 'error',
-            confirmButtonText: 'OK'
-          });
-        } finally {
-          setIsDeleting(false);
-        }
-      }
     });
+
+    if (result.isConfirmed) {
+      setIsLoading(true);
+      
+      try {
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        await Swal.fire({
+          icon: 'success',
+          title: 'Terhapus!',
+          text: 'Supplier berhasil dihapus',
+          confirmButtonColor: '#10B981'
+        });
+      } catch (error) {
+        await Swal.fire({
+          icon: 'error',
+          title: 'Gagal!',
+          text: 'Terjadi kesalahan saat menghapus supplier',
+          confirmButtonColor: '#EF4444'
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
-  const openEditSupplier = (supplier: any) => {
+  const openEditProductForm = (product: any) => {
+    setEditProduct({
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      price: product.price,
+      cost: product.cost,
+      stock: product.stock,
+      minStock: product.minStock,
+      barcode: product.barcode || '',
+      description: product.description || ''
+    });
+    setShowEditForm(product.id);
+  };
+
+  const openEditSupplierForm = (supplier: any) => {
     setEditSupplier({
       id: supplier.id,
       name: supplier.name,
-      contact_person: supplier.contact_person,
+      contact: supplier.contact,
       phone: supplier.phone,
       email: supplier.email || '',
       address: supplier.address || '',
       category: supplier.category
     });
-    setShowEditForm(supplier.id);
+    setShowEditSupplierForm(supplier.id);
   };
+
+  const renderProductsGrid = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      {filteredProducts.map((product) => (
+        <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+          {/* Product Header */}
+          <div className="p-4 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
+                {product.category}
+              </span>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => openEditProductForm(product)}
+                  className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                >
+                  <Edit className="h-4 w-4" />
+                </button>
+                <button 
+                  onClick={() => handleDeleteProduct(product.id, product.name)}
+                  className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
+            <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
+          </div>
+
+          {/* Product Details */}
+          <div className="p-4">
+            <div className="space-y-3">
+              {/* Price & Cost */}
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-gray-500">Harga Jual</p>
+                  <p className="font-semibold text-green-600">
+                    Rp {product.price.toLocaleString('id-ID')}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500">Modal</p>
+                  <p className="font-medium text-gray-700">
+                    Rp {product.cost.toLocaleString('id-ID')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Stock */}
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-gray-500">Stok Tersedia</p>
+                  <p className={`font-semibold ${
+                    product.stock <= product.minStock ? 'text-red-600' : 'text-blue-600'
+                  }`}>
+                    {product.stock} unit
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500">Min. Stok</p>
+                  <p className="font-medium text-gray-700">{product.minStock} unit</p>
+                </div>
+              </div>
+
+              {/* Profit Margin */}
+              <div className="pt-3 border-t border-gray-100">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-500">Margin Keuntungan</span>
+                  <span className="font-semibold text-purple-600">
+                    {Math.round(((product.price - product.cost) / product.price) * 100)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Barcode */}
+              {product.barcode && (
+                <div className="pt-2">
+                  <p className="text-xs text-gray-500">Barcode</p>
+                  <p className="font-mono text-sm text-gray-700">{product.barcode}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderProductsList = () => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produk</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stok</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Margin</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredProducts.map((product) => (
+              <tr key={product.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                    <div className="text-sm text-gray-500">{product.description}</div>
+                    {product.barcode && (
+                      <div className="text-xs text-gray-400 font-mono">{product.barcode}</div>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getCategoryColor(product.category)}`}>
+                    {product.category}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">
+                    <div className="font-semibold text-green-600">Rp {product.price.toLocaleString('id-ID')}</div>
+                    <div className="text-gray-500">Modal: Rp {product.cost.toLocaleString('id-ID')}</div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm">
+                    <div className={`font-semibold ${product.stock <= product.minStock ? 'text-red-600' : 'text-blue-600'}`}>
+                      {product.stock} unit
+                    </div>
+                    <div className="text-gray-500">Min: {product.minStock}</div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="text-sm font-semibold text-purple-600">
+                    {Math.round(((product.price - product.cost) / product.price) * 100)}%
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openEditProductForm(product)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProduct(product.id, product.name)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderSuppliersGrid = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredSuppliers.map((supplier) => (
+        <div key={supplier.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-4 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                  <Truck className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">{supplier.name}</h3>
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>
+                    {supplier.category}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="p-4">
+            <div className="space-y-3">
+              <div className="text-sm">
+                <p className="text-gray-600">Kontak Person</p>
+                <p className="font-medium">{supplier.contact}</p>
+              </div>
+              
+              <div className="text-sm">
+                <p className="text-gray-600">Telepon</p>
+                <p className="font-medium">{supplier.phone}</p>
+              </div>
+              
+              <div className="text-sm">
+                <p className="text-gray-600">Email</p>
+                <p className="font-medium">{supplier.email}</p>
+              </div>
+              
+              {supplier.address && (
+                <div className="text-sm">
+                  <p className="text-gray-600">Alamat</p>
+                  <p className="font-medium">{supplier.address}</p>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-gray-100">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Total PO:</span>
+                  <span className="font-medium">
+                    {mockPurchaseOrders.filter(po => po.supplierId === supplier.id).length}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                Buat PO
+              </button>
+              <button 
+                onClick={() => openEditSupplierForm(supplier)}
+                className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors"
+              >
+                <Edit className="h-4 w-4" />
+              </button>
+              <button 
+                onClick={() => handleDeleteSupplier(supplier.id, supplier.name)}
+                className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderSuppliersList = () => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kontak</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total PO</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredSuppliers.map((supplier) => (
+              <tr key={supplier.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                      <Truck className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{supplier.name}</div>
+                      <div className="text-sm text-gray-500">{supplier.contact}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getCategoryColor(supplier.category)}`}>
+                    {supplier.category}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">
+                    <div>{supplier.phone}</div>
+                    <div className="text-gray-500">{supplier.email}</div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="text-sm font-medium text-gray-900">
+                    {mockPurchaseOrders.filter(po => po.supplierId === supplier.id).length}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openEditSupplierForm(supplier)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSupplier(supplier.id, supplier.name)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   const renderProductsTab = () => (
     <div className="space-y-6">
@@ -595,13 +871,39 @@ const Products: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Manajemen Produk</h2>
           <p className="text-gray-600">Kelola inventory produk cafe</p>
         </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          Tambah Produk
-        </button>
+        <div className="flex items-center gap-3">
+          {/* View Toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setProductsViewMode('grid')}
+              className={`p-2 rounded-md transition-colors ${
+                productsViewMode === 'grid'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Grid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setProductsViewMode('list')}
+              className={`p-2 rounded-md transition-colors ${
+                productsViewMode === 'list'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+          
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Plus className="h-5 w-5" />
+            Tambah Produk
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -643,102 +945,8 @@ const Products: React.FC = () => {
         </div>
       )}
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="flex justify-center items-center py-12">
-          <Loader className="h-8 w-8 text-blue-600 animate-spin" />
-          <span className="ml-2 text-gray-600">Memuat data...</span>
-        </div>
-      )}
-
-      {/* Products Grid */}
-      {!isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredProducts.map((product) => (
-            <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-              {/* Product Header */}
-              <div className="p-4 border-b border-gray-100">
-                <div className="flex items-center justify-between mb-2">
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
-                    {product.category}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => setShowEditForm(product.id)}
-                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button 
-                      onClick={() => alert(`Hapus produk ${product.name}?`)}
-                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
-                <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
-              </div>
-
-              {/* Product Details */}
-              <div className="p-4">
-                <div className="space-y-3">
-                  {/* Price & Cost */}
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-xs text-gray-500">Harga Jual</p>
-                      <p className="font-semibold text-green-600">
-                        Rp {product.price.toLocaleString('id-ID')}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Modal</p>
-                      <p className="font-medium text-gray-700">
-                        Rp {product.cost.toLocaleString('id-ID')}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Stock */}
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-xs text-gray-500">Stok Tersedia</p>
-                      <p className={`font-semibold ${
-                        product.stock <= product.min_stock ? 'text-red-600' : 'text-blue-600'
-                      }`}>
-                        {product.stock} unit
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Min. Stok</p>
-                      <p className="font-medium text-gray-700">{product.min_stock} unit</p>
-                    </div>
-                  </div>
-
-                  {/* Profit Margin */}
-                  <div className="pt-3 border-t border-gray-100">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Margin Keuntungan</span>
-                      <span className="font-semibold text-purple-600">
-                        {Math.round(((product.price - product.cost) / product.price) * 100)}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Barcode */}
-                  {product.barcode && (
-                    <div className="pt-2">
-                      <p className="text-xs text-gray-500">Barcode</p>
-                      <p className="font-mono text-sm text-gray-700">{product.barcode}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Products Display */}
+      {productsViewMode === 'grid' ? renderProductsGrid() : renderProductsList()}
     </div>
   );
 
@@ -771,151 +979,141 @@ const Products: React.FC = () => {
         />
       </div>
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="flex justify-center items-center py-12">
-          <Loader className="h-8 w-8 text-blue-600 animate-spin" />
-          <span className="ml-2 text-gray-600">Memuat data...</span>
-        </div>
-      )}
-
       {/* Purchase Orders List */}
-      {!isLoading && (
-        <div className="space-y-4">
-          {filteredPurchases.map((purchase) => {
-            const supplier = suppliers.find(s => s.id === purchase.supplier_id);
-            return (
-              <div key={purchase.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                      <FileText className="h-6 w-6 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{purchase.po_number}</h3>
-                      <p className="text-gray-600">{supplier?.name}</p>
-                    </div>
+      <div className="space-y-4">
+        {filteredPurchases.map((purchase) => {
+          const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
+          return (
+            <div key={purchase.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <FileText className="h-6 w-6 text-green-600" />
                   </div>
-                  <div className="text-right">
-                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(purchase.status)}`}>
-                      {getStatusIcon(purchase.status)}
-                      {purchase.status.toUpperCase()}
-                    </span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">{purchase.poNumber}</h3>
+                    <p className="text-gray-600">{supplier?.name}</p>
                   </div>
                 </div>
+                <div className="text-right">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(purchase.status)}`}>
+                    {getStatusIcon(purchase.status)}
+                    {purchase.status.toUpperCase()}
+                  </span>
+                </div>
+              </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs">Tanggal Order</p>
-                      <p className="font-medium text-gray-900">{new Date(purchase.order_date).toLocaleDateString('id-ID')}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Truck className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs">Estimasi Tiba</p>
-                      <p className="font-medium text-gray-900">{new Date(purchase.expected_date).toLocaleDateString('id-ID')}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Package className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs">Total Item</p>
-                      <p className="font-medium text-gray-900">{purchase.purchase_order_items?.length || 0} produk</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <TrendingUp className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs">Total Nilai</p>
-                      <p className="font-medium text-gray-900">Rp {purchase.total_amount.toLocaleString('id-ID')}</p>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Calendar className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs">Tanggal Order</p>
+                    <p className="font-medium text-gray-900">{new Date(purchase.orderDate).toLocaleDateString('id-ID')}</p>
                   </div>
                 </div>
+                
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Truck className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs">Estimasi Tiba</p>
+                    <p className="font-medium text-gray-900">{new Date(purchase.expectedDate).toLocaleDateString('id-ID')}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Package className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs">Total Item</p>
+                    <p className="font-medium text-gray-900">{purchase.items.length} produk</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 text-gray-600">
+                  <TrendingUp className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs">Total Nilai</p>
+                    <p className="font-medium text-gray-900">Rp {purchase.totalAmount.toLocaleString('id-ID')}</p>
+                  </div>
+                </div>
+              </div>
 
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => setSelectedPurchase(selectedPurchase === purchase.id ? null : purchase.id)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                  >
-                    Lihat Detail
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setSelectedPurchase(selectedPurchase === purchase.id ? null : purchase.id)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Lihat Detail
+                </button>
+                
+                {purchase.status === 'pending' && (
+                  <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    Konfirmasi Order
                   </button>
-                  
-                  {purchase.status === 'pending' && (
-                    <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                      Konfirmasi Order
-                    </button>
-                  )}
-                  
-                  {purchase.status === 'ordered' && (
-                    <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                      Terima Barang
-                    </button>
-                  )}
-                </div>
-
-                {/* Extended Details */}
-                {selectedPurchase === purchase.id && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h4 className="font-semibold text-gray-900 mb-3">Detail Purchase Order</h4>
-                    
-                    {/* Items List */}
-                    <div className="space-y-2 mb-4">
-                      {purchase.purchase_order_items?.map((item: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
-                          <div>
-                            <span className="font-medium">{item.product_name}</span>
-                            <span className="text-gray-600 ml-2">x {item.quantity}</span>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">Rp {item.total.toLocaleString('id-ID')}</div>
-                            <div className="text-sm text-gray-600">@Rp {item.unit_cost.toLocaleString('id-ID')}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Supplier Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <h5 className="font-medium text-gray-700 mb-2">Informasi Supplier</h5>
-                        <div className="text-sm space-y-1">
-                          <div><strong>Nama:</strong> {supplier?.name}</div>
-                          <div><strong>Kontak:</strong> {supplier?.contact_person}</div>
-                          <div><strong>Telepon:</strong> {supplier?.phone}</div>
-                          <div><strong>Email:</strong> {supplier?.email}</div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <h5 className="font-medium text-gray-700 mb-2">Detail Order</h5>
-                        <div className="text-sm space-y-1">
-                          <div><strong>PO Number:</strong> {purchase.po_number}</div>
-                          <div><strong>Status:</strong> {purchase.status}</div>
-                          <div><strong>Dibuat oleh:</strong> {purchase.created_by}</div>
-                          <div><strong>Total:</strong> Rp {purchase.total_amount.toLocaleString('id-ID')}</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {purchase.notes && (
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <strong className="text-blue-800">Catatan:</strong>
-                        <p className="text-blue-700 mt-1">{purchase.notes}</p>
-                      </div>
-                    )}
-                  </div>
+                )}
+                
+                {purchase.status === 'ordered' && (
+                  <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    Terima Barang
+                  </button>
                 )}
               </div>
-            );
-          })}
-        </div>
-      )}
+
+              {/* Extended Details */}
+              {selectedPurchase === purchase.id && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-3">Detail Purchase Order</h4>
+                  
+                  {/* Items List */}
+                  <div className="space-y-2 mb-4">
+                    {purchase.items.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
+                        <div>
+                          <span className="font-medium">{item.productName}</span>
+                          <span className="text-gray-600 ml-2">x {item.quantity}</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">Rp {item.total.toLocaleString('id-ID')}</div>
+                          <div className="text-sm text-gray-600">@Rp {item.unitCost.toLocaleString('id-ID')}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Supplier Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <h5 className="font-medium text-gray-700 mb-2">Informasi Supplier</h5>
+                      <div className="text-sm space-y-1">
+                        <div><strong>Nama:</strong> {supplier?.name}</div>
+                        <div><strong>Kontak:</strong> {supplier?.contact}</div>
+                        <div><strong>Telepon:</strong> {supplier?.phone}</div>
+                        <div><strong>Email:</strong> {supplier?.email}</div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h5 className="font-medium text-gray-700 mb-2">Detail Order</h5>
+                      <div className="text-sm space-y-1">
+                        <div><strong>PO Number:</strong> {purchase.poNumber}</div>
+                        <div><strong>Status:</strong> {purchase.status}</div>
+                        <div><strong>Dibuat oleh:</strong> {purchase.createdBy}</div>
+                        <div><strong>Total:</strong> Rp {purchase.totalAmount.toLocaleString('id-ID')}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {purchase.notes && (
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <strong className="text-blue-800">Catatan:</strong>
+                      <p className="text-blue-700 mt-1">{purchase.notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 
@@ -927,13 +1125,39 @@ const Products: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Manajemen Supplier</h2>
           <p className="text-gray-600">Kelola data supplier dan vendor</p>
         </div>
-        <button
-          onClick={() => setShowSupplierForm(true)}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          Tambah Supplier
-        </button>
+        <div className="flex items-center gap-3">
+          {/* View Toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setSuppliersViewMode('grid')}
+              className={`p-2 rounded-md transition-colors ${
+                suppliersViewMode === 'grid'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Grid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setSuppliersViewMode('list')}
+              className={`p-2 rounded-md transition-colors ${
+                suppliersViewMode === 'list'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+          
+          <button
+            onClick={() => setShowSupplierForm(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Plus className="h-5 w-5" />
+            Tambah Supplier
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -948,156 +1172,8 @@ const Products: React.FC = () => {
         />
       </div>
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="flex justify-center items-center py-12">
-          <Loader className="h-8 w-8 text-purple-600 animate-spin" />
-          <span className="ml-2 text-gray-600">Memuat data supplier...</span>
-        </div>
-      )}
-
-      {/* Suppliers Grid */}
-      {!isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSuppliers.map((supplier) => (
-            <div key={supplier.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                      <Building className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg">{supplier.name}</h3>
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>
-                        {supplier.category}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => setShowSupplierDetails(showSupplierDetails === supplier.id ? null : supplier.id)}
-                      className="p-1 text-white hover:text-purple-200 transition-colors"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button 
-                      onClick={() => openEditSupplier(supplier)}
-                      className="p-1 text-white hover:text-purple-200 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteSupplier(supplier.id)}
-                      disabled={isDeleting}
-                      className="p-1 text-white hover:text-red-200 transition-colors disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Body */}
-              <div className="p-4">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <User className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs text-gray-500">Kontak Person</p>
-                      <p className="font-medium text-gray-900">{supplier.contact_person}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Phone className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs text-gray-500">Telepon</p>
-                      <p className="font-medium text-gray-900">{supplier.phone}</p>
-                    </div>
-                  </div>
-                  
-                  {supplier.email && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Mail className="h-4 w-4" />
-                      <div>
-                        <p className="text-xs text-gray-500">Email</p>
-                        <p className="font-medium text-gray-900">{supplier.email}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {supplier.address && (
-                    <div className="flex items-start gap-2 text-gray-600">
-                      <MapPin className="h-4 w-4 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-gray-500">Alamat</p>
-                        <p className="font-medium text-gray-900 text-sm">{supplier.address}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="pt-3 border-t border-gray-100">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Total PO:</span>
-                      <span className="font-medium">
-                        {purchaseOrders.filter(po => po.supplier_id === supplier.id).length}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Extended Details */}
-                {showSupplierDetails === supplier.id && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h4 className="font-semibold text-gray-900 mb-3">Detail Supplier</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">ID Supplier:</span>
-                        <span className="font-medium">{supplier.id}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Kategori:</span>
-                        <span className="font-medium capitalize">{supplier.category}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Status:</span>
-                        <span className="font-medium text-green-600">Aktif</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Bergabung:</span>
-                        <span className="font-medium">{new Date(supplier.created_at).toLocaleDateString('id-ID')}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 space-y-2">
-                      <button 
-                        onClick={() => {
-                          setNewPurchase(prev => ({
-                            ...prev,
-                            supplierId: supplier.id
-                          }));
-                          setShowPurchaseForm(true);
-                        }}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                      >
-                        Buat Purchase Order
-                      </button>
-                      <button 
-                        onClick={() => openEditSupplier(supplier)}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                      >
-                        Edit Supplier
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Suppliers Display */}
+      {suppliersViewMode === 'grid' ? renderSuppliersGrid() : renderSuppliersList()}
     </div>
   );
 
@@ -1156,7 +1232,7 @@ const Products: React.FC = () => {
                   onClick={() => setShowAddForm(false)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-6 w-6" />
                 </button>
               </div>
               
@@ -1224,8 +1300,8 @@ const Products: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Min. Stok</label>
                     <input
                       type="number"
-                      value={newProduct.min_stock}
-                      onChange={(e) => setNewProduct({...newProduct, min_stock: Number(e.target.value)})}
+                      value={newProduct.minStock}
+                      onChange={(e) => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0"
                     />
@@ -1265,14 +1341,139 @@ const Products: React.FC = () => {
                 <button 
                   onClick={handleAddProduct}
                   disabled={isLoading}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {isLoading ? (
-                    <>
-                      <Loader className="h-4 w-4 animate-spin" />
-                      <span>Menyimpan...</span>
-                    </>
-                  ) : 'Simpan Produk'}
+                  {isLoading ? 'Menyimpan...' : 'Simpan Produk'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {showEditForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Edit Produk</h2>
+                <button
+                  onClick={() => setShowEditForm(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <form className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk *</label>
+                  <input
+                    type="text"
+                    value={editProduct.name}
+                    onChange={(e) => setEditProduct({...editProduct, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Masukkan nama produk"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                  <select 
+                    value={editProduct.category}
+                    onChange={(e) => setEditProduct({...editProduct, category: e.target.value as any})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="beverage">Minuman</option>
+                    <option value="food">Makanan</option>
+                    <option value="snack">Snack</option>
+                    <option value="other">Lainnya</option>
+                  </select>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga Modal *</label>
+                    <input
+                      type="number"
+                      value={editProduct.cost}
+                      onChange={(e) => setEditProduct({...editProduct, cost: Number(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga Jual *</label>
+                    <input
+                      type="number"
+                      value={editProduct.price}
+                      onChange={(e) => setEditProduct({...editProduct, price: Number(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
+                    <input
+                      type="number"
+                      value={editProduct.stock}
+                      onChange={(e) => setEditProduct({...editProduct, stock: Number(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Min. Stok</label>
+                    <input
+                      type="number"
+                      value={editProduct.minStock}
+                      onChange={(e) => setEditProduct({...editProduct, minStock: Number(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Barcode (Opsional)</label>
+                  <input
+                    type="text"
+                    value={editProduct.barcode}
+                    onChange={(e) => setEditProduct({...editProduct, barcode: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Scan atau masukkan barcode"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
+                  <textarea
+                    value={editProduct.description}
+                    onChange={(e) => setEditProduct({...editProduct, description: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Deskripsi produk"
+                  />
+                </div>
+              </form>
+              
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowEditForm(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  onClick={() => handleEditProduct(editProduct.id)}
+                  disabled={isLoading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {isLoading ? 'Menyimpan...' : 'Perbarui Produk'}
                 </button>
               </div>
             </div>
@@ -1291,7 +1492,7 @@ const Products: React.FC = () => {
                   onClick={() => setShowPurchaseForm(false)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-6 w-6" />
                 </button>
               </div>
               
@@ -1306,7 +1507,7 @@ const Products: React.FC = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="">Pilih Supplier</option>
-                      {suppliers.map(supplier => (
+                      {mockSuppliers.map(supplier => (
                         <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
                       ))}
                     </select>
@@ -1348,7 +1549,7 @@ const Products: React.FC = () => {
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
                             <option value="">Pilih Produk</option>
-                            {products.map(product => (
+                            {mockProducts.map(product => (
                               <option key={product.id} value={product.id}>{product.name}</option>
                             ))}
                           </select>
@@ -1446,14 +1647,9 @@ const Products: React.FC = () => {
                 <button 
                   onClick={handleCreatePurchase}
                   disabled={isLoading}
-                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {isLoading ? (
-                    <>
-                      <Loader className="h-4 w-4 animate-spin" />
-                      <span>Membuat...</span>
-                    </>
-                  ) : 'Buat Purchase Order'}
+                  {isLoading ? 'Membuat PO...' : 'Buat Purchase Order'}
                 </button>
               </div>
             </div>
@@ -1472,7 +1668,7 @@ const Products: React.FC = () => {
                   onClick={() => setShowSupplierForm(false)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-6 w-6" />
                 </button>
               </div>
               
@@ -1492,8 +1688,8 @@ const Products: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kontak Person *</label>
                   <input
                     type="text"
-                    value={newSupplier.contact_person}
-                    onChange={(e) => setNewSupplier({...newSupplier, contact_person: e.target.value})}
+                    value={newSupplier.contact}
+                    onChange={(e) => setNewSupplier({...newSupplier, contact: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Nama kontak person"
                   />
@@ -1501,7 +1697,7 @@ const Products: React.FC = () => {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon</label>
                     <input
                       type="tel"
                       value={newSupplier.phone}
@@ -1559,14 +1755,9 @@ const Products: React.FC = () => {
                 <button 
                   onClick={handleAddSupplier}
                   disabled={isLoading}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {isLoading ? (
-                    <>
-                      <Loader className="h-4 w-4 animate-spin" />
-                      <span>Menyimpan...</span>
-                    </>
-                  ) : 'Tambah Supplier'}
+                  {isLoading ? 'Menyimpan...' : 'Tambah Supplier'}
                 </button>
               </div>
             </div>
@@ -1575,17 +1766,17 @@ const Products: React.FC = () => {
       )}
 
       {/* Edit Supplier Modal */}
-      {showEditForm && (
+      {showEditSupplierForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Edit Supplier</h2>
                 <button
-                  onClick={() => setShowEditForm(null)}
+                  onClick={() => setShowEditSupplierForm(null)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-6 w-6" />
                 </button>
               </div>
               
@@ -1605,8 +1796,8 @@ const Products: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kontak Person *</label>
                   <input
                     type="text"
-                    value={editSupplier.contact_person}
-                    onChange={(e) => setEditSupplier({...editSupplier, contact_person: e.target.value})}
+                    value={editSupplier.contact}
+                    onChange={(e) => setEditSupplier({...editSupplier, contact: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Nama kontak person"
                   />
@@ -1614,7 +1805,7 @@ const Products: React.FC = () => {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon</label>
                     <input
                       type="tel"
                       value={editSupplier.phone}
@@ -1664,22 +1855,17 @@ const Products: React.FC = () => {
               
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowEditForm(null)}
+                  onClick={() => setShowEditSupplierForm(null)}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   Batal
                 </button>
                 <button 
-                  onClick={handleEditSupplier}
+                  onClick={() => handleEditSupplier(editSupplier.id)}
                   disabled={isLoading}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {isLoading ? (
-                    <>
-                      <Loader className="h-4 w-4 animate-spin" />
-                      <span>Menyimpan...</span>
-                    </>
-                  ) : 'Perbarui Supplier'}
+                  {isLoading ? 'Menyimpan...' : 'Perbarui Supplier'}
                 </button>
               </div>
             </div>
@@ -1693,7 +1879,7 @@ const Products: React.FC = () => {
           <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Package className="h-6 w-6 text-blue-600" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">{products.length}</h3>
+          <h3 className="text-2xl font-bold text-gray-900 mb-1">{mockProducts.length}</h3>
           <p className="text-gray-600 text-sm">Total Produk</p>
         </div>
 
@@ -1702,7 +1888,7 @@ const Products: React.FC = () => {
             <ShoppingBag className="h-6 w-6 text-green-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {purchaseOrders.length}
+            {mockPurchaseOrders?.length || 0}
           </h3>
           <p className="text-gray-600 text-sm">Purchase Order</p>
         </div>
@@ -1712,7 +1898,7 @@ const Products: React.FC = () => {
             <Truck className="h-6 w-6 text-purple-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {suppliers.length}
+            {mockSuppliers?.length || 0}
           </h3>
           <p className="text-gray-600 text-sm">Supplier</p>
         </div>
