@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Package, Edit, Trash2, AlertTriangle, ShoppingBag, TrendingUp, Calendar, FileText, Truck, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Plus, Search, Package, Edit, Trash2, AlertTriangle, ShoppingBag, TrendingUp, Calendar, FileText, Truck, CheckCircle, Clock, XCircle, Eye, X, Phone, Mail, MapPin, User, Building } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Products: React.FC = () => {
@@ -10,8 +10,9 @@ const Products: React.FC = () => {
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [showSupplierDetails, setShowSupplierDetails] = useState<string | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Data states
   const [products, setProducts] = useState<any[]>([]);
@@ -24,10 +25,9 @@ const Products: React.FC = () => {
     price: 0,
     cost: 0,
     stock: 0,
-    min_stock: 0,
+    minStock: 0,
     barcode: '',
-    description: '',
-    supplier_id: ''
+    description: ''
   });
 
   const [newPurchase, setNewPurchase] = useState({
@@ -52,6 +52,16 @@ const Products: React.FC = () => {
     category: 'beverage' as 'beverage' | 'food' | 'snack' | 'other'
   });
 
+  const [editSupplier, setEditSupplier] = useState({
+    id: '',
+    name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    address: '',
+    category: 'beverage' as 'beverage' | 'food' | 'snack' | 'other'
+  });
+
   // Calculate totals whenever items change
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
   const [purchaseTax, setPurchaseTax] = useState(0);
@@ -68,30 +78,25 @@ const Products: React.FC = () => {
     setPurchaseTotal(total);
   }, [newPurchase.items]);
 
-  // Load data on component mount and tab change
+  // Load data
   useEffect(() => {
-    loadData();
-  }, [activeTab]);
+    loadSuppliers();
+    loadProducts();
+    loadPurchaseOrders();
+  }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadSuppliers = async () => {
     try {
-      if (activeTab === 'products' || activeTab === 'purchases') {
-        await Promise.all([
-          loadProducts(),
-          loadSuppliers()
-        ]);
-      }
-      if (activeTab === 'purchases') {
-        await loadPurchaseOrders();
-      }
-      if (activeTab === 'suppliers') {
-        await loadSuppliers();
-      }
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      
+      if (error) throw error;
+      setSuppliers(data || []);
     } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading suppliers:', error);
     }
   };
 
@@ -104,29 +109,12 @@ const Products: React.FC = () => {
           suppliers(name)
         `)
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
+        .order('name');
+      
       if (error) throw error;
       setProducts(data || []);
     } catch (error) {
       console.error('Error loading products:', error);
-      setProducts([]);
-    }
-  };
-
-  const loadSuppliers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setSuppliers(data || []);
-    } catch (error) {
-      console.error('Error loading suppliers:', error);
-      setSuppliers([]);
     }
   };
 
@@ -140,12 +128,11 @@ const Products: React.FC = () => {
           purchase_order_items(*)
         `)
         .order('created_at', { ascending: false });
-
+      
       if (error) throw error;
       setPurchaseOrders(data || []);
     } catch (error) {
       console.error('Error loading purchase orders:', error);
-      setPurchaseOrders([]);
     }
   };
 
@@ -172,7 +159,8 @@ const Products: React.FC = () => {
 
   const filteredSuppliers = suppliers.filter(supplier =>
     supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supplier.contact_person.toLowerCase().includes(searchTerm.toLowerCase())
+    supplier.contact_person.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    supplier.phone.includes(searchTerm)
   );
 
   const getCategoryColor = (category: string) => {
@@ -270,23 +258,14 @@ const Products: React.FC = () => {
       return;
     }
     
-    setLoading(true);
+    setIsLoading(true);
     try {
-      const { data: user } = await supabase.auth.getUser();
-      
-      const productData = {
-        ...newProduct,
-        created_by: user.user?.id
-      };
-
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('products')
-        .insert([productData])
-        .select()
-        .single();
-
+        .insert([newProduct]);
+      
       if (error) throw error;
-
+      
       alert('Produk berhasil ditambahkan!');
       setShowAddForm(false);
       setNewProduct({
@@ -295,19 +274,16 @@ const Products: React.FC = () => {
         price: 0,
         cost: 0,
         stock: 0,
-        min_stock: 0,
+        minStock: 0,
         barcode: '',
-        description: '',
-        supplier_id: ''
+        description: ''
       });
-      
-      // Reload products
-      await loadProducts();
+      loadProducts();
     } catch (error: any) {
       console.error('Error adding product:', error);
-      alert(`Gagal menambahkan produk: ${error.message}`);
+      alert('Gagal menambahkan produk: ' + error.message);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -323,50 +299,45 @@ const Products: React.FC = () => {
       return;
     }
     
-    setLoading(true);
+    setIsLoading(true);
     try {
-      const { data: user } = await supabase.auth.getUser();
-      
       // Generate PO number
-      const { data: poNumber } = await supabase.rpc('generate_po_number');
+      const { data: poData } = await supabase.rpc('generate_po_number');
       
       // Create purchase order
-      const purchaseData = {
-        po_number: poNumber,
-        supplier_id: newPurchase.supplierId,
-        expected_date: newPurchase.expectedDate,
-        subtotal: purchaseSubtotal,
-        tax: purchaseTax,
-        total_amount: purchaseTotal,
-        notes: newPurchase.notes,
-        created_by: user.user?.id
-      };
-
-      const { data: purchase, error: purchaseError } = await supabase
+      const { data: purchaseOrder, error: poError } = await supabase
         .from('purchase_orders')
-        .insert([purchaseData])
+        .insert([{
+          po_number: poData,
+          supplier_id: newPurchase.supplierId,
+          expected_date: newPurchase.expectedDate,
+          subtotal: purchaseSubtotal,
+          tax: purchaseTax,
+          total_amount: purchaseTotal,
+          notes: newPurchase.notes
+        }])
         .select()
         .single();
-
-      if (purchaseError) throw purchaseError;
-
+      
+      if (poError) throw poError;
+      
       // Create purchase order items
-      const itemsData = newPurchase.items.map(item => ({
-        po_id: purchase.id,
+      const items = newPurchase.items.map(item => ({
+        po_id: purchaseOrder.id,
         product_id: item.productId,
         product_name: item.productName,
         quantity: item.quantity,
         unit_cost: item.unitCost,
         total: item.total
       }));
-
+      
       const { error: itemsError } = await supabase
         .from('purchase_order_items')
-        .insert(itemsData);
-
+        .insert(items);
+      
       if (itemsError) throw itemsError;
-
-      alert(`Purchase Order ${poNumber} berhasil dibuat!\nSubtotal: Rp ${purchaseSubtotal.toLocaleString('id-ID')}\nPajak: Rp ${purchaseTax.toLocaleString('id-ID')}\nTotal: Rp ${purchaseTotal.toLocaleString('id-ID')}`);
+      
+      alert(`Purchase Order ${poData} berhasil dibuat!\nSubtotal: Rp ${purchaseSubtotal.toLocaleString('id-ID')}\nPajak: Rp ${purchaseTax.toLocaleString('id-ID')}\nTotal: Rp ${purchaseTotal.toLocaleString('id-ID')}`);
       setShowPurchaseForm(false);
       setNewPurchase({
         supplierId: '',
@@ -374,33 +345,29 @@ const Products: React.FC = () => {
         notes: '',
         expectedDate: new Date().toISOString().split('T')[0]
       });
-      
-      // Reload purchase orders
-      await loadPurchaseOrders();
+      loadPurchaseOrders();
     } catch (error: any) {
       console.error('Error creating purchase order:', error);
-      alert(`Gagal membuat purchase order: ${error.message}`);
+      alert('Gagal membuat purchase order: ' + error.message);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const handleAddSupplier = async () => {
-    if (!newSupplier.name || !newSupplier.contact_person) {
-      alert('Nama supplier dan kontak wajib diisi');
+    if (!newSupplier.name || !newSupplier.contact_person || !newSupplier.phone) {
+      alert('Nama supplier, kontak person, dan telepon wajib diisi');
       return;
     }
     
-    setLoading(true);
+    setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('suppliers')
-        .insert([newSupplier])
-        .select()
-        .single();
-
+        .insert([newSupplier]);
+      
       if (error) throw error;
-
+      
       alert('Supplier berhasil ditambahkan!');
       setShowSupplierForm(false);
       setNewSupplier({
@@ -411,15 +378,92 @@ const Products: React.FC = () => {
         address: '',
         category: 'beverage'
       });
-      
-      // Reload suppliers
-      await loadSuppliers();
+      loadSuppliers();
     } catch (error: any) {
       console.error('Error adding supplier:', error);
-      alert(`Gagal menambahkan supplier: ${error.message}`);
+      alert('Gagal menambahkan supplier: ' + error.message);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
+  };
+
+  const handleEditSupplier = async () => {
+    if (!editSupplier.name || !editSupplier.contact_person || !editSupplier.phone) {
+      alert('Nama supplier, kontak person, dan telepon wajib diisi');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('suppliers')
+        .update({
+          name: editSupplier.name,
+          contact_person: editSupplier.contact_person,
+          phone: editSupplier.phone,
+          email: editSupplier.email,
+          address: editSupplier.address,
+          category: editSupplier.category
+        })
+        .eq('id', editSupplier.id);
+      
+      if (error) throw error;
+      
+      alert('Supplier berhasil diperbarui!');
+      setShowEditForm(null);
+      setEditSupplier({
+        id: '',
+        name: '',
+        contact_person: '',
+        phone: '',
+        email: '',
+        address: '',
+        category: 'beverage'
+      });
+      loadSuppliers();
+    } catch (error: any) {
+      console.error('Error updating supplier:', error);
+      alert('Gagal memperbarui supplier: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteSupplier = async (supplierId: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus supplier ini? Tindakan ini tidak dapat dibatalkan.')) {
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('suppliers')
+        .update({ is_active: false })
+        .eq('id', supplierId);
+      
+      if (error) throw error;
+      
+      alert('Supplier berhasil dihapus!');
+      loadSuppliers();
+    } catch (error: any) {
+      console.error('Error deleting supplier:', error);
+      alert('Gagal menghapus supplier: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openEditSupplier = (supplier: any) => {
+    setEditSupplier({
+      id: supplier.id,
+      name: supplier.name,
+      contact_person: supplier.contact_person,
+      phone: supplier.phone,
+      email: supplier.email || '',
+      address: supplier.address || '',
+      category: supplier.category
+    });
+    setShowEditForm(supplier.id);
   };
 
   const renderProductsTab = () => (
@@ -432,11 +476,10 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddForm(true)}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="h-5 w-5" />
-          {loading ? 'Loading...' : 'Tambah Produk'}
+          Tambah Produk
         </button>
       </div>
 
@@ -476,14 +519,6 @@ const Products: React.FC = () => {
             {lowStockProducts.length} produk memiliki stok di bawah minimum: {' '}
             {lowStockProducts.map(p => p.name).join(', ')}
           </p>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2 text-gray-600">Memuat data...</span>
         </div>
       )}
 
@@ -561,14 +596,6 @@ const Products: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Supplier */}
-                {product.suppliers && (
-                  <div className="pt-2">
-                    <p className="text-xs text-gray-500">Supplier</p>
-                    <p className="font-medium text-sm text-gray-700">{product.suppliers.name}</p>
-                  </div>
-                )}
-
                 {/* Barcode */}
                 {product.barcode && (
                   <div className="pt-2">
@@ -594,11 +621,10 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowPurchaseForm(true)}
-          disabled={loading}
-          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <ShoppingBag className="h-5 w-5" />
-          {loading ? 'Loading...' : 'Buat Purchase Order'}
+          Buat Purchase Order
         </button>
       </div>
 
@@ -613,14 +639,6 @@ const Products: React.FC = () => {
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
-
-      {/* Loading State */}
-      {loading && (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-          <span className="ml-2 text-gray-600">Memuat data...</span>
-        </div>
-      )}
 
       {/* Purchase Orders List */}
       <div className="space-y-4">
@@ -739,8 +757,7 @@ const Products: React.FC = () => {
                       <div className="text-sm space-y-1">
                         <div><strong>PO Number:</strong> {purchase.po_number}</div>
                         <div><strong>Status:</strong> {purchase.status}</div>
-                        <div><strong>Subtotal:</strong> Rp {purchase.subtotal.toLocaleString('id-ID')}</div>
-                        <div><strong>Pajak:</strong> Rp {purchase.tax.toLocaleString('id-ID')}</div>
+                        <div><strong>Dibuat oleh:</strong> {purchase.created_by}</div>
                         <div><strong>Total:</strong> Rp {purchase.total_amount.toLocaleString('id-ID')}</div>
                       </div>
                     </div>
@@ -771,11 +788,10 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowSupplierForm(true)}
-          disabled={loading}
-          className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="h-5 w-5" />
-          {loading ? 'Loading...' : 'Tambah Supplier'}
+          Tambah Supplier
         </button>
       </div>
 
@@ -791,29 +807,43 @@ const Products: React.FC = () => {
         />
       </div>
 
-      {/* Loading State */}
-      {loading && (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-          <span className="ml-2 text-gray-600">Memuat data...</span>
-        </div>
-      )}
-
       {/* Suppliers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredSuppliers.map((supplier) => (
           <div key={supplier.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-4 text-white">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                  <Truck className="h-6 w-6" />
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                    <Building className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">{supplier.name}</h3>
+                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>
+                      {supplier.category}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-lg">{supplier.name}</h3>
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>
-                    {supplier.category}
-                  </span>
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => setShowSupplierDetails(showSupplierDetails === supplier.id ? null : supplier.id)}
+                    className="p-1 text-white hover:text-purple-200 transition-colors"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  <button 
+                    onClick={() => openEditSupplier(supplier)}
+                    className="p-1 text-white hover:text-purple-200 transition-colors"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteSupplier(supplier.id)}
+                    className="p-1 text-white hover:text-red-200 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -821,25 +851,39 @@ const Products: React.FC = () => {
             {/* Body */}
             <div className="p-4">
               <div className="space-y-3">
-                <div className="text-sm">
-                  <p className="text-gray-600">Kontak Person</p>
-                  <p className="font-medium">{supplier.contact_person}</p>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <User className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs text-gray-500">Kontak Person</p>
+                    <p className="font-medium text-gray-900">{supplier.contact_person}</p>
+                  </div>
                 </div>
                 
-                <div className="text-sm">
-                  <p className="text-gray-600">Telepon</p>
-                  <p className="font-medium">{supplier.phone}</p>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Phone className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs text-gray-500">Telepon</p>
+                    <p className="font-medium text-gray-900">{supplier.phone}</p>
+                  </div>
                 </div>
                 
-                <div className="text-sm">
-                  <p className="text-gray-600">Email</p>
-                  <p className="font-medium">{supplier.email}</p>
-                </div>
+                {supplier.email && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Mail className="h-4 w-4" />
+                    <div>
+                      <p className="text-xs text-gray-500">Email</p>
+                      <p className="font-medium text-gray-900">{supplier.email}</p>
+                    </div>
+                  </div>
+                )}
                 
                 {supplier.address && (
-                  <div className="text-sm">
-                    <p className="text-gray-600">Alamat</p>
-                    <p className="font-medium">{supplier.address}</p>
+                  <div className="flex items-start gap-2 text-gray-600">
+                    <MapPin className="h-4 w-4 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-gray-500">Alamat</p>
+                      <p className="font-medium text-gray-900 text-sm">{supplier.address}</p>
+                    </div>
                   </div>
                 )}
 
@@ -853,14 +897,45 @@ const Products: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-4 flex gap-2">
-                <button className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                  Buat PO
-                </button>
-                <button className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors">
-                  <Edit className="h-4 w-4" />
-                </button>
-              </div>
+              {/* Extended Details */}
+              {showSupplierDetails === supplier.id && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-3">Detail Supplier</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">ID Supplier:</span>
+                      <span className="font-medium">{supplier.id}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Kategori:</span>
+                      <span className="font-medium capitalize">{supplier.category}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status:</span>
+                      <span className="font-medium text-green-600">Aktif</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Bergabung:</span>
+                      <span className="font-medium">{new Date(supplier.created_at).toLocaleDateString('id-ID')}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 space-y-2">
+                    <button 
+                      onClick={() => setShowPurchaseForm(true)}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Buat Purchase Order
+                    </button>
+                    <button 
+                      onClick={() => openEditSupplier(supplier)}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Edit Supplier
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -945,20 +1020,6 @@ const Products: React.FC = () => {
                   </select>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-                  <select 
-                    value={newProduct.supplier_id}
-                    onChange={(e) => setNewProduct({...newProduct, supplier_id: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Pilih Supplier</option>
-                    {suppliers.map(supplier => (
-                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                    ))}
-                  </select>
-                </div>
-                
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Harga Modal *</label>
@@ -997,8 +1058,8 @@ const Products: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Min. Stok</label>
                     <input
                       type="number"
-                      value={newProduct.min_stock}
-                      onChange={(e) => setNewProduct({...newProduct, min_stock: Number(e.target.value)})}
+                      value={newProduct.minStock}
+                      onChange={(e) => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0"
                     />
@@ -1037,10 +1098,10 @@ const Products: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleAddProduct}
-                  disabled={loading}
+                  disabled={isLoading}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {loading ? 'Menyimpan...' : 'Simpan Produk'}
+                  {isLoading ? 'Menyimpan...' : 'Simpan Produk'}
                 </button>
               </div>
             </div>
@@ -1205,10 +1266,10 @@ const Products: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleCreatePurchase}
-                  disabled={loading}
+                  disabled={isLoading}
                   className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {loading ? 'Membuat...' : 'Buat Purchase Order'}
+                  {isLoading ? 'Membuat...' : 'Buat Purchase Order'}
                 </button>
               </div>
             </div>
@@ -1248,7 +1309,7 @@ const Products: React.FC = () => {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon *</label>
                     <input
                       type="tel"
                       value={newSupplier.phone}
@@ -1305,10 +1366,118 @@ const Products: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleAddSupplier}
-                  disabled={loading}
+                  disabled={isLoading}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {loading ? 'Menyimpan...' : 'Tambah Supplier'}
+                  {isLoading ? 'Menyimpan...' : 'Tambah Supplier'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Supplier Modal */}
+      {showEditForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Edit Supplier</h2>
+                <button
+                  onClick={() => setShowEditForm(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <form className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Supplier *</label>
+                  <input
+                    type="text"
+                    value={editSupplier.name}
+                    onChange={(e) => setEditSupplier({...editSupplier, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Nama perusahaan supplier"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kontak Person *</label>
+                  <input
+                    type="text"
+                    value={editSupplier.contact_person}
+                    onChange={(e) => setEditSupplier({...editSupplier, contact_person: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Nama kontak person"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon *</label>
+                    <input
+                      type="tel"
+                      value={editSupplier.phone}
+                      onChange={(e) => setEditSupplier({...editSupplier, phone: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="+62 8xx-xxxx-xxxx"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                    <select 
+                      value={editSupplier.category}
+                      onChange={(e) => setEditSupplier({...editSupplier, category: e.target.value as any})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="beverage">Minuman</option>
+                      <option value="food">Makanan</option>
+                      <option value="snack">Snack</option>
+                      <option value="other">Lainnya</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editSupplier.email}
+                    onChange={(e) => setEditSupplier({...editSupplier, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="email@supplier.com"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
+                  <textarea
+                    value={editSupplier.address}
+                    onChange={(e) => setEditSupplier({...editSupplier, address: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Alamat lengkap supplier"
+                  />
+                </div>
+              </form>
+              
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowEditForm(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  onClick={handleEditSupplier}
+                  disabled={isLoading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {isLoading ? 'Menyimpan...' : 'Perbarui Supplier'}
                 </button>
               </div>
             </div>
@@ -1317,7 +1486,7 @@ const Products: React.FC = () => {
       )}
 
       {/* Summary Stats */}
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="mt-8 grid grid-cols-1 md: grid-cols-4 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
           <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Package className="h-6 w-6 text-blue-600" />
