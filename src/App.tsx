@@ -20,6 +20,7 @@ import UserManagement from './components/UserManagement';
 import VoucherManagement from './components/VoucherManagement';
 import Settings from './components/Settings';
 import MaintenanceManagement from './components/MaintenanceManagement';
+import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   return (
@@ -31,7 +32,25 @@ const App: React.FC = () => {
 };
 
 const AppLayout: React.FC = () => {
+  const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = React.useState('dashboard');
+
+  // Show loading spinner while authentication status is being determined
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to login if user is not authenticated
+  if (!user) {
+    return <LoginPage />;
+  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -69,8 +88,6 @@ const AppLayout: React.FC = () => {
         return <Settings />;
       case 'maintenance':
         return <MaintenanceManagement />;
-      case 'login':
-        return <LoginPage />;
       default:
         return <Dashboard />;
     }
