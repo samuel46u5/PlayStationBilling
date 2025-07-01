@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Package, Edit, Trash2, AlertTriangle, ShoppingBag, TrendingUp, Calendar, FileText, Truck, CheckCircle, Clock, XCircle, RefreshCw } from 'lucide-react';
+import { Plus, Search, Package, Edit, Trash2, AlertTriangle, ShoppingBag, TrendingUp, Calendar, FileText, Truck, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { supabase, db } from '../lib/supabase';
 
 const Products: React.FC = () => {
@@ -11,13 +11,12 @@ const Products: React.FC = () => {
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Data states
+  // State for data
   const [products, setProducts] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -25,28 +24,27 @@ const Products: React.FC = () => {
     price: 0,
     cost: 0,
     stock: 0,
-    min_stock: 0,
+    minStock: 0,
     barcode: '',
-    description: '',
-    supplier_id: ''
+    description: ''
   });
 
   const [newPurchase, setNewPurchase] = useState({
-    supplier_id: '',
+    supplierId: '',
     items: [] as Array<{
-      product_id: string;
-      product_name: string;
+      productId: string;
+      productName: string;
       quantity: number;
-      unit_cost: number;
+      unitCost: number;
       total: number;
     }>,
     notes: '',
-    expected_date: new Date().toISOString().split('T')[0]
+    expectedDate: new Date().toISOString().split('T')[0]
   });
 
   const [newSupplier, setNewSupplier] = useState({
     name: '',
-    contact_person: '',
+    contact: '',
     phone: '',
     email: '',
     address: '',
@@ -71,48 +69,67 @@ const Products: React.FC = () => {
 
   // Load data on component mount
   useEffect(() => {
-    loadProducts();
-    loadSuppliers();
-    loadPurchaseOrders();
+    loadData();
   }, []);
 
-  const loadProducts = async () => {
+  const loadData = async () => {
     try {
-      setIsLoading(true);
-      const data = await db.products.getAll();
-      setProducts(data || []);
-    } catch (err: any) {
-      setError('Failed to load products: ' + err.message);
-      console.error('Error loading products:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      setLoading(true);
+      
+      // Load products
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select(`
+          *,
+          suppliers(name)
+        `)
+        .eq('is_active', true);
 
-  const loadSuppliers = async () => {
-    try {
-      const data = await db.select('suppliers', '*', { is_active: true });
-      setSuppliers(data || []);
-    } catch (err: any) {
-      console.error('Error loading suppliers:', err);
-    }
-  };
+      if (productsError) {
+        console.error('Error loading products:', productsError);
+        // Use empty array if error
+        setProducts([]);
+      } else {
+        setProducts(productsData || []);
+      }
 
-  const loadPurchaseOrders = async () => {
-    try {
-      const { data, error } = await supabase
+      // Load suppliers
+      const { data: suppliersData, error: suppliersError } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('is_active', true);
+
+      if (suppliersError) {
+        console.error('Error loading suppliers:', suppliersError);
+        setSuppliers([]);
+      } else {
+        setSuppliers(suppliersData || []);
+      }
+
+      // Load purchase orders
+      const { data: purchaseData, error: purchaseError } = await supabase
         .from('purchase_orders')
         .select(`
           *,
           suppliers(name),
           purchase_order_items(*)
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setPurchaseOrders(data || []);
-    } catch (err: any) {
-      console.error('Error loading purchase orders:', err);
+        `);
+
+      if (purchaseError) {
+        console.error('Error loading purchase orders:', purchaseError);
+        setPurchaseOrders([]);
+      } else {
+        setPurchaseOrders(purchaseData || []);
+      }
+
+    } catch (error) {
+      console.error('Error loading data:', error);
+      // Set empty arrays on error
+      setProducts([]);
+      setSuppliers([]);
+      setPurchaseOrders([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -132,7 +149,7 @@ const Products: React.FC = () => {
   });
 
   const filteredPurchases = purchaseOrders.filter(purchase => {
-    const supplier = purchase.suppliers;
+    const supplier = suppliers.find(s => s.id === purchase.supplier_id);
     return supplier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
            purchase.po_number.toLowerCase().includes(searchTerm.toLowerCase());
   });
@@ -175,10 +192,10 @@ const Products: React.FC = () => {
 
   const addItemToPurchase = () => {
     const newItem = {
-      product_id: '',
-      product_name: '',
+      productId: '',
+      productName: '',
       quantity: 1,
-      unit_cost: 0,
+      unitCost: 0,
       total: 0
     };
     
@@ -197,22 +214,22 @@ const Products: React.FC = () => {
       item[field as keyof typeof item] = value;
       
       // Handle product selection
-      if (field === 'product_id') {
+      if (field === 'productId') {
         const product = products.find(p => p.id === value);
         if (product) {
-          item.product_name = product.name;
-          item.unit_cost = product.cost;
+          item.productName = product.name;
+          item.unitCost = product.cost;
           item.total = item.quantity * product.cost;
         } else {
-          item.product_name = '';
-          item.unit_cost = 0;
+          item.productName = '';
+          item.unitCost = 0;
           item.total = 0;
         }
       }
       
-      // Recalculate total when quantity or unit_cost changes
-      if (field === 'quantity' || field === 'unit_cost') {
-        item.total = item.quantity * item.unit_cost;
+      // Recalculate total when quantity or unitCost changes
+      if (field === 'quantity' || field === 'unitCost') {
+        item.total = item.quantity * item.unitCost;
       }
       
       updatedItems[index] = item;
@@ -233,31 +250,34 @@ const Products: React.FC = () => {
 
   const handleAddProduct = async () => {
     if (!newProduct.name || newProduct.price <= 0) {
-      setError('Nama produk dan harga wajib diisi');
+      alert('Nama produk dan harga wajib diisi');
       return;
     }
     
     try {
-      setIsLoading(true);
-      setError(null);
-      
-      await db.insert('products', {
-        name: newProduct.name,
-        category: newProduct.category,
-        price: newProduct.price,
-        cost: newProduct.cost,
-        stock: newProduct.stock,
-        min_stock: newProduct.min_stock,
-        barcode: newProduct.barcode || null,
-        description: newProduct.description || null,
-        supplier_id: newProduct.supplier_id || null,
-        is_active: true
-      });
-      
-      // Reload products
-      await loadProducts();
-      
-      // Reset form
+      const { data, error } = await supabase
+        .from('products')
+        .insert([{
+          name: newProduct.name,
+          category: newProduct.category,
+          price: newProduct.price,
+          cost: newProduct.cost,
+          stock: newProduct.stock,
+          min_stock: newProduct.minStock,
+          barcode: newProduct.barcode || null,
+          description: newProduct.description || null,
+          is_active: true
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding product:', error);
+        alert('Gagal menambahkan produk: ' + error.message);
+        return;
+      }
+
+      alert('Produk berhasil ditambahkan!');
       setShowAddForm(false);
       setNewProduct({
         name: '',
@@ -265,147 +285,150 @@ const Products: React.FC = () => {
         price: 0,
         cost: 0,
         stock: 0,
-        min_stock: 0,
+        minStock: 0,
         barcode: '',
-        description: '',
-        supplier_id: ''
+        description: ''
       });
       
-      alert('Produk berhasil ditambahkan!');
-    } catch (err: any) {
-      setError('Gagal menambahkan produk: ' + err.message);
-      console.error('Error adding product:', err);
-    } finally {
-      setIsLoading(false);
+      // Reload products
+      loadData();
+    } catch (error) {
+      console.error('Error adding product:', error);
+      alert('Terjadi kesalahan saat menambahkan produk');
     }
   };
 
   const handleCreatePurchase = async () => {
-    if (!newPurchase.supplier_id || newPurchase.items.length === 0) {
-      setError('Supplier dan item pembelian wajib diisi');
+    if (!newPurchase.supplierId || newPurchase.items.length === 0) {
+      alert('Supplier dan item pembelian wajib diisi');
       return;
     }
     
-    const invalidItems = newPurchase.items.some(item => !item.product_id || item.quantity <= 0);
+    const invalidItems = newPurchase.items.some(item => !item.productId || item.quantity <= 0);
     if (invalidItems) {
-      setError('Semua item harus memiliki produk dan quantity yang valid');
+      alert('Semua item harus memiliki produk dan quantity yang valid');
       return;
     }
     
     try {
-      setIsLoading(true);
-      setError(null);
-      
       // Generate PO number
       const { data: poNumber } = await supabase.rpc('generate_po_number');
       
       // Create purchase order
-      const purchaseOrder = await db.insert('purchase_orders', {
-        po_number: poNumber,
-        supplier_id: newPurchase.supplier_id,
-        expected_date: newPurchase.expected_date,
-        subtotal: purchaseSubtotal,
-        tax: purchaseTax,
-        total_amount: purchaseTotal,
-        notes: newPurchase.notes || null,
-        status: 'pending'
-      });
+      const { data: purchaseOrder, error: poError } = await supabase
+        .from('purchase_orders')
+        .insert([{
+          po_number: poNumber,
+          supplier_id: newPurchase.supplierId,
+          expected_date: newPurchase.expectedDate,
+          subtotal: purchaseSubtotal,
+          tax: purchaseTax,
+          total_amount: purchaseTotal,
+          notes: newPurchase.notes || null,
+          status: 'pending'
+        }])
+        .select()
+        .single();
+
+      if (poError) {
+        console.error('Error creating purchase order:', poError);
+        alert('Gagal membuat purchase order: ' + poError.message);
+        return;
+      }
 
       // Create purchase order items
-      await Promise.all(
-        newPurchase.items.map(item => 
-          db.insert('purchase_order_items', {
-            po_id: purchaseOrder.id,
-            product_id: item.product_id,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit_cost: item.unit_cost,
-            total: item.total
-          })
-        )
-      );
+      const itemsToInsert = newPurchase.items.map(item => ({
+        po_id: purchaseOrder.id,
+        product_id: item.productId,
+        product_name: item.productName,
+        quantity: item.quantity,
+        unit_cost: item.unitCost,
+        total: item.total
+      }));
 
-      // Reload purchase orders
-      await loadPurchaseOrders();
-      
+      const { error: itemsError } = await supabase
+        .from('purchase_order_items')
+        .insert(itemsToInsert);
+
+      if (itemsError) {
+        console.error('Error creating purchase order items:', itemsError);
+        alert('Gagal membuat item purchase order: ' + itemsError.message);
+        return;
+      }
+
       alert(`Purchase Order ${poNumber} berhasil dibuat!\nSubtotal: Rp ${purchaseSubtotal.toLocaleString('id-ID')}\nPajak: Rp ${purchaseTax.toLocaleString('id-ID')}\nTotal: Rp ${purchaseTotal.toLocaleString('id-ID')}`);
-      
       setShowPurchaseForm(false);
       setNewPurchase({
-        supplier_id: '',
+        supplierId: '',
         items: [],
         notes: '',
-        expected_date: new Date().toISOString().split('T')[0]
+        expectedDate: new Date().toISOString().split('T')[0]
       });
-    } catch (err: any) {
-      setError('Gagal membuat purchase order: ' + err.message);
-      console.error('Error creating purchase order:', err);
-    } finally {
-      setIsLoading(false);
+      
+      // Reload data
+      loadData();
+    } catch (error) {
+      console.error('Error creating purchase order:', error);
+      alert('Terjadi kesalahan saat membuat purchase order');
     }
   };
 
   const handleAddSupplier = async () => {
-    if (!newSupplier.name || !newSupplier.contact_person) {
-      setError('Nama supplier dan kontak wajib diisi');
+    if (!newSupplier.name || !newSupplier.contact) {
+      alert('Nama supplier dan kontak wajib diisi');
       return;
     }
     
     try {
-      setIsLoading(true);
-      setError(null);
-      
-      await db.insert('suppliers', {
-        name: newSupplier.name,
-        contact_person: newSupplier.contact_person,
-        phone: newSupplier.phone,
-        email: newSupplier.email || null,
-        address: newSupplier.address || null,
-        category: newSupplier.category,
-        is_active: true
-      });
-      
-      // Reload suppliers
-      await loadSuppliers();
-      
+      const { data, error } = await supabase
+        .from('suppliers')
+        .insert([{
+          name: newSupplier.name,
+          contact_person: newSupplier.contact,
+          phone: newSupplier.phone,
+          email: newSupplier.email || null,
+          address: newSupplier.address || null,
+          category: newSupplier.category,
+          is_active: true
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding supplier:', error);
+        alert('Gagal menambahkan supplier: ' + error.message);
+        return;
+      }
+
       alert('Supplier berhasil ditambahkan!');
       setShowSupplierForm(false);
       setNewSupplier({
         name: '',
-        contact_person: '',
+        contact: '',
         phone: '',
         email: '',
         address: '',
         category: 'beverage'
       });
-    } catch (err: any) {
-      setError('Gagal menambahkan supplier: ' + err.message);
-      console.error('Error adding supplier:', err);
-    } finally {
-      setIsLoading(false);
+      
+      // Reload suppliers
+      loadData();
+    } catch (error) {
+      console.error('Error adding supplier:', error);
+      alert('Terjadi kesalahan saat menambahkan supplier');
     }
   };
 
-  const handleEditProduct = async (productId: string) => {
-    // Here you would normally update the database
-    alert(`Product ${productId} berhasil diperbarui!`);
-    setShowEditForm(null);
-  };
-
-  const handleDeleteProduct = async (productId: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus produk ini?')) {
-      try {
-        setIsLoading(true);
-        await db.update('products', productId, { is_active: false });
-        await loadProducts();
-        alert('Produk berhasil dihapus!');
-      } catch (err: any) {
-        setError('Gagal menghapus produk: ' + err.message);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  };
+  if (loading) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Memuat data...</p>
+        </div>
+      </div>
+    );
+  }
 
   const renderProductsTab = () => (
     <div className="space-y-6">
@@ -417,29 +440,12 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddForm(true)}
-          disabled={isLoading}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
-          {isLoading ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+          <Plus className="h-5 w-5" />
           Tambah Produk
         </button>
       </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <p className="text-red-800">{error}</p>
-          </div>
-          <button 
-            onClick={() => setError(null)}
-            className="mt-2 text-red-600 hover:text-red-700 text-sm"
-          >
-            Tutup
-          </button>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4">
@@ -480,110 +486,92 @@ const Products: React.FC = () => {
         </div>
       )}
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
-          <span className="ml-2 text-gray-600">Memuat produk...</span>
-        </div>
-      )}
-
       {/* Products Grid */}
-      {!isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredProducts.map((product) => (
-            <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-              {/* Product Header */}
-              <div className="p-4 border-b border-gray-100">
-                <div className="flex items-center justify-between mb-2">
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
-                    {product.category}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => setShowEditForm(product.id)}
-                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteProduct(product.id)}
-                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {filteredProducts.map((product) => (
+          <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+            {/* Product Header */}
+            <div className="p-4 border-b border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
+                  {product.category}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => setShowEditForm(product.id)}
+                    className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button 
+                    onClick={() => alert(`Hapus produk ${product.name}?`)}
+                    className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
-                <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
               </div>
+              <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
+              <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
+            </div>
 
-              {/* Product Details */}
-              <div className="p-4">
-                <div className="space-y-3">
-                  {/* Price & Cost */}
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-xs text-gray-500">Harga Jual</p>
-                      <p className="font-semibold text-green-600">
-                        Rp {product.price.toLocaleString('id-ID')}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Modal</p>
-                      <p className="font-medium text-gray-700">
-                        Rp {product.cost.toLocaleString('id-ID')}
-                      </p>
-                    </div>
+            {/* Product Details */}
+            <div className="p-4">
+              <div className="space-y-3">
+                {/* Price & Cost */}
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs text-gray-500">Harga Jual</p>
+                    <p className="font-semibold text-green-600">
+                      Rp {product.price.toLocaleString('id-ID')}
+                    </p>
                   </div>
-
-                  {/* Stock */}
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-xs text-gray-500">Stok Tersedia</p>
-                      <p className={`font-semibold ${
-                        product.stock <= product.min_stock ? 'text-red-600' : 'text-blue-600'
-                      }`}>
-                        {product.stock} unit
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Min. Stok</p>
-                      <p className="font-medium text-gray-700">{product.min_stock} unit</p>
-                    </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Modal</p>
+                    <p className="font-medium text-gray-700">
+                      Rp {product.cost.toLocaleString('id-ID')}
+                    </p>
                   </div>
-
-                  {/* Profit Margin */}
-                  <div className="pt-3 border-t border-gray-100">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Margin Keuntungan</span>
-                      <span className="font-semibold text-purple-600">
-                        {Math.round(((product.price - product.cost) / product.price) * 100)}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Barcode */}
-                  {product.barcode && (
-                    <div className="pt-2">
-                      <p className="text-xs text-gray-500">Barcode</p>
-                      <p className="font-mono text-sm text-gray-700">{product.barcode}</p>
-                    </div>
-                  )}
-
-                  {/* Supplier */}
-                  {product.suppliers && (
-                    <div className="pt-2">
-                      <p className="text-xs text-gray-500">Supplier</p>
-                      <p className="text-sm text-gray-700">{product.suppliers.name}</p>
-                    </div>
-                  )}
                 </div>
+
+                {/* Stock */}
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs text-gray-500">Stok Tersedia</p>
+                    <p className={`font-semibold ${
+                      product.stock <= product.min_stock ? 'text-red-600' : 'text-blue-600'
+                    }`}>
+                      {product.stock} unit
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Min. Stok</p>
+                    <p className="font-medium text-gray-700">{product.min_stock} unit</p>
+                  </div>
+                </div>
+
+                {/* Profit Margin */}
+                <div className="pt-3 border-t border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-500">Margin Keuntungan</span>
+                    <span className="font-semibold text-purple-600">
+                      {Math.round(((product.price - product.cost) / product.price) * 100)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Barcode */}
+                {product.barcode && (
+                  <div className="pt-2">
+                    <p className="text-xs text-gray-500">Barcode</p>
+                    <p className="font-mono text-sm text-gray-700">{product.barcode}</p>
+                  </div>
+                )}
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 
@@ -597,10 +585,9 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowPurchaseForm(true)}
-          disabled={isLoading}
-          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
-          {isLoading ? <RefreshCw className="h-5 w-5 animate-spin" /> : <ShoppingBag className="h-5 w-5" />}
+          <ShoppingBag className="h-5 w-5" />
           Buat Purchase Order
         </button>
       </div>
@@ -620,7 +607,7 @@ const Products: React.FC = () => {
       {/* Purchase Orders List */}
       <div className="space-y-4">
         {filteredPurchases.map((purchase) => {
-          const supplier = purchase.suppliers;
+          const supplier = suppliers.find(s => s.id === purchase.supplier_id);
           return (
             <div key={purchase.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
@@ -734,8 +721,6 @@ const Products: React.FC = () => {
                       <div className="text-sm space-y-1">
                         <div><strong>PO Number:</strong> {purchase.po_number}</div>
                         <div><strong>Status:</strong> {purchase.status}</div>
-                        <div><strong>Subtotal:</strong> Rp {purchase.subtotal.toLocaleString('id-ID')}</div>
-                        <div><strong>Pajak:</strong> Rp {purchase.tax.toLocaleString('id-ID')}</div>
                         <div><strong>Total:</strong> Rp {purchase.total_amount.toLocaleString('id-ID')}</div>
                       </div>
                     </div>
@@ -766,10 +751,9 @@ const Products: React.FC = () => {
         </div>
         <button
           onClick={() => setShowSupplierForm(true)}
-          disabled={isLoading}
-          className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
-          {isLoading ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+          <Plus className="h-5 w-5" />
           Tambah Supplier
         </button>
       </div>
@@ -878,7 +862,6 @@ const Products: React.FC = () => {
                   onClick={() => {
                     setActiveTab(tab.id as any);
                     setSearchTerm('');
-                    setError(null);
                   }}
                   className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === tab.id
@@ -907,7 +890,7 @@ const Products: React.FC = () => {
             <div className="p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Tambah Produk Baru</h2>
               
-              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleAddProduct(); }}>
+              <form className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk *</label>
                   <input
@@ -916,7 +899,6 @@ const Products: React.FC = () => {
                     onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Masukkan nama produk"
-                    required
                   />
                 </div>
                 
@@ -943,8 +925,6 @@ const Products: React.FC = () => {
                       onChange={(e) => setNewProduct({...newProduct, cost: Number(e.target.value)})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0"
-                      min="0"
-                      required
                     />
                   </div>
                   <div>
@@ -955,8 +935,6 @@ const Products: React.FC = () => {
                       onChange={(e) => setNewProduct({...newProduct, price: Number(e.target.value)})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0"
-                      min="0"
-                      required
                     />
                   </div>
                 </div>
@@ -970,34 +948,18 @@ const Products: React.FC = () => {
                       onChange={(e) => setNewProduct({...newProduct, stock: Number(e.target.value)})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0"
-                      min="0"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Min. Stok</label>
                     <input
                       type="number"
-                      value={newProduct.min_stock}
-                      onChange={(e) => setNewProduct({...newProduct, min_stock: Number(e.target.value)})}
+                      value={newProduct.minStock}
+                      onChange={(e) => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0"
-                      min="0"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier (Opsional)</label>
-                  <select
-                    value={newProduct.supplier_id}
-                    onChange={(e) => setNewProduct({...newProduct, supplier_id: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Pilih Supplier</option>
-                    {suppliers.map(supplier => (
-                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                    ))}
-                  </select>
                 </div>
                 
                 <div>
@@ -1027,16 +989,13 @@ const Products: React.FC = () => {
                 <button
                   onClick={() => setShowAddForm(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                  disabled={isLoading}
                 >
                   Batal
                 </button>
                 <button 
                   onClick={handleAddProduct}
-                  disabled={isLoading}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
                   Simpan Produk
                 </button>
               </div>
@@ -1052,16 +1011,15 @@ const Products: React.FC = () => {
             <div className="p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Buat Purchase Order</h2>
               
-              <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleCreatePurchase(); }}>
+              <form className="space-y-6">
                 {/* Supplier Selection */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
                     <select
-                      value={newPurchase.supplier_id}
-                      onChange={(e) => setNewPurchase({...newPurchase, supplier_id: e.target.value})}
+                      value={newPurchase.supplierId}
+                      onChange={(e) => setNewPurchase({...newPurchase, supplierId: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
                     >
                       <option value="">Pilih Supplier</option>
                       {suppliers.map(supplier => (
@@ -1074,8 +1032,8 @@ const Products: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Diharapkan</label>
                     <input
                       type="date"
-                      value={newPurchase.expected_date}
-                      onChange={(e) => setNewPurchase({...newPurchase, expected_date: e.target.value})}
+                      value={newPurchase.expectedDate}
+                      onChange={(e) => setNewPurchase({...newPurchase, expectedDate: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -1101,8 +1059,8 @@ const Products: React.FC = () => {
                         <div className="col-span-4">
                           <label className="block text-xs font-medium text-gray-700 mb-1">Produk</label>
                           <select
-                            value={item.product_id}
-                            onChange={(e) => updatePurchaseItem(index, 'product_id', e.target.value)}
+                            value={item.productId}
+                            onChange={(e) => updatePurchaseItem(index, 'productId', e.target.value)}
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
                             <option value="">Pilih Produk</option>
@@ -1127,8 +1085,8 @@ const Products: React.FC = () => {
                           <label className="block text-xs font-medium text-gray-700 mb-1">Harga Satuan</label>
                           <input
                             type="number"
-                            value={item.unit_cost}
-                            onChange={(e) => updatePurchaseItem(index, 'unit_cost', Number(e.target.value))}
+                            value={item.unitCost}
+                            onChange={(e) => updatePurchaseItem(index, 'unitCost', Number(e.target.value))}
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         </div>
@@ -1198,16 +1156,13 @@ const Products: React.FC = () => {
                 <button
                   onClick={() => setShowPurchaseForm(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                  disabled={isLoading}
                 >
                   Batal
                 </button>
                 <button 
                   onClick={handleCreatePurchase}
-                  disabled={isLoading}
-                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
                   Buat Purchase Order
                 </button>
               </div>
@@ -1223,7 +1178,7 @@ const Products: React.FC = () => {
             <div className="p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Tambah Supplier Baru</h2>
               
-              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleAddSupplier(); }}>
+              <form className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nama Supplier *</label>
                   <input
@@ -1232,7 +1187,6 @@ const Products: React.FC = () => {
                     onChange={(e) => setNewSupplier({...newSupplier, name: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Nama perusahaan supplier"
-                    required
                   />
                 </div>
                 
@@ -1240,24 +1194,22 @@ const Products: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kontak Person *</label>
                   <input
                     type="text"
-                    value={newSupplier.contact_person}
-                    onChange={(e) => setNewSupplier({...newSupplier, contact_person: e.target.value})}
+                    value={newSupplier.contact}
+                    onChange={(e) => setNewSupplier({...newSupplier, contact: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Nama kontak person"
-                    required
                   />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon</label>
                     <input
                       type="tel"
                       value={newSupplier.phone}
                       onChange={(e) => setNewSupplier({...newSupplier, phone: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="+62 8xx-xxxx-xxxx"
-                      required
                     />
                   </div>
                   
@@ -1303,16 +1255,13 @@ const Products: React.FC = () => {
                 <button
                   onClick={() => setShowSupplierForm(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                  disabled={isLoading}
                 >
                   Batal
                 </button>
                 <button 
                   onClick={handleAddSupplier}
-                  disabled={isLoading}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
                   Tambah Supplier
                 </button>
               </div>
@@ -1336,7 +1285,7 @@ const Products: React.FC = () => {
             <ShoppingBag className="h-6 w-6 text-green-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {purchaseOrders.length}
+            {purchaseOrders?.length || 0}
           </h3>
           <p className="text-gray-600 text-sm">Purchase Order</p>
         </div>
@@ -1346,7 +1295,7 @@ const Products: React.FC = () => {
             <Truck className="h-6 w-6 text-purple-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {suppliers.length}
+            {suppliers?.length || 0}
           </h3>
           <p className="text-gray-600 text-sm">Supplier</p>
         </div>
