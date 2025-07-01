@@ -21,11 +21,15 @@ async function getCurrentUserSafe() {
     const { data: { user }, error } = await supabase.auth.getUser();
     
     if (error) {
+      // Handle the specific case where no session exists - this is normal
+      if (error.message === 'Auth session missing!') {
+        return null;
+      }
       throw new Error(`Failed to retrieve user session: ${error.message}`);
     }
     
     if (!user) {
-      throw new Error('No authenticated user found. Please log in to continue.');
+      return null;
     }
     
     return user;
@@ -95,6 +99,9 @@ export const db = {
 
     async create(customer: any) {
       const user = await getCurrentUserSafe();
+      if (!user) {
+        throw new Error('No authenticated user found. Please log in to continue.');
+      }
       return db.insert('customers', {
         ...customer,
         created_by: user.id
@@ -142,6 +149,9 @@ export const db = {
 
     async create(product: any) {
       const user = await getCurrentUserSafe();
+      if (!user) {
+        throw new Error('No authenticated user found. Please log in to continue.');
+      }
       return db.insert('products', {
         ...product,
         created_by: user.id
@@ -166,6 +176,9 @@ export const db = {
   sales: {
     async create(sale: any, items: any[]) {
       const user = await getCurrentUserSafe();
+      if (!user) {
+        throw new Error('No authenticated user found. Please log in to continue.');
+      }
       
       // Create sale
       const saleData = await db.insert('sales', {
@@ -198,6 +211,9 @@ export const db = {
   rentals: {
     async create(rental: any) {
       const user = await getCurrentUserSafe();
+      if (!user) {
+        throw new Error('No authenticated user found. Please log in to continue.');
+      }
       
       return db.insert('rental_sessions', {
         ...rental,
@@ -226,6 +242,9 @@ export const db = {
   vouchers: {
     async create(voucher: any) {
       const user = await getCurrentUserSafe();
+      if (!user) {
+        throw new Error('No authenticated user found. Please log in to continue.');
+      }
       
       // Generate voucher code
       const { data } = await supabase.rpc('generate_voucher_code');
@@ -258,6 +277,9 @@ export const db = {
 
         // Record usage
         const user = await getCurrentUserSafe();
+        if (!user) {
+          throw new Error('No authenticated user found. Please log in to continue.');
+        }
         await db.insert('voucher_usages', {
           voucher_id: voucherId,
           voucher_code: voucher.voucher_code,
@@ -288,6 +310,9 @@ export const db = {
 
     async create(sessionData: any) {
       const user = await getCurrentUserSafe();
+      if (!user) {
+        throw new Error('No authenticated user found. Please log in to continue.');
+      }
       
       return db.insert('cashier_sessions', {
         ...sessionData,
@@ -325,6 +350,10 @@ export const auth = {
   async getCurrentUser() {
     try {
       const user = await getCurrentUserSafe();
+      
+      if (!user) {
+        return null;
+      }
       
       const { data: userData, error } = await supabase
         .from('users')
