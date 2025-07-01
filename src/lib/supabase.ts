@@ -15,6 +15,28 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
+// Helper function to get current user with proper error handling
+async function getCurrentUserSafe() {
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error) {
+      throw new Error(`Failed to retrieve user session: ${error.message}`);
+    }
+    
+    if (!user) {
+      throw new Error('No authenticated user found. Please log in to continue.');
+    }
+    
+    return user;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Authentication error: Unable to verify user session');
+  }
+}
+
 // Database helper functions
 export const db = {
   // Generic query functions
@@ -72,9 +94,10 @@ export const db = {
     },
 
     async create(customer: any) {
+      const user = await getCurrentUserSafe();
       return db.insert('customers', {
         ...customer,
-        created_by: (await supabase.auth.getUser()).data.user?.id
+        created_by: user.id
       });
     },
 
@@ -117,6 +140,14 @@ export const db = {
       return data;
     },
 
+    async create(product: any) {
+      const user = await getCurrentUserSafe();
+      return db.insert('products', {
+        ...product,
+        created_by: user.id
+      });
+    },
+
     async updateStock(id: string, quantity: number) {
       const { data: product } = await supabase
         .from('products')
@@ -134,12 +165,12 @@ export const db = {
 
   sales: {
     async create(sale: any, items: any[]) {
-      const { data: user } = await supabase.auth.getUser();
+      const user = await getCurrentUserSafe();
       
       // Create sale
       const saleData = await db.insert('sales', {
         ...sale,
-        cashier_id: user.user?.id,
+        cashier_id: user.id,
         sale_date: new Date().toISOString()
       });
 
@@ -166,11 +197,11 @@ export const db = {
 
   rentals: {
     async create(rental: any) {
-      const { data: user } = await supabase.auth.getUser();
+      const user = await getCurrentUserSafe();
       
       return db.insert('rental_sessions', {
         ...rental,
-        created_by: user.user?.id,
+        created_by: user.id,
         start_time: new Date().toISOString()
       });
     },
@@ -194,7 +225,7 @@ export const db = {
 
   vouchers: {
     async create(voucher: any) {
-      const { data: user } = await supabase.auth.getUser();
+      const user = await getCurrentUserSafe();
       
       // Generate voucher code
       const { data } = await supabase.rpc('generate_voucher_code');
@@ -202,7 +233,7 @@ export const db = {
       return db.insert('vouchers', {
         ...voucher,
         voucher_code: data,
-        created_by: user.user?.id,
+        created_by: user.id,
         expiry_date: new Date(Date.now() + voucher.validity_days * 24 * 60 * 60 * 1000).toISOString()
       });
     },
@@ -226,13 +257,13 @@ export const db = {
         });
 
         // Record usage
-        const { data: user } = await supabase.auth.getUser();
+        const user = await getCurrentUserSafe();
         await db.insert('voucher_usages', {
           voucher_id: voucherId,
           voucher_code: voucher.voucher_code,
           hours_used: hoursUsed,
           remaining_hours_after: newRemainingHours,
-          used_by: user.user?.id
+          used_by: user.id
         });
 
         return true;
@@ -256,11 +287,11 @@ export const db = {
     },
 
     async create(sessionData: any) {
-      const { data: user } = await supabase.auth.getUser();
+      const user = await getCurrentUserSafe();
       
       return db.insert('cashier_sessions', {
         ...sessionData,
-        cashier_id: user.user?.id
+        cashier_id: user.id
       });
     },
 
@@ -292,10 +323,10 @@ export const auth = {
   },
 
   async getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user) {
-      const { data: userData } = await supabase
+    try {
+      const user = await getCurrentUserSafe();
+      
+      const { data: userData, error } = await supabase
         .from('users')
         .select(`
           *,
@@ -304,9 +335,16 @@ export const auth = {
         .eq('id', user.id)
         .single();
       
+      if (error) {
+        throw new Error(`Failed to retrieve user data: ${error.message}`);
+      }
+      
       return userData;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to get current user information');
     }
-    
-    return null;
   }
 };
