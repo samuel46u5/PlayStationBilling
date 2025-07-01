@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { auth } from '../lib/supabase';
 
 export interface User {
   id: string;
@@ -32,43 +33,45 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>({
-    id: 'demo-user',
-    username: 'demo',
-    full_name: 'Demo User',
-    email: 'demo@example.com',
-    role_id: 'admin',
-    status: 'active',
-    roles: {
-      name: 'Administrator',
-      permissions: []
-    }
-  });
-  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const currentUser = await auth.getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+        }
+      } catch (err: any) {
+        console.error('Session check error:', err);
+        setError(err.message || 'Failed to check authentication session');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkSession();
+  }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setError(null);
     setIsLoading(true);
     
     try {
-      // Simulate login for demo
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const authData = await auth.signIn(email, password);
       
-      setUser({
-        id: 'demo-user',
-        username: 'demo',
-        full_name: 'Demo User',
-        email: email,
-        role_id: 'admin',
-        status: 'active',
-        roles: {
-          name: 'Administrator',
-          permissions: []
+      if (authData.user) {
+        const userData = await auth.getCurrentUser();
+        if (userData) {
+          setUser(userData);
+          return true;
         }
-      });
+      }
       
-      return true;
+      throw new Error('Failed to get user data after login');
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'An error occurred during login');
@@ -79,7 +82,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    setUser(null);
+    try {
+      await auth.signOut();
+      setUser(null);
+      setError(null);
+    } catch (err: any) {
+      console.error('Logout error:', err);
+      setError(err.message || 'An error occurred during logout');
+    }
   };
 
   const value = {
