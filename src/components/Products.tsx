@@ -6,7 +6,7 @@ import { db } from '../lib/supabase'; // Hanya import db
 import Swal from 'sweetalert2';
 
 const Products: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'products' | 'purchases' | 'suppliers'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'purchases' | 'suppliers' | 'purchaseList'>('products');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -907,161 +907,42 @@ const Products: React.FC = () => {
     </div>
   );
 
-  const renderSuppliersTab = () => (
+  // Form/Content untuk tab Daftar Pembelian
+  const renderPurchaseListTab = () => (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <h2 className="text-2xl font-bold text-gray-900">Daftar Pembelian</h2>
+      <p className="text-gray-600">Form pencarian dan daftar pembelian produk dari supplier.</p>
+      <form className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-xl space-y-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Manajemen Supplier</h2>
-          <p className="text-gray-600">Kelola data supplier dan vendor</p>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Cari Nomor PO / Supplier</label>
+          <input
+            type="text"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Masukkan nomor PO atau nama supplier"
+          />
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSupplierView('card')}
-            className={`p-2 rounded-lg border ${supplierView === 'card' ? 'bg-purple-100 border-purple-400 text-purple-600' : 'border-gray-200 text-gray-400 hover:text-purple-600'}`}
-            aria-label="Tampilan Card"
-          >
-            <LayoutGrid className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => setSupplierView('list')}
-            className={`p-2 rounded-lg border ${supplierView === 'list' ? 'bg-purple-100 border-purple-400 text-purple-600' : 'border-gray-200 text-gray-400 hover:text-purple-600'}`}
-            aria-label="Tampilan List"
-          >
-            <ListIcon className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => setShowSupplierForm(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ml-2"
-          >
-            <Plus className="h-5 w-5" />
-            Tambah Supplier
-          </button>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
+          <input
+            type="date"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
+        <button
+          type="submit"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          Cari Pembelian
+        </button>
+      </form>
+      {/* Placeholder untuk hasil pencarian */}
+      <div className="bg-gray-50 rounded-xl border border-gray-200 p-6 text-gray-400 text-center">
+        Hasil pencarian pembelian akan muncul di sini.
       </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 cursor-pointer" onClick={() => setSearchTerm('')} />
-        <input
-          type="text"
-          placeholder="Cari supplier..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-      </div>
-
-      {/* Suppliers Grid/List */}
-      {supplierView === 'card' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSuppliers.map((supplier) => (
-            <div key={supplier.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-4 text-white">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                    <Truck className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{supplier.name}</h3>
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>
-                      {supplier.category}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              {/* Body */}
-              <div className="p-4">
-                <div className="space-y-3">
-                  <div className="text-sm">
-                    <p className="text-gray-600">Kontak Person</p>
-                    <p className="font-medium">{supplier.contact_person}</p>
-                  </div>
-                  <div className="text-sm">
-                    <p className="text-gray-600">Telepon</p>
-                    <p className="font-medium">{supplier.phone}</p>
-                  </div>
-                  <div className="text-sm">
-                    <p className="text-gray-600">Email</p>
-                    <p className="font-medium">{supplier.email}</p>
-                  </div>
-                  {supplier.address && (
-                    <div className="text-sm">
-                      <p className="text-gray-600">Alamat</p>
-                      <p className="font-medium">{supplier.address}</p>
-                    </div>
-                  )}
-                  <div className="pt-3 border-t border-gray-100">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Total PO:</span>
-                      <span className="font-medium">
-                        {mockPurchaseOrders.filter(po => po.supplierId === supplier.id).length}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <button className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                    Buat PO
-                  </button>
-                  <button
-                    className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors"
-                    onClick={() => setShowEditSupplierForm(supplier.id)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button
-                    className="p-2 border border-gray-300 hover:border-gray-400 text-red-600 rounded-lg transition-colors"
-                    onClick={() => handleDeleteSupplier(supplier)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontak Person</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alamat</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {filteredSuppliers.map((supplier) => (
-                <tr key={supplier.id}>
-                  <td className="px-4 py-3 font-medium text-gray-900">{supplier.name}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>{supplier.category}</span>
-                  </td>
-                  <td className="px-4 py-3">{supplier.contact_person}</td>
-                  <td className="px-4 py-3">{supplier.phone}</td>
-                  <td className="px-4 py-3">{supplier.email}</td>
-                  <td className="px-4 py-3">{supplier.address}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setShowEditSupplierForm(supplier.id)} className="p-1 text-gray-400 hover:text-purple-600 transition-colors"><Edit className="h-4 w-4" /></button>
-                      <button onClick={() => handleDeleteSupplier(supplier)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 
+  // ...existing code...
   return (
     <>
       <div className="p-6 bg-gray-50 min-h-screen">
@@ -1077,6 +958,7 @@ const Products: React.FC = () => {
               {[
                 { id: 'products', label: 'Produk', icon: Package },
                 { id: 'purchases', label: 'Pembelian', icon: ShoppingBag },
+                { id: 'purchaseList', label: 'Daftar Pembelian', icon: FileText },
                 { id: 'suppliers', label: 'Supplier', icon: Truck }
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -1105,6 +987,7 @@ const Products: React.FC = () => {
         {/* Tab Content */}
         {activeTab === 'products' && renderProductsTab()}
         {activeTab === 'purchases' && renderPurchasesTab()}
+        {activeTab === 'purchaseList' && renderPurchaseListTab()}
         {activeTab === 'suppliers' && renderSuppliersTab()}
 
         {/* Add Product Modal */}
