@@ -62,6 +62,12 @@ const Products: React.FC = () => {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [totalPurchases, setTotalPurchases] = useState(0);
 
+  // State untuk filter daftar pembelian
+  const [purchaseListFilter, setPurchaseListFilter] = useState({
+    search: '',
+    date: ''
+  });
+
   // Calculate totals whenever items change
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
   const [purchaseTax, setPurchaseTax] = useState(0);
@@ -907,16 +913,32 @@ const Products: React.FC = () => {
     </div>
   );
 
+  // Filter daftar pembelian dari database
+  const filteredPurchaseList = purchases.filter((purchase) => {
+    const supplier = suppliers.find(s => s.id === purchase.supplier_id);
+    const matchSearch =
+      purchase.poNumber?.toLowerCase().includes(purchaseListFilter.search.toLowerCase()) ||
+      supplier?.name?.toLowerCase().includes(purchaseListFilter.search.toLowerCase());
+    const matchDate = !purchaseListFilter.date ||
+      (purchase.orderDate && purchase.orderDate.startsWith(purchaseListFilter.date));
+    return matchSearch && matchDate;
+  });
+
   // Form/Content untuk tab Daftar Pembelian
   const renderPurchaseListTab = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Daftar Pembelian</h2>
-      <p className="text-gray-600">Form pencarian dan daftar pembelian produk dari supplier.</p>
-      <form className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-xl space-y-4">
+      <p className="text-gray-600">Daftar pembelian produk dari supplier (data dari database).</p>
+      <form
+        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-xl space-y-4"
+        onSubmit={e => e.preventDefault()}
+      >
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Cari Nomor PO / Supplier</label>
           <input
             type="text"
+            value={purchaseListFilter.search}
+            onChange={e => setPurchaseListFilter(f => ({ ...f, search: e.target.value }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Masukkan nomor PO atau nama supplier"
           />
@@ -925,19 +947,52 @@ const Products: React.FC = () => {
           <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
           <input
             type="date"
+            value={purchaseListFilter.date}
+            onChange={e => setPurchaseListFilter(f => ({ ...f, date: e.target.value }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
-        <button
-          type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          Cari Pembelian
-        </button>
       </form>
-      {/* Placeholder untuk hasil pencarian */}
-      <div className="bg-gray-50 rounded-xl border border-gray-200 p-6 text-gray-400 text-center">
-        Hasil pencarian pembelian akan muncul di sini.
+      {/* Tabel hasil pencarian */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-0 overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">No. PO</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal Order</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estimasi Tiba</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {filteredPurchaseList.length === 0 && (
+              <tr>
+                <td colSpan={6} className="text-center text-gray-400 py-6">
+                  Tidak ada data pembelian ditemukan.
+                </td>
+              </tr>
+            )}
+            {filteredPurchaseList.map((purchase) => {
+              const supplier = suppliers.find(s => s.id === purchase.supplier_id);
+              return (
+                <tr key={purchase.id}>
+                  <td className="px-4 py-3 font-medium text-blue-700">{purchase.poNumber}</td>
+                  <td className="px-4 py-3">{supplier?.name || '-'}</td>
+                  <td className="px-4 py-3">{purchase.orderDate ? new Date(purchase.orderDate).toLocaleDateString('id-ID') : '-'}</td>
+                  <td className="px-4 py-3">{purchase.expectedDate ? new Date(purchase.expectedDate).toLocaleDateString('id-ID') : '-'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(purchase.status)}`}>
+                      {purchase.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-right">Rp {purchase.totalAmount?.toLocaleString('id-ID') || '0'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
