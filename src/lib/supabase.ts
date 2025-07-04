@@ -170,6 +170,10 @@ export const db = {
           stock: product.stock - quantity 
         });
       }
+    },
+
+    async update(id: string, product: any) {
+      return db.update('products', id, product);
     }
   },
 
@@ -326,6 +330,61 @@ export const db = {
         end_time: new Date().toISOString(),
         status: 'closed'
       });
+    }
+  },
+
+  suppliers: {
+    async getAll() {
+      return db.select('suppliers', '*');
+    },
+    async create(supplier: any) {
+      // Hilangkan autentikasi user
+      return db.insert('suppliers', supplier);
+    },
+    async update(id: string, supplier: any) {
+      return db.update('suppliers', id, supplier);
+    },
+    async delete(id: string) {
+      return db.delete('suppliers', id);
+    }
+  },
+
+  purchases: {
+    async getAll() {
+      return db.select('purchase_orders', '*');
+    },
+    async create(purchase: any) {
+      // Generate PO number (simple: PO-YYYYMMDD-<random4>)
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0,10).replace(/-/g, '');
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      const po_number = `PO-${dateStr}-${rand}`;
+      // Insert PO
+      const po = await db.insert('purchase_orders', {
+        po_number,
+        supplier_id: purchase.supplier_id,
+        notes: purchase.notes,
+        expected_date: purchase.expected_date,
+        subtotal: purchase.subtotal,
+        tax: purchase.tax,
+        total_amount: purchase.total_amount || purchase.total, // fallback for old code
+        status: 'pending',
+        // created_by: null // tidak perlu jika tidak ada user
+      });
+      // Insert PO items
+      if (purchase.items && Array.isArray(purchase.items)) {
+        for (const item of purchase.items) {
+          await db.insert('purchase_order_items', {
+            po_id: po.id,
+            product_id: item.productId,
+            product_name: item.productName,
+            quantity: item.quantity,
+            unit_cost: item.unitCost,
+            total: item.total
+          });
+        }
+      }
+      return po;
     }
   }
 };

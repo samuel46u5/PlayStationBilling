@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Package, Edit, Trash2, AlertTriangle, ShoppingBag, TrendingUp, Calendar, FileText, Truck, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { List as ListIcon, LayoutGrid } from 'lucide-react';
 import { mockProducts, mockPurchaseOrders, mockSuppliers } from '../data/mockData';
+import { db } from '../lib/supabase'; // Hanya import db
 import Swal from 'sweetalert2';
 
 const Products: React.FC = () => {
@@ -39,12 +41,26 @@ const Products: React.FC = () => {
 
   const [newSupplier, setNewSupplier] = useState({
     name: '',
-    contact: '',
+    contact_person: '',
     phone: '',
     email: '',
     address: '',
     category: 'beverage' as 'beverage' | 'food' | 'snack' | 'other'
   });
+
+  // State untuk produk dari database
+  const [products, setProducts] = useState<any[]>([]);
+  // State untuk supplier dari database
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [supplierView, setSupplierView] = useState<'card' | 'list'>('card');
+  const [showEditSupplierForm, setShowEditSupplierForm] = useState<string | null>(null);
+  const [editSupplier, setEditSupplier] = useState<any | null>(null);
+
+  // State for pagination
+  const [purchasePage, setPurchasePage] = useState(1);
+  const purchasesPerPage = 5;
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [totalPurchases, setTotalPurchases] = useState(0);
 
   // Calculate totals whenever items change
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
@@ -62,6 +78,100 @@ const Products: React.FC = () => {
     setPurchaseTotal(total);
   }, [newPurchase.items]);
 
+  // Fetch products from Supabase
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const data = await db.products.getAll();
+        setProducts(data || []);
+      } catch (error: any) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal memuat produk',
+          text: error.message || 'Terjadi kesalahan saat mengambil data produk.'
+        });
+      }
+    };
+    fetchProducts();
+    // expose for refresh
+    (window as any).refreshProducts = fetchProducts;
+  }, []);
+
+  // Fetch suppliers from Supabase
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const data = await db.suppliers.getAll();
+        setSuppliers(data || []);
+      } catch (error: any) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal memuat supplier',
+          text: error.message || 'Terjadi kesalahan saat mengambil data supplier.'
+        });
+      }
+    };
+    fetchSuppliers();
+    (window as any).refreshSuppliers = fetchSuppliers;
+  }, []);
+
+  // Helper: mapping DB fields to UI fields for purchases
+  function mapPurchaseFromDb(p: any) {
+    return {
+      id: p.id,
+      poNumber: p.po_number || p.poNumber || '-',
+      supplier_id: p.supplier_id,
+      orderDate: p.order_date || p.orderDate,
+      expectedDate: p.expected_date || p.expectedDate,
+      status: p.status || 'pending',
+      notes: p.notes,
+      totalAmount: p.total_amount || p.totalAmount,
+      createdBy: p.created_by || p.createdBy,
+      // items: p.items || [] // items will be fetched separately if needed
+    };
+  }
+
+  // Fetch purchases from Supabase (replace mockPurchaseOrders)
+  useEffect(() => {
+    const fetchPurchases = async () => {
+      try {
+        const data = await db.purchases.getAll();
+        // Map DB fields to UI fields
+        const mapped = (data || []).map(mapPurchaseFromDb);
+        setPurchases(mapped);
+        setTotalPurchases(mapped.length);
+      } catch (error: any) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal memuat daftar pembelian',
+          text: error.message || 'Terjadi kesalahan saat mengambil data pembelian.'
+        });
+      }
+    };
+    fetchPurchases();
+    (window as any).refreshPurchases = fetchPurchases;
+  }, []);
+
+  // Buka modal edit dan isi data produk
+  useEffect(() => {
+    if (showEditForm) {
+      const prod = products.find(p => p.id === showEditForm);
+      if (prod) setEditProduct({ ...prod });
+    } else {
+      setEditProduct(null);
+    }
+  }, [showEditForm, products]);
+
+  // Buka modal edit supplier dan isi data
+  useEffect(() => {
+    if (showEditSupplierForm) {
+      const sup = suppliers.find(s => s.id === showEditSupplierForm);
+      if (sup) setEditSupplier({ ...sup });
+    } else {
+      setEditSupplier(null);
+    }
+  }, [showEditSupplierForm, suppliers]);
+
   const categories = [
     { value: 'all', label: 'Semua Kategori' },
     { value: 'beverage', label: 'Minuman' },
@@ -70,7 +180,7 @@ const Products: React.FC = () => {
     { value: 'other', label: 'Lainnya' }
   ];
 
-  const filteredProducts = mockProducts.filter(product => {
+  const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.barcode?.includes(searchTerm);
     const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
@@ -83,9 +193,10 @@ const Products: React.FC = () => {
            purchase.poNumber.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  const filteredSuppliers = mockSuppliers.filter(supplier =>
+  // Ganti filteredSuppliers agar pakai data dari database
+  const filteredSuppliers = suppliers.filter(supplier =>
     supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supplier.contact.toLowerCase().includes(searchTerm.toLowerCase())
+    supplier.contact_person.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getCategoryColor = (category: string) => {
@@ -117,7 +228,7 @@ const Products: React.FC = () => {
     }
   };
 
-  const lowStockProducts = mockProducts.filter(p => p.stock <= p.minStock);
+  const lowStockProducts = products.filter(p => p.stock <= p.minStock);
 
   const addItemToPurchase = () => {
     const newItem = {
@@ -140,6 +251,7 @@ const Products: React.FC = () => {
       const item = { ...updatedItems[index] };
       
       // Update the specific field
+      // @ts-expect-error: dynamic assignment
       item[field as keyof typeof item] = value;
       
       // Handle product selection
@@ -243,32 +355,156 @@ const Products: React.FC = () => {
     });
   };
 
-  const handleAddSupplier = () => {
-    if (!newSupplier.name || !newSupplier.contact) {
+  // Ubah handleAddSupplier agar simpan ke database dan refresh list
+  const handleAddSupplier = async () => {
+    if (!newSupplier.name?.trim() || !newSupplier.contact_person?.trim()) {
       Swal.fire({
         icon: 'error',
         title: 'Validasi Gagal',
-        text: 'Nama supplier dan kontak wajib diisi'
+        text: 'Nama supplier dan kontak person wajib diisi'
       });
       return;
     }
-    
-    Swal.fire({
-      icon: 'success',
-      title: 'Berhasil!',
-      text: `Supplier ${newSupplier.name} berhasil ditambahkan!`
-    });
-    
-    setShowSupplierForm(false);
-    setNewSupplier({
-      name: '',
-      contact: '',
-      phone: '',
-      email: '',
-      address: '',
-      category: 'beverage'
-    });
+    try {
+      await db.suppliers.create(newSupplier);
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil!',
+        text: `Supplier ${newSupplier.name} berhasil ditambahkan!`
+      });
+      setShowSupplierForm(false);
+      setNewSupplier({
+        name: '',
+        contact_person: '',
+        phone: '',
+        email: '',
+        address: '',
+        category: 'beverage'
+      });
+      if ((window as any).refreshSuppliers) (window as any).refreshSuppliers();
+    } catch (error: any) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal tambah supplier',
+        text: error.message || 'Terjadi kesalahan saat menambah supplier.'
+      });
+    }
   };
+
+  const [editProduct, setEditProduct] = useState<any | null>(null); // State produk yang diedit
+
+  const handleEditProduct = async () => {
+    if (!editProduct.name || editProduct.price <= 0) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Validasi Gagal',
+        text: 'Nama produk dan harga wajib diisi'
+      });
+      return;
+    }
+    try {
+      await db.products.update(editProduct.id, {
+        name: editProduct.name,
+        category: editProduct.category,
+        price: editProduct.price,
+        cost: editProduct.cost,
+        stock: editProduct.stock,
+        minStock: editProduct.minStock,
+        barcode: editProduct.barcode,
+        description: editProduct.description
+      });
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil!',
+        text: `Produk ${editProduct.name} berhasil diupdate!`
+      });
+      setShowEditForm(null);
+      // Refresh produk
+      if ((window as any).refreshProducts) (window as any).refreshProducts();
+    } catch (error: any) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal update',
+        text: error.message || 'Terjadi kesalahan saat update produk.'
+      });
+    }
+  };
+
+  // Edit supplier
+  const handleEditSupplier = async () => {
+    // Cek null/undefined dan string kosong
+    if (!editSupplier || !editSupplier.name?.trim() || !editSupplier.contact_person?.trim()) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Validasi Gagal',
+        text: 'Nama supplier dan kontak person wajib diisi'
+      });
+      return;
+    }
+    try {
+      await db.suppliers.update(editSupplier.id, editSupplier);
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil!',
+        text: 'Supplier berhasil diupdate!'
+      });
+      setShowEditSupplierForm(null);
+      if ((window as any).refreshSuppliers) (window as any).refreshSuppliers();
+    } catch (error: any) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal update supplier',
+        text: error.message || 'Terjadi kesalahan saat update supplier.'
+      });
+    }
+  };
+
+  const handleDeleteProduct = async (product: any) => {
+    const result = await Swal.fire({
+      title: `Hapus produk?`,
+      text: `Yakin ingin menghapus produk ${product.name}? Data tidak dapat dikembalikan!`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Ya, hapus',
+      cancelButtonText: 'Batal'
+    });
+    if (result.isConfirmed) {
+      try {
+        await db.delete('products', product.id);
+        Swal.fire('Terhapus!', `Produk ${product.name} berhasil dihapus.`, 'success');
+        if ((window as any).refreshProducts) (window as any).refreshProducts();
+      } catch (error: any) {
+        Swal.fire('Gagal', error.message || 'Gagal menghapus produk.', 'error');
+      }
+    }
+  };
+
+  // Delete supplier
+  const handleDeleteSupplier = async (supplier: any) => {
+    const result = await Swal.fire({
+      title: `Hapus supplier?`,
+      text: `Yakin ingin menghapus supplier ${supplier.name}? Data tidak dapat dikembalikan!`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Ya, hapus',
+      cancelButtonText: 'Batal'
+    });
+    if (result.isConfirmed) {
+      try {
+        await db.suppliers.delete(supplier.id);
+        Swal.fire('Terhapus!', `Supplier ${supplier.name} berhasil dihapus.`, 'success');
+        if ((window as any).refreshSuppliers) (window as any).refreshSuppliers();
+      } catch (error: any) {
+        Swal.fire('Gagal', error.message || 'Gagal menghapus supplier.', 'error');
+      }
+    }
+  };
+
+  const [productView, setProductView] = useState<'card' | 'list'>('card');
 
   const renderProductsTab = () => (
     <div className="space-y-6">
@@ -278,19 +514,38 @@ const Products: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Manajemen Produk</h2>
           <p className="text-gray-600">Kelola inventory produk cafe</p>
         </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          Tambah Produk
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setProductView('card')}
+            className={`p-2 rounded-lg border ${productView === 'card' ? 'bg-blue-100 border-blue-400 text-blue-600' : 'border-gray-200 text-gray-400 hover:text-blue-600'}`}
+            aria-label="Tampilan Card"
+          >
+            <LayoutGrid className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setProductView('list')}
+            className={`p-2 rounded-lg border ${productView === 'list' ? 'bg-blue-100 border-blue-400 text-blue-600' : 'border-gray-200 text-gray-400 hover:text-blue-600'}`}
+            aria-label="Tampilan List"
+          >
+            <ListIcon className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ml-2"
+          >
+            <Plus className="h-5 w-5" />
+            Tambah Produk
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <Search 
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 cursor-pointer" 
+            onClick={() => setSearchTerm('')}
+          />
           <input
             type="text"
             placeholder="Cari produk atau barcode..."
@@ -326,94 +581,137 @@ const Products: React.FC = () => {
         </div>
       )}
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredProducts.map((product) => (
-          <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-            {/* Product Header */}
-            <div className="p-4 border-b border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
-                  {product.category}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button 
-                    onClick={() => setShowEditForm(product.id)}
-                    className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button 
-                    onClick={() => alert(`Hapus produk ${product.name}?`)}
-                    className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+      {/* Products Grid/List */}
+      {productView === 'card' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredProducts.map((product) => (
+            <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+              {/* Product Header */}
+              <div className="p-4 border-b border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
+                    {product.category}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => setShowEditForm(product.id)}
+                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteProduct(product)}
+                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
+                <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
+                <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
               </div>
-              <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
-              <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
-            </div>
 
-            {/* Product Details */}
-            <div className="p-4">
-              <div className="space-y-3">
-                {/* Price & Cost */}
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs text-gray-500">Harga Jual</p>
-                    <p className="font-semibold text-green-600">
-                      Rp {product.price.toLocaleString('id-ID')}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">Modal</p>
-                    <p className="font-medium text-gray-700">
-                      Rp {product.cost.toLocaleString('id-ID')}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Stock */}
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs text-gray-500">Stok Tersedia</p>
-                    <p className={`font-semibold ${
-                      product.stock <= product.minStock ? 'text-red-600' : 'text-blue-600'
-                    }`}>
-                      {product.stock} unit
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">Min. Stok</p>
-                    <p className="font-medium text-gray-700">{product.minStock} unit</p>
-                  </div>
-                </div>
-
-                {/* Profit Margin */}
-                <div className="pt-3 border-t border-gray-100">
+              {/* Product Details */}
+              <div className="p-4">
+                <div className="space-y-3">
+                  {/* Price & Cost */}
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Margin Keuntungan</span>
-                    <span className="font-semibold text-purple-600">
-                      {Math.round(((product.price - product.cost) / product.price) * 100)}%
-                    </span>
+                    <div>
+                      <p className="text-xs text-gray-500">Harga Jual</p>
+                      <p className="font-semibold text-green-600">
+                        Rp {product.price.toLocaleString('id-ID')}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">Modal</p>
+                      <p className="font-medium text-gray-700">
+                        Rp {product.cost.toLocaleString('id-ID')}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {/* Barcode */}
-                {product.barcode && (
-                  <div className="pt-2">
-                    <p className="text-xs text-gray-500">Barcode</p>
-                    <p className="font-mono text-sm text-gray-700">{product.barcode}</p>
+                  {/* Stock */}
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-xs text-gray-500">Stok Tersedia</p>
+                      <p className={`font-semibold ${
+                        product.stock <= product.minStock ? 'text-red-600' : 'text-blue-600'
+                      }`}>
+                        {product.stock} unit
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">Min. Stok</p>
+                      <p className="font-medium text-gray-700">{product.minStock} unit</p>
+                    </div>
                   </div>
-                )}
+
+                  {/* Profit Margin */}
+                  <div className="pt-3 border-t border-gray-100">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500">Margin Keuntungan</span>
+                      <span className="font-semibold text-purple-600">
+                        {Math.round(((product.price - product.cost) / product.price) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Barcode */}
+                  {product.barcode && (
+                    <div className="pt-2">
+                      <p className="text-xs text-gray-500">Barcode</p>
+                      <p className="font-mono text-sm text-gray-700">{product.barcode}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Harga Jual</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modal</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stok</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Min. Stok</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Barcode</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {filteredProducts.map((product) => (
+                <tr key={product.id}>
+                  <td className="px-4 py-3 font-medium text-gray-900">{product.name}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>{product.category}</span>
+                  </td>
+                  <td className="px-4 py-3 text-green-600 font-semibold">Rp {product.price.toLocaleString('id-ID')}</td>
+                  <td className="px-4 py-3 text-gray-700">Rp {product.cost.toLocaleString('id-ID')}</td>
+                  <td className={`px-4 py-3 font-semibold ${product.stock <= product.minStock ? 'text-red-600' : 'text-blue-600'}`}>{product.stock}</td>
+                  <td className="px-4 py-3">{product.minStock}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-700">{product.barcode || '-'}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setShowEditForm(product.id)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => handleDeleteProduct(product)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
+
+  const paginatedPurchases = purchases.slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage);
+  const totalPages = Math.ceil(totalPurchases / purchasesPerPage);
 
   const renderPurchasesTab = () => (
     <div className="space-y-6">
@@ -446,139 +744,166 @@ const Products: React.FC = () => {
 
       {/* Purchase Orders List */}
       <div className="space-y-4">
-        {filteredPurchases.map((purchase) => {
-          const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
-          return (
-            <div key={purchase.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <FileText className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{purchase.poNumber}</h3>
-                    <p className="text-gray-600">{supplier?.name}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(purchase.status)}`}>
-                    {getStatusIcon(purchase.status)}
-                    {purchase.status.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Calendar className="h-4 w-4" />
-                  <div>
-                    <p className="text-xs">Tanggal Order</p>
-                    <p className="font-medium text-gray-900">{new Date(purchase.orderDate).toLocaleDateString('id-ID')}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Truck className="h-4 w-4" />
-                  <div>
-                    <p className="text-xs">Estimasi Tiba</p>
-                    <p className="font-medium text-gray-900">{new Date(purchase.expectedDate).toLocaleDateString('id-ID')}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Package className="h-4 w-4" />
-                  <div>
-                    <p className="text-xs">Total Item</p>
-                    <p className="font-medium text-gray-900">{purchase.items.length} produk</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 text-gray-600">
-                  <TrendingUp className="h-4 w-4" />
-                  <div>
-                    <p className="text-xs">Total Nilai</p>
-                    <p className="font-medium text-gray-900">Rp {purchase.totalAmount.toLocaleString('id-ID')}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setSelectedPurchase(selectedPurchase === purchase.id ? null : purchase.id)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Lihat Detail
-                </button>
-                
-                {purchase.status === 'pending' && (
-                  <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                    Konfirmasi Order
-                  </button>
-                )}
-                
-                {purchase.status === 'ordered' && (
-                  <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                    Terima Barang
-                  </button>
-                )}
-              </div>
-
-              {/* Extended Details */}
-              {selectedPurchase === purchase.id && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="font-semibold text-gray-900 mb-3">Detail Purchase Order</h4>
-                  
-                  {/* Items List */}
-                  <div className="space-y-2 mb-4">
-                    {purchase.items.map((item, index) => (
-                      <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
-                        <div>
-                          <span className="font-medium">{item.productName}</span>
-                          <span className="text-gray-600 ml-2">x {item.quantity}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-medium">Rp {item.total.toLocaleString('id-ID')}</div>
-                          <div className="text-sm text-gray-600">@Rp {item.unitCost.toLocaleString('id-ID')}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Supplier Info */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        {mockPurchaseOrders
+          .filter(purchase => {
+            const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
+            return supplier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              purchase.poNumber.toLowerCase().includes(searchTerm.toLowerCase());
+          })
+          .slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage)
+          .map((purchase) => {
+            const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
+            return (
+              <div key={purchase.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                      <FileText className="h-6 w-6 text-green-600" />
+                    </div>
                     <div>
-                      <h5 className="font-medium text-gray-700 mb-2">Informasi Supplier</h5>
-                      <div className="text-sm space-y-1">
-                        <div><strong>Nama:</strong> {supplier?.name}</div>
-                        <div><strong>Kontak:</strong> {supplier?.contact}</div>
-                        <div><strong>Telepon:</strong> {supplier?.phone}</div>
-                        <div><strong>Email:</strong> {supplier?.email}</div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h5 className="font-medium text-gray-700 mb-2">Detail Order</h5>
-                      <div className="text-sm space-y-1">
-                        <div><strong>PO Number:</strong> {purchase.poNumber}</div>
-                        <div><strong>Status:</strong> {purchase.status}</div>
-                        <div><strong>Dibuat oleh:</strong> {purchase.createdBy}</div>
-                        <div><strong>Total:</strong> Rp {purchase.totalAmount.toLocaleString('id-ID')}</div>
-                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900">{purchase.poNumber}</h3>
+                      <p className="text-gray-600">{supplier?.name}</p>
                     </div>
                   </div>
-                  
-                  {purchase.notes && (
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <strong className="text-blue-800">Catatan:</strong>
-                      <p className="text-blue-700 mt-1">{purchase.notes}</p>
+                  <div className="text-right">
+                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(purchase.status)}`}>
+                      {getStatusIcon(purchase.status)}
+                      {purchase.status.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Calendar className="h-4 w-4" />
+                    <div>
+                      <p className="text-xs">Tanggal Order</p>
+                      <p className="font-medium text-gray-900">{new Date(purchase.orderDate).toLocaleDateString('id-ID')}</p>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Truck className="h-4 w-4" />
+                    <div>
+                      <p className="text-xs">Estimasi Tiba</p>
+                      <p className="font-medium text-gray-900">{new Date(purchase.expectedDate).toLocaleDateString('id-ID')}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Package className="h-4 w-4" />
+                    <div>
+                      <p className="text-xs">Total Item</p>
+                      <p className="font-medium text-gray-900">{purchase.items.length} produk</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <TrendingUp className="h-4 w-4" />
+                    <div>
+                      <p className="text-xs">Total Nilai</p>
+                      <p className="font-medium text-gray-900">Rp {purchase.totalAmount.toLocaleString('id-ID')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setSelectedPurchase(selectedPurchase === purchase.id ? null : purchase.id)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Lihat Detail
+                  </button>
+                  {purchase.status === 'pending' && (
+                    <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                      Konfirmasi Order
+                    </button>
+                  )}
+                  {purchase.status === 'ordered' && (
+                    <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                      Terima Barang
+                    </button>
                   )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+
+                {/* Extended Details */}
+                {selectedPurchase === purchase.id && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h4 className="font-semibold text-gray-900 mb-3">Detail Purchase Order</h4>
+                    {/* Items List */}
+                    <div className="space-y-2 mb-4">
+                      {purchase.items.map((item, index) => (
+                        <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
+                          <div>
+                            <span className="font-medium">{item.productName}</span>
+                            <span className="text-gray-600 ml-2">x {item.quantity}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-medium">Rp {item.total.toLocaleString('id-ID')}</div>
+                            <div className="text-sm text-gray-600">@Rp {item.unitCost.toLocaleString('id-ID')}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Supplier Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <h5 className="font-medium text-gray-700 mb-2">Informasi Supplier</h5>
+                        <div className="text-sm space-y-1">
+                          <div><strong>Nama:</strong> {supplier?.name}</div>
+                          <div><strong>Kontak:</strong> {supplier?.contact_person}</div>
+                          <div><strong>Telepon:</strong> {supplier?.phone}</div>
+                          <div><strong>Email:</strong> {supplier?.email}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <h5 className="font-medium text-gray-700 mb-2">Detail Order</h5>
+                        <div className="text-sm space-y-1">
+                          <div><strong>PO Number:</strong> {purchase.poNumber}</div>
+                          <div><strong>Status:</strong> {purchase.status}</div>
+                          <div><strong>Dibuat oleh:</strong> {purchase.createdBy}</div>
+                          <div><strong>Total:</strong> Rp {purchase.totalAmount.toLocaleString('id-ID')}</div>
+                        </div>
+                      </div>
+                    </div>
+                    {purchase.notes && (
+                      <div className="bg-blue-50 p-3 rounded-lg">
+                        <strong className="text-blue-800">Catatan:</strong>
+                        <p className="text-blue-700 mt-1">{purchase.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2 mt-4">
+          <button
+            onClick={() => setPurchasePage(p => Math.max(1, p - 1))}
+            disabled={purchasePage === 1}
+            className="px-3 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
+          >
+            Prev
+          </button>
+          {[...Array(totalPages)].map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setPurchasePage(idx + 1)}
+              className={`px-3 py-1 rounded border ${purchasePage === idx + 1 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-300'}`}
+            >
+              {idx + 1}
+            </button>
+          ))}
+          <button
+            onClick={() => setPurchasePage(p => Math.min(totalPages, p + 1))}
+            disabled={purchasePage === totalPages}
+            className="px-3 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -590,18 +915,34 @@ const Products: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Manajemen Supplier</h2>
           <p className="text-gray-600">Kelola data supplier dan vendor</p>
         </div>
-        <button
-          onClick={() => setShowSupplierForm(true)}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          Tambah Supplier
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSupplierView('card')}
+            className={`p-2 rounded-lg border ${supplierView === 'card' ? 'bg-purple-100 border-purple-400 text-purple-600' : 'border-gray-200 text-gray-400 hover:text-purple-600'}`}
+            aria-label="Tampilan Card"
+          >
+            <LayoutGrid className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setSupplierView('list')}
+            className={`p-2 rounded-lg border ${supplierView === 'list' ? 'bg-purple-100 border-purple-400 text-purple-600' : 'border-gray-200 text-gray-400 hover:text-purple-600'}`}
+            aria-label="Tampilan List"
+          >
+            <ListIcon className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setShowSupplierForm(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ml-2"
+          >
+            <Plus className="h-5 w-5" />
+            Tambah Supplier
+          </button>
+        </div>
       </div>
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 cursor-pointer" onClick={() => setSearchTerm('')} />
         <input
           type="text"
           placeholder="Cari supplier..."
@@ -611,454 +952,185 @@ const Products: React.FC = () => {
         />
       </div>
 
-      {/* Suppliers Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSuppliers.map((supplier) => (
-          <div key={supplier.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-4 text-white">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                  <Truck className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">{supplier.name}</h3>
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>
-                    {supplier.category}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Body */}
-            <div className="p-4">
-              <div className="space-y-3">
-                <div className="text-sm">
-                  <p className="text-gray-600">Kontak Person</p>
-                  <p className="font-medium">{supplier.contact}</p>
-                </div>
-                
-                <div className="text-sm">
-                  <p className="text-gray-600">Telepon</p>
-                  <p className="font-medium">{supplier.phone}</p>
-                </div>
-                
-                <div className="text-sm">
-                  <p className="text-gray-600">Email</p>
-                  <p className="font-medium">{supplier.email}</p>
-                </div>
-                
-                {supplier.address && (
-                  <div className="text-sm">
-                    <p className="text-gray-600">Alamat</p>
-                    <p className="font-medium">{supplier.address}</p>
+      {/* Suppliers Grid/List */}
+      {supplierView === 'card' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredSuppliers.map((supplier) => (
+            <div key={supplier.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-4 text-white">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                    <Truck className="h-6 w-6" />
                   </div>
-                )}
-
-                <div className="pt-3 border-t border-gray-100">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total PO:</span>
-                    <span className="font-medium">
-                      {mockPurchaseOrders.filter(po => po.supplierId === supplier.id).length}
+                  <div>
+                    <h3 className="font-semibold text-lg">{supplier.name}</h3>
+                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>
+                      {supplier.category}
                     </span>
                   </div>
                 </div>
               </div>
-
-              <div className="mt-4 flex gap-2">
-                <button className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                  Buat PO
-                </button>
-                <button className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors">
-                  <Edit className="h-4 w-4" />
-                </button>
+              {/* Body */}
+              <div className="p-4">
+                <div className="space-y-3">
+                  <div className="text-sm">
+                    <p className="text-gray-600">Kontak Person</p>
+                    <p className="font-medium">{supplier.contact_person}</p>
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-gray-600">Telepon</p>
+                    <p className="font-medium">{supplier.phone}</p>
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-gray-600">Email</p>
+                    <p className="font-medium">{supplier.email}</p>
+                  </div>
+                  {supplier.address && (
+                    <div className="text-sm">
+                      <p className="text-gray-600">Alamat</p>
+                      <p className="font-medium">{supplier.address}</p>
+                    </div>
+                  )}
+                  <div className="pt-3 border-t border-gray-100">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Total PO:</span>
+                      <span className="font-medium">
+                        {mockPurchaseOrders.filter(po => po.supplierId === supplier.id).length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                    Buat PO
+                  </button>
+                  <button
+                    className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors"
+                    onClick={() => setShowEditSupplierForm(supplier.id)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button
+                    className="p-2 border border-gray-300 hover:border-gray-400 text-red-600 rounded-lg transition-colors"
+                    onClick={() => handleDeleteSupplier(supplier)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontak Person</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alamat</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {filteredSuppliers.map((supplier) => (
+                <tr key={supplier.id}>
+                  <td className="px-4 py-3 font-medium text-gray-900">{supplier.name}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(supplier.category)}`}>{supplier.category}</span>
+                  </td>
+                  <td className="px-4 py-3">{supplier.contact_person}</td>
+                  <td className="px-4 py-3">{supplier.phone}</td>
+                  <td className="px-4 py-3">{supplier.email}</td>
+                  <td className="px-4 py-3">{supplier.address}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setShowEditSupplierForm(supplier.id)} className="p-1 text-gray-400 hover:text-purple-600 transition-colors"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => handleDeleteSupplier(supplier)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Manajemen Produk & Pembelian</h1>
-        <p className="text-gray-600">Kelola produk, pembelian stok, dan supplier</p>
-      </div>
-
-      {/* Tabs */}
-      <div className="mb-8">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {[
-              { id: 'products', label: 'Produk', icon: Package },
-              { id: 'purchases', label: 'Pembelian', icon: ShoppingBag },
-              { id: 'suppliers', label: 'Supplier', icon: Truck }
-            ].map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id as any);
-                    setSearchTerm('');
-                  }}
-                  className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
+    <>
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Manajemen Produk & Pembelian</h1>
+          <p className="text-gray-600">Kelola produk, pembelian stok, dan supplier</p>
         </div>
-      </div>
 
-      {/* Tab Content */}
-      {activeTab === 'products' && renderProductsTab()}
-      {activeTab === 'purchases' && renderPurchasesTab()}
-      {activeTab === 'suppliers' && renderSuppliersTab()}
-
-      {/* Add Product Modal */}
-      {showAddForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Tambah Produk Baru</h2>
-              
-              <form className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk *</label>
-                  <input
-                    type="text"
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Masukkan nama produk"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-                  <select 
-                    value={newProduct.category}
-                    onChange={(e) => setNewProduct({...newProduct, category: e.target.value as any})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        {/* Tabs */}
+        <div className="mb-8">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              {[
+                { id: 'products', label: 'Produk', icon: Package },
+                { id: 'purchases', label: 'Pembelian', icon: ShoppingBag },
+                { id: 'suppliers', label: 'Supplier', icon: Truck }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setActiveTab(tab.id as any);
+                      setSearchTerm('');
+                    }}
+                    className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                   >
-                    <option value="beverage">Minuman</option>
-                    <option value="food">Makanan</option>
-                    <option value="snack">Snack</option>
-                    <option value="other">Lainnya</option>
-                  </select>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga Modal *</label>
-                    <input
-                      type="number"
-                      value={newProduct.cost}
-                      onChange={(e) => setNewProduct({...newProduct, cost: Number(e.target.value)})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga Jual *</label>
-                    <input
-                      type="number"
-                      value={newProduct.price}
-                      onChange={(e) => setNewProduct({...newProduct, price: Number(e.target.value)})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Stok Awal</label>
-                    <input
-                      type="number"
-                      value={newProduct.stock}
-                      onChange={(e) => setNewProduct({...newProduct, stock: Number(e.target.value)})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Min. Stok</label>
-                    <input
-                      type="number"
-                      value={newProduct.minStock}
-                      onChange={(e) => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Barcode (Opsional)</label>
-                  <input
-                    type="text"
-                    value={newProduct.barcode}
-                    onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Scan atau masukkan barcode"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
-                  <textarea
-                    value={newProduct.description}
-                    onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
-                    placeholder="Deskripsi produk"
-                  />
-                </div>
-              </form>
-              
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowAddForm(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Batal
-                </button>
-                <button 
-                  onClick={handleAddProduct}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Simpan Produk
-                </button>
-              </div>
-            </div>
+                    <Icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
         </div>
-      )}
 
-      {/* Create Purchase Order Modal */}
-      {showPurchaseForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Buat Purchase Order</h2>
-              
-              <form className="space-y-6">
-                {/* Supplier Selection */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
-                    <select
-                      value={newPurchase.supplierId}
-                      onChange={(e) => setNewPurchase({...newPurchase, supplierId: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Pilih Supplier</option>
-                      {mockSuppliers.map(supplier => (
-                        <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Diharapkan</label>
-                    <input
-                      type="date"
-                      value={newPurchase.expectedDate}
-                      onChange={(e) => setNewPurchase({...newPurchase, expectedDate: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
+        {/* Tab Content */}
+        {activeTab === 'products' && renderProductsTab()}
+        {activeTab === 'purchases' && renderPurchasesTab()}
+        {activeTab === 'suppliers' && renderSuppliersTab()}
 
-                {/* Items Section */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-medium text-gray-900">Item Pembelian</h3>
-                    <button
-                      type="button"
-                      onClick={addItemToPurchase}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Tambah Item
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {newPurchase.items.map((item, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg">
-                        <div className="col-span-4">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Produk</label>
-                          <select
-                            value={item.productId}
-                            onChange={(e) => updatePurchaseItem(index, 'productId', e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          >
-                            <option value="">Pilih Produk</option>
-                            {mockProducts.map(product => (
-                              <option key={product.id} value={product.id}>{product.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        
-                        <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Qty</label>
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => updatePurchaseItem(index, 'quantity', Number(e.target.value))}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            min="1"
-                          />
-                        </div>
-                        
-                        <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Harga Satuan</label>
-                          <input
-                            type="number"
-                            value={item.unitCost}
-                            onChange={(e) => updatePurchaseItem(index, 'unitCost', Number(e.target.value))}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                        
-                        <div className="col-span-3">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Total</label>
-                          <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium">
-                            Rp {item.total.toLocaleString('id-ID')}
-                          </div>
-                        </div>
-                        
-                        <div className="col-span-1">
-                          <button
-                            type="button"
-                            onClick={() => removePurchaseItem(index)}
-                            className="w-full p-1 text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Real-time Total Calculation */}
-                  {newPurchase.items.length > 0 && (
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                      <h4 className="font-medium text-blue-900 mb-3">Ringkasan Purchase Order</h4>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-blue-800">Subtotal:</span>
-                          <span className="font-medium text-blue-900">
-                            Rp {purchaseSubtotal.toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-blue-800">Pajak (10%):</span>
-                          <span className="font-medium text-blue-900">
-                            Rp {purchaseTax.toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center border-t border-blue-300 pt-2">
-                          <span className="font-bold text-blue-900">Total:</span>
-                          <span className="text-xl font-bold text-blue-900">
-                            Rp {purchaseTotal.toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Catatan (Opsional)</label>
-                  <textarea
-                    value={newPurchase.notes}
-                    onChange={(e) => setNewPurchase({...newPurchase, notes: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
-                    placeholder="Catatan untuk supplier"
-                  />
-                </div>
-              </form>
-              
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowPurchaseForm(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Batal
-                </button>
-                <button 
-                  onClick={handleCreatePurchase}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Buat Purchase Order
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Supplier Modal */}
-      {showSupplierForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Tambah Supplier Baru</h2>
-              
-              <form className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Supplier *</label>
-                  <input
-                    type="text"
-                    value={newSupplier.name}
-                    onChange={(e) => setNewSupplier({...newSupplier, name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Nama perusahaan supplier"
-                  />
-                </div>
+        {/* Add Product Modal */}
+        {showAddForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Tambah Produk Baru</h2>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Kontak Person *</label>
-                  <input
-                    type="text"
-                    value={newSupplier.contact}
-                    onChange={(e) => setNewSupplier({...newSupplier, contact: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Nama kontak person"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+                <form className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk *</label>
                     <input
-                      type="tel"
-                      value={newSupplier.phone}
-                      onChange={(e) => setNewSupplier({...newSupplier, phone: e.target.value})}
+                      type="text"
+                      value={newProduct.name}
+                      onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="+62 8xx-xxxx-xxxx"
+                      placeholder="Masukkan nama produk"
                     />
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
                     <select 
-                      value={newSupplier.category}
-                      onChange={(e) => setNewSupplier({...newSupplier, category: e.target.value as any})}
+                      value={newProduct.category}
+                      onChange={(e) => setNewProduct({...newProduct, category: e.target.value as any})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="beverage">Minuman</option>
@@ -1067,89 +1139,638 @@ const Products: React.FC = () => {
                       <option value="other">Lainnya</option>
                     </select>
                   </div>
-                </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Harga Modal *</label>
+                      <input
+                        type="number"
+                        value={newProduct.cost}
+                        onChange={(e) => setNewProduct({...newProduct, cost: Number(e.target.value)})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Harga Jual *</label>
+                      <input
+                        type="number"
+                        value={newProduct.price}
+                        onChange={(e) => setNewProduct({...newProduct, price: Number(e.target.value)})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Stok Awal</label>
+                      <input
+                        type="number"
+                        value={newProduct.stock}
+                        onChange={(e) => setNewProduct({...newProduct, stock: Number(e.target.value)})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Min. Stok</label>
+                      <input
+                        type="number"
+                        value={newProduct.minStock}
+                        onChange={(e) => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Barcode (Opsional)</label>
+                    <input
+                      type="text"
+                      value={newProduct.barcode}
+                      onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Scan atau masukkan barcode"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
+                    <textarea
+                      value={newProduct.description}
+                      onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={3}
+                      placeholder="Deskripsi produk"
+                    />
+                  </div>
+                </form>
                 
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowAddForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={handleAddProduct}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Simpan Produk
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Create Purchase Order Modal */}
+        {showPurchaseForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Buat Purchase Order</h2>
+                
+                <form className="space-y-6">
+                  {/* Supplier Selection */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
+                      <select
+                        value={newPurchase.supplierId}
+                        onChange={(e) => setNewPurchase({...newPurchase, supplierId: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Pilih Supplier</option>
+                        {suppliers.map(supplier => (
+                          <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Diharapkan</label>
+                      <input
+                        type="date"
+                        value={newPurchase.expectedDate}
+                        onChange={(e) => setNewPurchase({...newPurchase, expectedDate: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Items Section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-medium text-gray-900">Item Pembelian</h3>
+                      <button
+                        type="button"
+                        onClick={addItemToPurchase}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Tambah Item
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {newPurchase.items.map((item, index) => (
+                        <div key={index} className="grid grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg">
+                          <div className="col-span-4">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Produk</label>
+                            <select
+                              value={item.productId}
+                              onChange={(e) => updatePurchaseItem(index, 'productId', e.target.value)}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value="">Pilih Produk</option>
+                              {products.map(product => (
+                                <option key={product.id} value={product.id}>{product.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-span-2">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Qty</label>
+                            <input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => updatePurchaseItem(index, 'quantity', Number(e.target.value))}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              min="1"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Harga Satuan</label>
+                            <input
+                              type="number"
+                              value={item.unitCost}
+                              onChange={(e) => updatePurchaseItem(index, 'unitCost', Number(e.target.value))}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div className="col-span-3">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Total</label>
+                            <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium">
+                              Rp {item.total.toLocaleString('id-ID')}
+                            </div>
+                          </div>
+                          <div className="col-span-1">
+                            <button
+                              type="button"
+                              onClick={() => removePurchaseItem(index)}
+                              className="w-full p-1 text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Real-time Total Calculation */}
+                    {newPurchase.items.length > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                        <h4 className="font-medium text-blue-900 mb-3">Ringkasan Purchase Order</h4>
+                        <div className="space-y-2">
+                          {(() => {
+                            const subtotal = newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
+                            const tax = Math.round(subtotal * 0.1);
+                            const total = subtotal + tax;
+                            return (
+                              <>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-blue-800">Subtotal:</span>
+                                  <span className="font-medium text-blue-900">
+                                    Rp {subtotal.toLocaleString('id-ID')}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-blue-800">Pajak (10%):</span>
+                                  <span className="font-medium text-blue-900">
+                                    Rp {tax.toLocaleString('id-ID')}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center border-t border-blue-300 pt-2">
+                                  <span className="font-bold text-blue-900">Total:</span>
+                                  <span className="text-xl font-bold text-blue-900">
+                                    Rp {total.toLocaleString('id-ID')}
+                                  </span>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Catatan (Opsional)</label>
+                    <textarea
+                      value={newPurchase.notes}
+                      onChange={(e) => setNewPurchase({...newPurchase, notes: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={3}
+                      placeholder="Catatan untuk supplier"
+                    />
+                  </div>
+                </form>
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowPurchaseForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      // Simpan ke database
+                      try {
+                        await db.purchases.create({
+                          supplier_id: newPurchase.supplierId, // field DB
+                          items: newPurchase.items,
+                          notes: newPurchase.notes,
+                          expected_date: newPurchase.expectedDate,
+                          subtotal: purchaseSubtotal,
+                          tax: purchaseTax,
+                          total_amount: purchaseTotal // field DB
+                        });
+                        Swal.fire({
+                          icon: 'success',
+                          title: 'Berhasil!',
+                          text: `Purchase Order berhasil dibuat dengan total Rp ${purchaseTotal.toLocaleString('id-ID')}`
+                        });
+                        setShowPurchaseForm(false);
+                        setNewPurchase({
+                          supplierId: '',
+                          items: [],
+                          notes: '',
+                          expectedDate: new Date().toISOString().split('T')[0]
+                        });
+                        if ((window as any).refreshPurchases) (window as any).refreshPurchases();
+                      } catch (error: any) {
+                        Swal.fire({
+                          icon: 'error',
+                          title: 'Gagal tambah PO',
+                          text: (error?.message || '') + (error?.details ? '\n' + error.details : '')
+                        });
+                        // Optional: log error detail ke console
+                        // eslint-disable-next-line no-console
+                        console.error('PO Error:', error);
+                      }
+                    }}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Buat Purchase Order
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Supplier Modal */}
+        {showSupplierForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Tambah Supplier Baru</h2>
+                <form className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Supplier *</label>
+                    <input
+                      type="text"
+                      value={newSupplier.name}
+                      onChange={(e) => setNewSupplier({...newSupplier, name: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="Nama perusahaan supplier"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kontak Person *</label>
+                    <input
+                      type="text"
+                      value={newSupplier.contact_person}
+                      onChange={(e) => setNewSupplier({...newSupplier, contact_person: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="Nama kontak person"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Telepon</label>
+                      <input
+                        type="text"
+                        value={newSupplier.phone}
+                        onChange={(e) => setNewSupplier({...newSupplier, phone: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="+62 8xx-xxxx-xxxx"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                      <select
+                        value={newSupplier.category}
+                        onChange={(e) => setNewSupplier({...newSupplier, category: e.target.value as any})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      >
+                        <option value="beverage">Minuman</option>
+                        <option value="food">Makanan</option>
+                        <option value="snack">Snack</option>
+                        <option value="other">Lainnya</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={newSupplier.email}
+                      onChange={(e) => setNewSupplier({...newSupplier, email: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="email@supplier.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
+                    <textarea
+                      value={newSupplier.address}
+                      onChange={(e) => setNewSupplier({...newSupplier, address: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="Alamat lengkap supplier"
+                      rows={2}
+                    />
+                  </div>
+                </form>
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowSupplierForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={handleAddSupplier}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Tambah Supplier
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Product Modal */}
+        {showEditForm && editProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Produk</h2>
+                <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleEditProduct(); }}>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk *</label>
+                    <input
+                      type="text"
+                      value={editProduct.name}
+                      onChange={e => setEditProduct({ ...editProduct, name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Masukkan nama produk"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                    <select
+                      value={editProduct.category}
+                      onChange={e => setEditProduct({ ...editProduct, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="beverage">Minuman</option>
+                      <option value="food">Makanan</option>
+                      <option value="snack">Snack</option>
+                      <option value="other">Lainnya</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Harga Modal *</label>
+                      <input
+                        type="number"
+                        value={editProduct.cost}
+                        onChange={e => setEditProduct({ ...editProduct, cost: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Harga Jual *</label>
+                      <input
+                        type="number"
+                        value={editProduct.price}
+                        onChange={e => setEditProduct({ ...editProduct, price: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Stok</label>
+                      <input
+                        type="number"
+                        value={editProduct.stock}
+                        onChange={e => setEditProduct({ ...editProduct, stock: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Min. Stok</label>
+                      <input
+                        type="number"
+                        value={editProduct.minStock}
+                        onChange={e => setEditProduct({ ...editProduct, minStock: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Barcode (Opsional)</label>
+                    <input
+                      type="text"
+                      value={editProduct.barcode || ''}
+                      onChange={e => setEditProduct({ ...editProduct, barcode: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Scan atau masukkan barcode"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
+                    <textarea
+                      value={editProduct.description || ''}
+                      onChange={e => setEditProduct({ ...editProduct, description: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={3}
+                      placeholder="Deskripsi produk"
+                    />
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setShowEditForm(null)}
+                      className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Simpan Perubahan
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Summary Stats */}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Package className="h-6 w-6 text-blue-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-1">{mockProducts.length}</h3>
+            <p className="text-gray-600 text-sm">Total Produk</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <ShoppingBag className="h-6 w-6 text-green-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-1">
+              {mockPurchaseOrders?.length || 0}
+            </h3>
+            <p className="text-gray-600 text-sm">Purchase Order</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Truck className="h-6 w-6 text-purple-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-1">
+              {mockSuppliers?.length || 0}
+            </h3>
+            <p className="text-gray-600 text-sm">Supplier</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-1">{lowStockProducts.length}</h3>
+            <p className="text-gray-600 text-sm">Stok Menipis</p>
+          </div>
+        </div>
+      </div>
+      {/* Modal Edit Supplier */}
+      {showEditSupplierForm && editSupplier && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Supplier</h2>
+              <form className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Supplier *</label>
+                  <input
+                    type="text"
+                    value={editSupplier.name}
+                    onChange={(e) => setEditSupplier({ ...editSupplier, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Nama perusahaan supplier"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kontak Person *</label>
+                  <input
+                    type="text"
+                    value={editSupplier.contact_person}
+                    onChange={(e) => setEditSupplier({ ...editSupplier, contact_person: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Nama kontak person"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Telepon</label>
+                    <input
+                      type="text"
+                      value={editSupplier.phone}
+                      onChange={(e) => setEditSupplier({ ...editSupplier, phone: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="+62 8xx-xxxx-xxxx"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                    <select
+                      value={editSupplier.category}
+                      onChange={(e) => setEditSupplier({ ...editSupplier, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="beverage">Minuman</option>
+                      <option value="food">Makanan</option>
+                      <option value="snack">Snack</option>
+                      <option value="other">Lainnya</option>
+                    </select>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
                     type="email"
-                    value={newSupplier.email}
-                    onChange={(e) => setNewSupplier({...newSupplier, email: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={editSupplier.email}
+                    onChange={(e) => setEditSupplier({ ...editSupplier, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="email@supplier.com"
                   />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
                   <textarea
-                    value={newSupplier.address}
-                    onChange={(e) => setNewSupplier({...newSupplier, address: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
+                    value={editSupplier.address}
+                    onChange={(e) => setEditSupplier({ ...editSupplier, address: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Alamat lengkap supplier"
+                    rows={2}
                   />
                 </div>
               </form>
-              
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowSupplierForm(false)}
+                  onClick={() => setShowEditSupplierForm(null)}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   Batal
                 </button>
                 <button 
-                  onClick={handleAddSupplier}
+                  onClick={handleEditSupplier}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  Tambah Supplier
+                  Simpan Perubahan
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* Summary Stats */}
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Package className="h-6 w-6 text-blue-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">{mockProducts.length}</h3>
-          <p className="text-gray-600 text-sm">Total Produk</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <ShoppingBag className="h-6 w-6 text-green-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {mockPurchaseOrders?.length || 0}
-          </h3>
-          <p className="text-gray-600 text-sm">Purchase Order</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Truck className="h-6 w-6 text-purple-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {mockSuppliers?.length || 0}
-          </h3>
-          <p className="text-gray-600 text-sm">Supplier</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <AlertTriangle className="h-6 w-6 text-red-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">{lowStockProducts.length}</h3>
-          <p className="text-gray-600 text-sm">Stok Menipis</p>
-        </div>
-      </div>
-    </div>
+    </>
   );
 };
 
