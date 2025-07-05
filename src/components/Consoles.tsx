@@ -102,18 +102,32 @@ const Consoles: React.FC = () => {
       let updateData = updatedFields;
       if (!updateData) {
         const name = (document.getElementById('edit-name') as HTMLInputElement)?.value;
+        const equipmentTypeId = (document.getElementById('edit-equipment-type') as HTMLSelectElement)?.value;
+        const rateProfileId = (document.getElementById('edit-rate-profile') as HTMLSelectElement)?.value;
+        const status = (document.getElementById('edit-status') as HTMLSelectElement)?.value;
         const location = (document.getElementById('edit-location') as HTMLInputElement)?.value;
         const serialNumber = (document.getElementById('edit-serial') as HTMLInputElement)?.value;
+        const isActive = (document.getElementById('edit-active') as HTMLInputElement)?.checked;
+        const purchaseDate = (document.getElementById('edit-purchase-date') as HTMLInputElement)?.value;
+        const warrantyExpiry = (document.getElementById('edit-warranty') as HTMLInputElement)?.value;
         let ipAddress = (document.getElementById('edit-ip') as HTMLInputElement)?.value;
+        const relayCommand = (document.getElementById('edit-relay') as HTMLInputElement)?.value;
         const notes = (document.getElementById('edit-notes') as HTMLTextAreaElement)?.value;
-        // Perbaikan: jika ipAddress kosong, set null
-        ipAddress = ipAddress && ipAddress.trim() !== '' ? ipAddress : null;
+        // Field opsional: null jika kosong
+        const safe = (v: string | undefined) => v && v.trim() !== '' ? v : null;
         updateData = {
           name,
-          location,
-          serial_number: serialNumber,
-          ip_address: ipAddress,
-          notes
+          equipment_type_id: equipmentTypeId,
+          rate_profile_id: rateProfileId,
+          status,
+          location: safe(location),
+          serial_number: safe(serialNumber),
+          is_active: !!isActive,
+          purchase_date: safe(purchaseDate),
+          warranty_expiry: safe(warrantyExpiry),
+          ip_address: safe(ipAddress),
+          relay_command: safe(relayCommand),
+          notes: safe(notes)
         };
       }
       await db.update('consoles', consoleId, updateData);
@@ -160,16 +174,6 @@ const Consoles: React.FC = () => {
   // Set Available
   const handleSetAvailable = async (consoleId: string) => {
     await handleEditConsole(consoleId, { status: 'available' });
-  };
-
-  const handleStartRental = (consoleId: string) => {
-    // Here you would normally start a new rental session
-    alert(`Starting new rental for console ${consoleId}`);
-  };
-
-  const handleEndSession = (consoleId: string) => {
-    // Here you would normally end the current session
-    alert(`Ending current session for console ${consoleId}`);
   };
 
   return (
@@ -310,180 +314,176 @@ const Consoles: React.FC = () => {
       {/* Tampilan Card (Grid) */}
       {viewMode === 'card' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {consoles.map((console) => {
-            const rateProfile = mockRateProfiles.find(profile => profile.id === console.rateProfileId);
-            
-            return (
-              <div key={console.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-                {/* Header */}
-                <div className={`p-4 ${console.equipmentTypeId === 'ET002' ? 'bg-gradient-to-r from-blue-600 to-blue-700' : 'bg-gradient-to-r from-purple-600 to-purple-700'} text-white`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                        <Gamepad2 className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">{console.name}</h3>
-                        <span className="text-sm opacity-90">{console.location}</span>
-                      </div>
+          {consoles.map((console) => (
+            <div key={console.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+              {/* Header */}
+              <div className={`p-4 ${console.equipmentTypeId === 'ET002' ? 'bg-gradient-to-r from-blue-600 to-blue-700' : 'bg-gradient-to-r from-purple-600 to-purple-700'} text-white`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                      <Gamepad2 className="h-6 w-6" />
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                      console.status === 'available' ? 'bg-green-500 text-white' :
-                      console.status === 'rented' ? 'bg-orange-500 text-white' :
-                      'bg-red-500 text-white'
-                    }`}>
-                      {getStatusIcon(console.status)}
-                      {console.status.toUpperCase()}
-                    </span>
+                    <div>
+                      <h3 className="font-semibold text-lg">{console.name}</h3>
+                      <span className="text-sm opacity-90">{console.location}</span>
+                    </div>
                   </div>
                 </div>
-
-                {/* Body */}
-                <div className="p-4">
-                  <div className="space-y-4">
-                    {/* Console Info */}
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        Informasi Konsol
-                      </h4>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Serial Number</span>
-                          <span className="font-medium text-gray-900">
-                            {console.serial_number || 'N/A'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Location</span>
-                          <span className="font-medium text-gray-900">
-                            {console.location || 'N/A'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Purchase Date</span>
-                          <span className="font-medium text-gray-900">
-                            {console.purchase_date ? new Date(console.purchase_date).toLocaleDateString('id-ID') : 'N/A'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Warranty</span>
-                          <span className="font-medium text-gray-900">
-                            {console.warranty_expiry ? new Date(console.warranty_expiry).toLocaleDateString('id-ID') : 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="pt-4 border-t border-gray-100">
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => setSelectedConsole(selectedConsole === console.id ? null : console.id)}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                        >
-                          {console.status === 'available' ? 'Mulai Sewa' : 'Lihat Detail'}
-                        </button>
-                        <button 
-                          onClick={() => setShowEditForm(console.id)}
-                          className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors"
-                        >
-                          <Settings className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteConsole(console.id)}
-                          className="p-2 border border-red-300 hover:border-red-500 text-red-600 rounded-lg transition-colors"
-                          title="Hapus Console"
-                        >
-                          {/* Ikon keranjang sampah */}
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V19a2 2 0 002 2h8a2 2 0 002-2V7.5M4 7.5h16M10 11v6M14 11v6M9 7.5V5a2 2 0 012-2h2a2 2 0 012 2v2.5" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Extended Details */}
-                    {selectedConsole === console.id && (
-                      <div className="pt-4 border-t border-gray-100">
-                        <h4 className="font-semibold text-gray-900 mb-3">Informasi Konsol</h4>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Console ID:</span>
-                            <span className="font-medium">{console.id}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Equipment Type:</span>
-                            <span className="font-medium">{console.equipment_type_id}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Current Status:</span>
-                            <span className={`font-medium ${
-                              console.status === 'available' ? 'text-green-600' :
-                              console.status === 'rented' ? 'text-blue-600' : 'text-red-600'
-                            }`}>
-                              {console.status}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Total Revenue Today:</span>
-                            <span className="font-medium text-green-600">Rp 150,000</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Hours Played Today:</span>
-                            <span className="font-medium">8.5 hours</span>
-                          </div>
-                          {console.ip_address && (
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">IP Address:</span>
-                              <span className="font-medium">{console.ip_address}</span>
-                            </div>
-                          )}
-                          {console.notes && (
-                            <div className="mt-3">
-                              <span className="text-gray-600">Notes:</span>
-                              <p className="font-medium mt-1">{console.notes}</p>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {console.status === 'available' && (
-                          <div className="mt-4 space-y-2">
-                            <button 
-                              onClick={() => handleSetMaintenance(console.id)}
-                              className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                            >
-                              Setel ke Pemeliharaan
-                            </button>
-                          </div>
-                        )}
-                        
-                        {console.status === 'rented' && (
-                          <div className="mt-4">
-                            {/* Hapus tombol Akhiri Sesi Saat Ini */}
-                          </div>
-                        )}
-                        
-                        {console.status === 'maintenance' && (
-                          <div className="mt-4">
-                            <button 
-                              onClick={() => handleSetAvailable(console.id)}
-                              className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                            >
-                              Tandai Sebagai Tersedia
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                    console.status === 'available' ? 'bg-green-500 text-white' :
+                    console.status === 'rented' ? 'bg-orange-500 text-white' :
+                    'bg-red-500 text-white'
+                  }`}>
+                    {getStatusIcon(console.status)}
+                    {console.status.toUpperCase()}
+                  </span>
                 </div>
               </div>
-            );
-          })}
+
+              {/* Body */}
+              <div className="p-4">
+                <div className="space-y-4">
+                  {/* Console Info */}
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      Informasi Konsol
+                    </h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Serial Number</span>
+                        <span className="font-medium text-gray-900">
+                          {console.serial_number || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Location</span>
+                        <span className="font-medium text-gray-900">
+                          {console.location || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Purchase Date</span>
+                        <span className="font-medium text-gray-900">
+                          {console.purchase_date ? new Date(console.purchase_date).toLocaleDateString('id-ID') : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Warranty</span>
+                        <span className="font-medium text-gray-900">
+                          {console.warranty_expiry ? new Date(console.warranty_expiry).toLocaleDateString('id-ID') : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => setSelectedConsole(selectedConsole === console.id ? null : console.id)}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                      >
+                        Lihat Detail
+                      </button>
+                      <button 
+                        onClick={() => setShowEditForm(console.id)}
+                        className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteConsole(console.id)}
+                        className="p-2 border border-red-300 hover:border-red-500 text-red-600 rounded-lg transition-colors"
+                        title="Hapus Console"
+                      >
+                        {/* Ikon keranjang sampah */}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V19a2 2 0 002 2h8a2 2 0 002-2V7.5M4 7.5h16M10 11v6M14 11v6M9 7.5V5a2 2 0 012-2h2a2 2 0 012 2v2.5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Extended Details */}
+                  {selectedConsole === console.id && (
+                    <div className="pt-4 border-t border-gray-100">
+                      <h4 className="font-semibold text-gray-900 mb-3">Informasi Konsol</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Console ID:</span>
+                          <span className="font-medium">{console.id}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Equipment Type:</span>
+                          <span className="font-medium">{console.equipment_type_id}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Current Status:</span>
+                          <span className={`font-medium ${
+                            console.status === 'available' ? 'text-green-600' :
+                            console.status === 'rented' ? 'text-blue-600' : 'text-red-600'
+                          }`}>
+                            {console.status}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Total Revenue Today:</span>
+                          <span className="font-medium text-green-600">Rp 150,000</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Hours Played Today:</span>
+                          <span className="font-medium">8.5 hours</span>
+                        </div>
+                        {console.ip_address && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">IP Address:</span>
+                            <span className="font-medium">{console.ip_address}</span>
+                          </div>
+                        )}
+                        {console.notes && (
+                          <div className="mt-3">
+                            <span className="text-gray-600">Notes:</span>
+                            <p className="font-medium mt-1">{console.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {console.status === 'available' && (
+                        <div className="mt-4 space-y-2">
+                          <button 
+                            onClick={() => handleSetMaintenance(console.id)}
+                            className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                          >
+                            Setel ke Pemeliharaan
+                          </button>
+                        </div>
+                      )}
+                      
+                      {console.status === 'rented' && (
+                        <div className="mt-4">
+                          {/* Hapus tombol Akhiri Sesi Saat Ini */}
+                        </div>
+                      )}
+                      
+                      {console.status === 'maintenance' && (
+                        <div className="mt-4">
+                          <button 
+                            onClick={() => handleSetAvailable(console.id)}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                          >
+                            Tandai Sebagai Tersedia
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -563,138 +563,142 @@ const Consoles: React.FC = () => {
                   </button>
                 </div>
                 <form className="space-y-4">
-                  {editTab === 'umum' && <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nama Konsol</label>
-                      <input
-                        id="edit-name"
-                        type="text"
-                        defaultValue={editing.name}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Konsol</label>
-                      <select
-                        id="edit-equipment-type"
-                        defaultValue={editing.equipment_type_id}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        {mockEquipmentTypes.map(type => (
-                          <option key={type.id} value={type.id}>{type.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Profil Tarif</label>
-                      <select
-                        id="edit-rate-profile"
-                        defaultValue={editing.rate_profile_id}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        {mockRateProfiles.map(profile => (
-                          <option key={profile.id} value={profile.id}>{profile.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                      <select
-                        id="edit-status"
-                        defaultValue={editing.status}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="available">Tersedia</option>
-                        <option value="rented">Disewa</option>
-                        <option value="maintenance">Pemeliharaan</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
-                      <input
-                        id="edit-location"
-                        type="text"
-                        defaultValue={editing.location}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
-                      <input
-                        id="edit-serial"
-                        type="text"
-                        defaultValue={editing.serial_number}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="edit-active"
-                        type="checkbox"
-                        defaultChecked={editing.is_active}
-                        className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                      />
-                      <label htmlFor="edit-active" className="text-sm text-gray-700">Aktif</label>
-                    </div>
-                  </>}
-                  {editTab === 'teknis' && <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
-                      <input
-                        id="edit-purchase-date"
-                        type="date"
-                        defaultValue={editing.purchase_date ? editing.purchase_date.slice(0,10) : ''}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Garansi s/d</label>
-                      <input
-                        id="edit-warranty"
-                        type="date"
-                        defaultValue={editing.warranty_expiry ? editing.warranty_expiry.slice(0,10) : ''}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
-                      <input
-                        id="edit-ip"
-                        type="text"
-                        defaultValue={editing.ip_address}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay</label>
-                      <input
-                        id="edit-relay"
-                        type="text"
-                        defaultValue={editing.relay_command}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
-                      <textarea
-                        id="edit-notes"
-                        defaultValue={editing.notes}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows={3}
-                      />
-                    </div>
-                  </>}
+                  {editTab === 'umum' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nama Konsol</label>
+                        <input
+                          id="edit-name"
+                          type="text"
+                          defaultValue={editing.name}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Konsol</label>
+                        <select
+                          id="edit-equipment-type"
+                          defaultValue={editing.equipment_type_id}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {mockEquipmentTypes.map(type => (
+                            <option key={type.id} value={type.id}>{type.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Profil Tarif</label>
+                        <select
+                          id="edit-rate-profile"
+                          defaultValue={editing.rate_profile_id}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {mockRateProfiles.map(profile => (
+                            <option key={profile.id} value={profile.id}>{profile.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select
+                          id="edit-status"
+                          defaultValue={editing.status}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="available">Tersedia</option>
+                          <option value="rented">Disewa</option>
+                          <option value="maintenance">Pemeliharaan</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
+                        <input
+                          id="edit-location"
+                          type="text"
+                          defaultValue={editing.location}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
+                        <input
+                          id="edit-serial"
+                          type="text"
+                          defaultValue={editing.serial_number}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="edit-active"
+                          type="checkbox"
+                          defaultChecked={editing.is_active}
+                          className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                        />
+                        <label htmlFor="edit-active" className="text-sm text-gray-700">Aktif</label>
+                      </div>
+                    </>
+                  )}
+                  {editTab === 'teknis' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
+                        <input
+                          id="edit-purchase-date"
+                          type="date"
+                          defaultValue={editing.purchase_date ? editing.purchase_date.slice(0,10) : ''}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Garansi s/d</label>
+                        <input
+                          id="edit-warranty"
+                          type="date"
+                          defaultValue={editing.warranty_expiry ? editing.warranty_expiry.slice(0,10) : ''}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
+                        <input
+                          id="edit-ip"
+                          type="text"
+                          defaultValue={editing.ip_address}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay</label>
+                        <input
+                          id="edit-relay"
+                          type="text"
+                          defaultValue={editing.relay_command}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
+                        <textarea
+                          id="edit-notes"
+                          defaultValue={editing.notes}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          rows={3}
+                          placeholder="Catatan tambahan tentang konsol ini"
+                        />
+                      </div>
+                    </>
+                  )}
                 </form>
-                
-                <div className="flex gap-3 mt-6">
+                <div className="flex gap-3 mt-4">
                   <button
-                    onClick={() => setShowEditForm(false)}
+                    onClick={() => setShowEditForm(null)}
                     className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                   >
                     Batal
                   </button>
                   <button 
-                    onClick={() => handleEditConsole(showEditForm)}
+                    onClick={() => handleEditConsole(editing.id)}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                   >
                     Simpan Perubahan
@@ -704,7 +708,7 @@ const Consoles: React.FC = () => {
             </div>
           </div>
         );
-      })}
+      })()}
     </div>
   );
 };
