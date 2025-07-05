@@ -453,12 +453,6 @@ const Consoles: React.FC = () => {
                         {console.status === 'available' && (
                           <div className="mt-4 space-y-2">
                             <button 
-                              onClick={() => handleStartRental(console.id)}
-                              className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                            >
-                              Mulai Sewa Baru
-                            </button>
-                            <button 
                               onClick={() => handleSetMaintenance(console.id)}
                               className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                             >
@@ -469,12 +463,7 @@ const Consoles: React.FC = () => {
                         
                         {console.status === 'rented' && (
                           <div className="mt-4">
-                            <button 
-                              onClick={() => handleEndSession(console.id)}
-                              className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                            >
-                              Akhiri Sesi Saat Ini
-                            </button>
+                            {/* Hapus tombol Akhiri Sesi Saat Ini */}
                           </div>
                         )}
                         
@@ -696,9 +685,10 @@ const Consoles: React.FC = () => {
                     </div>
                   </>}
                 </form>
+                
                 <div className="flex gap-3 mt-6">
                   <button
-                    onClick={() => setShowEditForm(null)}
+                    onClick={() => setShowEditForm(false)}
                     className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                   >
                     Batal
@@ -707,14 +697,14 @@ const Consoles: React.FC = () => {
                     onClick={() => handleEditConsole(showEditForm)}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                   >
-                    Perbarui Konsol
+                    Simpan Perubahan
                   </button>
                 </div>
               </div>
             </div>
           </div>
         );
-      })()}
+      })}
     </div>
   );
 };
