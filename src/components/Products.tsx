@@ -56,8 +56,8 @@ const Products: React.FC = () => {
   const [showEditSupplierForm, setShowEditSupplierForm] = useState<string | null>(null);
   const [editSupplier, setEditSupplier] = useState<any | null>(null);
 
-  // State untuk daftar pembelian
-  const [purchaseList, setPurchaseList] = useState<any[]>([]);
+  // Tambah state untuk daftar PO, filter tanggal, dan status
+  const [purchases, setPurchases] = useState<any[]>([]);
   const [purchaseDateRange, setPurchaseDateRange] = useState<{start: string, end: string}>({start: '', end: ''});
   const [purchaseStatus, setPurchaseStatus] = useState<string>('all');
 
@@ -114,25 +114,12 @@ const Products: React.FC = () => {
     (window as any).refreshSuppliers = fetchSuppliers;
   }, []);
 
-  // Fetch purchase list from Supabase with filter
+  // Fetch purchase orders dari Supabase
   useEffect(() => {
-    const fetchPurchaseList = async () => {
+    const fetchPurchases = async () => {
       try {
         const data = await db.purchases.getAll();
-        let filtered = data || [];
-        // Filter by date range
-        if (purchaseDateRange.start && purchaseDateRange.end) {
-          filtered = filtered.filter((po: any) => {
-            const orderDate = po.orderDate || po.order_date;
-            if (!orderDate) return false;
-            return orderDate >= purchaseDateRange.start && orderDate <= purchaseDateRange.end;
-          });
-        }
-        // Filter by status
-        if (purchaseStatus !== 'all') {
-          filtered = filtered.filter((po: any) => (po.status || '').toLowerCase() === purchaseStatus);
-        }
-        setPurchaseList(filtered);
+        setPurchases(data || []);
       } catch (error: any) {
         Swal.fire({
           icon: 'error',
@@ -141,9 +128,9 @@ const Products: React.FC = () => {
         });
       }
     };
-    fetchPurchaseList();
-    (window as any).refreshPurchaseList = fetchPurchaseList;
-  }, [purchaseDateRange, purchaseStatus]);
+    fetchPurchases();
+    (window as any).refreshPurchases = fetchPurchases;
+  }, []);
 
   // Helper: mapping DB fields to UI fields for purchases
   // function mapPurchaseFromDb(p: any) {
@@ -227,6 +214,25 @@ const Products: React.FC = () => {
     supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     supplier.contact_person.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const filteredPurchaseOrders = purchases.filter(po => {
+    // Filter status
+    const statusMatch = purchaseStatus === 'all' || po.status === purchaseStatus;
+    // Filter tanggal order
+    let dateMatch = true;
+    if (purchaseDateRange.start) {
+      dateMatch = dateMatch && new Date(po.order_date) >= new Date(purchaseDateRange.start);
+    }
+    if (purchaseDateRange.end) {
+      dateMatch = dateMatch && new Date(po.order_date) <= new Date(purchaseDateRange.end);
+    }
+    // Filter search
+    const supplier = suppliers.find(s => s.id === po.supplier_id);
+    const searchMatch =
+      (po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplier?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+    return statusMatch && dateMatch && searchMatch;
+  });
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -920,27 +926,27 @@ const Products: React.FC = () => {
     </div>
   );
 
+  // Form/Content untuk tab Daftar Pembelian
   const renderPurchaseListTab = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Daftar Pembelian</h2>
-          <p className="text-gray-600">Lihat semua purchase order dari database</p>
-        </div>
-      </div>
-      {/* Filter */}
-      <div className="flex flex-col md:flex-row gap-4 items-end">
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Order</label>
-          <div className="flex gap-2">
-            <input type="date" value={purchaseDateRange.start} onChange={e => setPurchaseDateRange(r => ({...r, start: e.target.value}))} className="px-3 py-2 border border-gray-300 rounded-lg" />
-            <span className="mx-1">-</span>
-            <input type="date" value={purchaseDateRange.end} onChange={e => setPurchaseDateRange(r => ({...r, end: e.target.value}))} className="px-3 py-2 border border-gray-300 rounded-lg" />
-          </div>
+      <div className="flex flex-col md:flex-row md:items-end gap-4">
+        <div className="flex-1">
+          <label className="block text-xs font-medium text-gray-700 mb-1">Cari PO / Supplier</label>
+          <input
+            type="text"
+            placeholder="Cari PO number atau nama supplier..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-          <select value={purchaseStatus} onChange={e => setPurchaseStatus(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg">
+          <select
+            value={purchaseStatus}
+            onChange={e => setPurchaseStatus(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
             <option value="all">Semua</option>
             <option value="pending">Pending</option>
             <option value="ordered">Ordered</option>
@@ -948,34 +954,62 @@ const Products: React.FC = () => {
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Order</label>
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={purchaseDateRange.start}
+              onChange={e => setPurchaseDateRange(r => ({...r, start: e.target.value}))}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <span className="self-center">-</span>
+            <input
+              type="date"
+              value={purchaseDateRange.end}
+              onChange={e => setPurchaseDateRange(r => ({...r, end: e.target.value}))}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        </div>
       </div>
-      {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Number</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal Order</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estimasi Tiba</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-            {purchaseList.length === 0 && (
-              <tr><td colSpan={6} className="text-center text-gray-400 py-6">Tidak ada data pembelian ditemukan.</td></tr>
-            )}
-            {purchaseList.map((po: any) => (
-              <tr key={po.id}>
-                <td className="px-4 py-3 font-medium text-gray-900">{po.poNumber}</td>
-                <td className="px-4 py-3">{suppliers.find(s => s.id === po.supplier_id)?.name || '-'}</td>
-                <td className="px-4 py-3">{po.orderDate ? new Date(po.orderDate).toLocaleDateString('id-ID') : '-'}</td>
-                <td className="px-4 py-3">{po.expectedDate ? new Date(po.expectedDate).toLocaleDateString('id-ID') : '-'}</td>
-                <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(po.status)}`}>{po.status}</span></td>
-                <td className="px-4 py-3">Rp {po.totalAmount?.toLocaleString('id-ID') || '-'}</td>
+            {filteredPurchaseOrders.length === 0 && (
+              <tr>
+                <td colSpan={6} className="text-center text-gray-400 py-6">
+                  Tidak ada data purchase order ditemukan.
+                </td>
               </tr>
-            ))}
+            )}
+            {filteredPurchaseOrders.map(po => {
+              const supplier = suppliers.find(s => s.id === po.supplier_id);
+              return (
+                <tr key={po.id}>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-900">{po.po_number}</td>
+                  <td className="px-4 py-3">{po.order_date ? new Date(po.order_date).toLocaleDateString('id-ID') : '-'}</td>
+                  <td className="px-4 py-3">{supplier?.name || '-'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(po.status)}`}>{po.status}</span>
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-blue-700">Rp {Number(po.total_amount).toLocaleString('id-ID')}</td>
+                  <td className="px-4 py-3">
+                    {/* Aksi detail, dll */}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
