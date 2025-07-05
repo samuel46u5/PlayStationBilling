@@ -56,6 +56,11 @@ const Products: React.FC = () => {
   const [showEditSupplierForm, setShowEditSupplierForm] = useState<string | null>(null);
   const [editSupplier, setEditSupplier] = useState<any | null>(null);
 
+  // State untuk daftar pembelian
+  const [purchaseList, setPurchaseList] = useState<any[]>([]);
+  const [purchaseDateRange, setPurchaseDateRange] = useState<{start: string, end: string}>({start: '', end: ''});
+  const [purchaseStatus, setPurchaseStatus] = useState<string>('all');
+
   // Calculate totals whenever items change
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
   const [purchaseTax, setPurchaseTax] = useState(0);
@@ -108,6 +113,37 @@ const Products: React.FC = () => {
     fetchSuppliers();
     (window as any).refreshSuppliers = fetchSuppliers;
   }, []);
+
+  // Fetch purchase list from Supabase with filter
+  useEffect(() => {
+    const fetchPurchaseList = async () => {
+      try {
+        const data = await db.purchases.getAll();
+        let filtered = data || [];
+        // Filter by date range
+        if (purchaseDateRange.start && purchaseDateRange.end) {
+          filtered = filtered.filter((po: any) => {
+            const orderDate = po.orderDate || po.order_date;
+            if (!orderDate) return false;
+            return orderDate >= purchaseDateRange.start && orderDate <= purchaseDateRange.end;
+          });
+        }
+        // Filter by status
+        if (purchaseStatus !== 'all') {
+          filtered = filtered.filter((po: any) => (po.status || '').toLowerCase() === purchaseStatus);
+        }
+        setPurchaseList(filtered);
+      } catch (error: any) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal memuat daftar pembelian',
+          text: error.message || 'Terjadi kesalahan saat mengambil data pembelian.'
+        });
+      }
+    };
+    fetchPurchaseList();
+    (window as any).refreshPurchaseList = fetchPurchaseList;
+  }, [purchaseDateRange, purchaseStatus]);
 
   // Helper: mapping DB fields to UI fields for purchases
   // function mapPurchaseFromDb(p: any) {
@@ -884,8 +920,67 @@ const Products: React.FC = () => {
     </div>
   );
 
-  // Form/Content untuk tab Daftar Pembelian
-  // const renderPurchaseListTab = () => null; // sementara dihilangkan
+  const renderPurchaseListTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Daftar Pembelian</h2>
+          <p className="text-gray-600">Lihat semua purchase order dari database</p>
+        </div>
+      </div>
+      {/* Filter */}
+      <div className="flex flex-col md:flex-row gap-4 items-end">
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Order</label>
+          <div className="flex gap-2">
+            <input type="date" value={purchaseDateRange.start} onChange={e => setPurchaseDateRange(r => ({...r, start: e.target.value}))} className="px-3 py-2 border border-gray-300 rounded-lg" />
+            <span className="mx-1">-</span>
+            <input type="date" value={purchaseDateRange.end} onChange={e => setPurchaseDateRange(r => ({...r, end: e.target.value}))} className="px-3 py-2 border border-gray-300 rounded-lg" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+          <select value={purchaseStatus} onChange={e => setPurchaseStatus(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg">
+            <option value="all">Semua</option>
+            <option value="pending">Pending</option>
+            <option value="ordered">Ordered</option>
+            <option value="received">Received</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      {/* Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Number</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal Order</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estimasi Tiba</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {purchaseList.length === 0 && (
+              <tr><td colSpan={6} className="text-center text-gray-400 py-6">Tidak ada data pembelian ditemukan.</td></tr>
+            )}
+            {purchaseList.map((po: any) => (
+              <tr key={po.id}>
+                <td className="px-4 py-3 font-medium text-gray-900">{po.poNumber}</td>
+                <td className="px-4 py-3">{suppliers.find(s => s.id === po.supplier_id)?.name || '-'}</td>
+                <td className="px-4 py-3">{po.orderDate ? new Date(po.orderDate).toLocaleDateString('id-ID') : '-'}</td>
+                <td className="px-4 py-3">{po.expectedDate ? new Date(po.expectedDate).toLocaleDateString('id-ID') : '-'}</td>
+                <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(po.status)}`}>{po.status}</span></td>
+                <td className="px-4 py-3">Rp {po.totalAmount?.toLocaleString('id-ID') || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   // Render tab for suppliers
   const renderSuppliersTab = () => (
@@ -969,7 +1064,7 @@ const Products: React.FC = () => {
               { [
                 { id: 'products', label: 'Produk', icon: Package },
                 { id: 'purchases', label: 'Pembelian', icon: ShoppingBag },
-                // { id: 'purchaseList', label: 'Daftar Pembelian', icon: FileText }, // sementara dihilangkan
+                { id: 'purchaseList', label: 'Daftar Pembelian', icon: FileText },
                 { id: 'suppliers', label: 'Supplier', icon: Truck }
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -998,7 +1093,7 @@ const Products: React.FC = () => {
         {/* Tab Content */}
         {activeTab === 'products' && renderProductsTab()}
         {activeTab === 'purchases' && renderPurchasesTab()}
-        {/* {activeTab === 'purchaseList' && renderPurchaseListTab()} */}
+        {activeTab === 'purchaseList' && renderPurchaseListTab()}
         {activeTab === 'suppliers' && renderSuppliersTab()}
 
         {/* Add Product Modal */}
