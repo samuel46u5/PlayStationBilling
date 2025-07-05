@@ -20,6 +20,7 @@ const Consoles: React.FC = () => {
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [editTab, setEditTab] = useState<'umum' | 'teknis'>('umum');
   const [addTab, setAddTab] = useState<'umum' | 'teknis'>('umum');
+  const [editConsoleData, setEditConsoleData] = useState<any>(null);
 
   useEffect(() => {
     // Fetch consoles from Supabase
@@ -38,8 +39,12 @@ const Consoles: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (showEditForm) setEditTab('umum');
-  }, [showEditForm]);
+    if (showEditForm) {
+      setEditTab('umum');
+      const editing = consoles.find(c => c.id === showEditForm);
+      setEditConsoleData(editing ? { ...editing } : null);
+    }
+  }, [showEditForm, consoles]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -117,38 +122,25 @@ const Consoles: React.FC = () => {
   };
 
   // Update Console
-  const handleEditConsole = async (consoleId: string, updatedFields?: any) => {
+  const handleEditConsole = async (consoleId: string) => {
+    if (!editConsoleData) return;
     setLoading(true);
     try {
-      let updateData = updatedFields;
-      if (!updateData) {
-        const name = (document.getElementById('edit-name') as HTMLInputElement)?.value;
-        const equipmentTypeId = (document.getElementById('edit-equipment-type') as HTMLSelectElement)?.value;
-        const status = (document.getElementById('edit-status') as HTMLSelectElement)?.value;
-        const location = (document.getElementById('edit-location') as HTMLInputElement)?.value;
-        const serialNumber = (document.getElementById('edit-serial') as HTMLInputElement)?.value;
-        const isActive = (document.getElementById('edit-active') as HTMLInputElement)?.checked;
-        const purchaseDate = (document.getElementById('edit-purchase-date') as HTMLInputElement)?.value;
-        const warrantyExpiry = (document.getElementById('edit-warranty') as HTMLInputElement)?.value;
-        let ipAddress = (document.getElementById('edit-ip') as HTMLInputElement)?.value;
-        const relayCommand = (document.getElementById('edit-relay') as HTMLInputElement)?.value;
-        const notes = (document.getElementById('edit-notes') as HTMLTextAreaElement)?.value;
-        // Field opsional: null jika kosong
-        const safe = (v: string | undefined) => v && v.trim() !== '' ? v : null;
-        updateData = {
-          name,
-          equipment_type_id: equipmentTypeId,
-          status,
-          location: safe(location),
-          serial_number: safe(serialNumber),
-          is_active: !!isActive,
-          purchase_date: safe(purchaseDate),
-          warranty_expiry: safe(warrantyExpiry),
-          ip_address: safe(ipAddress),
-          relay_command: safe(relayCommand),
-          notes: safe(notes)
-        };
-      }
+      // Field opsional: null jika kosong
+      const safe = (v: string | undefined) => v && v.trim() !== '' ? v : null;
+      const updateData = {
+        name: editConsoleData.name,
+        equipment_type_id: editConsoleData.equipment_type_id,
+        status: editConsoleData.status,
+        location: safe(editConsoleData.location),
+        serial_number: safe(editConsoleData.serial_number),
+        is_active: !!editConsoleData.is_active,
+        purchase_date: safe(editConsoleData.purchase_date),
+        warranty_expiry: safe(editConsoleData.warranty_expiry),
+        ip_address: safe(editConsoleData.ip_address),
+        relay_command: safe(editConsoleData.relay_command),
+        notes: safe(editConsoleData.notes)
+      };
       await db.update('consoles', consoleId, updateData);
       const data = await db.select('consoles');
       setConsoles(data);
@@ -187,12 +179,14 @@ const Consoles: React.FC = () => {
 
   // Set Maintenance
   const handleSetMaintenance = async (consoleId: string) => {
-    await handleEditConsole(consoleId, { status: 'maintenance' });
+    setEditConsoleData((prev: any) => ({ ...prev, status: 'maintenance' }));
+    setTimeout(() => handleEditConsole(consoleId), 0);
   };
 
   // Set Available
   const handleSetAvailable = async (consoleId: string) => {
-    await handleEditConsole(consoleId, { status: 'available' });
+    setEditConsoleData((prev: any) => ({ ...prev, status: 'available' }));
+    setTimeout(() => handleEditConsole(consoleId), 0);
   };
 
   return (
@@ -658,8 +652,7 @@ const Consoles: React.FC = () => {
       )}
 
       {/* Edit Console Modal */}
-      {showEditForm && (() => {
-        const editing = consoles.find(c => c.id === showEditForm) || {};
+      {showEditForm && editConsoleData && (() => {
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
@@ -689,7 +682,8 @@ const Consoles: React.FC = () => {
                         <input
                           id="edit-name"
                           type="text"
-                          defaultValue={editing.name}
+                          value={editConsoleData.name || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, name: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -697,7 +691,8 @@ const Consoles: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Konsol</label>
                         <select
                           id="edit-equipment-type"
-                          defaultValue={editing.equipment_type_id}
+                          value={editConsoleData.equipment_type_id || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, equipment_type_id: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                           {mockEquipmentTypes.map(type => (
@@ -709,7 +704,8 @@ const Consoles: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                         <select
                           id="edit-status"
-                          defaultValue={editing.status}
+                          value={editConsoleData.status || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, status: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                           <option value="available">Tersedia</option>
@@ -722,7 +718,8 @@ const Consoles: React.FC = () => {
                         <input
                           id="edit-location"
                           type="text"
-                          defaultValue={editing.location}
+                          value={editConsoleData.location || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, location: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -731,7 +728,8 @@ const Consoles: React.FC = () => {
                         <input
                           id="edit-serial"
                           type="text"
-                          defaultValue={editing.serial_number}
+                          value={editConsoleData.serial_number || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, serial_number: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -739,7 +737,8 @@ const Consoles: React.FC = () => {
                         <input
                           id="edit-active"
                           type="checkbox"
-                          defaultChecked={editing.is_active}
+                          checked={!!editConsoleData.is_active}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, is_active: e.target.checked }))}
                           className="h-4 w-4 text-blue-600 border-gray-300 rounded"
                         />
                         <label htmlFor="edit-active" className="text-sm text-gray-700">Aktif</label>
@@ -753,7 +752,8 @@ const Consoles: React.FC = () => {
                         <input
                           id="edit-purchase-date"
                           type="date"
-                          defaultValue={editing.purchase_date ? editing.purchase_date.slice(0,10) : ''}
+                          value={editConsoleData.purchase_date ? editConsoleData.purchase_date.slice(0,10) : ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, purchase_date: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -762,7 +762,8 @@ const Consoles: React.FC = () => {
                         <input
                           id="edit-warranty"
                           type="date"
-                          defaultValue={editing.warranty_expiry ? editing.warranty_expiry.slice(0,10) : ''}
+                          value={editConsoleData.warranty_expiry ? editConsoleData.warranty_expiry.slice(0,10) : ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, warranty_expiry: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -771,7 +772,8 @@ const Consoles: React.FC = () => {
                         <input
                           id="edit-ip"
                           type="text"
-                          defaultValue={editing.ip_address}
+                          value={editConsoleData.ip_address || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, ip_address: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -780,7 +782,8 @@ const Consoles: React.FC = () => {
                         <input
                           id="edit-relay"
                           type="text"
-                          defaultValue={editing.relay_command}
+                          value={editConsoleData.relay_command || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -788,7 +791,8 @@ const Consoles: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
                         <textarea
                           id="edit-notes"
-                          defaultValue={editing.notes}
+                          value={editConsoleData.notes || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, notes: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           rows={3}
                           placeholder="Catatan tambahan tentang konsol ini"
@@ -805,7 +809,7 @@ const Consoles: React.FC = () => {
                     Batal
                   </button>
                   <button 
-                    onClick={() => handleEditConsole(editing.id)}
+                    onClick={() => handleEditConsole(editConsoleData.id)}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                   >
                     Simpan Perubahan
