@@ -790,140 +790,109 @@ const Products: React.FC = () => {
 
       {/* Purchase Orders List */}
       <div className="space-y-4">
-        {mockPurchaseOrders
-          .filter(purchase => {
-            const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
-            return supplier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              purchase.poNumber.toLowerCase().includes(searchTerm.toLowerCase());
-          })
-          // .slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage) // pagination removed
-          .map((purchase) => {
-            const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
-            return (
-              <div key={purchase.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                      <FileText className="h-6 w-6 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{purchase.poNumber}</h3>
-                      <p className="text-gray-600">{supplier?.name}</p>
-                    </div>
+        {filteredPurchaseOrders.map((purchase) => {
+          const supplier = suppliers.find(s => s.id === purchase.supplier_id);
+          return (
+            <div key={purchase.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <FileText className="h-6 w-6 text-green-600" />
                   </div>
-                  <div className="text-right">
-                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(purchase.status)}`}>
-                      {getStatusIcon(purchase.status)}
-                      {purchase.status.toUpperCase()}
-                    </span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">{purchase.po_number}</h3>
+                    <p className="text-gray-600">{supplier?.name}</p>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs">Tanggal Order</p>
-                      <p className="font-medium text-gray-900">{new Date(purchase.orderDate).toLocaleDateString('id-ID')}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Truck className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs">Estimasi Tiba</p>
-                      <p className="font-medium text-gray-900">{new Date(purchase.expectedDate).toLocaleDateString('id-ID')}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Package className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs">Total Item</p>
-                      <p className="font-medium text-gray-900">{purchase.items.length} produk</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <TrendingUp className="h-4 w-4" />
-                    <div>
-                      <p className="text-xs">Total Nilai</p>
-                      <p className="font-medium text-gray-900">Rp {purchase.totalAmount.toLocaleString('id-ID')}</p>
-                    </div>
-                  </div>
+                <div className="text-right">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(purchase.status)}`}>
+                    {getStatusIcon(purchase.status)}
+                    {purchase.status?.toUpperCase()}
+                  </span>
                 </div>
-
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => setSelectedPurchase(selectedPurchase === purchase.id ? null : purchase.id)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                  >
-                    Lihat Detail
-                  </button>
-                  {purchase.status === 'pending' && (
-                    <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                      Konfirmasi Order
-                    </button>
-                  )}
-                  {purchase.status === 'ordered' && (
-                    <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                      Terima Barang
-                    </button>
-                  )}
-                </div>
-
-                {/* Extended Details */}
-                {selectedPurchase === purchase.id && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h4 className="font-semibold text-gray-900 mb-3">Detail Purchase Order</h4>
-                    {/* Items List */}
-                    <div className="space-y-2 mb-4">
-                      {purchase.items.map((item, index) => (
-                        <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
-                          <div>
-                            <span className="font-medium">{item.productName}</span>
-                            <span className="text-gray-600 ml-2">x {item.quantity}</span>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">Rp {item.total.toLocaleString('id-ID')}</div>
-                            <div className="text-sm text-gray-600">@Rp {item.unitCost.toLocaleString('id-ID')}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* Supplier Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <h5 className="font-medium text-gray-700 mb-2">Informasi Supplier</h5>
-                        <div className="text-sm space-y-1">
-                          <div><strong>Nama:</strong> {supplier?.name}</div>
-                          <div><strong>Kontak:</strong> {supplier?.contact}</div>
-                          <div><strong>Telepon:</strong> {supplier?.phone}</div>
-                          <div><strong>Email:</strong> {supplier?.email}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <h5 className="font-medium text-gray-700 mb-2">Detail Order</h5>
-                        <div className="text-sm space-y-1">
-                          <div><strong>PO Number:</strong> {purchase.poNumber}</div>
-                          <div><strong>Status:</strong> {purchase.status}</div>
-                          <div><strong>Dibuat oleh:</strong> {purchase.createdBy}</div>
-                          <div><strong>Total:</strong> Rp {purchase.totalAmount.toLocaleString('id-ID')}</div>
-                        </div>
-                      </div>
-                    </div>
-                    {purchase.notes && (
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <strong className="text-blue-800">Catatan:</strong>
-                        <p className="text-blue-700 mt-1">{purchase.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
-            );
-          })}
-      </div>
 
-      {/* Pagination Controls */}
-      {/* Pagination removed since purchase list tab is disabled */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Calendar className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs">Tanggal Order</p>
+                    <p className="font-medium text-gray-900">{purchase.order_date ? new Date(purchase.order_date).toLocaleDateString('id-ID') : '-'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Truck className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs">Estimasi Tiba</p>
+                    <p className="font-medium text-gray-900">{purchase.expected_date ? new Date(purchase.expected_date).toLocaleDateString('id-ID') : '-'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Package className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs">Total Item</p>
+                    <p className="font-medium text-gray-900">-</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <TrendingUp className="h-4 w-4" />
+                  <div>
+                    <p className="text-xs">Total Nilai</p>
+                    <p className="font-medium text-gray-900">Rp {Number(purchase.total_amount).toLocaleString('id-ID')}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setSelectedPurchase(selectedPurchase === purchase.id ? null : purchase.id)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Lihat Detail
+                </button>
+              </div>
+
+              {/* Extended Details */}
+              {selectedPurchase === purchase.id && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-3">Detail Purchase Order</h4>
+                  {/* Items List - tampilkan jika sudah fetch item */}
+                  <div className="space-y-2 mb-4 text-gray-500 text-sm">(Detail item PO belum diimplementasikan)</div>
+                  {/* Supplier Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <h5 className="font-medium text-gray-700 mb-2">Informasi Supplier</h5>
+                      <div className="text-sm space-y-1">
+                        <div><strong>Nama:</strong> {supplier?.name}</div>
+                        <div><strong>Kontak:</strong> {supplier?.contact_person}</div>
+                        <div><strong>Telepon:</strong> {supplier?.phone}</div>
+                        <div><strong>Email:</strong> {supplier?.email}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <h5 className="font-medium text-gray-700 mb-2">Detail Order</h5>
+                      <div className="text-sm space-y-1">
+                        <div><strong>PO Number:</strong> {purchase.po_number}</div>
+                        <div><strong>Status:</strong> {purchase.status}</div>
+                        <div><strong>Total:</strong> Rp {Number(purchase.total_amount).toLocaleString('id-ID')}</div>
+                      </div>
+                    </div>
+                  </div>
+                  {purchase.notes && (
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <strong className="text-blue-800">Catatan:</strong>
+                      <p className="text-blue-700 mt-1">{purchase.notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filteredPurchaseOrders.length === 0 && (
+          <div className="text-center text-gray-400 py-6">Tidak ada data purchase order ditemukan.</div>
+        )}
+      </div>
     </div>
   );
 
