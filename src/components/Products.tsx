@@ -550,6 +550,7 @@ const Products: React.FC = () => {
   };
 
   const [productView, setProductView] = useState<'card' | 'list'>('card');
+  const [supplierView, setSupplierView] = useState<'card' | 'list'>('card');
 
   const renderProductsTab = () => (
     <div className="space-y-6">
@@ -1024,13 +1025,29 @@ const Products: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Manajemen Supplier</h2>
           <p className="text-gray-600">Kelola data supplier produk</p>
         </div>
-        <button
-          onClick={() => setShowSupplierForm(true)}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          Tambah Supplier
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSupplierView('card')}
+            className={`p-2 rounded-lg border ${supplierView === 'card' ? 'bg-purple-100 border-purple-400 text-purple-600' : 'border-gray-200 text-gray-400 hover:text-purple-600'}`}
+            aria-label="Tampilan Card"
+          >
+            <LayoutGrid className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setSupplierView('list')}
+            className={`p-2 rounded-lg border ${supplierView === 'list' ? 'bg-purple-100 border-purple-400 text-purple-600' : 'border-gray-200 text-gray-400 hover:text-purple-600'}`}
+            aria-label="Tampilan List"
+          >
+            <ListIcon className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setShowSupplierForm(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Plus className="h-5 w-5" />
+            Tambah Supplier
+          </button>
+        </div>
       </div>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -1042,44 +1059,80 @@ const Products: React.FC = () => {
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
         />
       </div>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontak Person</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {filteredSuppliers.length === 0 && (
-              <tr>
-                <td colSpan={6} className="text-center text-gray-400 py-6">
-                  Tidak ada data supplier ditemukan.
-                </td>
-              </tr>
-            )}
-            {filteredSuppliers.map((supplier) => (
-              <tr key={supplier.id}>
-                <td className="px-4 py-3 font-medium text-gray-900">{supplier.name}</td>
-                <td className="px-4 py-3">{supplier.contact_person}</td>
-                <td className="px-4 py-3">{supplier.phone || '-'}</td>
-                <td className="px-4 py-3">{supplier.email || '-'}</td>
-                <td className="px-4 py-3">{supplier.category}</td>
-                <td className="px-4 py-3">
+      {supplierView === 'card' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredSuppliers.length === 0 && (
+            <div className="col-span-full text-center text-gray-400 py-6">Tidak ada data supplier ditemukan.</div>
+          )}
+          {filteredSuppliers.map((supplier) => (
+            <div key={supplier.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+              <div className="p-4 border-b border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">{supplier.category}</span>
                   <div className="flex items-center gap-1">
                     <button onClick={() => setShowEditSupplierForm(supplier.id)} className="p-1 text-gray-400 hover:text-purple-600 transition-colors"><Edit className="h-4 w-4" /></button>
                     <button onClick={() => handleDeleteSupplier(supplier)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
                   </div>
-                </td>
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-1">{supplier.name}</h3>
+                <p className="text-sm text-gray-600 line-clamp-2">{supplier.address}</p>
+              </div>
+              <div className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <span className="font-medium">Kontak:</span> {supplier.contact_person}
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <span className="font-medium">Telepon:</span> {supplier.phone || '-'}
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <span className="font-medium">Email:</span> {supplier.email || '-'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontak Person</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {filteredSuppliers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center text-gray-400 py-6">
+                    Tidak ada data supplier ditemukan.
+                  </td>
+                </tr>
+              )}
+              {filteredSuppliers.map((supplier) => (
+                <tr key={supplier.id}>
+                  <td className="px-4 py-3 font-medium text-gray-900">{supplier.name}</td>
+                  <td className="px-4 py-3">{supplier.contact_person}</td>
+                  <td className="px-4 py-3">{supplier.phone || '-'}</td>
+                  <td className="px-4 py-3">{supplier.email || '-'}</td>
+                  <td className="px-4 py-3">{supplier.category}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setShowEditSupplierForm(supplier.id)} className="p-1 text-gray-400 hover:text-purple-600 transition-colors"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => handleDeleteSupplier(supplier)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 
