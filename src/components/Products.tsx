@@ -61,6 +61,11 @@ const Products: React.FC = () => {
   const [purchaseDateRange, setPurchaseDateRange] = useState<{start: string, end: string}>({start: '', end: ''});
   const [purchaseStatus, setPurchaseStatus] = useState<string>('all');
 
+  // State untuk item PO detail
+  const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
+  const [loadingPurchaseItems, setLoadingPurchaseItems] = useState(false);
+  const [purchaseItemsError, setPurchaseItemsError] = useState<string | null>(null);
+
   // Calculate totals whenever items change
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
   const [purchaseTax, setPurchaseTax] = useState(0);
@@ -187,6 +192,29 @@ const Products: React.FC = () => {
       setEditSupplier(null);
     }
   }, [showEditSupplierForm, suppliers]);
+
+  // Fetch item PO saat detail PO dibuka
+  useEffect(() => {
+    const fetchItems = async () => {
+      if (!selectedPurchase) {
+        setPurchaseItems([]);
+        setPurchaseItemsError(null);
+        return;
+      }
+      setLoadingPurchaseItems(true);
+      setPurchaseItemsError(null);
+      try {
+        const items = await db.select('purchase_order_items', '*', { po_id: selectedPurchase });
+        setPurchaseItems(items || []);
+      } catch (err: any) {
+        setPurchaseItemsError(err?.message || 'Gagal memuat item PO');
+        setPurchaseItems([]);
+      } finally {
+        setLoadingPurchaseItems(false);
+      }
+    };
+    fetchItems();
+  }, [selectedPurchase]);
 
   const categories = [
     { value: 'all', label: 'Semua Kategori' },
@@ -831,7 +859,13 @@ const Products: React.FC = () => {
                   <Package className="h-4 w-4" />
                   <div>
                     <p className="text-xs">Total Item</p>
-                    <p className="font-medium text-gray-900">-</p>
+                    <p className="font-medium text-gray-900">
+                      {selectedPurchase === purchase.id
+                        ? loadingPurchaseItems
+                          ? '-'
+                          : `${purchaseItems.length} / ${purchaseItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)}`
+                        : '-'}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
@@ -857,7 +891,46 @@ const Products: React.FC = () => {
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <h4 className="font-semibold text-gray-900 mb-3">Detail Purchase Order</h4>
                   {/* Items List - tampilkan jika sudah fetch item */}
-                  <div className="space-y-2 mb-4 text-gray-500 text-sm">(Detail item PO belum diimplementasikan)</div>
+                  <div className="mb-4">
+                    {loadingPurchaseItems ? (
+                      <div className="text-gray-500 text-sm">Memuat item PO...</div>
+                    ) : purchaseItemsError ? (
+                      <div className="text-red-500 text-sm">{purchaseItemsError}</div>
+                    ) : purchaseItems.length === 0 ? (
+                      <div className="text-gray-400 text-sm">Tidak ada item pada PO ini.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium text-gray-600">Produk</th>
+                              <th className="px-3 py-2 text-right font-medium text-gray-600">Qty</th>
+                              <th className="px-3 py-2 text-right font-medium text-gray-600">Harga Satuan</th>
+                              <th className="px-3 py-2 text-right font-medium text-gray-600">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-100">
+                            {purchaseItems.map((item, idx) => {
+                              // Cari nama produk dari products jika product_name kosong
+                              let productName = item.product_name;
+                              if (!productName) {
+                                const prod = products.find(p => p.id === item.product_id);
+                                productName = prod ? prod.name : '-';
+                              }
+                              return (
+                                <tr key={item.id || idx}>
+                                  <td className="px-3 py-2">{productName}</td>
+                                  <td className="px-3 py-2 text-right">{item.quantity}</td>
+                                  <td className="px-3 py-2 text-right">Rp {Number(item.unit_cost).toLocaleString('id-ID')}</td>
+                                  <td className="px-3 py-2 text-right">Rp {Number(item.total).toLocaleString('id-ID')}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                   {/* Supplier Info */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
@@ -926,7 +999,7 @@ const Products: React.FC = () => {
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Tanggal Order</label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <input
               type="date"
               value={purchaseDateRange.start}
