@@ -52,21 +52,9 @@ const Products: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   // State untuk supplier dari database
   const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [supplierView, setSupplierView] = useState<'card' | 'list'>('card');
+  // const [supplierView, setSupplierView] = useState<'card' | 'list'>('card');
   const [showEditSupplierForm, setShowEditSupplierForm] = useState<string | null>(null);
   const [editSupplier, setEditSupplier] = useState<any | null>(null);
-
-  // State for pagination
-  const [purchasePage, setPurchasePage] = useState(1);
-  const purchasesPerPage = 5;
-  const [purchases, setPurchases] = useState<any[]>([]);
-  const [totalPurchases, setTotalPurchases] = useState(0);
-
-  // State untuk filter daftar pembelian
-  const [purchaseListFilter, setPurchaseListFilter] = useState({
-    search: '',
-    date: ''
-  });
 
   // Calculate totals whenever items change
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
@@ -122,30 +110,29 @@ const Products: React.FC = () => {
   }, []);
 
   // Helper: mapping DB fields to UI fields for purchases
-  function mapPurchaseFromDb(p: any) {
-    return {
-      id: p.id,
-      poNumber: p.po_number || p.poNumber || '-',
-      supplier_id: p.supplier_id,
-      orderDate: p.order_date || p.orderDate,
-      expectedDate: p.expected_date || p.expectedDate,
-      status: p.status || 'pending',
-      notes: p.notes,
-      totalAmount: p.total_amount || p.totalAmount,
-      createdBy: p.created_by || p.createdBy,
-      // items: p.items || [] // items will be fetched separately if needed
-    };
-  }
+  // function mapPurchaseFromDb(p: any) {
+  //   return {
+  //     id: p.id,
+  //     poNumber: p.po_number || p.poNumber || '-',
+  //     supplier_id: p.supplier_id,
+  //     orderDate: p.order_date || p.orderDate,
+  //     expectedDate: p.expected_date || p.expectedDate,
+  //     status: p.status || 'pending',
+  //     notes: p.notes,
+  //     totalAmount: p.total_amount || p.totalAmount,
+  //     createdBy: p.created_by || p.createdBy,
+  //     // items: p.items || [] // items will be fetched separately if needed
+  //   };
+  // }
 
   // Fetch purchases from Supabase (replace mockPurchaseOrders)
   useEffect(() => {
     const fetchPurchases = async () => {
       try {
-        const data = await db.purchases.getAll();
+        // const data = await db.purchases.getAll(); // purchases fetch not needed
         // Map DB fields to UI fields
-        const mapped = (data || []).map(mapPurchaseFromDb);
-        setPurchases(mapped);
-        setTotalPurchases(mapped.length);
+        // const mapped = (data || []).map(mapPurchaseFromDb); // purchases mapping not needed
+        // setPurchases(mapped); // commented out since purchases state is removed
       } catch (error: any) {
         Swal.fire({
           icon: 'error',
@@ -193,11 +180,11 @@ const Products: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const filteredPurchases = mockPurchaseOrders.filter(purchase => {
-    const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
-    return supplier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           purchase.poNumber.toLowerCase().includes(searchTerm.toLowerCase());
-  });
+  // const filteredPurchases = mockPurchaseOrders.filter(purchase => {
+  //   const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
+  //   return supplier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  //     purchase.poNumber.toLowerCase().includes(searchTerm.toLowerCase());
+  // });
 
   // Ganti filteredSuppliers agar pakai data dari database
   const filteredSuppliers = suppliers.filter(supplier =>
@@ -326,40 +313,40 @@ const Products: React.FC = () => {
     });
   };
 
-  const handleCreatePurchase = () => {
-    if (!newPurchase.supplierId || newPurchase.items.length === 0) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Validasi Gagal',
-        text: 'Supplier dan item pembelian wajib diisi'
-      });
-      return;
-    }
+  // const handleCreatePurchase = () => {
+  //   if (!newPurchase.supplierId || newPurchase.items.length === 0) {
+  //     Swal.fire({
+  //       icon: 'error',
+  //       title: 'Validasi Gagal',
+  //       text: 'Supplier dan item pembelian wajib diisi'
+  //     });
+  //     return;
+  //   }
     
-    const invalidItems = newPurchase.items.some(item => !item.productId || item.quantity <= 0);
-    if (invalidItems) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Validasi Gagal',
-        text: 'Semua item harus memiliki produk dan quantity yang valid'
-      });
-      return;
-    }
+  //   const invalidItems = newPurchase.items.some(item => !item.productId || item.quantity <= 0);
+  //   if (invalidItems) {
+  //     Swal.fire({
+  //       icon: 'error',
+  //       title: 'Validasi Gagal',
+  //       text: 'Semua item harus memiliki produk dan quantity yang valid'
+  //     });
+  //     return;
+  //   }
     
-    Swal.fire({
-      icon: 'success',
-      title: 'Berhasil!',
-      text: `Purchase Order berhasil dibuat dengan total Rp ${purchaseTotal.toLocaleString('id-ID')}`
-    });
+  //   Swal.fire({
+  //     icon: 'success',
+  //     title: 'Berhasil!',
+  //     text: `Purchase Order berhasil dibuat dengan total Rp ${purchaseTotal.toLocaleString('id-ID')}`
+  //   });
     
-    setShowPurchaseForm(false);
-    setNewPurchase({
-      supplierId: '',
-      items: [],
-      notes: '',
-      expectedDate: new Date().toISOString().split('T')[0]
-    });
-  };
+  //   setShowPurchaseForm(false);
+  //   setNewPurchase({
+  //     supplierId: '',
+  //     items: [],
+  //     notes: '',
+  //     expectedDate: new Date().toISOString().split('T')[0]
+  //   });
+  // };
 
   // Ubah handleAddSupplier agar simpan ke database dan refresh list
   const handleAddSupplier = async () => {
@@ -489,6 +476,16 @@ const Products: React.FC = () => {
 
   // Delete supplier
   const handleDeleteSupplier = async (supplier: any) => {
+    // Cek apakah ada produk yang masih terkait dengan supplier ini
+    const relatedProducts = products.filter(p => p.supplier_id === supplier.id);
+    if (relatedProducts.length > 0) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Tidak bisa hapus supplier',
+        text: `Masih ada ${relatedProducts.length} produk yang terkait dengan supplier ini. Hapus atau pindahkan produk terlebih dahulu.`
+      });
+      return;
+    }
     const result = await Swal.fire({
       title: `Hapus supplier?`,
       text: `Yakin ingin menghapus supplier ${supplier.name}? Data tidak dapat dikembalikan!`,
@@ -716,8 +713,8 @@ const Products: React.FC = () => {
     </div>
   );
 
-  const paginatedPurchases = purchases.slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage);
-  const totalPages = Math.ceil(totalPurchases / purchasesPerPage);
+  // const paginatedPurchases = purchases.slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage);
+  // const totalPages = Math.ceil(totalPurchases / purchasesPerPage);
 
   const renderPurchasesTab = () => (
     <div className="space-y-6">
@@ -756,7 +753,7 @@ const Products: React.FC = () => {
             return supplier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
               purchase.poNumber.toLowerCase().includes(searchTerm.toLowerCase());
           })
-          .slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage)
+          // .slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage) // pagination removed
           .map((purchase) => {
             const supplier = mockSuppliers.find(s => s.id === purchase.supplierId);
             return (
@@ -854,7 +851,7 @@ const Products: React.FC = () => {
                         <h5 className="font-medium text-gray-700 mb-2">Informasi Supplier</h5>
                         <div className="text-sm space-y-1">
                           <div><strong>Nama:</strong> {supplier?.name}</div>
-                          <div><strong>Kontak:</strong> {supplier?.contact_person}</div>
+                          <div><strong>Kontak:</strong> {supplier?.contact}</div>
                           <div><strong>Telepon:</strong> {supplier?.phone}</div>
                           <div><strong>Email:</strong> {supplier?.email}</div>
                         </div>
@@ -883,121 +880,80 @@ const Products: React.FC = () => {
       </div>
 
       {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-4">
-          <button
-            onClick={() => setPurchasePage(p => Math.max(1, p - 1))}
-            disabled={purchasePage === 1}
-            className="px-3 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
-          >
-            Prev
-          </button>
-          {[...Array(totalPages)].map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setPurchasePage(idx + 1)}
-              className={`px-3 py-1 rounded border ${purchasePage === idx + 1 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-300'}`}
-            >
-              {idx + 1}
-            </button>
-          ))}
-          <button
-            onClick={() => setPurchasePage(p => Math.min(totalPages, p + 1))}
-            disabled={purchasePage === totalPages}
-            className="px-3 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      )}
+      {/* Pagination removed since purchase list tab is disabled */}
     </div>
   );
 
-  // Filter daftar pembelian dari database
-  const filteredPurchaseList = purchases.filter((purchase) => {
-    const supplier = suppliers.find(s => s.id === purchase.supplier_id);
-    const matchSearch =
-      purchase.poNumber?.toLowerCase().includes(purchaseListFilter.search.toLowerCase()) ||
-      supplier?.name?.toLowerCase().includes(purchaseListFilter.search.toLowerCase());
-    const matchDate = !purchaseListFilter.date ||
-      (purchase.orderDate && purchase.orderDate.startsWith(purchaseListFilter.date));
-    return matchSearch && matchDate;
-  });
-
   // Form/Content untuk tab Daftar Pembelian
-  const renderPurchaseListTab = () => (
+  // const renderPurchaseListTab = () => null; // sementara dihilangkan
+
+  // Render tab for suppliers
+  const renderSuppliersTab = () => (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Daftar Pembelian</h2>
-      <p className="text-gray-600">Daftar pembelian produk dari supplier (data dari database).</p>
-      <form
-        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-xl space-y-4"
-        onSubmit={e => e.preventDefault()}
-      >
+      <div className="flex items-center justify-between">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Cari Nomor PO / Supplier</label>
-          <input
-            type="text"
-            value={purchaseListFilter.search}
-            onChange={e => setPurchaseListFilter(f => ({ ...f, search: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Masukkan nomor PO atau nama supplier"
-          />
+          <h2 className="text-2xl font-bold text-gray-900">Manajemen Supplier</h2>
+          <p className="text-gray-600">Kelola data supplier produk</p>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
-          <input
-            type="date"
-            value={purchaseListFilter.date}
-            onChange={e => setPurchaseListFilter(f => ({ ...f, date: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-      </form>
-      {/* Tabel hasil pencarian */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-0 overflow-x-auto">
+        <button
+          onClick={() => setShowSupplierForm(true)}
+          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+        >
+          <Plus className="h-5 w-5" />
+          Tambah Supplier
+        </button>
+      </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+        <input
+          type="text"
+          placeholder="Cari supplier atau kontak person..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        />
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">No. PO</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal Order</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estimasi Tiba</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontak Person</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-            {filteredPurchaseList.length === 0 && (
+            {filteredSuppliers.length === 0 && (
               <tr>
                 <td colSpan={6} className="text-center text-gray-400 py-6">
-                  Tidak ada data pembelian ditemukan.
+                  Tidak ada data supplier ditemukan.
                 </td>
               </tr>
             )}
-            {filteredPurchaseList.map((purchase) => {
-              const supplier = suppliers.find(s => s.id === purchase.supplier_id);
-              return (
-                <tr key={purchase.id}>
-                  <td className="px-4 py-3 font-medium text-blue-700">{purchase.poNumber}</td>
-                  <td className="px-4 py-3">{supplier?.name || '-'}</td>
-                  <td className="px-4 py-3">{purchase.orderDate ? new Date(purchase.orderDate).toLocaleDateString('id-ID') : '-'}</td>
-                  <td className="px-4 py-3">{purchase.expectedDate ? new Date(purchase.expectedDate).toLocaleDateString('id-ID') : '-'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(purchase.status)}`}>
-                      {purchase.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-right">Rp {purchase.totalAmount?.toLocaleString('id-ID') || '0'}</td>
-                </tr>
-              );
-            })}
+            {filteredSuppliers.map((supplier) => (
+              <tr key={supplier.id}>
+                <td className="px-4 py-3 font-medium text-gray-900">{supplier.name}</td>
+                <td className="px-4 py-3">{supplier.contact_person}</td>
+                <td className="px-4 py-3">{supplier.phone || '-'}</td>
+                <td className="px-4 py-3">{supplier.email || '-'}</td>
+                <td className="px-4 py-3">{supplier.category}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setShowEditSupplierForm(supplier.id)} className="p-1 text-gray-400 hover:text-purple-600 transition-colors"><Edit className="h-4 w-4" /></button>
+                    <button onClick={() => handleDeleteSupplier(supplier)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
     </div>
   );
 
-  // ...existing code...
   return (
     <>
       <div className="p-6 bg-gray-50 min-h-screen">
@@ -1010,10 +966,10 @@ const Products: React.FC = () => {
         <div className="mb-8">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
-              {[
+              { [
                 { id: 'products', label: 'Produk', icon: Package },
                 { id: 'purchases', label: 'Pembelian', icon: ShoppingBag },
-                { id: 'purchaseList', label: 'Daftar Pembelian', icon: FileText },
+                // { id: 'purchaseList', label: 'Daftar Pembelian', icon: FileText }, // sementara dihilangkan
                 { id: 'suppliers', label: 'Supplier', icon: Truck }
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -1042,7 +998,7 @@ const Products: React.FC = () => {
         {/* Tab Content */}
         {activeTab === 'products' && renderProductsTab()}
         {activeTab === 'purchases' && renderPurchasesTab()}
-        {activeTab === 'purchaseList' && renderPurchaseListTab()}
+        {/* {activeTab === 'purchaseList' && renderPurchaseListTab()} */}
         {activeTab === 'suppliers' && renderSuppliersTab()}
 
         {/* Add Product Modal */}
