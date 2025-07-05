@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Gamepad2, Plus, Settings, Wrench, Clock } from 'lucide-react';
-import { mockConsoles, mockRateProfiles } from '../data/mockData';
+import { mockRateProfiles } from '../data/mockData';
+import { db } from '../lib/supabase';
+import Swal from 'sweetalert2';
 
 const Consoles: React.FC = () => {
+  const [consoles, setConsoles] = useState<any[]>([]);
   const [selectedConsole, setSelectedConsole] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
@@ -13,6 +16,23 @@ const Consoles: React.FC = () => {
     dailyRate: 0,
     weeklyRate: 0
   });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Fetch consoles from Supabase
+    const fetchConsoles = async () => {
+      setLoading(true);
+      try {
+        const data = await db.select('consoles');
+        setConsoles(data);
+      } catch (err) {
+        alert('Failed to fetch consoles');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchConsoles();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -32,28 +52,108 @@ const Consoles: React.FC = () => {
     }
   };
 
-  const handleAddConsole = () => {
+  const handleAddConsole = async () => {
     if (!newConsole.name || newConsole.hourlyRate <= 0) {
-      alert('Console name and hourly rate are required');
+      Swal.fire('Gagal', 'Console name and hourly rate are required', 'error');
       return;
     }
-    
-    // Here you would normally save to database
-    alert('Console added successfully!');
-    setShowAddForm(false);
-    setNewConsole({
-      name: '',
-      type: 'PS5',
-      hourlyRate: 0,
-      dailyRate: 0,
-      weeklyRate: 0
-    });
+    setLoading(true);
+    try {
+      // Insert to Supabase
+      const newId = `CNSL-${Date.now()}`;
+      const insertData = {
+        id: newId,
+        name: newConsole.name,
+        equipment_type_id: newConsole.type === 'PS5' ? 'ET002' : 'ET001',
+        rate_profile_id: newConsole.type === 'PS5' ? 'RP002' : 'RP001',
+        status: 'available',
+        is_active: true,
+      };
+      await db.insert('consoles', insertData);
+      // Refresh list
+      const data = await db.select('consoles');
+      setConsoles(data);
+      Swal.fire('Berhasil', 'Console added successfully!', 'success');
+      setShowAddForm(false);
+      setNewConsole({
+        name: '',
+        type: 'PS5',
+        hourlyRate: 0,
+        dailyRate: 0,
+        weeklyRate: 0
+      });
+    } catch (err: any) {
+      Swal.fire('Gagal', err.message || 'Failed to add console', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditConsole = (consoleId: string) => {
-    // Here you would normally update the database
-    alert(`Console ${consoleId} updated successfully!`);
-    setShowEditForm(null);
+  // Update Console
+  const handleEditConsole = async (consoleId: string, updatedFields?: any) => {
+    setLoading(true);
+    try {
+      let updateData = updatedFields;
+      if (!updateData) {
+        const name = (document.getElementById('edit-name') as HTMLInputElement)?.value;
+        const location = (document.getElementById('edit-location') as HTMLInputElement)?.value;
+        const serialNumber = (document.getElementById('edit-serial') as HTMLInputElement)?.value;
+        let ipAddress = (document.getElementById('edit-ip') as HTMLInputElement)?.value;
+        const notes = (document.getElementById('edit-notes') as HTMLTextAreaElement)?.value;
+        // Perbaikan: jika ipAddress kosong, set null
+        ipAddress = ipAddress && ipAddress.trim() !== '' ? ipAddress : null;
+        updateData = {
+          name,
+          location,
+          serial_number: serialNumber,
+          ip_address: ipAddress,
+          notes
+        };
+      }
+      await db.update('consoles', consoleId, updateData);
+      const data = await db.select('consoles');
+      setConsoles(data);
+      Swal.fire('Berhasil', 'Console updated successfully!', 'success');
+      setShowEditForm(null);
+    } catch (err: any) {
+      Swal.fire('Gagal', err.message || 'Failed to update console', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete Console
+  const handleDeleteConsole = async (consoleId: string) => {
+    const result = await Swal.fire({
+      title: 'Hapus Console?',
+      text: 'Are you sure you want to delete this console?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel',
+    });
+    if (!result.isConfirmed) return;
+    setLoading(true);
+    try {
+      await db.delete('consoles', consoleId);
+      const data = await db.select('consoles');
+      setConsoles(data);
+      Swal.fire('Berhasil', 'Console deleted successfully!', 'success');
+    } catch (err: any) {
+      Swal.fire('Gagal', err.message || 'Failed to delete console', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Set Maintenance
+  const handleSetMaintenance = async (consoleId: string) => {
+    await handleEditConsole(consoleId, { status: 'maintenance' });
+  };
+
+  // Set Available
+  const handleSetAvailable = async (consoleId: string) => {
+    await handleEditConsole(consoleId, { status: 'available' });
   };
 
   const handleStartRental = (consoleId: string) => {
@@ -64,16 +164,6 @@ const Consoles: React.FC = () => {
   const handleEndSession = (consoleId: string) => {
     // Here you would normally end the current session
     alert(`Ending current session for console ${consoleId}`);
-  };
-
-  const handleSetMaintenance = (consoleId: string) => {
-    // Here you would normally set console to maintenance
-    alert(`Console ${consoleId} set to maintenance mode`);
-  };
-
-  const handleSetAvailable = (consoleId: string) => {
-    // Here you would normally set console to available
-    alert(`Console ${consoleId} set to available`);
   };
 
   return (
@@ -96,7 +186,7 @@ const Consoles: React.FC = () => {
 
       {/* Console Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {mockConsoles.map((console) => {
+        {consoles.map((console) => {
           const rateProfile = mockRateProfiles.find(profile => profile.id === console.rateProfileId);
           
           return (
@@ -140,7 +230,7 @@ const Consoles: React.FC = () => {
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Serial Number</span>
                         <span className="font-medium text-gray-900">
-                          {console.serialNumber || 'N/A'}
+                          {console.serial_number || 'N/A'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -152,13 +242,13 @@ const Consoles: React.FC = () => {
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Purchase Date</span>
                         <span className="font-medium text-gray-900">
-                          {console.purchaseDate ? new Date(console.purchaseDate).toLocaleDateString('id-ID') : 'N/A'}
+                          {console.purchase_date ? new Date(console.purchase_date).toLocaleDateString('id-ID') : 'N/A'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Warranty</span>
                         <span className="font-medium text-gray-900">
-                          {console.warrantyExpiry ? new Date(console.warrantyExpiry).toLocaleDateString('id-ID') : 'N/A'}
+                          {console.warranty_expiry ? new Date(console.warranty_expiry).toLocaleDateString('id-ID') : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -179,6 +269,15 @@ const Consoles: React.FC = () => {
                       >
                         <Settings className="h-4 w-4" />
                       </button>
+                      <button
+                        onClick={() => handleDeleteConsole(console.id)}
+                        className="p-2 border border-red-300 hover:border-red-500 text-red-600 rounded-lg transition-colors"
+                        title="Delete Console"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
 
@@ -193,7 +292,7 @@ const Consoles: React.FC = () => {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Equipment Type:</span>
-                          <span className="font-medium">{console.equipmentTypeId}</span>
+                          <span className="font-medium">{console.equipment_type_id}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Current Status:</span>
@@ -212,10 +311,10 @@ const Consoles: React.FC = () => {
                           <span className="text-gray-600">Hours Played Today:</span>
                           <span className="font-medium">8.5 hours</span>
                         </div>
-                        {console.ipAddress && (
+                        {console.ip_address && (
                           <div className="flex justify-between">
                             <span className="text-gray-600">IP Address:</span>
-                            <span className="font-medium">{console.ipAddress}</span>
+                            <span className="font-medium">{console.ip_address}</span>
                           </div>
                         )}
                         {console.notes && (
@@ -335,8 +434,9 @@ const Consoles: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Console Name</label>
                   <input
+                    id="edit-name"
                     type="text"
-                    defaultValue={mockConsoles.find(c => c.id === showEditForm)?.name}
+                    defaultValue={consoles.find(c => c.id === showEditForm)?.name}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -344,8 +444,9 @@ const Consoles: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                   <input
+                    id="edit-location"
                     type="text"
-                    defaultValue={mockConsoles.find(c => c.id === showEditForm)?.location}
+                    defaultValue={consoles.find(c => c.id === showEditForm)?.location}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -353,8 +454,9 @@ const Consoles: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
                   <input
+                    id="edit-serial"
                     type="text"
-                    defaultValue={mockConsoles.find(c => c.id === showEditForm)?.serialNumber}
+                    defaultValue={consoles.find(c => c.id === showEditForm)?.serial_number}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -362,8 +464,9 @@ const Consoles: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
                   <input
+                    id="edit-ip"
                     type="text"
-                    defaultValue={mockConsoles.find(c => c.id === showEditForm)?.ipAddress}
+                    defaultValue={consoles.find(c => c.id === showEditForm)?.ip_address}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -371,7 +474,8 @@ const Consoles: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                   <textarea
-                    defaultValue={mockConsoles.find(c => c.id === showEditForm)?.notes}
+                    id="edit-notes"
+                    defaultValue={consoles.find(c => c.id === showEditForm)?.notes}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={3}
                   />
@@ -404,7 +508,7 @@ const Consoles: React.FC = () => {
             <Clock className="h-6 w-6 text-green-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {mockConsoles.filter(c => c.status === 'available').length}
+            {consoles.filter(c => c.status === 'available').length}
           </h3>
           <p className="text-gray-600 text-sm">Available Consoles</p>
         </div>
@@ -414,7 +518,7 @@ const Consoles: React.FC = () => {
             <Gamepad2 className="h-6 w-6 text-blue-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {mockConsoles.filter(c => c.status === 'rented').length}
+            {consoles.filter(c => c.status === 'rented').length}
           </h3>
           <p className="text-gray-600 text-sm">Currently Rented</p>
         </div>
@@ -424,7 +528,7 @@ const Consoles: React.FC = () => {
             <Wrench className="h-6 w-6 text-red-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {mockConsoles.filter(c => c.status === 'maintenance').length}
+            {consoles.filter(c => c.status === 'maintenance').length}
           </h3>
           <p className="text-gray-600 text-sm">Under Maintenance</p>
         </div>
@@ -434,7 +538,7 @@ const Consoles: React.FC = () => {
             <Settings className="h-6 w-6 text-purple-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {Math.round((mockConsoles.filter(c => c.status === 'rented').length / mockConsoles.length) * 100)}%
+            {Math.round((consoles.filter(c => c.status === 'rented').length / consoles.length) * 100)}%
           </h3>
           <p className="text-gray-600 text-sm">Utilization Rate</p>
         </div>
