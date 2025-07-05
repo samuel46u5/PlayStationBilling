@@ -19,6 +19,7 @@ const Consoles: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [editTab, setEditTab] = useState<'umum' | 'teknis'>('umum');
+  const [addTab, setAddTab] = useState<'umum' | 'teknis'>('umum');
 
   useEffect(() => {
     // Fetch consoles from Supabase
@@ -59,21 +60,41 @@ const Consoles: React.FC = () => {
   };
 
   const handleAddConsole = async () => {
-    if (!newConsole.name || newConsole.hourlyRate <= 0) {
-      Swal.fire('Gagal', 'Nama konsol dan tarif per jam diperlukan', 'error');
-      return;
-    }
     setLoading(true);
     try {
-      // Insert to Supabase
+      // Ambil semua field dari form (dua tab)
+      const name = (document.getElementById('add-name') as HTMLInputElement)?.value;
+      const equipmentTypeId = (document.getElementById('add-equipment-type') as HTMLSelectElement)?.value;
+      const status = (document.getElementById('add-status') as HTMLSelectElement)?.value;
+      const location = (document.getElementById('add-location') as HTMLInputElement)?.value;
+      const serialNumber = (document.getElementById('add-serial') as HTMLInputElement)?.value;
+      const isActive = (document.getElementById('add-active') as HTMLInputElement)?.checked;
+      const purchaseDate = (document.getElementById('add-purchase-date') as HTMLInputElement)?.value;
+      const warrantyExpiry = (document.getElementById('add-warranty') as HTMLInputElement)?.value;
+      let ipAddress = (document.getElementById('add-ip') as HTMLInputElement)?.value;
+      const relayCommand = (document.getElementById('add-relay') as HTMLInputElement)?.value;
+      const notes = (document.getElementById('add-notes') as HTMLTextAreaElement)?.value;
+      // Field opsional: null jika kosong
+      const safe = (v: string | undefined) => v && v.trim() !== '' ? v : null;
+      if (!name) {
+        Swal.fire('Gagal', 'Nama konsol diperlukan', 'error');
+        setLoading(false);
+        return;
+      }
       const newId = `CNSL-${Date.now()}`;
       const insertData = {
         id: newId,
-        name: newConsole.name,
-        equipment_type_id: newConsole.type === 'PS5' ? 'ET002' : 'ET001',
-        rate_profile_id: newConsole.type === 'PS5' ? 'RP002' : 'RP001',
-        status: 'available',
-        is_active: true,
+        name,
+        equipment_type_id: equipmentTypeId,
+        status,
+        location: safe(location),
+        serial_number: safe(serialNumber),
+        is_active: !!isActive,
+        purchase_date: safe(purchaseDate),
+        warranty_expiry: safe(warrantyExpiry),
+        ip_address: safe(ipAddress),
+        relay_command: safe(relayCommand),
+        notes: safe(notes)
       };
       await db.insert('consoles', insertData);
       // Refresh list
@@ -103,7 +124,6 @@ const Consoles: React.FC = () => {
       if (!updateData) {
         const name = (document.getElementById('edit-name') as HTMLInputElement)?.value;
         const equipmentTypeId = (document.getElementById('edit-equipment-type') as HTMLSelectElement)?.value;
-        const rateProfileId = (document.getElementById('edit-rate-profile') as HTMLSelectElement)?.value;
         const status = (document.getElementById('edit-status') as HTMLSelectElement)?.value;
         const location = (document.getElementById('edit-location') as HTMLInputElement)?.value;
         const serialNumber = (document.getElementById('edit-serial') as HTMLInputElement)?.value;
@@ -118,7 +138,6 @@ const Consoles: React.FC = () => {
         updateData = {
           name,
           equipment_type_id: equipmentTypeId,
-          rate_profile_id: rateProfileId,
           status,
           location: safe(location),
           serial_number: safe(serialNumber),
@@ -493,40 +512,140 @@ const Consoles: React.FC = () => {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
             <div className="p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Tambah Konsol Baru</h2>
-              
+              <div className="flex gap-2 mb-6">
+                <button
+                  type="button"
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${addTab === 'umum' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                  onClick={() => setAddTab('umum')}
+                >
+                  Informasi Umum
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${addTab === 'teknis' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                  onClick={() => setAddTab('teknis')}
+                >
+                  Detail Teknis
+                </button>
+              </div>
               <form className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Konsol *</label>
-                  <input
-                    type="text"
-                    value={newConsole.name}
-                    onChange={(e) => setNewConsole({...newConsole, name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="mis. PlayStation 5 - Station 1"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Konsol</label>
-                  <select 
-                    value={newConsole.type}
-                    onChange={(e) => setNewConsole({...newConsole, type: e.target.value as any})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="PS4">PlayStation 4</option>
-                    <option value="PS5">PlayStation 5</option>
-                  </select>
-                </div>
+                {addTab === 'umum' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nama Konsol *</label>
+                      <input
+                        id="add-name"
+                        type="text"
+                        defaultValue={newConsole.name}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="mis. PlayStation 5 - Station 1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Konsol</label>
+                      <select
+                        id="add-equipment-type"
+                        defaultValue={newConsole.type === 'PS5' ? 'ET002' : 'ET001'}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        {mockEquipmentTypes.map(type => (
+                          <option key={type.id} value={type.id}>{type.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <select
+                        id="add-status"
+                        defaultValue="available"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="available">Tersedia</option>
+                        <option value="rented">Disewa</option>
+                        <option value="maintenance">Pemeliharaan</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
+                      <input
+                        id="add-location"
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
+                      <input
+                        id="add-serial"
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="add-active"
+                        type="checkbox"
+                        defaultChecked={true}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      />
+                      <label htmlFor="add-active" className="text-sm text-gray-700">Aktif</label>
+                    </div>
+                  </>
+                )}
+                {addTab === 'teknis' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
+                      <input
+                        id="add-purchase-date"
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Garansi s/d</label>
+                      <input
+                        id="add-warranty"
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
+                      <input
+                        id="add-ip"
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay</label>
+                      <input
+                        id="add-relay"
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
+                      <textarea
+                        id="add-notes"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows={3}
+                        placeholder="Catatan tambahan tentang konsol ini"
+                      />
+                    </div>
+                  </>
+                )}
               </form>
-              
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-3 mt-4">
                 <button
                   onClick={() => setShowAddForm(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   Batal
                 </button>
-                <button 
+                <button
                   onClick={handleAddConsole}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
@@ -583,18 +702,6 @@ const Consoles: React.FC = () => {
                         >
                           {mockEquipmentTypes.map(type => (
                             <option key={type.id} value={type.id}>{type.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Profil Tarif</label>
-                        <select
-                          id="edit-rate-profile"
-                          defaultValue={editing.rate_profile_id}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          {mockRateProfiles.map(profile => (
-                            <option key={profile.id} value={profile.id}>{profile.name}</option>
                           ))}
                         </select>
                       </div>
