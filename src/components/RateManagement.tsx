@@ -1,8 +1,8 @@
+import Swal from 'sweetalert2';
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, DollarSign, Edit, Trash2, Clock, Calendar, TrendingUp, Users, Gamepad2, Settings, Eye, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { RateProfile, EquipmentType, Console } from '../types';
-import Swal from 'sweetalert2';
 
 const RateManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -10,6 +10,7 @@ const RateManagement: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
+  const [showConsoleManageModal, setShowConsoleManageModal] = useState<string | null>(null);
 
   // State for data from database
   const [rateProfiles, setRateProfiles] = useState<RateProfile[]>([]);
@@ -109,6 +110,7 @@ const RateManagement: React.FC = () => {
   const refreshData = async () => {
     setLoading(true);
     const { data: rateData } = await supabase.from('rate_profiles').select('*').order('created_at', { ascending: false });
+    const { data: consoleData } = await supabase.from('consoles').select('*');
     setRateProfiles((rateData || []).map((p: any) => ({
       id: p.id,
       name: p.name,
@@ -116,7 +118,7 @@ const RateManagement: React.FC = () => {
       hourlyRate: Number(p.hourly_rate) || 0,
       dailyRate: Number(p.daily_rate) || 0,
       weeklyRate: Number(p.weekly_rate) || 0,
-      monthlyRate: p.monthly_rate !== undefined && p.monthly_rate !== null ? Number(p.monthly_rate) : undefined,
+      monthlyRate: p.monthly_rate !== undefined && p.monthlyRate !== null ? Number(p.monthlyRate) : undefined,
       peakHourRate: p.peak_hour_rate !== undefined && p.peak_hour_rate !== null ? Number(p.peak_hour_rate) : undefined,
       peakHourStart: p.peak_hour_start || '',
       peakHourEnd: p.peak_hour_end || '',
@@ -126,6 +128,23 @@ const RateManagement: React.FC = () => {
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       createdBy: p.created_by,
+    })));
+    setConsoles((consoleData || []).map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      equipmentTypeId: c.equipment_type_id,
+      rateProfileId: c.rate_profile_id,
+      status: c.status,
+      location: c.location,
+      serialNumber: c.serial_number,
+      purchaseDate: c.purchase_date,
+      warrantyExpiry: c.warranty_expiry,
+      notes: c.notes,
+      ipAddress: c.ip_address,
+      relayCommand: c.relay_command,
+      isActive: c.is_active,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
     })));
     setLoading(false);
   };
@@ -211,6 +230,12 @@ const RateManagement: React.FC = () => {
 
   // Hapus profil tarif dari database
   const handleDeleteRateProfile = async (profileId: string) => {
+    // Cek apakah ada console yang menggunakan profil tarif ini
+    const usedByConsoles = consoles.filter(console => console.rateProfileId === profileId);
+    if (usedByConsoles.length > 0) {
+      await Swal.fire('Tidak Bisa Menghapus', 'Profil tarif ini masih digunakan oleh satu atau lebih console. Silakan pindahkan atau hapus console terkait terlebih dahulu.', 'error');
+      return;
+    }
     const confirm = await Swal.fire({
       title: 'Konfirmasi',
       text: 'Apakah Anda yakin ingin menghapus profil tarif ini?',
@@ -240,6 +265,43 @@ const RateManagement: React.FC = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+      {/* Summary Stats */}
+      <div className="mb-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <DollarSign className="h-6 w-6 text-green-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-1">{rateProfiles.length}</h3>
+          <p className="text-gray-600 text-sm">Total Profil Tarif</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <TrendingUp className="h-6 w-6 text-blue-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-1">
+            {rateProfiles.filter(p => p.isActive).length}
+          </h3>
+          <p className="text-gray-600 text-sm">Profil Aktif</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Gamepad2 className="h-6 w-6 text-purple-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-1">
+            {consoles.filter(c => c.rateProfileId).length}
+          </h3>
+          <p className="text-gray-600 text-sm">Console Menggunakan Tarif</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+          <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Clock className="h-6 w-6 text-orange-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-1">
+            Rp {rateProfiles.length > 0 ? Math.round(rateProfiles.reduce((sum, p) => sum + p.hourlyRate, 0) / rateProfiles.length).toLocaleString('id-ID') : 0}
+          </h3>
+          <p className="text-gray-600 text-sm">Rata-rata Tarif/Jam</p>
+        </div>
+      </div>
       {loading && <div className="text-center text-gray-500">Memuat data...</div>}
       {!loading && rateProfiles.length === 0 && (
         <div className="text-center text-gray-400 py-10">Tidak ada data profil tarif ditemukan.</div>
@@ -418,6 +480,13 @@ const RateManagement: React.FC = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
+                        <button
+                          onClick={() => setShowConsoleManageModal(profile.id)}
+                          className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors"
+                          title="Pengaturan Konsol"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </button>
                         <button 
                           onClick={() => handleDeleteRateProfile(profile.id)}
                           className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors"
@@ -460,11 +529,76 @@ const RateManagement: React.FC = () => {
                                 <div key={console.id} className="text-sm text-gray-600 flex items-center gap-2">
                                   <Gamepad2 className="h-3 w-3" />
                                   {console.name}
+                                  <button
+                                    className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                    onClick={async () => {
+                                      const confirm = await Swal.fire({
+                                        title: 'Konfirmasi',
+                                        text: `Lepas konsol '${console.name}' dari profil tarif ini?`,
+                                        icon: 'warning',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'Ya, lepas',
+                                        cancelButtonText: 'Batal',
+                                      });
+                                      if (!confirm.isConfirmed) return;
+                                      const { error } = await supabase.from('consoles').update({ rate_profile_id: null }).eq('id', console.id);
+                                      if (error) {
+                                        Swal.fire('Gagal', 'Gagal melepas konsol: ' + error.message, 'error');
+                                        return;
+                                      }
+                                      await refreshData();
+                                      setShowConsoleManageModal(profile.id); // trigger re-render modal
+                                      Swal.fire('Berhasil', `Konsol '${console.name}' berhasil dilepas dari profil tarif.`, 'success');
+                                    }}
+                                  >
+                                    Lepas
+                                  </button>
                                 </div>
                               ))}
                             {getConsoleCount(profile.id) === 0 && (
                               <p className="text-sm text-gray-500 italic">Belum ada console yang menggunakan tarif ini</p>
                             )}
+                          </div>
+                          {/* Tambahkan konsol ke profil tarif ini */}
+                          <div className="mt-4">
+                            <h5 className="font-medium text-gray-900 mb-2">Tambahkan Console ke Profil Ini</h5>
+                            <div className="space-y-1">
+                              {consoles.filter(console => !console.rateProfileId).length === 0 && (
+                                <p className="text-sm text-gray-500 italic">Tidak ada console yang belum memiliki profil tarif</p>
+                              )}
+                              {consoles
+                                .filter(console => !console.rateProfileId)
+                                .map(console => (
+                                  <div key={console.id} className="text-sm text-gray-600 flex items-center gap-2">
+                                    <Gamepad2 className="h-3 w-3" />
+                                    {console.name}
+                                    <button
+                                      className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                      onClick={async () => {
+                                        const confirm = await Swal.fire({
+                                          title: 'Konfirmasi',
+                                          text: `Tambahkan konsol '${console.name}' ke profil tarif ini?`,
+                                          icon: 'question',
+                                          showCancelButton: true,
+                                          confirmButtonText: 'Ya, tambahkan',
+                                          cancelButtonText: 'Batal',
+                                        });
+                                        if (!confirm.isConfirmed) return;
+                                        const { error } = await supabase.from('consoles').update({ rate_profile_id: profile.id }).eq('id', console.id);
+                                        if (error) {
+                                          Swal.fire('Gagal', 'Gagal menambahkan konsol: ' + error.message, 'error');
+                                          return;
+                                        }
+                                        await refreshData();
+                                        setShowConsoleManageModal(profile.id); // trigger re-render modal
+                                        Swal.fire('Berhasil', `Konsol '${console.name}' berhasil ditambahkan ke profil tarif.`, 'success');
+                                      }}
+                                    >
+                                      Tambahkan
+                                    </button>
+                                  </div>
+                                ))}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -811,46 +945,115 @@ const RateManagement: React.FC = () => {
             </div>
           )}
 
-          {/* Summary Stats */}
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <DollarSign className="h-6 w-6 text-green-600" />
+          {/* Modal Pengaturan Konsol */}
+          {showConsoleManageModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Settings className="h-5 w-5" /> Pengaturan Konsol untuk Profil Tarif
+                  </h2>
+                  {(() => {
+                    const profile = rateProfiles.find(p => p.id === showConsoleManageModal);
+                    if (!profile) return null;
+                    return (
+                      <>
+                        <div className="mb-4">
+                          <span className="font-semibold">{profile.name}</span>
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-gray-900 mb-2">Console yang Menggunakan Profil Ini</h5>
+                          <div className="space-y-1 mb-4">
+                            {consoles.filter(console => console.rateProfileId === profile.id).length === 0 && (
+                              <p className="text-sm text-gray-500 italic">Belum ada console yang menggunakan profil ini</p>
+                            )}
+                            {consoles
+                              .filter(console => console.rateProfileId === profile.id)
+                              .map(console => (
+                                <div key={console.id} className="text-sm text-gray-600 flex items-center gap-2">
+                                  <Gamepad2 className="h-3 w-3" />
+                                  {console.name}
+                                  <button
+                                    className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                    onClick={async () => {
+                                      const confirm = await Swal.fire({
+                                        title: 'Konfirmasi',
+                                        text: `Lepas konsol '${console.name}' dari profil tarif ini?`,
+                                        icon: 'warning',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'Ya, lepas',
+                                        cancelButtonText: 'Batal',
+                                      });
+                                      if (!confirm.isConfirmed) return;
+                                      const { error } = await supabase.from('consoles').update({ rate_profile_id: null }).eq('id', console.id);
+                                      if (error) {
+                                        Swal.fire('Gagal', 'Gagal melepas konsol: ' + error.message, 'error');
+                                        return;
+                                      }
+                                      await refreshData();
+                                      setShowConsoleManageModal(profile.id); // trigger re-render modal
+                                      Swal.fire('Berhasil', `Konsol '${console.name}' berhasil dilepas dari profil tarif.`, 'success');
+                                    }}
+                                  >
+                                    Lepas
+                                  </button>
+                                </div>
+                              ))}
+                          </div>
+                          <h5 className="font-medium text-gray-900 mb-2">Tambahkan Console ke Profil Ini</h5>
+                          <div className="space-y-1">
+                            {consoles.filter(console => !console.rateProfileId).length === 0 && (
+                              <p className="text-sm text-gray-500 italic">Tidak ada console yang belum memiliki profil tarif</p>
+                            )}
+                            {consoles
+                              .filter(console => !console.rateProfileId)
+                              .map(console => (
+                                <div key={console.id} className="text-sm text-gray-600 flex items-center gap-2">
+                                  <Gamepad2 className="h-3 w-3" />
+                                  {console.name}
+                                  <button
+                                    className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                    onClick={async () => {
+                                      const confirm = await Swal.fire({
+                                        title: 'Konfirmasi',
+                                        text: `Tambahkan konsol '${console.name}' ke profil tarif ini?`,
+                                        icon: 'question',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'Ya, tambahkan',
+                                        cancelButtonText: 'Batal',
+                                      });
+                                      if (!confirm.isConfirmed) return;
+                                      const { error } = await supabase.from('consoles').update({ rate_profile_id: profile.id }).eq('id', console.id);
+                                      if (error) {
+                                        Swal.fire('Gagal', 'Gagal menambahkan konsol: ' + error.message, 'error');
+                                        return;
+                                      }
+                                      await refreshData();
+                                      setShowConsoleManageModal(profile.id); // trigger re-render modal
+                                      Swal.fire('Berhasil', `Konsol '${console.name}' berhasil ditambahkan ke profil tarif.`, 'success');
+                                    }}
+                                  >
+                                    Tambahkan
+                                  </button>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                          <button
+                            onClick={() => setShowConsoleManageModal(null)}
+                            className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                          >
+                            Tutup
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1">{rateProfiles.length}</h3>
-              <p className="text-gray-600 text-sm">Total Profil Tarif</p>
             </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <TrendingUp className="h-6 w-6 text-blue-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                {rateProfiles.filter(p => p.isActive).length}
-              </h3>
-              <p className="text-gray-600 text-sm">Profil Aktif</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Gamepad2 className="h-6 w-6 text-purple-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                {consoles.filter(c => c.rateProfileId).length}
-              </h3>
-              <p className="text-gray-600 text-sm">Console Menggunakan Tarif</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Clock className="h-6 w-6 text-orange-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                Rp {Math.round(rateProfiles.reduce((sum, p) => sum + p.hourlyRate, 0) / rateProfiles.length).toLocaleString('id-ID')}
-              </h3>
-              <p className="text-gray-600 text-sm">Rata-rata Tarif/Jam</p>
-            </div>
-          </div>
+          )}
         </>
       )}
     </div>
