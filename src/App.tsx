@@ -18,6 +18,7 @@ import UserManagement from './components/UserManagement';
 import VoucherManagement from './components/VoucherManagement';
 import Settings from './components/Settings';
 import MaintenanceManagement from './components/MaintenanceManagement';
+import RateProfilePage from './components/RateProfilePage';
 
 const App: React.FC = () => {
   return (
@@ -66,6 +67,9 @@ const AppLayout: React.FC = () => {
         return <Settings />;
       case 'maintenance':
         return <MaintenanceManagement />;
+      case 'rate-profile':
+      case 'rate-profiles':
+        return <RateProfilePage />;
       default:
         return <Dashboard />;
     }

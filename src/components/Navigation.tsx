@@ -22,6 +22,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     { id: 'consoles', label: 'Consoles', icon: SettingsIcon },
     { id: 'equipment', label: 'Equipment Management', icon: Wrench },
     { id: 'rates', label: 'Tarif', icon: TrendingUp },
+    { id: 'rate-profiles', label: 'Profil tarif', icon: TrendingUp },
     { id: 'maintenance', label: 'Hardware Maintenance', icon: Tool },
     { id: 'users', label: 'User Management', icon: Shield },
     { id: 'settings', label: 'Pengaturan', icon: Cog },
@@ -57,6 +58,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
                   <Icon className="h-5 w-5" />
                   <span className="font-medium text-sm">{item.label}</span>
                 </button>
+                {/* Hapus render RateProfilePage dari sini, hanya tombol menu saja */}
               </li>
             );
           })}
