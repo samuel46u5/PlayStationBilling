@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Search, DollarSign, Edit, Trash2, Clock, Calendar, TrendingUp, Users, Gamepad2, Settings, Eye, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { RateProfile, EquipmentType, Console } from '../types';
+import Swal from 'sweetalert2';
 
 const RateManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,7 +41,7 @@ const RateManagement: React.FC = () => {
         const { data: eqData, error: eqError } = await supabase.from('equipment_types').select('*').order('name');
         const { data: consoleData, error: consoleError } = await supabase.from('consoles').select('*');
         if (rateError || eqError || consoleError) {
-          alert('Gagal mengambil data dari database. Pastikan Supabase berjalan dan koneksi benar.');
+          Swal.fire('Gagal mengambil data', 'Pastikan Supabase berjalan dan koneksi benar.', 'error');
         }
         // Mapping snake_case ke camelCase agar tidak error
         setRateProfiles((rateData || []).map((p: any) => ({
@@ -89,7 +90,7 @@ const RateManagement: React.FC = () => {
           updatedAt: c.updated_at,
         })));
       } catch (err) {
-        alert('Terjadi error saat mengambil data: ' + (err instanceof Error ? err.message : String(err)));
+        Swal.fire('Error', 'Terjadi error saat mengambil data: ' + (err instanceof Error ? err.message : String(err)), 'error');
       }
       setLoading(false);
     };
@@ -132,7 +133,7 @@ const RateManagement: React.FC = () => {
   // Tambah profil tarif ke database
   const handleAddRateProfile = async () => {
     if (!newRateProfile.name || newRateProfile.hourlyRate <= 0) {
-      alert('Nama profil tarif dan tarif per jam wajib diisi');
+      Swal.fire('Validasi Gagal', 'Nama profil tarif dan tarif per jam wajib diisi', 'warning');
       return;
     }
     // Generate id unik (pakai Date.now + random)
@@ -155,7 +156,7 @@ const RateManagement: React.FC = () => {
     };
     const { error } = await supabase.from('rate_profiles').insert([insertData]);
     if (error) {
-      alert('Gagal menambah profil tarif: ' + error.message);
+      Swal.fire('Gagal', 'Gagal menambah profil tarif: ' + error.message, 'error');
       return;
     }
     setShowAddForm(false);
@@ -174,7 +175,7 @@ const RateManagement: React.FC = () => {
       isActive: true,
     });
     await refreshData();
-    alert('Profil tarif berhasil ditambahkan!');
+    Swal.fire('Berhasil', 'Profil tarif berhasil ditambahkan!', 'success');
   };
 
   // Edit profil tarif ke database
@@ -200,24 +201,32 @@ const RateManagement: React.FC = () => {
     };
     const { error } = await supabase.from('rate_profiles').update(updateData).eq('id', profileId);
     if (error) {
-      alert('Gagal update profil tarif: ' + error.message);
+      Swal.fire('Gagal', 'Gagal update profil tarif: ' + error.message, 'error');
       return;
     }
     setShowEditForm(null);
     await refreshData();
-    alert(`Profil tarif ${profileId} berhasil diperbarui!`);
+    Swal.fire('Berhasil', `Profil tarif berhasil diperbarui!`, 'success');
   };
 
   // Hapus profil tarif dari database
   const handleDeleteRateProfile = async (profileId: string) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus profil tarif ini?')) return;
+    const confirm = await Swal.fire({
+      title: 'Konfirmasi',
+      text: 'Apakah Anda yakin ingin menghapus profil tarif ini?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, hapus',
+      cancelButtonText: 'Batal',
+    });
+    if (!confirm.isConfirmed) return;
     const { error } = await supabase.from('rate_profiles').delete().eq('id', profileId);
     if (error) {
-      alert('Gagal menghapus profil tarif: ' + error.message);
+      Swal.fire('Gagal', 'Gagal menghapus profil tarif: ' + error.message, 'error');
       return;
     }
     await refreshData();
-    alert(`Profil tarif ${profileId} berhasil dihapus!`);
+    Swal.fire('Berhasil', 'Profil tarif berhasil dihapus!', 'success');
   };
 
   const getEquipmentTypeName = (equipmentTypeId: string) => {
