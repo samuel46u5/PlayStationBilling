@@ -20,6 +20,13 @@ const dummyProfiles = [
     createdAt: '2025-07-01',
     updatedAt: '2025-07-01',
     createdBy: 'admin',
+    // Paket Hemat
+    packages: [
+      { name: 'Paket 1', duration: 2, price: 18000, note: 'hemat Rp 2.000 dari harga normal Rp 20.000' },
+      { name: 'Paket 2', duration: 3, price: 25000, note: 'hemat Rp 5.000' },
+      { name: 'Paket 3', duration: 5, price: 40000, note: 'hemat Rp 10.000' },
+      { name: 'Paket 4', duration: 10, price: 75000, note: 'bisa dipakai beberapa kali' },
+    ],
   },
   {
     id: '2',
@@ -38,6 +45,12 @@ const dummyProfiles = [
     createdAt: '2025-07-01',
     updatedAt: '2025-07-01',
     createdBy: 'admin',
+    packages: [
+      { name: 'Paket 1', duration: 2, price: 15000, note: 'hemat Rp 2.000 dari harga normal Rp 17.000' },
+      { name: 'Paket 2', duration: 3, price: 20000, note: 'hemat Rp 5.000' },
+      { name: 'Paket 3', duration: 5, price: 35000, note: 'hemat Rp 10.000' },
+      { name: 'Paket 4', duration: 10, price: 65000, note: 'bisa dipakai beberapa kali' },
+    ],
   },
 ];
 
@@ -152,23 +165,11 @@ const RateProfilePage: React.FC = () => {
                     <h2 className="text-lg font-bold">{profile.name}</h2>
                   </div>
                 </div>
-                {/* Tombol Kelola Konsol */}
-                <button
-                  className="flex items-center gap-1 px-3 py-1 bg-gray-900 bg-opacity-20 hover:bg-opacity-40 rounded-lg text-xs font-medium transition-colors"
-                  onClick={() => setShowConsoleManageModal(profile.id)}
-                  type="button"
-                >
-                  <Settings className="h-4 w-4" /> Kelola Konsol
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                  profile.isActive ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'
-                }`}>
-                  {profile.isActive ? 'AKTIF' : 'NONAKTIF'}
-                </span>
-                {/* Tombol Edit & Hapus */}
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${profile.isActive ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>
+                    {profile.isActive ? 'AKTIF' : 'NONAKTIF'}
+                  </span>
+                  {/* Tombol Edit & Hapus */}
                   <button
                     className="flex items-center gap-1 px-3 py-1 bg-white bg-opacity-20 hover:bg-opacity-40 rounded-lg text-xs font-medium transition-colors"
                     onClick={() => setShowEditForm(profile.id)}
@@ -191,54 +192,26 @@ const RateProfilePage: React.FC = () => {
               <div className="space-y-4">
                 {/* Deskripsi */}
                 <p className="text-gray-600 text-sm">{profile.description}</p>
-                {/* Struktur Tarif */}
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Struktur Tarif
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Per Jam</span>
-                      <span>Rp {profile.hourlyRate.toLocaleString('id-ID')}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Per Hari</span>
-                      <span>Rp {profile.dailyRate.toLocaleString('id-ID')}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Per Minggu</span>
-                      <span>Rp {profile.weeklyRate.toLocaleString('id-ID')}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Per Bulan</span>
-                      <span>Rp {profile.monthlyRate.toLocaleString('id-ID')}</span>
-                    </div>
-                  </div>
+                {/* Tarif per Jam */}
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-gray-900">Tarif per Jam</span>
+                  <span>Rp {profile.hourlyRate.toLocaleString('id-ID')}</span>
                 </div>
-                {/* Peak Hour & Weekend */}
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Peak Hour
-                  </h4>
-                  <div className="flex justify-between text-sm">
-                    <span>Tarif Peak Hour</span>
-                    <span>Rp {profile.peakHourRate.toLocaleString('id-ID')}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Jam Peak Hour</span>
-                    <span>{profile.peakHourStart} - {profile.peakHourEnd}</span>
-                  </div>
+                {/* Jam Berlaku */}
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-gray-900">Jam Berlaku</span>
+                  <span>{profile.peakHourStart?.slice(0,5)} - {profile.peakHourEnd?.slice(0,5)}</span>
                 </div>
+                {/* Berlaku untuk Console */}
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    Weekend Multiplier
-                  </h4>
-                  <div className="flex justify-between text-sm">
-                    <span>Multiplier</span>
-                    <span>{profile.weekendMultiplier}x</span>
+                  <span className="font-semibold text-gray-900 block mb-1">Berlaku untuk Console</span>
+                  <div className="flex flex-wrap gap-2">
+                    {(profile.applicableEquipmentTypes || []).map((id) => {
+                      const eq = dummyEquipmentTypes.find(e => e.id === id);
+                      return eq ? (
+                        <span key={eq.id} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">{eq.name}</span>
+                      ) : null;
+                    })}
                   </div>
                 </div>
               </div>
@@ -246,7 +219,7 @@ const RateProfilePage: React.FC = () => {
           </div>
         ))}
       </div>
-      {/* Modal Tambah Profil Tarif (dummy, UI saja) */}
+      {/* Modal Tambah Profil Tarif (hanya field yang diperlukan) */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -260,12 +233,11 @@ const RateProfilePage: React.FC = () => {
                       type="text"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="e.g., PlayStation Premium"
-                      disabled
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" disabled>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                       <option>Aktif</option>
                       <option>Nonaktif</option>
                     </select>
@@ -277,93 +249,38 @@ const RateProfilePage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={2}
                     placeholder="Deskripsi profil tarif"
-                    disabled
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Jam</label>
-                    <input
-                      type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="15000"
-                      disabled
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Hari</label>
-                    <input
-                      type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="120000"
-                      disabled
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Minggu</label>
-                    <input
-                      type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="700000"
-                      disabled
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Bulan</label>
-                    <input
-                      type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="2500000"
-                      disabled
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tarif Peak Hour</label>
-                    <input
-                      type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="18000"
-                      disabled
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Jam Mulai Peak</label>
-                    <input
-                      type="time"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      disabled
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Jam Selesai Peak</label>
-                    <input
-                      type="time"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      disabled
-                    />
-                  </div>
-                </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Weekend Multiplier</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Jam</label>
                   <input
                     type="number"
-                    step="0.1"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="1.2"
-                    disabled
+                    placeholder="Contoh: 10000"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Multiplier untuk weekend (1.2 = 20% lebih mahal)</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Jam Mulai Berlaku</label>
+                    <input
+                      type="time"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Jam Selesai Berlaku</label>
+                    <input
+                      type="time"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Berlaku untuk Equipment</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Berlaku untuk Console</label>
                   <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-3">
                     {dummyEquipmentTypes.map(eq => (
                       <div key={eq.id} className="flex items-center gap-2">
-                        <input type="checkbox" disabled />
+                        <input type="checkbox" />
                         <span>{eq.name}</span>
                       </div>
                     ))}
