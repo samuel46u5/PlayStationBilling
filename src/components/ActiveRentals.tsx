@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, DollarSign, User, Gamepad2, Play, Square, Calculator, Plus, CreditCard, Phone, Search, Grid3X3, List, LayoutGrid, ShoppingCart, Minus, X, Save } from 'lucide-react';
-import { mockRentalSessions, mockCustomers, mockConsoles, mockRateProfiles, mockProducts } from '../data/mockData';
+import { supabase } from '../lib/supabase';
 
 const ActiveRentals: React.FC = () => {
   const [selectedRental, setSelectedRental] = useState<string | null>(null);
@@ -30,7 +30,14 @@ const ActiveRentals: React.FC = () => {
 
   // Product search for modal
   const [productSearch, setProductSearch] = useState('');
-  
+
+  // State to hold data from Supabase
+  const [rentalSessions, setRentalSessions] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [consoles, setConsoles] = useState<any[]>([]);
+  const [rateProfiles, setRateProfiles] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+
   // Update current time every second for real-time duration
   useEffect(() => {
     const timer = setInterval(() => {
@@ -39,20 +46,39 @@ const ActiveRentals: React.FC = () => {
 
     return () => clearInterval(timer);
   }, []);
-  
-  const activeRentals = mockRentalSessions.filter(session => session.status === 'active');
+
+  // Fetch data from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      const [rentalRes, customerRes, consoleRes, rateRes, productRes] = await Promise.all([
+        supabase.from('rental_sessions').select('*'),
+        supabase.from('customers').select('*'),
+        supabase.from('consoles').select('*'),
+        supabase.from('rate_profiles').select('*'),
+        supabase.from('products').select('*'),
+      ]);
+      if (!rentalRes.error) setRentalSessions(rentalRes.data || []);
+      if (!customerRes.error) setCustomers(customerRes.data || []);
+      if (!consoleRes.error) setConsoles(consoleRes.data || []);
+      if (!rateRes.error) setRateProfiles(rateRes.data || []);
+      if (!productRes.error) setProducts(productRes.data || []);
+    };
+    fetchData();
+  }, []);
+
+  const activeRentals = rentalSessions.filter(session => session.status === 'active');
 
   // Filter customers based on search
-  const filteredCustomers = mockCustomers.filter(customer =>
+  const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
     customer.phone.includes(customerSearch)
   );
 
   // Filter products for modal
-  const filteredProducts = mockProducts.filter(product =>
+  const filteredProducts = products.filter(product =>
     product.isActive && (
       product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-      product.barcode?.includes(productSearch)
+      (product.barcode && product.barcode.includes(productSearch))
     )
   );
 
@@ -60,11 +86,11 @@ const ActiveRentals: React.FC = () => {
     const startTime = new Date(session.startTime);
     const minutesElapsed = Math.floor((currentTime.getTime() - startTime.getTime()) / (1000 * 60));
     const hoursElapsed = Math.ceil(minutesElapsed / 60);
-    
-    const console = mockConsoles.find(c => c.id === session.consoleId);
-    const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
+
+    const console = consoles.find(c => c.id === session.consoleId);
+    const rateProfile = rateProfiles.find(profile => profile.id === console?.rateProfileId);
     const hourlyRate = rateProfile?.hourlyRate || 0;
-    
+
     return hoursElapsed * hourlyRate;
   };
 
@@ -75,7 +101,7 @@ const ActiveRentals: React.FC = () => {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
-    
+
     return { hours, minutes, seconds, totalMinutes };
   };
 
@@ -89,7 +115,7 @@ const ActiveRentals: React.FC = () => {
     setConsoleCarts(prev => {
       const currentCart = prev[consoleId] || [];
       const existingItem = currentCart.find(item => item.productId === product.id);
-      
+
       if (existingItem) {
         // Update quantity
         const updatedCart = currentCart.map(item =>
@@ -151,9 +177,9 @@ const ActiveRentals: React.FC = () => {
 
     const total = cart.reduce((sum, item) => sum + item.total, 0);
     const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-    
+
     alert(`Berhasil menyimpan ${itemCount} item dengan total Rp ${total.toLocaleString('id-ID')} untuk console ${consoleId}`);
-    
+
     // Clear cart after saving
     clearCart(consoleId);
     setShowProductModal(null);
@@ -185,12 +211,12 @@ const ActiveRentals: React.FC = () => {
       alert('Please select a customer');
       return;
     }
-    
+
     setNewRental({ ...newRental, customerId: selectedCustomer });
     setShowCustomerModal(false);
     setCustomerSearch('');
     setSelectedCustomer('');
-    
+
     // Process the rental start
     alert(`Starting new rental for console ${newRental.consoleId} with customer ${selectedCustomer}`);
     setShowNewRentalModal(null);
@@ -220,16 +246,16 @@ const ActiveRentals: React.FC = () => {
 
   const renderCardView = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-      {mockConsoles.map((console) => {
+      {consoles.map((console) => {
         const consoleStatus = getConsoleStatus(console.id);
         const activeSession = getActiveSession(console.id);
-        const customer = activeSession ? mockCustomers.find(c => c.id === activeSession.customerId) : null;
+        const customer = activeSession ? customers.find(c => c.id === activeSession.customerId) : null;
         const currentCost = activeSession ? calculateCurrentCost(activeSession) : 0;
         const duration = activeSession ? formatDuration(activeSession.startTime) : null;
-        const rateProfile = mockRateProfiles.find(profile => profile.id === console.rateProfileId);
+        const rateProfile = rateProfiles.find(profile => profile.id === console.rateProfileId);
         const cartItemCount = getCartItemCount(console.id);
         const cartTotal = getCartTotal(console.id);
-        
+
         return (
           <div key={console.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
             {/* Header */}
@@ -573,13 +599,13 @@ const ActiveRentals: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {mockConsoles.map((console) => {
+            {consoles.map((console) => {
               const consoleStatus = getConsoleStatus(console.id);
               const activeSession = getActiveSession(console.id);
-              const customer = activeSession ? mockCustomers.find(c => c.id === activeSession.customerId) : null;
+              const customer = activeSession ? customers.find(c => c.id === activeSession.customerId) : null;
               const currentCost = activeSession ? calculateCurrentCost(activeSession) : 0;
               const duration = activeSession ? formatDuration(activeSession.startTime) : null;
-              const rateProfile = mockRateProfiles.find(profile => profile.id === console.rateProfileId);
+              const rateProfile = rateProfiles.find(profile => profile.id === console.rateProfileId);
               const cartItemCount = getCartItemCount(console.id);
               const cartTotal = getCartTotal(console.id);
               
@@ -744,8 +770,8 @@ const ActiveRentals: React.FC = () => {
         <div className="border-t border-gray-200 bg-gray-50 p-6">
           {(() => {
             const activeSession = activeRentals.find(s => s.id === selectedRental);
-            const customer = activeSession ? mockCustomers.find(c => c.id === activeSession.customerId) : null;
-            const console = activeSession ? mockConsoles.find(c => c.id === activeSession.consoleId) : null;
+            const customer = activeSession ? customers.find(c => c.id === activeSession.customerId) : null;
+            const console = activeSession ? consoles.find(c => c.id === activeSession.consoleId) : null;
             const currentCost = activeSession ? calculateCurrentCost(activeSession) : 0;
             const duration = activeSession ? formatDuration(activeSession.startTime) : null;
             
@@ -875,7 +901,7 @@ const ActiveRentals: React.FC = () => {
             {/* Status Indicators */}
             <div className="flex items-center gap-2 text-sm">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span>Available ({mockConsoles.filter(c => getConsoleStatus(c.id) === 'available').length})</span>
+              <span>Available ({consoles.filter(c => getConsoleStatus(c.id) === 'available').length})</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
@@ -883,7 +909,7 @@ const ActiveRentals: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 text-sm">
               <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              <span>Maintenance ({mockConsoles.filter(c => c.status === 'maintenance').length})</span>
+              <span>Maintenance ({consoles.filter(c => c.status === 'maintenance').length})</span>
             </div>
           </div>
         </div>
@@ -900,7 +926,7 @@ const ActiveRentals: React.FC = () => {
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">
-                  Add Products - {mockConsoles.find(c => c.id === showProductModal)?.name}
+                  Add Products - {consoles.find(c => c.id === showProductModal)?.name}
                 </h2>
                 <p className="text-gray-600">Select products to add to cart</p>
               </div>
@@ -1173,10 +1199,10 @@ const ActiveRentals: React.FC = () => {
                 <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                   <h3 className="font-medium text-blue-900 mb-2">Selected Console</h3>
                   <p className="text-blue-800">
-                    {mockConsoles.find(c => c.id === showNewRentalModal)?.name}
+                    {consoles.find(c => c.id === showNewRentalModal)?.name}
                   </p>
                   <p className="text-sm text-blue-600">
-                    Rp {(mockRateProfiles.find(profile => profile.id === mockConsoles.find(c => c.id === showNewRentalModal)?.rateProfileId)?.hourlyRate || 0).toLocaleString('id-ID')}/hour
+                    Rp {(rateProfiles.find(profile => profile.id === consoles.find(c => c.id === showNewRentalModal)?.rateProfileId)?.hourlyRate || 0).toLocaleString('id-ID')}/hour
                   </p>
                 </div>
               </div>

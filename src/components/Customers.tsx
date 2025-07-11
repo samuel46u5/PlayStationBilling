@@ -39,6 +39,12 @@ const Customers: React.FC = () => {
   // State tambahan untuk menyimpan nomor WhatsApp lama saat edit
   const [oldPhone, setOldPhone] = useState('');
 
+  // State untuk checkbox OTP edit
+  const [useOtpEdit, setUseOtpEdit] = useState(false);
+
+  // State untuk checkbox OTP tambah customer
+  const [useOtpAdd, setUseOtpAdd] = useState(false); // default: unchecked
+
   // Fetch customers from Supabase
   const fetchCustomers = async () => {
     setLoading(true);
@@ -80,6 +86,7 @@ const Customers: React.FC = () => {
       setOtpCodeEdit('');
       setGeneratedOtpEdit('');
       setOtpTimerEdit(0);
+      setUseOtpEdit(false);
     }
   }, [showEditForm]);
 
@@ -193,20 +200,98 @@ const Customers: React.FC = () => {
     handleSendOtp();
   };
 
-  // Tambah customer ke database
-  const handleAddCustomer = async () => {
-    if (!newCustomer.name || !newCustomer.whatsapp) {
-      Swal.fire('Error', 'Nama dan WhatsApp wajib diisi', 'warning');
+  // Fungsi OTP untuk edit customer
+  const handleSendOtpEdit = async () => {
+    if (!editPhone) {
+      Swal.fire('Error', 'Nomor WhatsApp wajib diisi', 'warning');
       return;
     }
-    if (otpStep !== 'verified') {
+    const whatsappRegex = /^(\+62|62|0)[0-9]{9,13}$/;
+    if (!whatsappRegex.test(editPhone)) {
+      Swal.fire('Error', 'Format nomor WhatsApp tidak valid. Gunakan format: +62xxx, 62xxx, atau 0xxx', 'warning');
+      return;
+    }
+    setIsSendingOtpEdit(true);
+    try {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedOtpEdit(otp);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setOtpStepEdit('verify');
+      setOtpTimerEdit(120);
+      const interval = setInterval(() => {
+        setOtpTimerEdit(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      Swal.fire('Sukses', `Kode OTP telah dikirim ke WhatsApp ${editPhone}. Silakan cek pesan masuk.`, 'success');
+    } catch (error) {
+      Swal.fire('Gagal mengirim OTP. Silakan coba lagi.', String(error), 'error');
+    } finally {
+      setIsSendingOtpEdit(false);
+    }
+  };
+
+  const handleVerifyOtpEdit = async () => {
+    if (!otpCodeEdit || otpCodeEdit.length !== 6) {
+      Swal.fire('Error', 'Masukkan kode OTP 6 digit', 'warning');
+      return;
+    }
+    setIsVerifyingEdit(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (otpCodeEdit === generatedOtpEdit) {
+        setOtpStepEdit('verified');
+        Swal.fire('Sukses', 'Nomor WhatsApp berhasil diverifikasi!', 'success');
+      } else {
+        Swal.fire('Error', 'Kode OTP salah. Silakan coba lagi.', 'error');
+        setOtpCodeEdit('');
+      }
+    } catch (error) {
+      Swal.fire('Gagal memverifikasi OTP. Silakan coba lagi.', String(error), 'error');
+    } finally {
+      setIsVerifyingEdit(false);
+    }
+  };
+
+  const handleResendOtpEdit = () => {
+    if (otpTimerEdit > 0) {
+      Swal.fire('Info', `Tunggu ${formatTimer(otpTimerEdit)} sebelum mengirim ulang`, 'info');
+      return;
+    }
+    setOtpCodeEdit('');
+    handleSendOtpEdit();
+  };
+
+  // Tambah customer ke database
+  const handleAddCustomer = async () => {
+    // Validasi nama wajib diisi
+    if (!newCustomer.name) {
+      Swal.fire('Error', 'Nama wajib diisi', 'warning');
+      return;
+    }
+    // Jika cek OTP dicentang, nomor WhatsApp wajib diisi
+    if (useOtpAdd && !newCustomer.whatsapp) {
+      Swal.fire('Error', 'Nomor WhatsApp wajib diisi jika Cek OTP dicentang', 'warning');
+      return;
+    }
+    // Duplicate check
+    const duplicate = customers.find(c => c.name.trim().toLowerCase() === newCustomer.name.trim().toLowerCase() || (newCustomer.whatsapp && c.phone === newCustomer.whatsapp));
+    if (duplicate) {
+      Swal.fire('Error', 'Nama atau nomor WhatsApp sudah terdaftar', 'error');
+      return;
+    }
+    if (useOtpAdd && otpStep !== 'verified') {
       Swal.fire('Error', 'Silakan verifikasi nomor WhatsApp terlebih dahulu', 'warning');
       return;
     }
     const { error } = await supabase.from('customers').insert([
       {
         name: newCustomer.name,
-        phone: newCustomer.whatsapp,
+        phone: newCustomer.whatsapp || "", // WA opsional, kirim string kosong jika tidak diisi
         email: newCustomer.email,
         address: newCustomer.address,
         total_spent: 0,
@@ -217,7 +302,7 @@ const Customers: React.FC = () => {
     if (error) {
       Swal.fire('Gagal menambah customer', error.message, 'error');
     } else {
-      await Swal.fire('Sukses', 'Customer berhasil ditambahkan dengan WhatsApp terverifikasi!', 'success');
+      await Swal.fire('Sukses', 'Customer berhasil ditambahkan!', 'success');
       setShowAddForm(false);
       setNewCustomer({ name: '', whatsapp: '', email: '', address: '' });
       setOtpStep('input');
@@ -236,6 +321,16 @@ const Customers: React.FC = () => {
     const phone = editPhone;
     const email = (document.getElementById('edit-email') as HTMLInputElement)?.value || customer.email;
     const address = (document.getElementById('edit-address') as HTMLInputElement)?.value || customer.address;
+    // Duplicate check (exclude self)
+    const duplicate = customers.find(c => (c.id !== customerId) && (c.name.trim().toLowerCase() === name.trim().toLowerCase() || (phone && c.phone === phone)));
+    if (duplicate) {
+      Swal.fire('Error', 'Nama atau nomor WhatsApp sudah terdaftar', 'error');
+      return;
+    }
+    if (useOtpEdit && phone !== oldPhone && otpStepEdit !== 'verified') {
+      Swal.fire('Error', 'Nomor WhatsApp baru harus diverifikasi OTP', 'warning');
+      return;
+    }
     const { error } = await supabase.from('customers').update({ name, phone, email, address }).eq('id', customerId);
     if (error) {
       Swal.fire('Gagal memperbarui customer', error.message, 'error');
@@ -281,83 +376,83 @@ const Customers: React.FC = () => {
     setShowAddForm(false);
   };
 
-  // Fungsi untuk menampilkan tanggal kunjungan terakhir dan berapa hari yang lalu
-  const renderLastVisit = (customer: Customer) => {
-    // Dummy: gunakan joinDate sebagai last visit, ganti dengan field real jika ada
-    if (!customer.joinDate) return '-';
-    const lastVisit = new Date(customer.joinDate);
-    const now = new Date();
-    const diffMs = now.getTime() - lastVisit.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const dateStr = lastVisit.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-    const timeStr = lastVisit.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-    return `${dateStr} ${timeStr} (${diffDays === 0 ? 'hari ini' : diffDays + ' hari lalu'})`;
-  };
-
-  // Handler OTP untuk edit customer
-  const handleSendOtpEdit = async () => {
-    if (!editPhone) {
-      Swal.fire('Error', 'Nomor WhatsApp wajib diisi', 'warning');
-      return;
-    }
-    const whatsappRegex = /^(\+62|62|0)[0-9]{9,13}$/;
-    if (!whatsappRegex.test(editPhone)) {
-      Swal.fire('Error', 'Format nomor WhatsApp tidak valid. Gunakan format: +62xxx, 62xxx, atau 0xxx', 'warning');
-      return;
-    }
-    setIsSendingOtpEdit(true);
-    try {
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedOtpEdit(otp);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setOtpStepEdit('verify');
-      setOtpTimerEdit(120);
-      const interval = setInterval(() => {
-        setOtpTimerEdit(prev => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      Swal.fire('Sukses', `Kode OTP telah dikirim ke WhatsApp ${editPhone}. Silakan cek pesan masuk.`, 'success');
-    } catch (error) {
-      Swal.fire('Gagal mengirim OTP. Silakan coba lagi.', '', 'error');
-    } finally {
-      setIsSendingOtpEdit(false);
-    }
-  };
-
-  const handleVerifyOtpEdit = async () => {
-    if (!otpCodeEdit || otpCodeEdit.length !== 6) {
-      Swal.fire('Error', 'Masukkan kode OTP 6 digit', 'warning');
-      return;
-    }
-    setIsVerifyingEdit(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      if (otpCodeEdit === generatedOtpEdit) {
-        setOtpStepEdit('verified');
-        Swal.fire('Sukses', 'Nomor WhatsApp berhasil diverifikasi!', 'success');
-      } else {
-        Swal.fire('Error', 'Kode OTP salah. Silakan coba lagi.', 'error');
-        setOtpCodeEdit('');
+  // Ambil data riwayat rental customer dari Supabase
+  const getCustomerStats = async (customerId: string) => {
+    // Ambil data rental/sesi dari tabel rentals (atau sessions jika ada)
+    const { data, error } = await supabase
+      .from('rentals')
+      .select('id, customer_id, console_type, duration, start_time')
+      .eq('customer_id', customerId);
+    if (error || !data) return {
+      totalKunjungan: 0,
+      rataSesi: 0,
+      consoleFavorit: '-',
+      lastVisit: '-',
+    };
+    const totalKunjungan = data.length;
+    const rataSesi = totalKunjungan > 0 ? data.reduce((sum, r) => sum + (r.duration || 0), 0) / totalKunjungan : 0;
+    // Hitung console favorit
+    const consoleCount: Record<string, number> = {};
+    data.forEach(r => {
+      if (r.console_type) {
+        consoleCount[r.console_type] = (consoleCount[r.console_type] || 0) + 1;
       }
-    } catch (error) {
-      Swal.fire('Gagal memverifikasi OTP. Silakan coba lagi.', '', 'error');
-    } finally {
-      setIsVerifyingEdit(false);
-    }
+    });
+    const consoleFavorit = Object.entries(consoleCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
+    // Kunjungan terakhir
+    const lastVisit = data.length > 0 ? new Date(Math.max(...data.map(r => new Date(r.start_time).getTime()))) : null;
+    return {
+      totalKunjungan,
+      rataSesi,
+      consoleFavorit,
+      lastVisit: lastVisit ? `${lastVisit.toLocaleDateString('id-ID')} ${lastVisit.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : '-',
+    };
   };
 
-  const handleResendOtpEdit = () => {
-    if (otpTimerEdit > 0) {
-      Swal.fire('Info', `Tunggu ${formatTimer(otpTimerEdit)} sebelum mengirim ulang`, 'info');
-      return;
-    }
-    setOtpCodeEdit('');
-    handleSendOtpEdit();
+  // Komponen Riwayat Customer dengan data real
+  const CustomerHistory: React.FC<{ customerId: string }> = ({ customerId }) => {
+    const [stats, setStats] = useState({ totalKunjungan: 0, rataSesi: 0, consoleFavorit: '-', lastVisit: '-' });
+    React.useEffect(() => {
+      getCustomerStats(customerId).then((result) => setStats({
+        totalKunjungan: result.totalKunjungan,
+        rataSesi: typeof result.rataSesi === 'number' ? result.rataSesi : 0,
+        consoleFavorit: result.consoleFavorit,
+        lastVisit: result.lastVisit,
+      }));
+    }, [customerId]);
+    return (
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span className="text-gray-600">Customer ID:</span>
+          <span className="font-medium">{customerId}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Total Kunjungan:</span>
+          <span className="font-medium">{stats.totalKunjungan} sesi</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Rata-rata Sesi:</span>
+          <span className="font-medium">{stats.rataSesi} jam</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Console Favorit:</span>
+          <span className="font-medium">{stats.consoleFavorit}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Kunjungan Terakhir:</span>
+          <span className="font-medium">{stats.lastVisit}</span>
+        </div>
+      </div>
+    );
+  };
+
+  // Komponen untuk menampilkan kunjungan terakhir di tabel list
+  const CustomerLastVisit: React.FC<{ customerId: string }> = ({ customerId }) => {
+    const [lastVisit, setLastVisit] = useState('-');
+    React.useEffect(() => {
+      getCustomerStats(customerId).then((result) => setLastVisit(result.lastVisit));
+    }, [customerId]);
+    return <>{lastVisit}</>;
   };
 
   return (
@@ -483,29 +578,7 @@ const Customers: React.FC = () => {
 
                 {/* Detail langsung tampil tanpa tombol dan tanpa total belanja */}
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="font-semibold text-gray-900 mb-3">Riwayat Customer</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Customer ID:</span>
-                      <span className="font-medium">{customer.id}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Total Kunjungan:</span>
-                      <span className="font-medium">12 sesi</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Rata-rata Sesi:</span>
-                      <span className="font-medium">2.5 jam</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Console Favorit:</span>
-                      <span className="font-medium">PlayStation 5</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Kunjungan Terakhir:</span>
-                      <span className="font-medium">{renderLastVisit(customer)}</span>
-                    </div>
-                  </div>
+                  <CustomerHistory customerId={customer.id} />
                 </div>
               </div>
             </div>
@@ -544,7 +617,7 @@ const Customers: React.FC = () => {
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${customer.status === 'active' ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>{customer.status || '-'}</span>
                   </td>
-                  <td className="px-4 py-3">{renderLastVisit(customer)}</td>
+                  <td className="px-4 py-3"><CustomerLastVisit customerId={customer.id} /></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => setShowEditForm(customer.id)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><Edit className="h-4 w-4" /></button>
@@ -579,7 +652,7 @@ const Customers: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nomor WhatsApp *
+                    Nomor WhatsApp{useOtpAdd ? ' *' : ' (Opsional)'}
                     {otpStep === 'verified' && (
                       <span className="ml-2 inline-flex items-center gap-1 text-green-600 text-xs">
                         <CheckCircle className="h-3 w-3" />
@@ -587,6 +660,16 @@ const Customers: React.FC = () => {
                       </span>
                     )}
                   </label>
+                  <div className="mb-2 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={useOtpAdd}
+                      onChange={e => setUseOtpAdd(e.target.checked)}
+                      className="accent-blue-600"
+                      id="cek-otp-add"
+                    />
+                    <label htmlFor="cek-otp-add" className="text-sm text-gray-700 select-none">Cek OTP</label>
+                  </div>
                   <div className="flex gap-2">
                     <input
                       type="tel"
@@ -603,7 +686,7 @@ const Customers: React.FC = () => {
                       placeholder="+62 8xx-xxxx-xxxx"
                       disabled={otpStep === 'verified'}
                     />
-                    {otpStep === 'input' && (
+                    {useOtpAdd && otpStep === 'input' && (
                       <button
                         type="button"
                         onClick={handleSendOtp}
@@ -625,7 +708,7 @@ const Customers: React.FC = () => {
                 </div>
 
                 {/* OTP Verification Section */}
-                {otpStep === 'verify' && (
+                {useOtpAdd && otpStep === 'verify' && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Shield className="h-5 w-5 text-blue-600" />
@@ -729,8 +812,14 @@ const Customers: React.FC = () => {
                   Batal
                 </button>
                 <button 
-                  onClick={handleAddCustomer}
-                  disabled={otpStep !== 'verified'}
+                  onClick={() => {
+                    if (useOtpAdd && otpStep !== 'verified') {
+                      Swal.fire('Error', 'Nomor WhatsApp harus diverifikasi OTP', 'warning');
+                      return;
+                    }
+                    handleAddCustomer();
+                  }}
+                  disabled={useOtpAdd ? otpStep !== 'verified' : false}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
                   Tambah Customer
@@ -760,14 +849,25 @@ const Customers: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp</label>
-                  <div className="flex gap-2">
+                  {/* Checkbox Cek OTP di atas input nomor WhatsApp */}
+                  <div className="mb-2 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={useOtpEdit}
+                      onChange={e => setUseOtpEdit(e.target.checked)}
+                      className="accent-blue-600"
+                      id="cek-otp-edit"
+                    />
+                    <label htmlFor="cek-otp-edit" className="text-sm text-gray-700 select-none">Cek OTP</label>
+                  </div>
+                  <div className="flex gap-2 items-center">
                     <input
                       type="tel"
                       id="edit-phone"
                       value={editPhone}
                       onChange={e => {
                         setEditPhone(e.target.value);
-                        if (e.target.value !== oldPhone) {
+                        if (useOtpEdit && e.target.value !== oldPhone) {
                           if (otpStepEdit !== 'input') {
                             setOtpStepEdit('input');
                             setOtpCodeEdit('');
@@ -781,24 +881,26 @@ const Customers: React.FC = () => {
                       }}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <button
-                      type="button"
-                      onClick={handleSendOtpEdit}
-                      disabled={isSendingOtpEdit || !editPhone || editPhone === oldPhone}
-                      className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-                    >
-                      {isSendingOtpEdit ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <MessageCircle className="h-4 w-4" />
-                      )}
-                      {isSendingOtpEdit ? 'Mengirim...' : 'Kirim OTP'}
-                    </button>
+                    {useOtpEdit && (
+                      <button
+                        type="button"
+                        onClick={handleSendOtpEdit}
+                        disabled={isSendingOtpEdit || !editPhone || editPhone === oldPhone}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                      >
+                        {isSendingOtpEdit ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MessageCircle className="h-4 w-4" />
+                        )}
+                        {isSendingOtpEdit ? 'Mengirim...' : 'Kirim OTP'}
+                      </button>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Format: +62xxx, 62xxx, atau 0xxx</p>
                 </div>
                 {/* OTP Verification Section for Edit */}
-                {editPhone !== oldPhone && otpStepEdit === 'verify' && (
+                {useOtpEdit && editPhone !== oldPhone && otpStepEdit === 'verify' && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
                     <div className="flex items-center gap-2 mb-3">
                       <Shield className="h-5 w-5 text-blue-600" />
@@ -854,7 +956,7 @@ const Customers: React.FC = () => {
                     </div>
                   </div>
                 )}
-                {editPhone !== oldPhone && otpStepEdit === 'verified' && (
+                {useOtpEdit && editPhone !== oldPhone && otpStepEdit === 'verified' && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-2">
                     <div className="flex items-center gap-2">
                       <CheckCircle className="h-5 w-5 text-green-600" />
@@ -900,7 +1002,7 @@ const Customers: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    if (editPhone !== oldPhone && otpStepEdit !== 'verified') {
+                    if (useOtpEdit && editPhone !== oldPhone && otpStepEdit !== 'verified') {
                       Swal.fire('Error', 'Nomor WhatsApp baru harus diverifikasi OTP', 'warning');
                       return;
                     }
