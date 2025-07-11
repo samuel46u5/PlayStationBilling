@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Search, User, Phone, Mail, MapPin, Calendar, DollarSign, Edit, Trash2, MessageCircle, Shield, Clock, CheckCircle, XCircle, RefreshCw, LayoutGrid, List as ListIcon, Gamepad2 } from 'lucide-react';
-import { mockCustomers } from '../data/mockData';
+import { supabase } from '../lib/supabase';
+import { Customer } from '../types';
+import Swal from 'sweetalert2';
 
 const Customers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,6 +16,8 @@ const Customers: React.FC = () => {
     address: ''
   });
   const [customerView, setCustomerView] = useState<'card' | 'list'>('card');
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // OTP States
   const [otpStep, setOtpStep] = useState<'input' | 'verify' | 'verified'>('input');
@@ -23,7 +27,63 @@ const Customers: React.FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
 
-  const filteredCustomers = mockCustomers.filter(customer =>
+  // Edit OTP States
+  const [editPhone, setEditPhone] = useState('');
+  const [otpStepEdit, setOtpStepEdit] = useState<'input' | 'verify' | 'verified'>('input');
+  const [otpCodeEdit, setOtpCodeEdit] = useState('');
+  const [generatedOtpEdit, setGeneratedOtpEdit] = useState('');
+  const [otpTimerEdit, setOtpTimerEdit] = useState(0);
+  const [isVerifyingEdit, setIsVerifyingEdit] = useState(false);
+  const [isSendingOtpEdit, setIsSendingOtpEdit] = useState(false);
+
+  // State tambahan untuk menyimpan nomor WhatsApp lama saat edit
+  const [oldPhone, setOldPhone] = useState('');
+
+  // Fetch customers from Supabase
+  const fetchCustomers = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      Swal.fire('Gagal mengambil data customer', error.message, 'error');
+      setCustomers([]);
+    } else {
+      // Mapping agar field konsisten dengan tipe Customer
+      setCustomers(
+        (data as any[]).map((c) => ({
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          email: c.email,
+          address: c.address,
+          totalSpent: c.total_spent ?? 0,
+          joinDate: c.join_date ? c.join_date : c.created_at,
+          status: c.status ?? 'active',
+        }))
+      );
+    }
+    setLoading(false);
+  };
+
+  React.useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  React.useEffect(() => {
+    if (showEditForm) {
+      const cust = customers.find(c => c.id === showEditForm);
+      setEditPhone(cust?.phone || '');
+      setOldPhone(cust?.phone || '');
+      setOtpStepEdit('input');
+      setOtpCodeEdit('');
+      setGeneratedOtpEdit('');
+      setOtpTimerEdit(0);
+    }
+  }, [showEditForm]);
+
+  const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.phone.includes(searchTerm)
   );
@@ -57,14 +117,14 @@ const Customers: React.FC = () => {
   // Send OTP via WhatsApp
   const handleSendOtp = async () => {
     if (!newCustomer.whatsapp) {
-      alert('Nomor WhatsApp wajib diisi');
+      Swal.fire('Error', 'Nomor WhatsApp wajib diisi', 'warning');
       return;
     }
 
     // Validate WhatsApp number format
     const whatsappRegex = /^(\+62|62|0)[0-9]{9,13}$/;
     if (!whatsappRegex.test(newCustomer.whatsapp)) {
-      alert('Format nomor WhatsApp tidak valid. Gunakan format: +62xxx, 62xxx, atau 0xxx');
+      Swal.fire('Error', 'Format nomor WhatsApp tidak valid. Gunakan format: +62xxx, 62xxx, atau 0xxx', 'warning');
       return;
     }
 
@@ -85,10 +145,10 @@ const Customers: React.FC = () => {
       startOtpTimer();
       
       // Show success message
-      alert(`Kode OTP telah dikirim ke WhatsApp ${newCustomer.whatsapp}. Silakan cek pesan masuk.`);
+      Swal.fire('Sukses', `Kode OTP telah dikirim ke WhatsApp ${newCustomer.whatsapp}. Silakan cek pesan masuk.`, 'success');
       
     } catch (error) {
-      alert('Gagal mengirim OTP. Silakan coba lagi.');
+      Swal.fire('Gagal mengirim OTP. Silakan coba lagi.', '', 'error');
       console.error('OTP send error:', error);
     } finally {
       setIsSendingOtp(false);
@@ -98,7 +158,7 @@ const Customers: React.FC = () => {
   // Verify OTP
   const handleVerifyOtp = async () => {
     if (!otpCode || otpCode.length !== 6) {
-      alert('Masukkan kode OTP 6 digit');
+      Swal.fire('Error', 'Masukkan kode OTP 6 digit', 'warning');
       return;
     }
 
@@ -110,13 +170,13 @@ const Customers: React.FC = () => {
       
       if (otpCode === generatedOtp) {
         setOtpStep('verified');
-        alert('Nomor WhatsApp berhasil diverifikasi!');
+        Swal.fire('Sukses', 'Nomor WhatsApp berhasil diverifikasi!', 'success');
       } else {
-        alert('Kode OTP salah. Silakan coba lagi.');
+        Swal.fire('Error', 'Kode OTP salah. Silakan coba lagi.', 'error');
         setOtpCode('');
       }
     } catch (error) {
-      alert('Gagal memverifikasi OTP. Silakan coba lagi.');
+      Swal.fire('Gagal memverifikasi OTP. Silakan coba lagi.', '', 'error');
     } finally {
       setIsVerifying(false);
     }
@@ -125,7 +185,7 @@ const Customers: React.FC = () => {
   // Resend OTP
   const handleResendOtp = () => {
     if (otpTimer > 0) {
-      alert(`Tunggu ${formatTimer(otpTimer)} sebelum mengirim ulang`);
+      Swal.fire('Info', `Tunggu ${formatTimer(otpTimer)} sebelum mengirim ulang`, 'info');
       return;
     }
     
@@ -133,37 +193,77 @@ const Customers: React.FC = () => {
     handleSendOtp();
   };
 
-  const handleAddCustomer = () => {
+  // Tambah customer ke database
+  const handleAddCustomer = async () => {
     if (!newCustomer.name || !newCustomer.whatsapp) {
-      alert('Nama dan WhatsApp wajib diisi');
+      Swal.fire('Error', 'Nama dan WhatsApp wajib diisi', 'warning');
       return;
     }
-    
     if (otpStep !== 'verified') {
-      alert('Silakan verifikasi nomor WhatsApp terlebih dahulu');
+      Swal.fire('Error', 'Silakan verifikasi nomor WhatsApp terlebih dahulu', 'warning');
       return;
     }
-    
-    // Here you would normally save to database
-    alert('Customer berhasil ditambahkan dengan WhatsApp terverifikasi!');
-    setShowAddForm(false);
-    setNewCustomer({ name: '', whatsapp: '', email: '', address: '' });
-    setOtpStep('input');
-    setOtpCode('');
-    setGeneratedOtp('');
-    setOtpTimer(0);
+    const { error } = await supabase.from('customers').insert([
+      {
+        name: newCustomer.name,
+        phone: newCustomer.whatsapp,
+        email: newCustomer.email,
+        address: newCustomer.address,
+        total_spent: 0,
+        join_date: new Date().toISOString().slice(0, 10),
+        status: 'active',
+      },
+    ]);
+    if (error) {
+      Swal.fire('Gagal menambah customer', error.message, 'error');
+    } else {
+      await Swal.fire('Sukses', 'Customer berhasil ditambahkan dengan WhatsApp terverifikasi!', 'success');
+      setShowAddForm(false);
+      setNewCustomer({ name: '', whatsapp: '', email: '', address: '' });
+      setOtpStep('input');
+      setOtpCode('');
+      setGeneratedOtp('');
+      setOtpTimer(0);
+      fetchCustomers();
+    }
   };
 
-  const handleEditCustomer = (customerId: string) => {
-    // Here you would normally update the database
-    alert(`Customer ${customerId} berhasil diperbarui!`);
-    setShowEditForm(null);
+  // Edit customer di database
+  const handleEditCustomer = async (customerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return;
+    const name = (document.getElementById('edit-name') as HTMLInputElement)?.value || customer.name;
+    const phone = editPhone;
+    const email = (document.getElementById('edit-email') as HTMLInputElement)?.value || customer.email;
+    const address = (document.getElementById('edit-address') as HTMLInputElement)?.value || customer.address;
+    const { error } = await supabase.from('customers').update({ name, phone, email, address }).eq('id', customerId);
+    if (error) {
+      Swal.fire('Gagal memperbarui customer', error.message, 'error');
+    } else {
+      await Swal.fire('Sukses', `Customer berhasil diperbarui!`, 'success');
+      setShowEditForm(null);
+      fetchCustomers();
+    }
   };
 
-  const handleDeleteCustomer = (customerId: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus customer ini?')) {
-      // Here you would normally delete from database
-      alert(`Customer ${customerId} berhasil dihapus!`);
+  // Hapus customer di database
+  const handleDeleteCustomer = async (customerId: string) => {
+    const result = await Swal.fire({
+      title: 'Hapus Customer?',
+      text: 'Apakah Anda yakin ingin menghapus customer ini?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, hapus',
+      cancelButtonText: 'Batal',
+    });
+    if (result.isConfirmed) {
+      const { error } = await supabase.from('customers').delete().eq('id', customerId);
+      if (error) {
+        Swal.fire('Gagal menghapus customer', error.message, 'error');
+      } else {
+        await Swal.fire('Sukses', 'Customer berhasil dihapus!', 'success');
+        fetchCustomers();
+      }
     }
   };
 
@@ -179,6 +279,85 @@ const Customers: React.FC = () => {
     setGeneratedOtp('');
     setOtpTimer(0);
     setShowAddForm(false);
+  };
+
+  // Fungsi untuk menampilkan tanggal kunjungan terakhir dan berapa hari yang lalu
+  const renderLastVisit = (customer: Customer) => {
+    // Dummy: gunakan joinDate sebagai last visit, ganti dengan field real jika ada
+    if (!customer.joinDate) return '-';
+    const lastVisit = new Date(customer.joinDate);
+    const now = new Date();
+    const diffMs = now.getTime() - lastVisit.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const dateStr = lastVisit.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = lastVisit.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    return `${dateStr} ${timeStr} (${diffDays === 0 ? 'hari ini' : diffDays + ' hari lalu'})`;
+  };
+
+  // Handler OTP untuk edit customer
+  const handleSendOtpEdit = async () => {
+    if (!editPhone) {
+      Swal.fire('Error', 'Nomor WhatsApp wajib diisi', 'warning');
+      return;
+    }
+    const whatsappRegex = /^(\+62|62|0)[0-9]{9,13}$/;
+    if (!whatsappRegex.test(editPhone)) {
+      Swal.fire('Error', 'Format nomor WhatsApp tidak valid. Gunakan format: +62xxx, 62xxx, atau 0xxx', 'warning');
+      return;
+    }
+    setIsSendingOtpEdit(true);
+    try {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedOtpEdit(otp);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setOtpStepEdit('verify');
+      setOtpTimerEdit(120);
+      const interval = setInterval(() => {
+        setOtpTimerEdit(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      Swal.fire('Sukses', `Kode OTP telah dikirim ke WhatsApp ${editPhone}. Silakan cek pesan masuk.`, 'success');
+    } catch (error) {
+      Swal.fire('Gagal mengirim OTP. Silakan coba lagi.', '', 'error');
+    } finally {
+      setIsSendingOtpEdit(false);
+    }
+  };
+
+  const handleVerifyOtpEdit = async () => {
+    if (!otpCodeEdit || otpCodeEdit.length !== 6) {
+      Swal.fire('Error', 'Masukkan kode OTP 6 digit', 'warning');
+      return;
+    }
+    setIsVerifyingEdit(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (otpCodeEdit === generatedOtpEdit) {
+        setOtpStepEdit('verified');
+        Swal.fire('Sukses', 'Nomor WhatsApp berhasil diverifikasi!', 'success');
+      } else {
+        Swal.fire('Error', 'Kode OTP salah. Silakan coba lagi.', 'error');
+        setOtpCodeEdit('');
+      }
+    } catch (error) {
+      Swal.fire('Gagal memverifikasi OTP. Silakan coba lagi.', '', 'error');
+    } finally {
+      setIsVerifyingEdit(false);
+    }
+  };
+
+  const handleResendOtpEdit = () => {
+    if (otpTimerEdit > 0) {
+      Swal.fire('Info', `Tunggu ${formatTimer(otpTimerEdit)} sebelum mengirim ulang`, 'info');
+      return;
+    }
+    setOtpCodeEdit('');
+    handleSendOtpEdit();
   };
 
   return (
@@ -236,21 +415,31 @@ const Customers: React.FC = () => {
             <div key={customer.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
               {/* Header */}
               <div className="bg-gradient-to-r from-slate-700 to-slate-800 p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
                       <User className="h-6 w-6" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg">{customer.name}</h3>
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                        customer.status === 'active' 
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-gray-400 text-white'
-                      }`}>
-                        {customer.status}
-                      </span>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-4 py-1 rounded-full text-xs font-semibold ${customer.status === 'active' ? 'bg-green-600 text-white' : 'bg-gray-400 text-white'}`}>{customer.status === 'active' ? 'AKTIF' : 'TIDAK AKTIF'}</span>
+                    <button
+                      onClick={() => setShowEditForm(customer.id)}
+                      className="flex items-center justify-center px-3 py-1 rounded-full border border-gray-200 text-white bg-white bg-opacity-10 hover:bg-gray-100 hover:text-slate-800 font-medium text-sm transition-colors"
+                      aria-label="Edit"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCustomer(customer.id)}
+                      className="flex items-center justify-center px-3 py-1 rounded-full border border-gray-200 text-white bg-white bg-opacity-10 hover:bg-gray-100 hover:text-red-600 font-medium text-sm transition-colors"
+                      aria-label="Hapus"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -278,83 +467,46 @@ const Customers: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Stats */}
+                  {/* Member Sejak */}
                   <div className="pt-3 border-t border-gray-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <DollarSign className="h-4 w-4" />
-                        <span className="text-sm">Total Belanja</span>
-                      </div>
-                      <span className="font-semibold text-green-600">
-                        Rp {customer.totalSpent.toLocaleString('id-ID')}
-                      </span>
-                    </div>
-
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-gray-600">
                         <Calendar className="h-4 w-4" />
                         <span className="text-sm">Member Sejak</span>
                       </div>
                       <span className="text-sm text-gray-900">
-                        {new Date(customer.joinDate).toLocaleDateString('id-ID')}
+                        {customer.joinDate ? new Date(customer.joinDate).toLocaleDateString('id-ID') : '-'}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="mt-6 flex gap-2">
-                  <button 
-                    onClick={() => setSelectedCustomer(selectedCustomer === customer.id ? null : customer.id)}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                  >
-                    Lihat Detail
-                  </button>
-                  <button 
-                    onClick={() => setShowEditForm(customer.id)}
-                    className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteCustomer(customer.id)}
-                    className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {/* Extended Details */}
-                {selectedCustomer === customer.id && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h4 className="font-semibold text-gray-900 mb-3">Riwayat Customer</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Customer ID:</span>
-                        <span className="font-medium">{customer.id}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Total Kunjungan:</span>
-                        <span className="font-medium">12 sesi</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Rata-rata Sesi:</span>
-                        <span className="font-medium">2.5 jam</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Console Favorit:</span>
-                        <span className="font-medium">PlayStation 5</span>
-                      </div>
+                {/* Detail langsung tampil tanpa tombol dan tanpa total belanja */}
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-3">Riwayat Customer</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Customer ID:</span>
+                      <span className="font-medium">{customer.id}</span>
                     </div>
-                    
-                    <button 
-                      onClick={() => handleStartRental(customer.id)}
-                      className="w-full mt-3 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                    >
-                      Mulai Rental Baru
-                    </button>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Kunjungan:</span>
+                      <span className="font-medium">12 sesi</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Rata-rata Sesi:</span>
+                      <span className="font-medium">2.5 jam</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Console Favorit:</span>
+                      <span className="font-medium">PlayStation 5</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Kunjungan Terakhir:</span>
+                      <span className="font-medium">{renderLastVisit(customer)}</span>
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           ))}
@@ -368,9 +520,9 @@ const Customers: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">WhatsApp</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alamat</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Belanja</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member Sejak</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kunjungan Terakhir</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
               </tr>
             </thead>
@@ -388,14 +540,13 @@ const Customers: React.FC = () => {
                   <td className="px-4 py-3">{customer.phone}</td>
                   <td className="px-4 py-3">{customer.email || '-'}</td>
                   <td className="px-4 py-3">{customer.address || '-'}</td>
-                  <td className="px-4 py-3 text-green-600 font-semibold">Rp {customer.totalSpent.toLocaleString('id-ID')}</td>
-                  <td className="px-4 py-3">{new Date(customer.joinDate).toLocaleDateString('id-ID')}</td>
+                  <td className="px-4 py-3">{customer.joinDate ? new Date(customer.joinDate).toLocaleDateString('id-ID') : '-'}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${customer.status === 'active' ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>{customer.status}</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${customer.status === 'active' ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>{customer.status || '-'}</span>
                   </td>
+                  <td className="px-4 py-3">{renderLastVisit(customer)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => setSelectedCustomer(selectedCustomer === customer.id ? null : customer.id)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><User className="h-4 w-4" /></button>
                       <button onClick={() => setShowEditForm(customer.id)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><Edit className="h-4 w-4" /></button>
                       <button onClick={() => handleDeleteCustomer(customer.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
                     </div>
@@ -602,48 +753,159 @@ const Customers: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
                   <input
                     type="text"
-                    defaultValue={mockCustomers.find(c => c.id === showEditForm)?.name}
+                    id="edit-name"
+                    defaultValue={customers.find(c => c.id === showEditForm)?.name}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp</label>
-                  <input
-                    type="tel"
-                    defaultValue={mockCustomers.find(c => c.id === showEditForm)?.phone}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="tel"
+                      id="edit-phone"
+                      value={editPhone}
+                      onChange={e => {
+                        setEditPhone(e.target.value);
+                        if (e.target.value !== oldPhone) {
+                          if (otpStepEdit !== 'input') {
+                            setOtpStepEdit('input');
+                            setOtpCodeEdit('');
+                            setGeneratedOtpEdit('');
+                          }
+                        } else {
+                          setOtpStepEdit('input');
+                          setOtpCodeEdit('');
+                          setGeneratedOtpEdit('');
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendOtpEdit}
+                      disabled={isSendingOtpEdit || !editPhone || editPhone === oldPhone}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                    >
+                      {isSendingOtpEdit ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <MessageCircle className="h-4 w-4" />
+                      )}
+                      {isSendingOtpEdit ? 'Mengirim...' : 'Kirim OTP'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Format: +62xxx, 62xxx, atau 0xxx</p>
                 </div>
-                
+                {/* OTP Verification Section for Edit */}
+                {editPhone !== oldPhone && otpStepEdit === 'verify' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-2">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield className="h-5 w-5 text-blue-600" />
+                      <h4 className="font-medium text-blue-900">Verifikasi WhatsApp</h4>
+                    </div>
+                    <p className="text-sm text-blue-800 mb-3">
+                      Kode OTP telah dikirim ke WhatsApp <strong>{editPhone}</strong>
+                    </p>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-blue-700 mb-1">
+                          Masukkan Kode OTP (6 digit)
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={otpCodeEdit}
+                            onChange={(e) => setOtpCodeEdit(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            className="flex-1 px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-mono text-lg"
+                            placeholder="000000"
+                            maxLength={6}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleVerifyOtpEdit}
+                            disabled={isVerifyingEdit || otpCodeEdit.length !== 6}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors"
+                          >
+                            {isVerifyingEdit ? (
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              'Verifikasi'
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2 text-blue-600">
+                          <Clock className="h-4 w-4" />
+                          <span>
+                            {otpTimerEdit > 0 ? `Kirim ulang dalam ${formatTimer(otpTimerEdit)}` : 'Kode expired'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleResendOtpEdit}
+                          disabled={otpTimerEdit > 0}
+                          className="text-blue-600 hover:text-blue-700 disabled:text-gray-400 font-medium"
+                        >
+                          Kirim Ulang
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {editPhone !== oldPhone && otpStepEdit === 'verified' && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                      <span className="font-medium text-green-900">WhatsApp Terverifikasi</span>
+                    </div>
+                    <p className="text-sm text-green-700 mt-1">
+                      Nomor WhatsApp {editPhone} telah berhasil diverifikasi
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
                     type="email"
-                    defaultValue={mockCustomers.find(c => c.id === showEditForm)?.email}
+                    id="edit-email"
+                    defaultValue={customers.find(c => c.id === showEditForm)?.email}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
                   <textarea
-                    defaultValue={mockCustomers.find(c => c.id === showEditForm)?.address}
+                    id="edit-address"
+                    defaultValue={customers.find(c => c.id === showEditForm)?.address}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={3}
                   />
                 </div>
               </form>
-              
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowEditForm(null)}
+                  onClick={() => {
+                    setShowEditForm(null);
+                    setOtpStepEdit('input');
+                    setOtpCodeEdit('');
+                    setGeneratedOtpEdit('');
+                    setOtpTimerEdit(0);
+                    setEditPhone('');
+                  }}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   Batal
                 </button>
-                <button 
-                  onClick={() => handleEditCustomer(showEditForm)}
+                <button
+                  onClick={() => {
+                    if (editPhone !== oldPhone && otpStepEdit !== 'verified') {
+                      Swal.fire('Error', 'Nomor WhatsApp baru harus diverifikasi OTP', 'warning');
+                      return;
+                    }
+                    handleEditCustomer(showEditForm);
+                  }}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
                   Perbarui Customer
