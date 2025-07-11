@@ -1,8 +1,47 @@
 import Swal from 'sweetalert2';
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, DollarSign, Edit, Trash2, Clock, Calendar, TrendingUp, Users, Gamepad2, Settings, Eye, AlertCircle } from 'lucide-react';
+import { Plus, Search, DollarSign, Edit, Trash2, Clock, TrendingUp, Gamepad2, Settings } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { RateProfile, EquipmentType, Console } from '../types';
+
+// 1. Weekend Multiplier dihapus dari tipe dan seluruh logic
+// 2. Label 'Tarif Khusus' diganti menjadi 'Jam Berlaku'
+type RateProfile = {
+  id: string;
+  name: string;
+  description: string;
+  hourlyRate: number;
+  peakHourRate?: number;
+  peakHourStart?: string;
+  peakHourEnd?: string;
+  applicableEquipmentTypes: string[];
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+};
+
+type EquipmentType = {
+  id: string;
+  name: string;
+};
+
+type ConsoleType = {
+  id: string;
+  name: string;
+  equipmentTypeId: string;
+  rateProfileId: string | null;
+  status?: string;
+  location?: string;
+  serialNumber?: string;
+  purchaseDate?: string;
+  warrantyExpiry?: string;
+  notes?: string;
+  ipAddress?: string;
+  relayCommand?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
 const RateManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,20 +54,16 @@ const RateManagement: React.FC = () => {
   // State for data from database
   const [rateProfiles, setRateProfiles] = useState<RateProfile[]>([]);
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([]);
-  const [consoles, setConsoles] = useState<Console[]>([]);
+  const [consoles, setConsoles] = useState<ConsoleType[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [newRateProfile, setNewRateProfile] = useState({
     name: '',
     description: '',
     hourlyRate: 0,
-    dailyRate: 0,
-    weeklyRate: 0,
-    monthlyRate: 0,
     peakHourRate: 0,
     peakHourStart: '18:00',
     peakHourEnd: '22:00',
-    weekendMultiplier: 1.2,
     applicableEquipmentTypes: [] as string[],
     isActive: true,
   });
@@ -50,29 +85,16 @@ const RateManagement: React.FC = () => {
           name: p.name,
           description: p.description,
           hourlyRate: Number(p.hourly_rate) || 0,
-          dailyRate: Number(p.daily_rate) || 0,
-          weeklyRate: Number(p.weekly_rate) || 0,
-          monthlyRate: p.monthly_rate !== undefined && p.monthly_rate !== null ? Number(p.monthly_rate) : undefined,
           peakHourRate: p.peak_hour_rate !== undefined && p.peak_hour_rate !== null ? Number(p.peak_hour_rate) : undefined,
           peakHourStart: p.peak_hour_start || '',
           peakHourEnd: p.peak_hour_end || '',
-          weekendMultiplier: p.weekend_multiplier !== undefined && p.weekend_multiplier !== null ? Number(p.weekend_multiplier) : 1,
           applicableEquipmentTypes: p.applicable_equipment_types || [],
           isActive: p.is_active,
           createdAt: p.created_at,
           updatedAt: p.updated_at,
           createdBy: p.created_by,
         })));
-        setEquipmentTypes((eqData || []).map((e: any) => ({
-          id: e.id,
-          name: e.name,
-          description: e.description,
-          icon: e.icon,
-          category: e.category,
-          isActive: e.is_active,
-          createdAt: e.created_at,
-          updatedAt: e.updated_at,
-        })));
+        setEquipmentTypes((eqData || []).map((et: any) => ({ id: et.id, name: et.name })));
         setConsoles((consoleData || []).map((c: any) => ({
           id: c.id,
           name: c.name,
@@ -116,13 +138,9 @@ const RateManagement: React.FC = () => {
       name: p.name,
       description: p.description,
       hourlyRate: Number(p.hourly_rate) || 0,
-      dailyRate: Number(p.daily_rate) || 0,
-      weeklyRate: Number(p.weekly_rate) || 0,
-      monthlyRate: p.monthly_rate !== undefined && p.monthlyRate !== null ? Number(p.monthlyRate) : undefined,
       peakHourRate: p.peak_hour_rate !== undefined && p.peak_hour_rate !== null ? Number(p.peak_hour_rate) : undefined,
       peakHourStart: p.peak_hour_start || '',
       peakHourEnd: p.peak_hour_end || '',
-      weekendMultiplier: p.weekend_multiplier !== undefined && p.weekend_multiplier !== null ? Number(p.weekend_multiplier) : 1,
       applicableEquipmentTypes: p.applicable_equipment_types || [],
       isActive: p.is_active,
       createdAt: p.created_at,
@@ -162,13 +180,9 @@ const RateManagement: React.FC = () => {
       name: newRateProfile.name,
       description: newRateProfile.description,
       hourly_rate: newRateProfile.hourlyRate,
-      daily_rate: newRateProfile.dailyRate,
-      weekly_rate: newRateProfile.weeklyRate,
-      monthly_rate: newRateProfile.monthlyRate,
       peak_hour_rate: newRateProfile.peakHourRate,
       peak_hour_start: newRateProfile.peakHourStart,
       peak_hour_end: newRateProfile.peakHourEnd,
-      weekend_multiplier: newRateProfile.weekendMultiplier,
       applicable_equipment_types: newRateProfile.applicableEquipmentTypes,
       is_active: newRateProfile.isActive,
       created_by: null, // TODO: isi user id jika sudah ada auth
@@ -183,13 +197,9 @@ const RateManagement: React.FC = () => {
       name: '',
       description: '',
       hourlyRate: 0,
-      dailyRate: 0,
-      weeklyRate: 0,
-      monthlyRate: 0,
       peakHourRate: 0,
       peakHourStart: '18:00',
       peakHourEnd: '22:00',
-      weekendMultiplier: 1.2,
       applicableEquipmentTypes: [],
       isActive: true,
     });
@@ -209,13 +219,9 @@ const RateManagement: React.FC = () => {
       name: formData.get('name'),
       description: formData.get('description'),
       hourly_rate: Number(formData.get('hourlyRate')),
-      daily_rate: Number(formData.get('dailyRate')),
-      weekly_rate: Number(formData.get('weeklyRate')),
-      monthly_rate: Number(formData.get('monthlyRate')),
       peak_hour_rate: Number(formData.get('peakHourRate')),
       peak_hour_start: formData.get('peakHourStart'),
       peak_hour_end: formData.get('peakHourEnd'),
-      weekend_multiplier: Number(formData.get('weekendMultiplier')),
       is_active: formData.get('isActive') === 'true',
     };
     const { error } = await supabase.from('rate_profiles').update(updateData).eq('id', profileId);
@@ -341,7 +347,7 @@ const RateManagement: React.FC = () => {
                 className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">Semua Jenis Equipment</option>
-                {equipmentTypes.map(equipmentType => (
+                {equipmentTypes.map((equipmentType: EquipmentType) => (
                   <option key={equipmentType.id} value={equipmentType.id}>{equipmentType.name}</option>
                 ))}
               </select>
@@ -390,78 +396,21 @@ const RateManagement: React.FC = () => {
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-600">Per Jam</span>
-                          <span className="font-semibold text-blue-600">
-                            Rp {profile.hourlyRate.toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Per Hari</span>
-                          <span className="font-semibold text-green-600">
-                            Rp {profile.dailyRate.toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Per Minggu</span>
-                          <span className="font-semibold text-purple-600">
-                            Rp {profile.weeklyRate.toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                        {profile.monthlyRate && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Per Bulan</span>
-                            <span className="font-semibold text-orange-600">
-                              Rp {profile.monthlyRate.toLocaleString('id-ID')}
+                          {profile.hourlyRate > 0 && (
+                            <span className="font-semibold text-blue-600">
+                              Rp {profile.hourlyRate.toLocaleString('id-ID')}
                             </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Peak Hour & Weekend */}
-                    {(profile.peakHourRate || profile.weekendMultiplier) && (
-                      <div>
-                        <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          Tarif Khusus
-                        </h4>
-                        <div className="space-y-2">
-                          {profile.peakHourRate && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">
-                                Peak Hour ({profile.peakHourStart} - {profile.peakHourEnd})
-                              </span>
-                              <span className="font-semibold text-red-600">
-                                Rp {profile.peakHourRate.toLocaleString('id-ID')}
-                              </span>
-                            </div>
-                          )}
-                          {profile.weekendMultiplier && profile.weekendMultiplier !== 1 && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">Weekend Multiplier</span>
-                              <span className="font-semibold text-yellow-600">
-                                {profile.weekendMultiplier}x
-                              </span>
-                            </div>
                           )}
                         </div>
-                      </div>
-                    )}
-
-                    {/* Applicable Equipment Types */}
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                        <Gamepad2 className="h-4 w-4" />
-                        Berlaku Untuk
-                      </h4>
-                      <div className="flex flex-wrap gap-1">
-                        {profile.applicableEquipmentTypes.map((equipmentTypeId) => (
-                          <span
-                            key={equipmentTypeId}
-                            className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                          >
-                            {getEquipmentTypeName(equipmentTypeId)}
+                        {/* Jam Berlaku selalu tampil di bawah Tarif per Jam */}
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-xs text-gray-500">Jam Berlaku</span>
+                          <span className="text-xs text-gray-700 font-medium">
+                            {profile.peakHourStart && profile.peakHourEnd
+                              ? `${profile.peakHourStart} - ${profile.peakHourEnd}`
+                              : '-'}
                           </span>
-                        ))}
+                        </div>
                       </div>
                     </div>
 
@@ -511,11 +460,11 @@ const RateManagement: React.FC = () => {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-600">Dibuat pada:</span>
-                            <span className="font-medium">{new Date(profile.createdAt).toLocaleDateString('id-ID')}</span>
+                            <span className="font-medium">{profile.createdAt ? new Date(profile.createdAt).toLocaleDateString('id-ID') : '-'}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-600">Terakhir diupdate:</span>
-                            <span className="font-medium">{new Date(profile.updatedAt).toLocaleDateString('id-ID')}</span>
+                            <span className="font-medium">{profile.updatedAt ? new Date(profile.updatedAt).toLocaleDateString('id-ID') : '-'}</span>
                           </div>
                         </div>
                         
@@ -660,41 +609,6 @@ const RateManagement: React.FC = () => {
                           placeholder="15000"
                         />
                       </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Hari</label>
-                        <input
-                          type="number"
-                          value={newRateProfile.dailyRate}
-                          onChange={(e) => setNewRateProfile({...newRateProfile, dailyRate: Number(e.target.value)})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="120000"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Minggu</label>
-                        <input
-                          type="number"
-                          value={newRateProfile.weeklyRate}
-                          onChange={(e) => setNewRateProfile({...newRateProfile, weeklyRate: Number(e.target.value)})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="700000"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Bulan</label>
-                        <input
-                          type="number"
-                          value={newRateProfile.monthlyRate}
-                          onChange={(e) => setNewRateProfile({...newRateProfile, monthlyRate: Number(e.target.value)})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="2500000"
-                        />
-                      </div>
                     </div>
                     
                     <div className="grid grid-cols-3 gap-4">
@@ -728,19 +642,6 @@ const RateManagement: React.FC = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Weekend Multiplier</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={newRateProfile.weekendMultiplier}
-                        onChange={(e) => setNewRateProfile({...newRateProfile, weekendMultiplier: Number(e.target.value)})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="1.2"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Multiplier untuk weekend (1.2 = 20% lebih mahal)</p>
                     </div>
                     
                     <div>
@@ -847,51 +748,10 @@ const RateManagement: React.FC = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               />
                             </div>
-                            
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Hari</label>
-                              <input
-                                type="number"
-                                name="dailyRate"
-                                defaultValue={profile.dailyRate}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Minggu</label>
-                              <input
-                                type="number"
-                                name="weeklyRate"
-                                defaultValue={profile.weeklyRate}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
-                            
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Tarif per Bulan</label>
-                              <input
-                                type="number"
-                                name="monthlyRate"
-                                defaultValue={profile.monthlyRate || 0}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-3 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Tarif Peak Hour</label>
-                              <input
-                                type="number"
-                                name="peakHourRate"
-                                defaultValue={profile.peakHourRate || 0}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
-                            
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Peak Hour Mulai</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Jam Mulai Berlaku Tarif</label>
                               <input
                                 type="time"
                                 name="peakHourStart"
@@ -901,7 +761,7 @@ const RateManagement: React.FC = () => {
                             </div>
                             
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Peak Hour Selesai</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Jam Berakhir Tarif</label>
                               <input
                                 type="time"
                                 name="peakHourEnd"
@@ -909,17 +769,6 @@ const RateManagement: React.FC = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               />
                             </div>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Weekend Multiplier</label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              name="weekendMultiplier"
-                              defaultValue={profile.weekendMultiplier || 1}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
                           </div>
                         </>
                       );

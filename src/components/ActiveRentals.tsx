@@ -60,7 +60,15 @@ const ActiveRentals: React.FC = () => {
       if (!rentalRes.error) setRentalSessions(rentalRes.data || []);
       if (!customerRes.error) setCustomers(customerRes.data || []);
       if (!consoleRes.error) setConsoles(consoleRes.data || []);
-      if (!rateRes.error) setRateProfiles(rateRes.data || []);
+      if (!rateRes.error) {
+        setRateProfiles((rateRes.data || []).map((p: any) => ({
+          ...p,
+          hourlyRate: Number(p.hourly_rate) || 0,
+          peakHourRate: p.peak_hour_rate !== undefined && p.peak_hour_rate !== null ? Number(p.peak_hour_rate) : undefined,
+          peakHourStart: p.peak_hour_start || '',
+          peakHourEnd: p.peak_hour_end || '',
+        })));
+      }
       if (!productRes.error) setProducts(productRes.data || []);
     };
     fetchData();
@@ -252,7 +260,10 @@ const ActiveRentals: React.FC = () => {
         const customer = activeSession ? customers.find(c => c.id === activeSession.customerId) : null;
         const currentCost = activeSession ? calculateCurrentCost(activeSession) : 0;
         const duration = activeSession ? formatDuration(activeSession.startTime) : null;
-        const rateProfile = rateProfiles.find(profile => profile.id === console.rateProfileId);
+        // Perbaiki pengambilan rateProfile agar tidak salah
+        const rateProfile = console.rateProfileId
+          ? rateProfiles.find(profile => String(profile.id) === String(console.rateProfileId))
+          : null;
         const cartItemCount = getCartItemCount(console.id);
         const cartTotal = getCartTotal(console.id);
 
@@ -304,27 +315,13 @@ const ActiveRentals: React.FC = () => {
                   <div>
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
-                      Rental Rates
+                      Tarif per Jam
                     </h4>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Hourly Rate</span>
-                        <span className="font-semibold text-blue-600">
-                          Rp {(rateProfile?.hourlyRate || 0).toLocaleString('id-ID')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Daily Rate</span>
-                        <span className="font-semibold text-green-600">
-                          Rp {(rateProfile?.dailyRate || 0).toLocaleString('id-ID')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Weekly Rate</span>
-                        <span className="font-semibold text-purple-600">
-                          Rp {(rateProfile?.weeklyRate || 0).toLocaleString('id-ID')}
-                        </span>
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Per Jam</span>
+                      <span className="font-semibold text-blue-600">
+                        Rp {(rateProfile?.hourly_rate ? Number(rateProfile.hourly_rate) : 0).toLocaleString('id-ID')}
+                      </span>
                     </div>
                   </div>
 
@@ -867,9 +864,18 @@ const ActiveRentals: React.FC = () => {
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Console Management</h1>
-            <p className="text-gray-600">Monitor all consoles and manage rental sessions</p>
+          <div className="flex items-center gap-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Console Management</h1>
+              <p className="text-gray-600">Monitor all consoles and manage rental sessions</p>
+            </div>
+            {/* Real-time clock */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-6 py-3 shadow-sm">
+              <Clock className="h-7 w-7 text-blue-600" />
+              <span className="font-mono text-2xl font-bold text-gray-900 tracking-widest">
+                {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             {/* View Toggle */}

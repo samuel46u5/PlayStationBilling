@@ -1,3 +1,4 @@
+// INI YG DIPAKAI
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Gamepad2, Clock, Plus, Search, Settings, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -63,7 +64,7 @@ const RateProfilePage: React.FC = () => {
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
   const [editData, setEditData] = useState<any | null>(null);
   const [showConsoleManageModal, setShowConsoleManageModal] = useState<string | null>(null);
-  const [consoles, setConsoles] = useState<{ id: string; name: string }[]>([]);
+  const [consoles, setConsoles] = useState<{ id: string; name: string; rate_profile_id?: string }[]>([]);
   const [consoleTab, setConsoleTab] = useState<string>('');
   const [editFormTab, setEditFormTab] = useState<'detail' | 'console'>('detail');
   const [addFormTab, setAddFormTab] = useState<'detail' | 'console'>('detail');
@@ -90,7 +91,7 @@ const RateProfilePage: React.FC = () => {
 
   useEffect(() => {
     const fetchConsoles = async () => {
-      const { data, error } = await supabase.from('consoles').select('id, name');
+      const { data, error } = await supabase.from('consoles').select('id, name, rate_profile_id');
       if (!error && data) setConsoles(data);
     };
     fetchConsoles();
@@ -135,12 +136,37 @@ const RateProfilePage: React.FC = () => {
   };
 
   // Handle save edit
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
+    // Update profile in local state
     setProfiles((prev) =>
       prev.map((p) => (p.id === editData.id ? { ...editData } : p))
     );
+
+    // Update consoles in Supabase
+    // 1. Set rate_profile_id for consoles in applicableConsoles
+    // 2. Remove rate_profile_id for consoles previously assigned but now removed
+    const assignedIds = editData.applicableConsoles || [];
+    const prevAssignedIds = consoles.filter(c => c.rate_profile_id === editData.id).map(c => c.id);
+
+    // Tambahkan ke profil tarif
+    for (const id of assignedIds) {
+      if (!prevAssignedIds.includes(id)) {
+        await supabase.from('consoles').update({ rate_profile_id: editData.id }).eq('id', id);
+      }
+    }
+    // Lepaskan dari profil tarif
+    for (const id of prevAssignedIds) {
+      if (!assignedIds.includes(id)) {
+        await supabase.from('consoles').update({ rate_profile_id: null }).eq('id', id);
+      }
+    }
+
     setShowEditForm(null);
     setEditData(null);
+
+    // Refresh consoles from DB
+    const { data, error } = await supabase.from('consoles').select('id, name, rate_profile_id, type');
+    if (!error && data) setConsoles(data);
   };
 
   // Handle cancel edit
@@ -192,6 +218,20 @@ const RateProfilePage: React.FC = () => {
     setDeleteId(null);
   };
 
+  // Handle add/remove console for profile in edit modal
+  const handleEditConsole = (id: string) => {
+    setEditData((prev: any) => {
+      const current = prev.applicableConsoles || [];
+      // If console is already assigned, remove it; else, add it
+      return {
+        ...prev,
+        applicableConsoles: current.includes(id)
+          ? current.filter((c: string) => c !== id)
+          : [...current, id],
+      };
+    });
+  };
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       {/* Statistik Ringkasan */}
@@ -233,7 +273,7 @@ const RateProfilePage: React.FC = () => {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Manajemen Tarif</h1>
-            <p className="text-gray-600">Kelola profil tarif untuk berbagai jenis equipment</p>
+            <p className="text-gray-600">Kelola profil tarif untuk berbagai jenis equipment agus pranoto</p>
           </div>
           <button
             onClick={() => setShowAddForm(true)}
@@ -269,72 +309,75 @@ const RateProfilePage: React.FC = () => {
       </div>
       {/* Grid Profil Tarif */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProfiles.map((profile) => (
-          <div key={profile.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-green-600 to-green-700 p-4 text-white">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                    <DollarSign className="h-6 w-6" />
+        {filteredProfiles.map((profile) => {
+          // Get consoles from DB that use this profile
+          const usedConsoles = consoles.filter(c => c.rate_profile_id === profile.id);
+          return (
+            <div key={profile.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-600 to-green-700 p-4 text-white">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                      <DollarSign className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold">{profile.name}</h2>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${profile.isActive ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>
+                      {profile.isActive ? 'AKTIF' : 'NONAKTIF'}
+                    </span>
+                    {/* Tombol Edit & Hapus */}
+                    <button
+                      className="flex items-center gap-1 px-3 py-1 bg-white bg-opacity-20 hover:bg-opacity-40 rounded-lg text-xs font-medium transition-colors"
+                      onClick={() => handleEdit(profile.id)}
+                      type="button"
+                    >
+                      <Pencil className="h-4 w-4" /> Edit
+                    </button>
+                    <button
+                      className="flex items-center gap-1 px-3 py-1 bg-white bg-opacity-20 hover:bg-red-500/40 rounded-lg text-xs font-medium text-red-100 hover:text-white transition-colors"
+                      onClick={() => handleDelete(profile.id)}
+                      type="button"
+                    >
+                      <Trash2 className="h-4 w-4" /> Hapus
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {/* Body */}
+              <div className="p-4">
+                <div className="space-y-4">
+                  {/* Deskripsi */}
+                  <p className="text-gray-600 text-sm">{profile.description}</p>
+                  {/* Tarif per Jam */}
+                  <div className="flex justify-between text-sm">
+                    <span className="font-semibold text-gray-900">Tarif per Jam</span>
+                    <span>Rp {profile.hourlyRate.toLocaleString('id-ID')}</span>
+                  </div>
+                  {/* Jam Berlaku */}
+                  <div className="flex justify-between text-sm">
+                    <span className="font-semibold text-gray-900">Jam Berlaku</span>
+                    <span>{profile.peakHourStart?.slice(0,5)} - {profile.peakHourEnd?.slice(0,5)}</span>
+                  </div>
+                  {/* Berlaku untuk Console */}
                   <div>
-                    <h2 className="text-lg font-bold">{profile.name}</h2>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${profile.isActive ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>
-                    {profile.isActive ? 'AKTIF' : 'NONAKTIF'}
-                  </span>
-                  {/* Tombol Edit & Hapus */}
-                  <button
-                    className="flex items-center gap-1 px-3 py-1 bg-white bg-opacity-20 hover:bg-opacity-40 rounded-lg text-xs font-medium transition-colors"
-                    onClick={() => handleEdit(profile.id)}
-                    type="button"
-                  >
-                    <Pencil className="h-4 w-4" /> Edit
-                  </button>
-                  <button
-                    className="flex items-center gap-1 px-3 py-1 bg-white bg-opacity-20 hover:bg-red-500/40 rounded-lg text-xs font-medium text-red-100 hover:text-white transition-colors"
-                    onClick={() => handleDelete(profile.id)}
-                    type="button"
-                  >
-                    <Trash2 className="h-4 w-4" /> Hapus
-                  </button>
-                </div>
-              </div>
-            </div>
-            {/* Body */}
-            <div className="p-4">
-              <div className="space-y-4">
-                {/* Deskripsi */}
-                <p className="text-gray-600 text-sm">{profile.description}</p>
-                {/* Tarif per Jam */}
-                <div className="flex justify-between text-sm">
-                  <span className="font-semibold text-gray-900">Tarif per Jam</span>
-                  <span>Rp {profile.hourlyRate.toLocaleString('id-ID')}</span>
-                </div>
-                {/* Jam Berlaku */}
-                <div className="flex justify-between text-sm">
-                  <span className="font-semibold text-gray-900">Jam Berlaku</span>
-                  <span>{profile.peakHourStart?.slice(0,5)} - {profile.peakHourEnd?.slice(0,5)}</span>
-                </div>
-                {/* Berlaku untuk Console */}
-                <div>
-                  <span className="font-semibold text-gray-900 block mb-1">Berlaku untuk Console</span>
-                  <div className="flex flex-wrap gap-2">
-                    {(profile.applicableEquipmentTypes || []).map((id) => {
-                      const eq = consoles.find(e => e.id === id);
-                      return eq ? (
+                    <span className="font-semibold text-gray-900 block mb-1">Berlaku untuk Console</span>
+                    <div className="flex flex-wrap gap-2">
+                      {usedConsoles.length === 0 ? (
+                        <span className="text-gray-400 text-xs">Tidak ada console</span>
+                      ) : usedConsoles.map(eq => (
                         <span key={eq.id} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">{eq.name}</span>
-                      ) : null;
-                    })}
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {/* Modal Tambah Profil Tarif (hanya field yang diperlukan) */}
       {showAddForm && (
@@ -565,32 +608,39 @@ const RateProfilePage: React.FC = () => {
               )}
               {editFormTab === 'console' && (
                 <div>
-                  <div className="mb-2 flex gap-2 border-b border-gray-200">
-                    {consoleTypes.map(type => (
-                      <button
-                        key={type}
-                        type="button"
-                        className={`px-3 py-1 rounded-t-lg border-b-2 ${consoleTab === type ? 'border-blue-500 text-blue-600 font-semibold bg-blue-50' : 'border-transparent text-gray-600'}`}
-                        onClick={() => setConsoleTab(type)}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-3">
-                    {(consolesByType[consoleTab] || []).map(eq => (
-                      <div key={eq.id} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={editData.applicableEquipmentTypes?.includes(eq.id)}
-                          onChange={() => handleEditEquipmentType(eq.id)}
-                        />
-                        <span>{eq.name}</span>
+                  <h3 className="font-semibold mb-2">Console yang Menggunakan Profil Ini</h3>
+                  <div className="space-y-2 mb-4">
+                    {consoles.filter(c => editData.applicableConsoles?.includes(c.id)).length === 0 ? (
+                      <span className="text-gray-400 text-xs">Tidak ada console</span>
+                    ) : consoles.filter(c => editData.applicableConsoles?.includes(c.id)).map(c => (
+                      <div key={c.id} className="flex items-center gap-2">
+                        <span>{c.name}</span>
+                        <button
+                          type="button"
+                          className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs"
+                          onClick={() => handleEditConsole(c.id)}
+                        >
+                          Lepas
+                        </button>
                       </div>
                     ))}
-                    {(!consolesByType[consoleTab] || consolesByType[consoleTab].length === 0) && (
-                      <span className="text-gray-400 text-xs">Tidak ada console pada kategori ini</span>
-                    )}
+                  </div>
+                  <h3 className="font-semibold mb-2">Tambahkan Console ke Profil Ini</h3>
+                  <div className="space-y-2 mb-4">
+                    {consoles.filter(c => !editData.applicableConsoles?.includes(c.id)).length === 0 ? (
+                      <span className="text-gray-400 text-xs">Tidak ada console tersedia</span>
+                    ) : consoles.filter(c => !editData.applicableConsoles?.includes(c.id)).map(c => (
+                      <div key={c.id} className="flex items-center gap-2">
+                        <span>{c.name}</span>
+                        <button
+                          type="button"
+                          className="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs"
+                          onClick={() => handleEditConsole(c.id)}
+                        >
+                          Tambahkan
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
