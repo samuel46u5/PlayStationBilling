@@ -380,7 +380,7 @@ const Customers: React.FC = () => {
   const getCustomerStats = async (customerId: string) => {
     // Ambil data rental/sesi dari tabel rentals (atau sessions jika ada)
     const { data, error } = await supabase
-      .from('rentals')
+      .from('rental_sessions')
       .select('id, customer_id, console_type, duration, start_time')
       .eq('customer_id', customerId);
     if (error || !data) return {
