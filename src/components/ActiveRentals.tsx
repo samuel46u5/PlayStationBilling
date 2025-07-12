@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard } from 'lucide-react';
+import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard, UserPlus, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Swal from 'sweetalert2';
 
@@ -72,6 +72,11 @@ const ActiveRentals: React.FC = () => {
   const [showStartRentalModal, setShowStartRentalModal] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customers, setCustomers] = useState<any[]>([]);
+  const [customerType, setCustomerType] = useState<'member' | 'non-member'>('member');
+  const [rentalType, setRentalType] = useState<'pay-as-you-go' | 'prepaid'>('pay-as-you-go');
+  const [rentalDuration, setRentalDuration] = useState<number>(1);
+  const [nonMemberName, setNonMemberName] = useState<string>('');
+  const [nonMemberPhone, setNonMemberPhone] = useState<string>('');
 
   // Load data on component mount
   useEffect(() => {
@@ -215,23 +220,83 @@ const ActiveRentals: React.FC = () => {
   };
 
   const handleStartRental = async (consoleId: string) => {
-    if (!selectedCustomerId) {
+    if (customerType === 'member' && !selectedCustomerId) {
       Swal.fire('Error', 'Silakan pilih customer terlebih dahulu', 'warning');
+      return;
+    }
+    
+    if (customerType === 'non-member' && (!nonMemberName || !nonMemberPhone)) {
+      Swal.fire('Error', 'Nama dan nomor telepon wajib diisi untuk non-member', 'warning');
       return;
     }
 
     try {
+      let customerId = selectedCustomerId;
+      
+      // Jika non-member, buat customer baru
+      if (customerType === 'non-member') {
+        const { data: newCustomer, error: customerError } = await supabase
+          .from('customers')
+          .insert({
+            name: nonMemberName,
+            phone: nonMemberPhone,
+            status: 'active',
+            join_date: new Date().toISOString().split('T')[0]
+          })
+          .select()
+          .single();
+          
+        if (customerError) throw customerError;
+        customerId = newCustomer.id;
+      }
+      
+      // Hitung biaya jika prepaid
+      let totalAmount = 0;
+      let paidAmount = 0;
+      let paymentStatus = 'pending';
+      
+      if (rentalType === 'prepaid') {
+        const console = consoles.find(c => c.id === consoleId);
+        const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
+        const hourlyRate = rateProfile?.hourly_rate || 0;
+        
+        totalAmount = hourlyRate * rentalDuration;
+        paidAmount = totalAmount;
+        paymentStatus = 'paid';
+        
+        // Konfirmasi pembayaran
+        const paymentResult = await Swal.fire({
+          title: 'Konfirmasi Pembayaran',
+          html: `
+            <div class="text-left">
+              <p><strong>Durasi:</strong> ${rentalDuration} jam</p>
+              <p><strong>Tarif per jam:</strong> Rp ${hourlyRate.toLocaleString('id-ID')}</p>
+              <p><strong>Total:</strong> Rp ${totalAmount.toLocaleString('id-ID')}</p>
+            </div>
+          `,
+          icon: 'info',
+          showCancelButton: true,
+          confirmButtonText: 'Bayar',
+          cancelButtonText: 'Batal'
+        });
+        
+        if (!paymentResult.isConfirmed) {
+          return;
+        }
+      }
+      
       // Create new rental session
       const { error: rentalError } = await supabase
         .from('rental_sessions')
         .insert({
-          customer_id: selectedCustomerId,
+          customer_id: customerId,
           console_id: consoleId,
           status: 'active',
-          payment_status: 'pending',
-          total_amount: 0,
-          paid_amount: 0,
-          start_time: new Date().toISOString()
+          payment_status: paymentStatus,
+          total_amount: totalAmount,
+          paid_amount: paidAmount,
+          start_time: new Date().toISOString(),
+          duration_minutes: rentalType === 'prepaid' ? rentalDuration * 60 : null
         });
         
       if (rentalError) throw rentalError;
@@ -246,6 +311,11 @@ const ActiveRentals: React.FC = () => {
 
       setShowStartRentalModal(null);
       setSelectedCustomerId('');
+      setCustomerType('member');
+      setRentalType('pay-as-you-go');
+      setRentalDuration(1);
+      setNonMemberName('');
+      setNonMemberPhone('');
       await loadData();
       Swal.fire('Berhasil', 'Sesi rental berhasil dimulai', 'success');
     } catch (error) {
@@ -614,24 +684,122 @@ const ActiveRentals: React.FC = () => {
       {showStartRentalModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="p-6">
+            <div className="p-6 max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Start New Rental</h2>
               
               <form className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Customer</label>
-                  <select
-                    value={selectedCustomerId}
-                    onChange={(e) => setSelectedCustomerId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">-- Select Customer --</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name} - {customer.phone}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Customer</label>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setCustomerType('member')}
+                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
+                        customerType === 'member' 
+                          ? 'bg-blue-50 border-blue-500 text-blue-700' 
+                          : 'bg-white border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <Users className="h-5 w-5" />
+                      <span className="font-medium">Member</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerType('non-member')}
+                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
+                        customerType === 'non-member' 
+                          ? 'bg-blue-50 border-blue-500 text-blue-700' 
+                          : 'bg-white border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <UserPlus className="h-5 w-5" />
+                      <span className="font-medium">Non-Member</span>
+                    </button>
+                  </div>
+                  
+                  {customerType === 'member' ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Member</label>
+                      <select
+                        value={selectedCustomerId}
+                        onChange={(e) => setSelectedCustomerId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">-- Pilih Member --</option>
+                        {customers.map(customer => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.name} - {customer.phone}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nama Non-Member</label>
+                        <input
+                          type="text"
+                          value={nonMemberName}
+                          onChange={(e) => setNonMemberName(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Masukkan nama customer"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nomor Telepon</label>
+                        <input
+                          type="tel"
+                          value={nonMemberPhone}
+                          onChange={(e) => setNonMemberPhone(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Masukkan nomor telepon"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Rental</label>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setRentalType('pay-as-you-go')}
+                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
+                        rentalType === 'pay-as-you-go' 
+                          ? 'bg-green-50 border-green-500 text-green-700' 
+                          : 'bg-white border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <Clock className="h-5 w-5" />
+                      <span className="font-medium">Pay As You Go</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRentalType('prepaid')}
+                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
+                        rentalType === 'prepaid' 
+                          ? 'bg-green-50 border-green-500 text-green-700' 
+                          : 'bg-white border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <DollarSign className="h-5 w-5" />
+                      <span className="font-medium">Bayar Dimuka</span>
+                    </button>
+                  </div>
+                  
+                  {rentalType === 'prepaid' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Durasi Rental (jam)</label>
+                      <input
+                        type="number"
+                        value={rentalDuration}
+                        onChange={(e) => setRentalDuration(Math.max(1, parseInt(e.target.value) || 1))}
+                        min="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -656,9 +824,17 @@ const ActiveRentals: React.FC = () => {
                           <div className="flex justify-between">
                             <span className="text-gray-600">Hourly Rate:</span>
                             <span className="font-medium">
-                              Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString('id-ID') : '0'}
+                              Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString('id-ID') : '0'}/jam
                             </span>
                           </div>
+                          {rentalType === 'prepaid' && (
+                            <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
+                              <span className="text-gray-800">Total ({rentalDuration} jam):</span>
+                              <span className="text-green-600">
+                                Rp {((rateProfile?.hourly_rate || 0) * rentalDuration).toLocaleString('id-ID')}
+                              </span>
+                            </div>
+                          )}
                         </>
                       );
                     })()}
@@ -671,14 +847,15 @@ const ActiveRentals: React.FC = () => {
                   onClick={() => setShowStartRentalModal(null)}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
-                  Cancel
+                  Batal
                 </button>
                 <button 
                   onClick={() => handleStartRental(showStartRentalModal)}
-                  disabled={!selectedCustomerId}
+                  disabled={(customerType === 'member' && !selectedCustomerId) || 
+                           (customerType === 'non-member' && (!nonMemberName || !nonMemberPhone))}
                   className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  Start Rental
+                  {rentalType === 'prepaid' ? 'Bayar & Mulai' : 'Mulai Rental'}
                 </button>
               </div>
             </div>
