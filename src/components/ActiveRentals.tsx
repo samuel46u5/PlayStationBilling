@@ -1,20 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard } from 'lucide-react';
-import { mockRentalSessions, mockCustomers, mockConsoles, mockProducts } from '../data/mockData';
-import { db, supabase } from '../lib/supabase';
+import { supabase, db } from '../lib/supabase';
 import Swal from 'sweetalert2';
+
+interface Console {
+  id: string;
+  name: string;
+  equipment_type_id: string;
+  rate_profile_id: string | null;
+  status: 'available' | 'rented' | 'maintenance';
+  location?: string;
+  serial_number?: string;
+  is_active: boolean;
+}
+
+interface RateProfile {
+  id: string;
+  name: string;
+  hourly_rate: number;
+}
 
 interface RentalSession {
   id: string;
-  customerId: string;
-  consoleId: string;
-  startTime: string;
-  endTime?: string;
-  duration: number;
-  totalAmount: number;
+  customer_id: string;
+  console_id: string;
+  start_time: string;
+  end_time?: string;
+  duration_minutes?: number;
+  total_amount: number;
   status: 'active' | 'completed' | 'overdue';
-  paymentStatus: 'pending' | 'partial' | 'paid';
-  paidAmount: number;
+  payment_status: 'pending' | 'partial' | 'paid';
+  paid_amount: number;
+  customers?: {
+    name: string;
+    phone: string;
+  };
+  consoles?: {
+    name: string;
+    location: string;
+  };
 }
 
 interface Product {
@@ -23,7 +47,7 @@ interface Product {
   category: string;
   price: number;
   stock: number;
-  isActive: boolean;
+  is_active: boolean;
 }
 
 interface CartItem {
@@ -35,14 +59,19 @@ interface CartItem {
 }
 
 const ActiveRentals: React.FC = () => {
-  const [sessions, setSessions] = useState<RentalSession[]>([]);
+  const [consoles, setConsoles] = useState<Console[]>([]);
+  const [rateProfiles, setRateProfiles] = useState<RateProfile[]>([]);
+  const [activeSessions, setActiveSessions] = useState<RentalSession[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showProductModal, setShowProductModal] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchProduct, setSearchProduct] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showStartRentalModal, setShowStartRentalModal] = useState<string | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [customers, setCustomers] = useState<any[]>([]);
 
   // Load data on component mount
   useEffect(() => {
@@ -52,7 +81,22 @@ const ActiveRentals: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load rental sessions
+      // Load consoles
+      const { data: consoleData, error: consoleError } = await supabase
+        .from('consoles')
+        .select('*')
+        .eq('is_active', true);
+
+      if (consoleError) throw consoleError;
+
+      // Load rate profiles
+      const { data: rateData, error: rateError } = await supabase
+        .from('rate_profiles')
+        .select('id, name, hourly_rate');
+
+      if (rateError) throw rateError;
+
+      // Load active rental sessions
       const { data: rentalData, error: rentalError } = await supabase
         .from('rental_sessions')
         .select(`
@@ -73,8 +117,19 @@ const ActiveRentals: React.FC = () => {
 
       if (productError) throw productError;
 
-      setSessions(rentalData || []);
+      // Load customers
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('status', 'active');
+
+      if (customerError) throw customerError;
+
+      setConsoles(consoleData || []);
+      setRateProfiles(rateData || []);
+      setActiveSessions(rentalData || []);
       setProducts(productData || []);
+      setCustomers(customerData || []);
     } catch (error) {
       console.error('Error loading data:', error);
       Swal.fire('Error', 'Gagal memuat data', 'error');
@@ -93,12 +148,18 @@ const ActiveRentals: React.FC = () => {
   };
 
   const calculateCurrentCost = (session: RentalSession) => {
-    const start = new Date(session.startTime);
+    const start = new Date(session.start_time);
     const now = new Date();
     const diffMs = now.getTime() - start.getTime();
     const hours = Math.ceil(diffMs / (1000 * 60 * 60));
-    // Assuming hourly rate of 15000 for now - this should come from rate profile
-    return hours * 15000;
+    
+    // Find console and its rate profile
+    const console = consoles.find(c => c.id === session.console_id);
+    const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
+    
+    // Use rate profile hourly rate or default to 15000
+    const hourlyRate = rateProfile?.hourly_rate || 15000;
+    return hours * hourlyRate;
   };
 
   const handleEndSession = async (sessionId: string) => {
@@ -113,7 +174,7 @@ const ActiveRentals: React.FC = () => {
 
     if (result.isConfirmed) {
       try {
-        const session = sessions.find(s => s.id === sessionId);
+        const session = activeSessions.find(s => s.id === sessionId);
         if (!session) return;
 
         const endTime = new Date().toISOString();
@@ -126,7 +187,7 @@ const ActiveRentals: React.FC = () => {
         });
 
         // Update console status to available
-        await db.consoles.updateStatus(session.consoleId, 'available');
+        await db.consoles.updateStatus(session.console_id, 'available');
 
         await loadData();
         Swal.fire('Berhasil', 'Sesi rental berhasil diakhiri', 'success');
@@ -134,6 +195,38 @@ const ActiveRentals: React.FC = () => {
         console.error('Error ending session:', error);
         Swal.fire('Error', 'Gagal mengakhiri sesi rental', 'error');
       }
+    }
+  };
+
+  const handleStartRental = async (consoleId: string) => {
+    if (!selectedCustomerId) {
+      Swal.fire('Error', 'Silakan pilih customer terlebih dahulu', 'warning');
+      return;
+    }
+
+    try {
+      // Create rental session
+      const rentalData = {
+        customer_id: selectedCustomerId,
+        console_id: consoleId,
+        status: 'active',
+        payment_status: 'pending',
+        total_amount: 0,
+        paid_amount: 0
+      };
+
+      await db.rentals.create(rentalData);
+
+      // Update console status to rented
+      await db.consoles.updateStatus(consoleId, 'rented');
+
+      setShowStartRentalModal(null);
+      setSelectedCustomerId('');
+      await loadData();
+      Swal.fire('Berhasil', 'Sesi rental berhasil dimulai', 'success');
+    } catch (error) {
+      console.error('Error starting rental:', error);
+      Swal.fire('Error', 'Gagal memulai sesi rental', 'error');
     }
   };
 
@@ -198,7 +291,7 @@ const ActiveRentals: React.FC = () => {
     }
 
     try {
-      const session = sessions.find(s => s.id === sessionId);
+      const session = activeSessions.find(s => s.id === sessionId);
       if (!session) return;
 
       const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
@@ -206,7 +299,7 @@ const ActiveRentals: React.FC = () => {
 
       // Create sale record
       const saleData = {
-        customer_id: session.customerId,
+        customer_id: session.customer_id,
         subtotal: subtotal,
         tax: 0,
         discount: 0,
@@ -254,6 +347,12 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
+  const getConsoleRateProfile = (consoleId: string) => {
+    const console = consoles.find(c => c.id === consoleId);
+    if (!console || !console.rate_profile_id) return null;
+    return rateProfiles.find(r => r.id === console.rate_profile_id);
+  };
+
   if (loading) {
     return (
       <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
@@ -268,118 +367,262 @@ const ActiveRentals: React.FC = () => {
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Rental Aktif</h1>
-        <p className="text-gray-600">Kelola sesi rental yang sedang berlangsung</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Console Management</h1>
+        <p className="text-gray-600">Monitor all consoles and manage rental sessions</p>
       </div>
 
-      {/* Active Sessions */}
+      {/* Time Display */}
+      <div className="mb-8 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <Clock className="h-5 w-5 text-blue-600" />
+          <span className="text-xl font-bold">
+            {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+        </div>
+        
+        <div className="flex gap-2">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <span className="text-sm">Available ({consoles.filter(c => c.status === 'available').length})</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span className="text-sm">Active ({consoles.filter(c => c.status === 'rented').length})</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <span className="text-sm">Maintenance ({consoles.filter(c => c.status === 'maintenance').length})</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Console Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sessions.map((session) => {
-          const customer = mockCustomers.find(c => c.id === session.customerId);
-          const console = mockConsoles.find(c => c.id === session.consoleId);
-          const currentCost = calculateCurrentCost(session);
+        {consoles.map((console) => {
+          const isActive = console.status === 'rented';
+          const activeSession = activeSessions.find(s => s.console_id === console.id);
+          const rateProfile = getConsoleRateProfile(console.id);
           
           return (
-            <div key={session.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+            <div 
+              key={console.id} 
+              className={`rounded-xl overflow-hidden shadow-sm border ${
+                console.status === 'available' ? 'border-green-200 bg-white' : 
+                console.status === 'rented' ? 'border-blue-200 bg-white' : 
+                'border-red-200 bg-white'
+              }`}
+            >
               {/* Header */}
-              <div className="bg-gradient-to-r from-green-600 to-green-700 p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                      <Gamepad2 className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg">{console?.name}</h3>
-                      <span className="text-sm opacity-90">{console?.location}</span>
-                    </div>
-                  </div>
+              <div className={`p-4 ${
+                console.status === 'available' ? 'bg-purple-600' : 
+                console.status === 'rented' ? 'bg-purple-600' : 
+                'bg-purple-600'
+              } text-white`}>
+                <div className="flex items-center gap-3">
+                  <Gamepad2 className="h-6 w-6" />
+                  <h3 className="font-semibold text-lg">{console.name}</h3>
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium">
-                    AKTIF
+                <div className="mt-2 flex justify-between items-center">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    console.status === 'available' ? 'bg-green-500 text-white' : 
+                    console.status === 'rented' ? 'bg-blue-500 text-white' : 
+                    'bg-red-500 text-white'
+                  }`}>
+                    {console.status === 'available' ? 'AVAILABLE' : 
+                     console.status === 'rented' ? 'ACTIVE' : 
+                     'MAINTENANCE'}
                   </span>
-                  <span className="text-sm opacity-90">
-                    {formatDuration(session.startTime)}
-                  </span>
+                  {console.location && (
+                    <span className="text-sm opacity-80">{console.location}</span>
+                  )}
                 </div>
               </div>
 
               {/* Body */}
               <div className="p-4">
-                <div className="space-y-4">
-                  {/* Customer Info */}
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <User className="h-4 w-4 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-700">Customer</span>
-                    </div>
-                    <p className="font-medium text-gray-900">{customer?.name}</p>
-                    <p className="text-sm text-gray-600">{customer?.phone}</p>
-                  </div>
-
-                  {/* Session Details */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Mulai:</span>
-                      <span className="font-medium">
-                        {new Date(session.startTime).toLocaleString('id-ID')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Durasi:</span>
-                      <span className="font-medium">{formatDuration(session.startTime)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Biaya Saat Ini:</span>
-                      <span className="font-bold text-green-600">
-                        Rp {currentCost.toLocaleString('id-ID')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Status Bayar:</span>
-                      <span className={`font-medium ${
-                        session.paymentStatus === 'paid' ? 'text-green-600' :
-                        session.paymentStatus === 'partial' ? 'text-orange-600' :
-                        'text-red-600'
-                      }`}>
-                        {session.paymentStatus.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="space-y-2 pt-4 border-t border-gray-100">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button 
-                        onClick={() => setShowProductModal(session.id)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Produk
-                      </button>
-                      <button 
-                        onClick={() => handleEndSession(session.id)}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Square className="h-4 w-4" />
-                        Akhiri
-                      </button>
-                    </div>
+                {/* Rate Info */}
+                <div className="mb-4">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    Tarif per Jam
+                  </h4>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Per Jam</span>
+                    <span className="font-semibold text-blue-600">
+                      Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString('id-ID') : '0'}
+                    </span>
                   </div>
                 </div>
+
+                {/* Active Session Info */}
+                {isActive && activeSession && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium text-blue-800">
+                        {activeSession.customers?.name}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-blue-600">Mulai:</span>
+                        <p className="font-medium">
+                          {new Date(activeSession.start_time).toLocaleTimeString('id-ID', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-blue-600">Durasi:</span>
+                        <p className="font-medium">{formatDuration(activeSession.start_time)}</p>
+                      </div>
+                      <div>
+                        <span className="text-blue-600">Biaya:</span>
+                        <p className="font-medium">Rp {calculateCurrentCost(activeSession).toLocaleString('id-ID')}</p>
+                      </div>
+                      <div>
+                        <span className="text-blue-600">Status:</span>
+                        <p className="font-medium">{activeSession.payment_status.toUpperCase()}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                {console.status === 'available' ? (
+                  <button 
+                    onClick={() => setShowStartRentalModal(console.id)}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                  >
+                    <Play className="h-5 w-5" />
+                    Start Rental
+                  </button>
+                ) : console.status === 'rented' && activeSession ? (
+                  <button 
+                    onClick={() => handleEndSession(activeSession.id)}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                  >
+                    <Square className="h-5 w-5" />
+                    End Rental
+                  </button>
+                ) : (
+                  <button 
+                    disabled
+                    className="w-full bg-gray-400 text-white py-3 rounded-lg font-medium mb-2 cursor-not-allowed"
+                  >
+                    <Wrench className="h-5 w-5 inline mr-2" />
+                    In Maintenance
+                  </button>
+                )}
+
+                {/* Add Products Button */}
+                <button 
+                  onClick={() => {
+                    if (console.status === 'rented' && activeSession) {
+                      setShowProductModal(activeSession.id);
+                    } else {
+                      Swal.fire('Info', 'Konsol harus dalam status aktif untuk menambahkan produk', 'info');
+                    }
+                  }}
+                  className={`w-full ${
+                    console.status === 'rented' 
+                      ? 'bg-orange-500 hover:bg-orange-600' 
+                      : 'bg-gray-400 cursor-not-allowed'
+                  } text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+                  disabled={console.status !== 'rented'}
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  Add Products
+                </button>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* No Active Sessions */}
-      {sessions.length === 0 && (
+      {/* No Consoles */}
+      {consoles.length === 0 && (
         <div className="text-center py-12">
           <Gamepad2 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Tidak Ada Rental Aktif</h3>
-          <p className="text-gray-600">Semua konsol sedang tidak digunakan</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Consoles Found</h3>
+          <p className="text-gray-600">Add consoles to start managing rentals</p>
+        </div>
+      )}
+
+      {/* Start Rental Modal */}
+      {showStartRentalModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Start New Rental</h2>
+              
+              <form className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Customer</label>
+                  <select
+                    value={selectedCustomerId}
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">-- Select Customer --</option>
+                    {customers.map(customer => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name} - {customer.phone}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-2">Console Information</h4>
+                  <div className="space-y-2 text-sm">
+                    {(() => {
+                      const console = consoles.find(c => c.id === showStartRentalModal);
+                      const rateProfile = console?.rate_profile_id 
+                        ? rateProfiles.find(r => r.id === console.rate_profile_id)
+                        : null;
+                      
+                      return (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Console:</span>
+                            <span className="font-medium">{console?.name}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Location:</span>
+                            <span className="font-medium">{console?.location || '-'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Hourly Rate:</span>
+                            <span className="font-medium">
+                              Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString('id-ID') : '0'}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </form>
+              
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowStartRentalModal(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => handleStartRental(showStartRentalModal)}
+                  disabled={!selectedCustomerId}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Start Rental
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -390,7 +633,7 @@ const ActiveRentals: React.FC = () => {
             {/* Product List */}
             <div className="flex-1 p-6 overflow-y-auto">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">Pilih Produk</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Select Products</h2>
                 <button
                   onClick={() => {
                     setShowProductModal(null);
@@ -407,7 +650,7 @@ const ActiveRentals: React.FC = () => {
                 <div className="flex-1">
                   <input
                     type="text"
-                    placeholder="Cari produk..."
+                    placeholder="Search products..."
                     value={searchProduct}
                     onChange={(e) => setSearchProduct(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -418,7 +661,7 @@ const ActiveRentals: React.FC = () => {
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="all">Semua Kategori</option>
+                  <option value="all">All Categories</option>
                   {categories.map(category => (
                     <option key={category} value={category}>{category}</option>
                   ))}
@@ -446,7 +689,7 @@ const ActiveRentals: React.FC = () => {
                         Rp {product.price.toLocaleString('id-ID')}
                       </span>
                       <span className="text-sm text-gray-500">
-                        Stok: {product.stock}
+                        Stock: {product.stock}
                       </span>
                     </div>
                   </div>
@@ -456,7 +699,7 @@ const ActiveRentals: React.FC = () => {
               {filteredProducts.length === 0 && (
                 <div className="text-center py-8">
                   <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">Tidak ada produk ditemukan</p>
+                  <p className="text-gray-500">No products found</p>
                 </div>
               )}
             </div>
@@ -466,7 +709,7 @@ const ActiveRentals: React.FC = () => {
               <div className="p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <ShoppingCart className="h-5 w-5" />
-                  Keranjang ({cart.length})
+                  Cart ({cart.length})
                 </h3>
               </div>
 
@@ -474,7 +717,7 @@ const ActiveRentals: React.FC = () => {
                 {cart.length === 0 ? (
                   <div className="text-center text-gray-500 mt-8">
                     <ShoppingCart className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                    <p>Keranjang kosong</p>
+                    <p>Cart is empty</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -559,8 +802,8 @@ const ActiveRentals: React.FC = () => {
           <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Gamepad2 className="h-6 w-6 text-green-600" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">{sessions.length}</h3>
-          <p className="text-gray-600 text-sm">Sesi Aktif</p>
+          <h3 className="text-2xl font-bold text-gray-900 mb-1">{activeSessions.length}</h3>
+          <p className="text-gray-600 text-sm">Active Sessions</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
@@ -568,9 +811,9 @@ const ActiveRentals: React.FC = () => {
             <DollarSign className="h-6 w-6 text-blue-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            Rp {sessions.reduce((sum, session) => sum + calculateCurrentCost(session), 0).toLocaleString('id-ID')}
+            Rp {activeSessions.reduce((sum, session) => sum + calculateCurrentCost(session), 0).toLocaleString('id-ID')}
           </h3>
-          <p className="text-gray-600 text-sm">Total Revenue Saat Ini</p>
+          <p className="text-gray-600 text-sm">Current Revenue</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
@@ -578,13 +821,13 @@ const ActiveRentals: React.FC = () => {
             <Clock className="h-6 w-6 text-purple-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {sessions.length > 0 ? Math.round(sessions.reduce((sum, session) => {
-              const start = new Date(session.startTime);
+            {activeSessions.length > 0 ? Math.round(activeSessions.reduce((sum, session) => {
+              const start = new Date(session.start_time);
               const now = new Date();
               return sum + (now.getTime() - start.getTime()) / (1000 * 60 * 60);
-            }, 0) / sessions.length) : 0}h
+            }, 0) / activeSessions.length) : 0}h
           </h3>
-          <p className="text-gray-600 text-sm">Rata-rata Durasi</p>
+          <p className="text-gray-600 text-sm">Average Duration</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
@@ -592,9 +835,9 @@ const ActiveRentals: React.FC = () => {
             <User className="h-6 w-6 text-orange-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {new Set(sessions.map(s => s.customerId)).size}
+            {new Set(activeSessions.map(s => s.customer_id)).size}
           </h3>
-          <p className="text-gray-600 text-sm">Customer Aktif</p>
+          <p className="text-gray-600 text-sm">Active Customers</p>
         </div>
       </div>
     </div>
