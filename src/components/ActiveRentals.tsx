@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard } from 'lucide-react';
 import { mockRentalSessions, mockCustomers, mockConsoles, mockProducts } from '../data/mockData';
-import { db } from '../lib/supabase';
+import { db, supabase } from '../lib/supabase';
 import Swal from 'sweetalert2';
 
 interface RentalSession {
@@ -53,7 +53,7 @@ const ActiveRentals: React.FC = () => {
     setLoading(true);
     try {
       // Load rental sessions
-      const { data: rentalData, error: rentalError } = await db.supabase
+      const { data: rentalData, error: rentalError } = await supabase
         .from('rental_sessions')
         .select(`
           *,
@@ -65,7 +65,7 @@ const ActiveRentals: React.FC = () => {
       if (rentalError) throw rentalError;
 
       // Load products
-      const { data: productData, error: productError } = await db.supabase
+      const { data: productData, error: productError } = await supabase
         .from('products')
         .select('*')
         .eq('is_active', true)
