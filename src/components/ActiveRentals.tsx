@@ -77,11 +77,72 @@ const ActiveRentals: React.FC = () => {
   const [rentalDuration, setRentalDuration] = useState<number>(1);
   const [nonMemberName, setNonMemberName] = useState<string>('');
   const [nonMemberPhone, setNonMemberPhone] = useState<string>('');
+  const [countdownTimers, setCountdownTimers] = useState<Record<string, number>>({});
+  const [countdownIntervals, setCountdownIntervals] = useState<Record<string, NodeJS.Timeout>>({});
 
   // Load data on component mount
   useEffect(() => {
     loadData();
   }, []);
+  
+  // Set up countdown timers for prepaid sessions
+  useEffect(() => {
+    // Clear all existing intervals when component unmounts
+    return () => {
+      Object.values(countdownIntervals).forEach(interval => clearInterval(interval));
+    };
+  }, [countdownIntervals]);
+  
+  // Set up countdown timers for prepaid sessions
+  useEffect(() => {
+    const prepaidSessions = activeSessions.filter(session => session.duration_minutes);
+    
+    prepaidSessions.forEach(session => {
+      if (countdownTimers[session.id] !== undefined) return; // Skip if timer already exists
+      
+      const startTime = new Date(session.start_time);
+      const durationMs = (session.duration_minutes || 0) * 60 * 1000;
+      const endTime = new Date(startTime.getTime() + durationMs);
+      const now = new Date();
+      
+      // Calculate remaining time in seconds
+      const remainingMs = Math.max(0, endTime.getTime() - now.getTime());
+      const remainingMinutes = Math.floor(remainingMs / (1000 * 60));
+      
+      // Set initial countdown value
+      setCountdownTimers(prev => ({
+        ...prev,
+        [session.id]: remainingMinutes
+      }));
+      
+      // Set up interval to update countdown
+      if (remainingMs > 0 && !countdownIntervals[session.id]) {
+        const interval = setInterval(() => {
+          setCountdownTimers(prev => {
+            const current = prev[session.id];
+            if (current <= 1) {
+              // Clear interval when countdown reaches 0
+              clearInterval(countdownIntervals[session.id]);
+              const newIntervals = {...countdownIntervals};
+              delete newIntervals[session.id];
+              setCountdownIntervals(newIntervals);
+              
+              // Optionally auto-end the session
+              // handleEndSession(session.id);
+              
+              return {...prev, [session.id]: 0};
+            }
+            return {...prev, [session.id]: current - 1};
+          });
+        }, 60000); // Update every minute
+        
+        setCountdownIntervals(prev => ({
+          ...prev,
+          [session.id]: interval
+        }));
+      }
+    });
+  }, [activeSessions]);
 
   const loadData = async () => {
     setLoading(true);
@@ -151,10 +212,16 @@ const ActiveRentals: React.FC = () => {
   const formatDuration = (startTime: string) => {
     const start = new Date(startTime);
     const now = new Date();
-    const diffMs = now.getTime() - start.getTime();
+    const diffMs = Math.max(0, now.getTime() - start.getTime());
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m`;
+  };
+  
+  const formatCountdown = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
   };
 
   const calculateCurrentCost = (session: RentalSession) => {
@@ -236,18 +303,27 @@ const ActiveRentals: React.FC = () => {
       // Jika non-member, buat customer baru
       if (customerType === 'non-member') {
         const { data: newCustomer, error: customerError } = await supabase
-          .from('customers')
-          .insert({
-            name: nonMemberName,
-            phone: nonMemberPhone,
-            status: 'active',
-            join_date: new Date().toISOString().split('T')[0]
-          })
+          .from('customers');
+        
+        // Prepare customer data
+        const customerData: any = {
+          name: nonMemberName,
+          status: 'active',
+          join_date: new Date().toISOString().split('T')[0]
+        };
+        
+        // Only add phone if provided
+        if (nonMemberPhone) {
+          customerData.phone = nonMemberPhone;
+        }
+        
+        const { data: insertedCustomer, error: insertError } = await newCustomer
+          .insert(customerData)
           .select()
           .single();
           
-        if (customerError) throw customerError;
-        customerId = newCustomer.id;
+        if (insertError) throw insertError;
+        customerId = insertedCustomer.id;
       }
       
       // Hitung biaya jika prepaid
@@ -551,6 +627,9 @@ const ActiveRentals: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <Gamepad2 className="h-6 w-6" />
                   <h3 className="font-semibold text-lg">{console.name}</h3>
+                  {console.location && (
+                    <span className="text-sm opacity-80">{console.location}</span>
+                  )}
                 </div>
                 <div className="mt-2 flex justify-between items-center">
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -605,7 +684,11 @@ const ActiveRentals: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-blue-600">Durasi:</span>
-                        <p className="font-medium">{formatDuration(activeSession.start_time)}</p>
+                        <p className="font-medium">
+                          {activeSession.duration_minutes 
+                            ? `${formatCountdown(countdownTimers[activeSession.id] || 0)} tersisa` 
+                            : formatDuration(activeSession.start_time)}
+                        </p>
                       </div>
                       <div>
                         <span className="text-blue-600">Biaya:</span>
@@ -792,12 +875,13 @@ const ActiveRentals: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Durasi Rental (jam)</label>
                       <input
-                        type="number"
+                        type="tel" 
                         value={rentalDuration}
                         onChange={(e) => setRentalDuration(Math.max(1, parseInt(e.target.value) || 1))}
                         min="1"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
+                      <p className="text-xs text-gray-500 mt-1">Opsional</p>
                     </div>
                   )}
                 </div>
@@ -852,7 +936,7 @@ const ActiveRentals: React.FC = () => {
                 <button 
                   onClick={() => handleStartRental(showStartRentalModal)}
                   disabled={(customerType === 'member' && !selectedCustomerId) || 
-                           (customerType === 'non-member' && (!nonMemberName || !nonMemberPhone))}
+                           (customerType === 'non-member' && !nonMemberName)}
                   className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
                   {rentalType === 'prepaid' ? 'Bayar & Mulai' : 'Mulai Rental'}
