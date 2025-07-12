@@ -78,7 +78,9 @@ const ActiveRentals: React.FC = () => {
   const [nonMemberName, setNonMemberName] = useState<string>('');
   const [nonMemberPhone, setNonMemberPhone] = useState<string>('');
   const [countdownTimers, setCountdownTimers] = useState<Record<string, number>>({});
+  const [elapsedTimers, setElapsedTimers] = useState<Record<string, number>>({});
   const [countdownIntervals, setCountdownIntervals] = useState<Record<string, NodeJS.Timeout>>({});
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Load data on component mount
   useEffect(() => {
@@ -88,60 +90,90 @@ const ActiveRentals: React.FC = () => {
   // Set up countdown timers for prepaid sessions
   useEffect(() => {
     // Clear all existing intervals when component unmounts
+    const intervalIds: NodeJS.Timeout[] = [];
+    
+    // Update current time every second
+    const timeInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    intervalIds.push(timeInterval);
+    
     return () => {
       Object.values(countdownIntervals).forEach(interval => clearInterval(interval));
+      intervalIds.forEach(id => clearInterval(id));
     };
-  }, [countdownIntervals]);
+  }, []);
   
   // Set up countdown timers for prepaid sessions
   useEffect(() => {
-    const prepaidSessions = activeSessions.filter(session => session.duration_minutes);
+    // Clear previous intervals
+    Object.values(countdownIntervals).forEach(interval => clearInterval(interval));
+    setCountdownIntervals({});
     
-    prepaidSessions.forEach(session => {
-      if (countdownTimers[session.id] !== undefined) return; // Skip if timer already exists
+    const newElapsedTimers: Record<string, number> = {};
+    const newCountdownTimers: Record<string, number> = {};
+    const newIntervals: Record<string, NodeJS.Timeout> = {};
+    
+    activeSessions.forEach(session => {
+      const startTime = new Date(session.start_time).getTime();
+      const now = currentTime.getTime();
+      const elapsedMs = now - startTime;
+      const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
       
-      const startTime = new Date(session.start_time);
-      const durationMs = (session.duration_minutes || 0) * 60 * 1000;
-      const endTime = new Date(startTime.getTime() + durationMs);
-      const now = new Date();
+      // For all sessions, track elapsed time
+      newElapsedTimers[session.id] = elapsedMinutes;
       
-      // Calculate remaining time in seconds
-      const remainingMs = Math.max(0, endTime.getTime() - now.getTime());
-      const remainingMinutes = Math.floor(remainingMs / (1000 * 60));
-      
-      // Set initial countdown value
-      setCountdownTimers(prev => ({
-        ...prev,
-        [session.id]: remainingMinutes
-      }));
-      
-      // Set up interval to update countdown
-      if (remainingMs > 0 && !countdownIntervals[session.id]) {
-        const interval = setInterval(() => {
-          setCountdownTimers(prev => {
-            const current = prev[session.id];
-            if (current <= 1) {
-              // Clear interval when countdown reaches 0
-              clearInterval(countdownIntervals[session.id]);
-              const newIntervals = {...countdownIntervals};
-              delete newIntervals[session.id];
-              setCountdownIntervals(newIntervals);
-              
-              // Optionally auto-end the session
-              // handleEndSession(session.id);
-              
-              return {...prev, [session.id]: 0};
-            }
-            return {...prev, [session.id]: current - 1};
-          });
-        }, 60000); // Update every minute
+      // For prepaid sessions, also track countdown
+      if (session.duration_minutes) {
+        const durationMs = session.duration_minutes * 60 * 1000;
+        const endTime = new Date(startTime + durationMs).getTime();
+        const remainingMs = Math.max(0, endTime - now);
+        const remainingMinutes = Math.floor(remainingMs / (1000 * 60));
         
-        setCountdownIntervals(prev => ({
-          ...prev,
-          [session.id]: interval
-        }));
+        newCountdownTimers[session.id] = remainingMinutes;
+        
+        // Set up interval to update countdown
+        if (remainingMs > 0) {
+          const interval = setInterval(() => {
+            setCountdownTimers(prev => {
+              const current = prev[session.id];
+              if (current <= 1) {
+                clearInterval(newIntervals[session.id]);
+                delete newIntervals[session.id];
+                return {...prev, [session.id]: 0};
+              }
+              return {...prev, [session.id]: current - 1};
+            });
+          }, 60000); // Update every minute
+          
+          newIntervals[session.id] = interval;
+        }
       }
     });
+    
+    setElapsedTimers(newElapsedTimers);
+    setCountdownTimers(newCountdownTimers);
+    setCountdownIntervals(newIntervals);
+    
+    // Set up interval to update elapsed time for all sessions
+    const elapsedInterval = setInterval(() => {
+      setElapsedTimers(prev => {
+        const newTimers = {...prev};
+        activeSessions.forEach(session => {
+          const startTime = new Date(session.start_time).getTime();
+          const now = new Date().getTime();
+          const elapsedMs = now - startTime;
+          const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
+          newTimers[session.id] = elapsedMinutes;
+        });
+        return newTimers;
+      });
+    }, 60000); // Update every minute
+    
+    return () => {
+      clearInterval(elapsedInterval);
+      Object.values(newIntervals).forEach(interval => clearInterval(interval));
+    };
   }, [activeSessions]);
 
   const loadData = async () => {
@@ -212,7 +244,7 @@ const ActiveRentals: React.FC = () => {
   const formatDuration = (startTime: string) => {
     const start = new Date(startTime);
     const now = new Date();
-    const diffMs = Math.max(0, now.getTime() - start.getTime());
+    const diffMs = now.getTime() - start.getTime();
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m`;
@@ -580,8 +612,8 @@ const ActiveRentals: React.FC = () => {
       {/* Time Display */}
       <div className="mb-8 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <Clock className="h-5 w-5 text-blue-600" />
-          <span className="text-xl font-bold">
+          <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
+          <span className="text-xl font-bold font-mono">
             {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
         </div>
@@ -666,10 +698,19 @@ const ActiveRentals: React.FC = () => {
                 {/* Active Session Info */}
                 {isActive && activeSession && (
                   <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <User className="h-4 w-4 text-blue-600" />
-                      <span className="font-medium text-blue-800">
-                        {activeSession.customers?.name}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-blue-600" />
+                        <span className="font-medium text-blue-800">
+                          {activeSession.customers?.name}
+                        </span>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        activeSession.duration_minutes 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {activeSession.duration_minutes ? 'BAYAR DIMUKA' : 'PAY AS YOU GO'}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm">
@@ -685,9 +726,21 @@ const ActiveRentals: React.FC = () => {
                       <div>
                         <span className="text-blue-600">Durasi:</span>
                         <p className="font-medium">
-                          {activeSession.duration_minutes 
-                            ? `${formatCountdown(countdownTimers[activeSession.id] || 0)} tersisa` 
-                            : formatDuration(activeSession.start_time)}
+                          {activeSession.duration_minutes ? (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
+                              <span className="font-bold text-purple-700">
+                                {formatCountdown(countdownTimers[activeSession.id] || 0)} tersisa
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-green-600 animate-pulse" />
+                              <span className="font-bold text-green-700">
+                                {formatDuration(activeSession.start_time)}
+                              </span>
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div>
@@ -697,6 +750,17 @@ const ActiveRentals: React.FC = () => {
                       <div>
                         <span className="text-blue-600">Status:</span>
                         <p className="font-medium">{activeSession.payment_status.toUpperCase()}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Live Timer Display */}
+                    <div className="mt-2 pt-2 border-t border-blue-200">
+                      <div className="text-center font-mono text-lg font-bold text-blue-700">
+                        {new Date().toLocaleTimeString('id-ID', { 
+                          hour: '2-digit', 
+                          minute: '2-digit',
+                          second: '2-digit'
+                        })}
                       </div>
                     </div>
                   </div>
@@ -835,8 +899,9 @@ const ActiveRentals: React.FC = () => {
                           value={nonMemberPhone}
                           onChange={(e) => setNonMemberPhone(e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Masukkan nomor telepon"
+                          placeholder="Opsional"
                         />
+                        <p className="text-xs text-gray-500 mt-1">Opsional</p>
                       </div>
                     </div>
                   )}
