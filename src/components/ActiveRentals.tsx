@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard } from 'lucide-react';
-import { supabase, db } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import Swal from 'sweetalert2';
 
 interface Console {
@@ -81,7 +81,7 @@ const ActiveRentals: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load consoles
+      // Fetch consoles
       const { data: consoleData, error: consoleError } = await supabase
         .from('consoles')
         .select('*')
@@ -89,14 +89,14 @@ const ActiveRentals: React.FC = () => {
 
       if (consoleError) throw consoleError;
 
-      // Load rate profiles
+      // Fetch rate profiles
       const { data: rateData, error: rateError } = await supabase
         .from('rate_profiles')
         .select('id, name, hourly_rate');
 
       if (rateError) throw rateError;
 
-      // Load active rental sessions
+      // Fetch active rental sessions
       const { data: rentalData, error: rentalError } = await supabase
         .from('rental_sessions')
         .select(`
@@ -108,16 +108,21 @@ const ActiveRentals: React.FC = () => {
 
       if (rentalError) throw rentalError;
 
-      // Load products
+      // Fetch products from database
       const { data: productData, error: productError } = await supabase
         .from('products')
         .select('*')
         .eq('is_active', true)
         .gt('stock', 0);
 
-      if (productError) throw productError;
+      if (productError) {
+        console.error('Error fetching products:', productError);
+        throw productError;
+      }
+      
+      console.log('Fetched products:', productData);
 
-      // Load customers
+      // Fetch customers
       const { data: customerData, error: customerError } = await supabase
         .from('customers')
         .select('*')
@@ -180,14 +185,25 @@ const ActiveRentals: React.FC = () => {
         const endTime = new Date().toISOString();
         const totalCost = calculateCurrentCost(session);
 
-        await db.rentals.endSession(sessionId, {
-          end_time: endTime,
-          total_amount: totalCost,
-          status: 'completed'
-        });
+        // Update rental session
+        const { error: updateError } = await supabase
+          .from('rental_sessions')
+          .update({
+            end_time: endTime,
+            total_amount: totalCost,
+            status: 'completed'
+          })
+          .eq('id', sessionId);
+          
+        if (updateError) throw updateError;
 
-        // Update console status to available
-        await db.consoles.updateStatus(session.console_id, 'available');
+        // Update console status
+        const { error: consoleError } = await supabase
+          .from('consoles')
+          .update({ status: 'available' })
+          .eq('id', session.console_id);
+          
+        if (consoleError) throw consoleError;
 
         await loadData();
         Swal.fire('Berhasil', 'Sesi rental berhasil diakhiri', 'success');
@@ -205,20 +221,28 @@ const ActiveRentals: React.FC = () => {
     }
 
     try {
-      // Create rental session
-      const rentalData = {
-        customer_id: selectedCustomerId,
-        console_id: consoleId,
-        status: 'active',
-        payment_status: 'pending',
-        total_amount: 0,
-        paid_amount: 0
-      };
+      // Create new rental session
+      const { error: rentalError } = await supabase
+        .from('rental_sessions')
+        .insert({
+          customer_id: selectedCustomerId,
+          console_id: consoleId,
+          status: 'active',
+          payment_status: 'pending',
+          total_amount: 0,
+          paid_amount: 0,
+          start_time: new Date().toISOString()
+        });
+        
+      if (rentalError) throw rentalError;
 
-      await db.rentals.create(rentalData);
-
-      // Update console status to rented
-      await db.consoles.updateStatus(consoleId, 'rented');
+      // Update console status
+      const { error: consoleError } = await supabase
+        .from('consoles')
+        .update({ status: 'rented' })
+        .eq('id', consoleId);
+        
+      if (consoleError) throw consoleError;
 
       setShowStartRentalModal(null);
       setSelectedCustomerId('');
@@ -293,30 +317,66 @@ const ActiveRentals: React.FC = () => {
     try {
       const session = activeSessions.find(s => s.id === sessionId);
       if (!session) return;
-
+      
+      // Calculate totals
       const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
       const total = subtotal;
-
-      // Create sale record
-      const saleData = {
-        customer_id: session.customer_id,
-        subtotal: subtotal,
-        tax: 0,
-        discount: 0,
-        total: total,
-        payment_method: 'cash', // Default to cash, can be changed
-        payment_amount: total,
-        change_amount: 0
-      };
-
-      const { sale } = await db.sales.create(saleData, cart.map(item => ({
+      
+      // Create sale in database
+      const { data: sale, error: saleError } = await supabase
+        .from('sales')
+        .insert({
+          customer_id: session.customer_id,
+          subtotal: subtotal,
+          tax: 0,
+          discount: 0,
+          total: total,
+          payment_method: 'cash',
+          payment_amount: total,
+          change_amount: 0,
+          sale_date: new Date().toISOString(),
+          cashier_id: null, // Will be updated when auth is implemented
+          session_id: null // Optional: link to cashier session if needed
+        })
+        .select()
+        .single();
+      
+      if (saleError) throw saleError;
+      
+      // Create sale items
+      const saleItems = cart.map(item => ({
+        sale_id: sale.id,
         product_id: item.productId,
         product_name: item.productName,
         quantity: item.quantity,
         price: item.price,
         total: item.total
-      })));
-
+      }));
+      
+      const { error: itemsError } = await supabase
+        .from('sale_items')
+        .insert(saleItems);
+      
+      if (itemsError) throw itemsError;
+      
+      // Update product stock
+      for (const item of cart) {
+        const { error: stockError } = await supabase
+          .from('products')
+          .select('stock')
+          .eq('id', item.productId)
+          .single()
+          .then(({ data, error }) => {
+            if (error) throw error;
+            return supabase
+              .from('products')
+              .update({ stock: data.stock - item.quantity })
+              .eq('id', item.productId);
+          });
+          
+        if (stockError) throw stockError;
+      }
+      
       clearCart();
       setShowProductModal(null);
       await loadData();
@@ -635,10 +695,7 @@ const ActiveRentals: React.FC = () => {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Select Products</h2>
                 <button
-                  onClick={() => {
-                    setShowProductModal(null);
-                    clearCart();
-                  }}
+                  onClick={() => { setShowProductModal(null); clearCart(); }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X className="h-6 w-6" />
@@ -669,7 +726,7 @@ const ActiveRentals: React.FC = () => {
               </div>
 
               {/* Product Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                 {filteredProducts.map((product) => (
                   <div
                     key={product.id}
@@ -679,7 +736,7 @@ const ActiveRentals: React.FC = () => {
                     <div className="mb-3">
                       <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
                         {product.category}
-                      </span>
+                      </span> 
                     </div>
                     
                     <h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
@@ -699,7 +756,7 @@ const ActiveRentals: React.FC = () => {
               {filteredProducts.length === 0 && (
                 <div className="text-center py-8">
                   <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No products found</p>
+                  <p className="text-gray-500">Tidak ada produk ditemukan</p>
                 </div>
               )}
             </div>
@@ -709,7 +766,7 @@ const ActiveRentals: React.FC = () => {
               <div className="p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <ShoppingCart className="h-5 w-5" />
-                  Cart ({cart.length})
+                  Keranjang ({cart.length})
                 </h3>
               </div>
 
@@ -717,7 +774,7 @@ const ActiveRentals: React.FC = () => {
                 {cart.length === 0 ? (
                   <div className="text-center text-gray-500 mt-8">
                     <ShoppingCart className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                    <p>Cart is empty</p>
+                    <p>Keranjang kosong</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -770,7 +827,7 @@ const ActiveRentals: React.FC = () => {
                   <div className="space-y-4">
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total:</span>
-                      <span>Rp {cartTotal.toLocaleString('id-ID')}</span>
+                      <span>Rp {cartTotal.toLocaleString('id-ID')}</span> 
                     </div>
                     
                     <div className="space-y-2">
@@ -779,13 +836,13 @@ const ActiveRentals: React.FC = () => {
                         className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                       >
                         <Calculator className="h-5 w-5" />
-                        Checkout
+                        Proses Pembayaran
                       </button>
                       <button
                         onClick={clearCart}
                         className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors"
                       >
-                        Clear Cart
+                        Kosongkan Keranjang
                       </button>
                     </div>
                   </div>
