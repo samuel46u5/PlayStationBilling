@@ -80,7 +80,6 @@ const ActiveRentals: React.FC = () => {
   const [countdownTimers, setCountdownTimers] = useState<Record<string, number>>({});
   const [elapsedTimers, setElapsedTimers] = useState<Record<string, number>>({});
   const [countdownIntervals, setCountdownIntervals] = useState<Record<string, NodeJS.Timeout>>({});
-  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Load data on component mount
   useEffect(() => {
@@ -116,7 +115,7 @@ const ActiveRentals: React.FC = () => {
     
     activeSessions.forEach(session => {
       const startTime = new Date(session.start_time).getTime();
-      const now = currentTime.getTime();
+      const now = new Date().getTime();
       const elapsedMs = now - startTime;
       const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
       
