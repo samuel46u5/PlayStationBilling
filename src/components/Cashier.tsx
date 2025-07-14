@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Minus, Trash2, ShoppingCart, Calculator, CreditCard, DollarSign, Receipt, Clock, User, Gamepad2, X, Printer, MessageCircle, CheckCircle, Edit3 } from 'lucide-react';
-import { mockRentalSessions, mockConsoles, mockRateProfiles } from '../data/mockData';
+import { mockConsoles, mockRateProfiles } from '../data/mockData';
 import { db } from '../lib/supabase';
 import { Product, SaleItem, RentalSession } from '../types';
 
@@ -34,13 +34,15 @@ const Cashier: React.FC = () => {
   const [isManualInput, setIsManualInput] = useState(false);
   const [manualAmount, setManualAmount] = useState<string>('');
 
-  // State for products and customers from Supabase
+  // State for products, customers, and rentals from Supabase
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState<boolean>(true);
+  const [rentals, setRentals] = useState<RentalSession[]>([]);
+  const [loadingRentals, setLoadingRentals] = useState<boolean>(true);
 
-  // Fetch products & customers from Supabase on mount
+  // Fetch products, customers, and rentals from Supabase on mount
   React.useEffect(() => {
     const fetchProducts = async () => {
       setLoadingProducts(true);
@@ -69,8 +71,26 @@ const Cashier: React.FC = () => {
         setLoadingCustomers(false);
       }
     };
+    const fetchRentals = async () => {
+      setLoadingRentals(true);
+      try {
+        // Use getActive to fetch active/pending rentals
+        const data = await db.rentals.getActive();
+        // If error, data is array of GenericStringError, else RentalSession[]
+        if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && 'id' in data[0]) {
+          setRentals(data);
+        } else {
+          setRentals([]);
+        }
+      } catch (err) {
+        setRentals([]);
+      } finally {
+        setLoadingRentals(false);
+      }
+    };
     fetchProducts();
     fetchCustomers();
+    fetchRentals();
   }, []);
 
   // Filter products from Supabase
@@ -81,10 +101,8 @@ const Cashier: React.FC = () => {
     )
   );
 
-  // Filter active rentals that need payment
-  const pendingRentals = mockRentalSessions.filter(session => 
-    session.status === 'active' || session.paymentStatus === 'pending'
-  );
+  // Filter active rentals that need payment (from Supabase)
+  const pendingRentals = rentals;
 
   const addProductToCart = (product: Product) => {
     const existingItem = cart.find(item => item.productId === product.id && item.type === 'product');
@@ -517,56 +535,65 @@ Selamat bermain dan nikmati waktu Anda ☕
         {/* Rentals Tab */}
         {activeTab === 'rentals' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pendingRentals.map((session) => {
-              const customer = customers.find((c: any) => c.id === session.customerId);
-              const console = mockConsoles.find(c => c.id === session.consoleId);
-              const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
-              const currentCost = calculateRentalCost(session);
-              
-              return (
-                <div
-                  key={session.id}
-                  onClick={() => addRentalToCart(session)}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Gamepad2 className="h-5 w-5 text-blue-600" />
-                      <span className="font-semibold text-gray-900">{console?.name}</span>
+            {loadingRentals ? (
+              <div className="text-center text-gray-500 py-8 col-span-full">Memuat data rental aktif...</div>
+            ) : pendingRentals.length === 0 ? (
+              <div className="text-center text-gray-500 py-8 col-span-full">
+                Tidak ada rental aktif atau pembayaran pending.<br />
+                Silakan cek data rental di database.
+              </div>
+            ) : (
+              pendingRentals.map((session) => {
+                const customer = customers.find((c: any) => c.id === session.customerId);
+                const console = mockConsoles.find(c => c.id === session.consoleId);
+                const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
+                const startTime = session.startTime;
+                const currentCost = calculateRentalCost({ ...session, startTime });
+                return (
+                  <div
+                    key={session.id}
+                    onClick={() => addRentalToCart({ ...session, startTime })}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Gamepad2 className="h-5 w-5 text-blue-600" />
+                        <span className="font-semibold text-gray-900">{console?.name}</span>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        session.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {session.paymentStatus === 'pending' ? 'PENDING' : 'ACTIVE'}
+                      </span>
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      session.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                    }`}>
-                      {session.paymentStatus === 'pending' ? 'PENDING' : 'ACTIVE'}
-                    </span>
-                  </div>
 
-                  <div className="space-y-2 mb-3">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <User className="h-4 w-4" />
-                      <span>{customer?.name}</span>
+                    <div className="space-y-2 mb-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <User className="h-4 w-4" />
+                        <span>{customer?.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Clock className="h-4 w-4" />
+                        <span>Durasi: {formatDuration(startTime)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Clock className="h-4 w-4" />
-                      <span>Durasi: {formatDuration(session.startTime)}</span>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-bold text-green-600">
+                        Rp {currentCost.toLocaleString('id-ID')}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Rp {(rateProfile?.hourlyRate || 0).toLocaleString('id-ID')}/jam
+                      </span>
+                    </div>
+
+                    <div className="mt-3 text-xs text-gray-500">
+                      Mulai: {new Date(startTime).toLocaleString('id-ID')}
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-bold text-green-600">
-                      Rp {currentCost.toLocaleString('id-ID')}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      Rp {(rateProfile?.hourlyRate || 0).toLocaleString('id-ID')}/jam
-                    </span>
-                  </div>
-
-                  <div className="mt-3 text-xs text-gray-500">
-                    Mulai: {new Date(session.startTime).toLocaleString('id-ID')}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         )}
       </div>
