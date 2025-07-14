@@ -4,28 +4,31 @@ function uuidv4() {
     return crypto.randomUUID();
   }
   // Polyfill: generates a RFC4122 version 4 UUID
+
+// Helper: filter users by search, role, status
+const filteredUsers = () => {
+  return users.filter((user) => {
+    const matchesSearch =
+      searchTerm.trim() === '' ||
+      user.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = selectedRole === 'all' || user.roleId === selectedRole;
+    const matchesStatus = selectedStatus === 'all' || user.status === selectedStatus;
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+};
   // Source: https://stackoverflow.com/a/2117523/6465432
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
 }
-  // Helper: filter users by search, role, status
-  const filteredUsers = () => {
-    return users.filter((user) => {
-      const matchesSearch =
-        searchTerm.trim() === '' ||
-        user.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesRole = selectedRole === 'all' || user.roleId === selectedRole;
-      const matchesStatus = selectedStatus === 'all' || user.status === selectedStatus;
-      return matchesSearch && matchesRole && matchesStatus;
-    });
-  };
 import React, { useState } from 'react';
 import { Plus, Search, User, Shield, Edit, Trash2, Eye, EyeOff, Calendar, Clock, AlertCircle } from 'lucide-react';
 import { db } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import Swal from 'sweetalert2';
 
 const UserManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'logs'>('users');
@@ -503,36 +506,64 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ roles, onClose, onUserAdded
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    
     if (!fullName || !username || !email || !roleId || !password) {
       setError('Semua field wajib diisi!');
       return;
     }
+    
     setLoading(true);
+    
     try {
-      // Insert user ke database
-      const newUser = {
-        id: uuidv4(),
-        username,
-        full_name: fullName,
+      // 1. Buat user di auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
-        phone,
-        avatar_url: null,
-        role_id: roleId || null,
-        status: 'active',
-        created_by: null,
-      };
-      const result = await db.insert('users', newUser);
-      console.log('User insert result:', result);
-      if (Array.isArray(result) && result[0]?.error) {
-        setError('Gagal menambah user: ' + (result[0]?.message || 'Unknown error'));
-      } else if (result && result.error) {
-        setError('Gagal menambah user: ' + (result.error.message || 'Unknown error'));
+        password,
+      });
+      
+      if (authError) {
+        throw new Error(`Auth error: ${authError.message}`);
+      }
+      
+      if (!authData.user) {
+        throw new Error('Failed to create auth user');
+      }
+      
+      // 2. Insert user ke database
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          username,
+          full_name: fullName,
+          email,
+          phone: phone || null,
+          role_id: roleId,
+          status: 'active',
+        })
+        .select()
+        .single();
+      
+      if (userError) {
+        // Rollback: delete auth user if profile creation fails
+        await supabase.auth.admin.deleteUser(authData.user.id);
+        throw new Error(`Database error: ${userError.message}`);
       } else {
+        await Swal.fire({
+          icon: 'success',
+          title: 'User berhasil ditambahkan',
+          text: `User ${fullName} telah berhasil ditambahkan ke sistem.`
+        });
         onUserAdded();
       }
     } catch (err: any) {
-      setError('Gagal menambah user.');
+      setError(err.message || 'Gagal menambah user.');
       console.error('User insert error:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal menambah user',
+        text: err.message || 'Terjadi kesalahan saat menambahkan user baru.'
+      });
     } finally {
       setLoading(false);
     }
