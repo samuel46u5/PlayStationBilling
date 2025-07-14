@@ -1,3 +1,159 @@
+// --- EditUserModal interface & component ---
+interface EditUserModalProps {
+  user: any;
+  roles: any[];
+  onClose: () => void;
+  onUserUpdated: () => void;
+}
+
+const EditUserModal: React.FC<EditUserModalProps> = ({ user, roles, onClose, onUserUpdated }) => {
+  const [fullName, setFullName] = React.useState(user.fullName || '');
+  const [username, setUsername] = React.useState(user.username || '');
+  const [email, setEmail] = React.useState(user.email || '');
+  const [phone, setPhone] = React.useState(user.phone || '');
+  const [roleId, setRoleId] = React.useState(user.roleId || '');
+  const [status, setStatus] = React.useState(user.status || 'active');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!fullName || !username || !email || !roleId) {
+      setError('Semua field wajib diisi!');
+      return;
+    }
+    setLoading(true);
+    try {
+      // Update user di table users
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          full_name: fullName,
+          username,
+          email,
+          phone: phone || null,
+          role_id: roleId,
+          status,
+        })
+        .eq('id', user.id);
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+      await Swal.fire({
+        icon: 'success',
+        title: 'User berhasil diupdate',
+        text: `User ${fullName} telah diperbarui.`
+      });
+      onUserUpdated();
+    } catch (err: any) {
+      setError(err.message || 'Gagal mengupdate user.');
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal mengupdate user',
+        text: err.message || 'Terjadi kesalahan saat update user.'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit User</h2>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input
+                type="tel"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={roleId}
+                onChange={e => setRoleId(e.target.value)}
+                disabled={loading}
+              >
+                <option value="">Select role</option>
+                {roles.filter((r: any) => !r.isSystem).map((role: any) => (
+                  <option key={role.id} value={role.id}>{role.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={status}
+                onChange={e => setStatus(e.target.value)}
+                disabled={loading}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            {error && <div className="text-red-600 text-sm">{error}</div>}
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                disabled={loading}
+              >
+                {loading ? 'Menyimpan...' : 'Update User'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
 // Fallback uuid v4 generator for browsers that do not support crypto.randomUUID
 function uuidv4() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -30,6 +186,7 @@ import { db } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import Swal from 'sweetalert2';
 
+
 const UserManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'logs'>('users');
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,6 +195,7 @@ const UserManagement: React.FC = () => {
   const [showAddUserForm, setShowAddUserForm] = useState(false);
   const [showAddRoleForm, setShowAddRoleForm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [editUser, setEditUser] = useState<any | null>(null); // Untuk modal edit user
 
   // State for users, roles, sessions, logs
   const [users, setUsers] = useState<any[]>([]);
@@ -328,27 +486,31 @@ const UserManagement: React.FC = () => {
                   <tr><td colSpan={6} className="text-center text-gray-500 py-8">Memuat data pengguna...</td></tr>
                 ) : filteredUsers().length === 0 ? (
                   <tr><td colSpan={6} className="text-center text-gray-500 py-8">Tidak ada pengguna ditemukan.</td></tr>
-                ) : filteredUsers().map((user: any) => {
-                  const role = roles.find((r: any) => r.id === user.roleId);
-                  return (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{user.fullName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-700">@{user.username}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-700">{user.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{role?.name || '-'}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{user.status?.toUpperCase()}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {/* Aksi: edit/hapus bisa ditambahkan di sini */}
-                        <button className="text-blue-600 hover:underline mr-3">Edit</button>
-                        <button className="text-red-600 hover:underline">Hapus</button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                ) : (
+                  filteredUsers().map((user: any) => {
+                    const role = roles.find((r: any) => r.id === user.roleId);
+                    return (
+                      <tr key={user.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{user.fullName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-700">@{user.username}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-700">{user.email}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{role?.name || '-'}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{user.status?.toUpperCase()}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <button
+                            className="text-blue-600 hover:underline mr-3"
+                            onClick={() => setEditUser(user)}
+                          >Edit</button>
+                          <button className="text-red-600 hover:underline">Hapus</button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -361,6 +523,7 @@ const UserManagement: React.FC = () => {
       )}
       {activeTab === 'sessions' && renderSessionsTab()}
       {activeTab === 'logs' && renderLogsTab()}
+
 
       {/* Add User Modal */}
       {showAddUserForm && (
@@ -383,6 +546,31 @@ const UserManagement: React.FC = () => {
           }}
         />
       )}
+
+
+      {/* Edit User Modal */}
+      {editUser && (
+        <EditUserModal
+          user={editUser}
+          roles={roles}
+          onClose={() => setEditUser(null)}
+          onUserUpdated={async () => {
+            setEditUser(null);
+            setLoadingUsers(true);
+            try {
+              const data = await db.select('users');
+              setUsers(data || []);
+            } catch {
+              setUsers([]);
+            } finally {
+              setLoadingUsers(false);
+            }
+          }}
+        />
+      )}
+
+
+export default UserManagement;
 
       {/* Add Role Modal */}
       {showAddRoleForm && (
