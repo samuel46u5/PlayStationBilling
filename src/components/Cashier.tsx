@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Minus, Trash2, ShoppingCart, Calculator, CreditCard, DollarSign, Receipt, Clock, User, Gamepad2, X, Printer, MessageCircle, CheckCircle, Edit3 } from 'lucide-react';
-import { mockProducts, mockRentalSessions, mockCustomers, mockConsoles, mockRateProfiles } from '../data/mockData';
+import { mockRentalSessions, mockCustomers, mockConsoles, mockRateProfiles } from '../data/mockData';
+import { db } from '../lib/supabase';
 import { Product, SaleItem, RentalSession } from '../types';
 
 interface PaymentItem {
@@ -33,8 +34,35 @@ const Cashier: React.FC = () => {
   const [isManualInput, setIsManualInput] = useState(false);
   const [manualAmount, setManualAmount] = useState<string>('');
 
-  // Filter products
-  const filteredProducts = mockProducts.filter(product =>
+  // State for products from Supabase
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
+
+  // Fetch products from Supabase on mount
+  React.useEffect(() => {
+    const fetchProducts = async () => {
+      setLoadingProducts(true);
+      try {
+        const data = await db.products.getAll();
+        // Map is_active (snake_case) ke isActive (camelCase)
+        const mapped = (data || []).map((p: any) => ({
+          ...p,
+          isActive: p.is_active,
+        }));
+        console.log('Supabase products fetched:', mapped);
+        setProducts(mapped);
+      } catch (err) {
+        console.error('Error fetching products from Supabase:', err);
+        setProducts([]);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  // Filter products from Supabase
+  const filteredProducts = products.filter(product =>
     product.isActive && (
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.barcode?.includes(searchTerm)
@@ -436,33 +464,42 @@ Selamat bermain dan nikmati waktu Anda ☕
 
         {/* Products Tab */}
         {activeTab === 'products' && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredProducts.map((product) => (
-              <div
-                key={product.id}
-                onClick={() => addProductToCart(product)}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
-              >
-                <div className="mb-3">
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
-                    {product.category}
-                  </span>
-                </div>
-                
-                <h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
-                <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-blue-600">
-                    Rp {product.price.toLocaleString('id-ID')}
-                  </span>
-                  <span className="text-sm text-gray-500">
-                    Stok: {product.stock}
-                  </span>
-                </div>
+          <>
+            {loadingProducts ? (
+              <div className="text-center text-gray-500 py-8">Memuat produk cafe...</div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                Tidak ada produk cafe yang aktif atau data belum masuk.<br />
+                Silakan cek data master produk di database.
               </div>
-            ))}
-          </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    onClick={() => addProductToCart(product)}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  >
+                    <div className="mb-3">
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
+                        {product.category}
+                      </span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-bold text-blue-600">
+                        Rp {product.price.toLocaleString('id-ID')}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Stok: {product.stock}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* Rentals Tab */}
