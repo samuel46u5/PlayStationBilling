@@ -1,191 +1,18 @@
-// --- EditUserModal interface & component ---
-interface EditUserModalProps {
-  user: any;
-  roles: any[];
-  onClose: () => void;
-  onUserUpdated: () => void;
-}
-
-const EditUserModal: React.FC<EditUserModalProps> = ({ user, roles, onClose, onUserUpdated }) => {
-  const [fullName, setFullName] = React.useState(user.fullName || '');
-  const [username, setUsername] = React.useState(user.username || '');
-  const [email, setEmail] = React.useState(user.email || '');
-  const [phone, setPhone] = React.useState(user.phone || '');
-  const [roleId, setRoleId] = React.useState(user.roleId || '');
-  const [status, setStatus] = React.useState(user.status || 'active');
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!fullName || !username || !email || !roleId) {
-      setError('Semua field wajib diisi!');
-      return;
-    }
-    setLoading(true);
-    try {
-      // Update user di table users
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          full_name: fullName,
-          username,
-          email,
-          phone: phone || null,
-          role_id: roleId,
-          status,
-        })
-        .eq('id', user.id);
-      if (updateError) {
-        throw new Error(updateError.message);
-      }
-      await Swal.fire({
-        icon: 'success',
-        title: 'User berhasil diupdate',
-        text: `User ${fullName} telah diperbarui.`
-      });
-      onUserUpdated();
-    } catch (err: any) {
-      setError(err.message || 'Gagal mengupdate user.');
-      Swal.fire({
-        icon: 'error',
-        title: 'Gagal mengupdate user',
-        text: err.message || 'Terjadi kesalahan saat update user.'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit User</h2>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={fullName}
-                onChange={e => setFullName(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              <input
-                type="tel"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={roleId}
-                onChange={e => setRoleId(e.target.value)}
-                disabled={loading}
-              >
-                <option value="">Select role</option>
-                {roles.filter((r: any) => !r.isSystem).map((role: any) => (
-                  <option key={role.id} value={role.id}>{role.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={status}
-                onChange={e => setStatus(e.target.value)}
-                disabled={loading}
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-            {error && <div className="text-red-600 text-sm">{error}</div>}
-            <div className="flex gap-3 mt-6">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                disabled={loading}
-              >
-                {loading ? 'Menyimpan...' : 'Update User'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-// Fallback uuid v4 generator for browsers that do not support crypto.randomUUID
-function uuidv4() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Polyfill: generates a RFC4122 version 4 UUID
-
-// Helper: filter users by search, role, status
-const filteredUsers = () => {
-  return users.filter((user) => {
-    const matchesSearch =
-      searchTerm.trim() === '' ||
-      user.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = selectedRole === 'all' || user.roleId === selectedRole;
-    const matchesStatus = selectedStatus === 'all' || user.status === selectedStatus;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-};
-  // Source: https://stackoverflow.com/a/2117523/6465432
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
 import React, { useState } from 'react';
 import { Plus, Search, User, Shield, Edit, Trash2, Eye, EyeOff, Calendar, Clock, AlertCircle } from 'lucide-react';
 import { db } from '../lib/supabase';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase'; 
 import Swal from 'sweetalert2';
 
+// Helper function to get session status color
+const getSessionStatusColor = (status: string) => {
+  switch (status) {
+    case 'active': return 'bg-green-100 text-green-800';
+    case 'expired': return 'bg-gray-100 text-gray-800';
+    case 'terminated': return 'bg-red-100 text-red-800';
+    default: return 'bg-gray-100 text-gray-800';
+  }
+};
 
 const UserManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'logs'>('users');
@@ -388,6 +215,73 @@ const UserManagement: React.FC = () => {
     });
   };
 
+  // Handle Delete User
+  const handleDeleteUser = async (userId: string) => {
+    const result = await Swal.fire({
+      title: 'Konfirmasi Hapus',
+      text: 'Apakah Anda yakin ingin menghapus user ini? Tindakan ini tidak dapat dibatalkan.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, hapus',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#d33',
+    });
+
+    if (result.isConfirmed) {
+      try {
+        // Check if user has related data
+        const { data: relatedData, error: checkError } = await supabase
+          .from('rental_sessions')
+          .select('id')
+          .eq('created_by', userId)
+          .limit(1);
+
+        if (checkError) throw new Error(checkError.message);
+
+        if (relatedData && relatedData.length > 0) {
+          await Swal.fire({
+            icon: 'error',
+            title: 'Tidak dapat menghapus',
+            text: 'User ini memiliki data terkait (rental, transaksi, dll). Nonaktifkan user sebagai gantinya.'
+          });
+          return;
+        }
+
+        // Delete user from database first
+        const { error: dbError } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', userId);
+
+        if (dbError) throw new Error(dbError.message);
+
+        // Then delete from auth
+        const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+        if (authError) throw new Error(authError.message);
+
+        await Swal.fire({
+          icon: 'success',
+          title: 'User berhasil dihapus',
+          text: 'User telah dihapus dari sistem.'
+        });
+
+        // Refresh user list
+        setLoadingUsers(true);
+        const { data } = await supabase.from('users').select('*');
+        setUsers(data || []);
+        setLoadingUsers(false);
+
+      } catch (err: any) {
+        console.error('Delete user error:', err);
+        await Swal.fire({
+          icon: 'error',
+          title: 'Gagal menghapus user',
+          text: err.message || 'Terjadi kesalahan saat menghapus user.'
+        });
+      }
+    }
+  };
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
@@ -503,9 +397,12 @@ const UserManagement: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <button
                             className="text-blue-600 hover:underline mr-3"
-                            onClick={() => setEditUser(user)}
+                            onClick={() => setEditUser(user)} 
                           >Edit</button>
-                          <button className="text-red-600 hover:underline">Hapus</button>
+                          <button 
+                            className="text-red-600 hover:underline"
+                            onClick={() => handleDeleteUser(user.id)}
+                          >Hapus</button>
                         </td>
                       </tr>
                     );
@@ -569,8 +466,6 @@ const UserManagement: React.FC = () => {
         />
       )}
 
-
-export default UserManagement;
 
       {/* Add Role Modal */}
       {showAddRoleForm && (
@@ -670,10 +565,6 @@ export default UserManagement;
     </div>
   );
 };
-
-
-export default UserManagement;
-
 
 interface AddUserModalProps {
   roles: any[];
@@ -856,3 +747,224 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ roles, onClose, onUserAdded
     </div>
   );
 };
+
+// --- EditUserModal interface & component ---
+interface EditUserModalProps {
+  user: any;
+  roles: any[];
+  onClose: () => void;
+  onUserUpdated: () => void;
+}
+
+const EditUserModal: React.FC<EditUserModalProps> = ({ user, roles, onClose, onUserUpdated }) => {
+  const [fullName, setFullName] = React.useState(user.full_name || '');
+  const [username, setUsername] = React.useState(user.username || '');
+  const [email, setEmail] = React.useState(user.email || '');
+  const [phone, setPhone] = React.useState(user.phone || '');
+  const [roleId, setRoleId] = React.useState(user.role_id || '');
+  const [status, setStatus] = React.useState(user.status || 'active');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [showResetPassword, setShowResetPassword] = React.useState(false);
+  const [newPassword, setNewPassword] = React.useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!fullName || !username || !email || !roleId) {
+      setError('Semua field wajib diisi!');
+      return;
+    }
+    setLoading(true);
+    try {
+      // Update user di table users
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          full_name: fullName,
+          username,
+          email,
+          phone: phone || null,
+          role_id: roleId,
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+      
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+      
+      // Update email di auth jika berubah
+      if (email !== user.email) {
+        const { error: authUpdateError } = await supabase.auth.admin.updateUserById(
+          user.id,
+          { email }
+        );
+        
+        if (authUpdateError) {
+          throw new Error(`Auth update error: ${authUpdateError.message}`);
+        }
+      }
+      
+      // Reset password jika diminta
+      if (showResetPassword && newPassword) {
+        const { error: passwordError } = await supabase.auth.admin.updateUserById(
+          user.id,
+          { password: newPassword }
+        );
+        
+        if (passwordError) {
+          throw new Error(`Password update error: ${passwordError.message}`);
+        }
+      }
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'User berhasil diupdate',
+        text: `User ${fullName} telah diperbarui.`
+      });
+      
+      onUserUpdated();
+    } catch (err: any) {
+      setError(err.message || 'Gagal mengupdate user.');
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal mengupdate user',
+        text: err.message || 'Terjadi kesalahan saat update user.'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit User</h2>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input
+                type="tel"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={roleId}
+                onChange={e => setRoleId(e.target.value)}
+                disabled={loading}
+              >
+                <option value="">Select role</option>
+                {roles.filter((r: any) => !r.isSystem).map((role: any) => (
+                  <option key={role.id} value={role.id}>{role.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={status}
+                onChange={e => setStatus(e.target.value)}
+                disabled={loading}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+            
+            {/* Password Reset Section */}
+            <div className="pt-2 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-700">Reset Password</label>
+                <button
+                  type="button"
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                  onClick={() => setShowResetPassword(!showResetPassword)}
+                >
+                  {showResetPassword ? 'Cancel' : 'Reset Password'}
+                </button>
+              </div>
+              
+              {showResetPassword && (
+                <div>
+                  <input
+                    type="password"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter new password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Password harus minimal 6 karakter
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {error && <div className="text-red-600 text-sm">{error}</div>}
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                disabled={loading}
+              >
+                {loading ? 'Menyimpan...' : 'Update User'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default UserManagement;
