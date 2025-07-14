@@ -1,710 +1,1166 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, Clock, Calculator, TrendingUp, TrendingDown, AlertCircle, CheckCircle, User, Receipt, CreditCard, Banknote, ArrowUpCircle, ArrowDownCircle, FileText, Printer, Eye, EyeOff, Calendar, ShoppingCart } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { CashierSession, CashierTransaction, CashFlow } from '../types';
+import React, { useState } from 'react';
+import { Plus, Minus, Trash2, ShoppingCart, Calculator, CreditCard, DollarSign, Receipt, Clock, User, Gamepad2, X, Printer, MessageCircle, CheckCircle, Edit3 } from 'lucide-react';
+import { db, supabase } from '../lib/supabase';
+import { Product, SaleItem, RentalSession } from '../types';
 import Swal from 'sweetalert2';
 
-const CashierSessionComponent: React.FC = () => {
-  const [currentSession, setCurrentSession] = useState<CashierSession | null>(null);
-  const [showOpenModal, setShowOpenModal] = useState(false);
-  const [showCloseModal, setShowCloseModal] = useState(false);
-  const [openingCash, setOpeningCash] = useState<number>(0);
-  const [closingCash, setClosingCash] = useState<number>(0);
-  const [notes, setNotes] = useState<string>('');
+interface PaymentItem {
+  id: string;
+  type: 'product' | 'rental';
+  name: string;
+  description?: string;
+  quantity: number;
+  price: number;
+  total: number;
+  productId?: string;
+  rentalSessionId?: string;
+}
+
+const Cashier: React.FC = () => {
+  const [cart, setCart] = useState<PaymentItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'products' | 'rentals'>('products');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [showPayment, setShowPayment] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [lastTransaction, setLastTransaction] = useState<any>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [loading, setLoading] = useState(false);
-  const [cashierSessions, setCashierSessions] = useState<any[]>([]);
-  const [cashierTransactions, setCashierTransactions] = useState<any[]>([]);
-  const [sales, setSales] = useState<any[]>([]);
-  const [rentalSessions, setRentalSessions] = useState<any[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  
+  // Manual input states
+  const [isManualInput, setIsManualInput] = useState(false);
+  const [manualAmount, setManualAmount] = useState<string>('');
 
-  // Fetch current user from Supabase
-  useEffect(() => {
-    const fetchCurrentUser = async () => {
-      try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error) throw error;
-        
-        if (user) {
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-          
-          if (userError) throw userError;
-          setCurrentUser(userData);
-        }
-      } catch (err) {
-        console.error('Error fetching current user:', err);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Gagal memuat data user. Silakan refresh halaman.'
-        });
-      }
-    };
-    
-    fetchCurrentUser();
-  }, []);
-
-  // Update current time every minute
-  useEffect(() => {
+  // State for products, customers, and rentals from Supabase
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState<boolean>(true);
+  const [rentals, setRentals] = useState<RentalSession[]>([]);
+  const [loadingRentals, setLoadingRentals] = useState<boolean>(true);
+  const [consoles, setConsoles] = useState<any[]>([]);
+  const [loadingConsoles, setLoadingConsoles] = useState<boolean>(true);
+  const [rateProfiles, setRateProfiles] = useState<any[]>([]);
+  const [loadingRateProfiles, setLoadingRateProfiles] = useState<boolean>(true);
+  
+  // Update current time every second
+  React.useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000);
-    
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch cashier sessions, transactions, sales, and rentals from Supabase
-  useEffect(() => {
-    if (!currentUser) return;
-    
-    const fetchData = async () => {
-      setLoading(true);
+  // Fetch products, customers, and rentals from Supabase on mount
+  React.useEffect(() => {
+    const fetchProducts = async () => {
+      setLoadingProducts(true);
       try {
-        // Fetch active session for current user
-        const { data: sessionData, error: sessionError } = await supabase
-          .from('cashier_sessions')
+        const { data, error } = await supabase
+          .from('products')
           .select('*')
-          .eq('cashier_id', currentUser.id)
-          .eq('status', 'active')
-          .single();
+          .eq('is_active', true);
         
-        if (sessionError && sessionError.code !== 'PGRST116') {
-          // PGRST116 means no rows returned, which is fine
-          throw sessionError;
-        }
+        if (error) throw error;
         
-        if (sessionData) {
-          setCurrentSession({
-            id: sessionData.id,
-            cashierId: sessionData.cashier_id,
-            cashierName: sessionData.cashier_name,
-            startTime: sessionData.start_time,
-            endTime: sessionData.end_time,
-            openingCash: sessionData.opening_cash,
-            closingCash: sessionData.closing_cash,
-            expectedCash: sessionData.expected_cash,
-            variance: sessionData.variance,
-            totalSales: sessionData.total_sales,
-            totalCash: sessionData.total_cash,
-            totalCard: sessionData.total_card,
-            totalTransfer: sessionData.total_transfer,
-            totalTransactions: sessionData.total_transactions,
-            status: sessionData.status,
-            notes: sessionData.notes,
-            createdAt: sessionData.created_at,
-            updatedAt: sessionData.updated_at
-          });
-          
-          // Fetch transactions for this session
-          const { data: transactionData, error: transactionError } = await supabase
-            .from('cashier_transactions')
-            .select('*')
-            .eq('session_id', sessionData.id)
-            .order('timestamp', { ascending: false });
-          
-          if (transactionError) throw transactionError;
-          setCashierTransactions(transactionData || []);
-          
-          // Fetch today's sales
-          const today = new Date().toISOString().split('T')[0];
-          const { data: salesData, error: salesError } = await supabase
-            .from('sales')
-            .select(`
-              *,
-              sale_items(*)
-            `)
-            .eq('cashier_id', currentUser.id)
-            .gte('sale_date', today)
-            .order('sale_date', { ascending: false });
-          
-          if (salesError) throw salesError;
-          setSales(salesData || []);
-          
-          // Fetch today's rental sessions
-          const { data: rentalData, error: rentalError } = await supabase
-            .from('rental_sessions')
-            .select('*')
-            .gte('start_time', today)
-            .eq('payment_status', 'paid')
-            .order('start_time', { ascending: false });
-          
-          if (rentalError) throw rentalError;
-          setRentalSessions(rentalData || []);
-        } else {
-          setCurrentSession(null);
-        }
+        // Map snake_case to camelCase
+        const mappedProducts = (data || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          category: p.category,
+          price: p.price,
+          cost: p.cost,
+          stock: p.stock,
+          minStock: p.min_stock,
+          barcode: p.barcode,
+          image: p.image_url,
+          description: p.description,
+          isActive: p.is_active
+        }));
+        
+        setProducts(mappedProducts);
       } catch (err) {
-        console.error('Error fetching cashier data:', err);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Gagal memuat data kasir. Silakan refresh halaman.'
-        });
+        console.error('Error fetching products:', err);
+        setProducts([]);
       } finally {
-        setLoading(false);
+        setLoadingProducts(false);
       }
     };
     
-    fetchData();
-  }, [currentUser]);
+    const fetchCustomers = async () => {
+      setLoadingCustomers(true);
+      try {
+        const { data, error } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('status', 'active');
+        
+        if (error) throw error;
+        setCustomers(data || []);
+      } catch (err) {
+        console.error('Error fetching customers:', err);
+        setCustomers([]);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+    
+    const fetchRentals = async () => {
+      setLoadingRentals(true);
+      try {
+        const { data, error } = await supabase
+          .from('rental_sessions')
+          .select(`
+            *,
+            customers(name, phone),
+            consoles(name, location)
+          `)
+          .eq('status', 'active');
+        
+        if (error) throw error;
+        
+        // Map to RentalSession type
+        const mappedRentals = (data || []).map((r: any) => ({
+          id: r.id,
+          customerId: r.customer_id,
+          consoleId: r.console_id,
+          startTime: r.start_time,
+          endTime: r.end_time,
+          duration: r.duration_minutes,
+          rateType: r.rate_type,
+          baseAmount: r.base_amount,
+          totalAmount: r.total_amount,
+          status: r.status,
+          paymentStatus: r.payment_status,
+          paidAmount: r.paid_amount,
+          appliedRateProfile: r.applied_rate_profile,
+          isVoucherUsed: r.is_voucher_used,
+          customerName: r.customers?.name,
+          consoleName: r.consoles?.name,
+          consoleLocation: r.consoles?.location,
+          // Add billing type field (pay as you go or prepaid)
+          billingType: r.applied_rate_profile?.billing_type || 'pay-as-you-go'
+        }));
+        
+        setRentals(mappedRentals);
+      } catch (err) {
+        console.error('Error fetching rentals:', err);
+        setRentals([]);
+      } finally {
+        setLoadingRentals(false);
+      }
+    };
+    
+    const fetchConsoles = async () => {
+      setLoadingConsoles(true);
+      try {
+        const { data, error } = await supabase
+          .from('consoles')
+          .select(`
+            *,
+            equipment_types(name, category),
+            rate_profiles(name, hourly_rate, daily_rate)
+          `)
+          .eq('is_active', true);
+        
+        if (error) throw error;
+        setConsoles(data || []);
+      } catch (err) {
+        console.error('Error fetching consoles:', err);
+        setConsoles([]);
+      } finally {
+        setLoadingConsoles(false);
+      }
+    };
+    
+    const fetchRateProfiles = async () => {
+      setLoadingRateProfiles(true);
+      try {
+        const { data, error } = await supabase
+          .from('rate_profiles')
+          .select('*')
+          .eq('is_active', true);
+        
+        if (error) throw error;
+        setRateProfiles(data || []);
+      } catch (err) {
+        console.error('Error fetching rate profiles:', err);
+        setRateProfiles([]);
+      } finally {
+        setLoadingRateProfiles(false);
+      }
+    };
+    
+    fetchProducts();
+    fetchCustomers();
+    fetchRentals();
+    fetchConsoles();
+    fetchRateProfiles();
+  }, []);
 
-  // Calculate session duration
-  const getSessionDuration = (session: CashierSession) => {
-    const start = new Date(session.startTime);
-    const end = session.endTime ? new Date(session.endTime) : new Date();
-    const diffMs = end.getTime() - start.getTime();
+  // Filter products from Supabase
+  const filteredProducts = products.filter(product =>
+    product.isActive && (
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.barcode?.includes(searchTerm)
+    )
+  );
+
+  // Filter active rentals that need payment (from Supabase)
+  const pendingRentals = rentals;
+
+  const addProductToCart = (product: Product) => {
+    const existingItem = cart.find(item => item.productId === product.id && item.type === 'product');
+    if (existingItem) {
+      setCart(cart.map(item =>
+        item.productId === product.id && item.type === 'product'
+          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
+          : item
+      ));
+    } else {
+      const newItem: PaymentItem = {
+        id: `product-${product.id}-${Date.now()}`,
+        type: 'product',
+        name: product.name,
+        description: product.description,
+        quantity: 1,
+        price: product.price,
+        total: product.price,
+        productId: product.id
+      };
+      setCart([...cart, newItem]);
+    }
+  };
+
+  const addRentalToCart = (session: RentalSession) => {
+    const customer = customers.find((c: any) => c.id === session.customerId);
+    const console = consoles.find((c: any) => c.id === session.consoleId);
+    
+    // Calculate current rental cost
+    const startTime = new Date(session.startTime);
+    const now = new Date();
+    const minutesElapsed = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
+    const hoursElapsed = Math.ceil(minutesElapsed / 60);
+    
+    // Get the rate profile for this console
+    const rateProfile = rateProfiles.find((profile: any) => profile.id === console?.rate_profile_id);
+    const currentCost = hoursElapsed * (rateProfile?.hourly_rate || 0);
+
+    const existingItem = cart.find(item => item.rentalSessionId === session.id);
+    if (existingItem) {
+      // Update existing rental item with current cost
+      setCart(cart.map(item =>
+        item.rentalSessionId === session.id
+          ? { ...item, price: currentCost, total: currentCost }
+          : item
+      ));
+    } else {
+      const newItem: PaymentItem = {
+        id: `rental-${session.id}-${Date.now()}`,
+        type: 'rental',
+        name: `${console?.name} Rental`,
+        description: `Customer: ${customer?.name} | Duration: ${Math.floor(minutesElapsed / 60)}h ${minutesElapsed % 60}m`,
+        quantity: 1,
+        price: currentCost,
+        total: currentCost,
+        rentalSessionId: session.id
+      };
+      setCart([...cart, newItem]);
+    }
+  };
+
+  const updateQuantity = (itemId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeFromCart(itemId);
+      return;
+    }
+    setCart(cart.map(item =>
+      item.id === itemId
+        ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
+        : item
+    ));
+  };
+
+  const removeFromCart = (itemId: string) => {
+    setCart(cart.filter(item => item.id !== itemId));
+  };
+
+  const clearCart = () => {
+    setCart([]);
+    setShowPayment(false);
+    setPaymentAmount(0);
+    setSelectedCustomer('');
+    setIsManualInput(false);
+    setManualAmount('');
+  };
+
+  const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+  const tax = 0; // No tax for now
+  const total = subtotal + tax;
+  
+  // Use manual amount if in manual mode, otherwise use paymentAmount
+  const actualPaymentAmount = isManualInput ? parseFloat(manualAmount) || 0 : paymentAmount;
+  const change = actualPaymentAmount - total;
+
+  // Money denomination buttons (in thousands)
+  const denominations = [
+    { label: '1K', value: 1000 },
+    { label: '5K', value: 5000 },
+    { label: '10K', value: 10000 },
+    { label: '20K', value: 20000 },
+    { label: '50K', value: 50000 },
+    { label: '100K', value: 100000 }
+  ];
+
+  const addDenomination = (value: number) => {
+    if (isManualInput) {
+      const currentValue = parseFloat(manualAmount) || 0;
+      setManualAmount((currentValue + value).toString());
+    } else {
+      setPaymentAmount(prev => prev + value);
+    }
+  };
+
+  const clearPaymentAmount = () => {
+    if (isManualInput) {
+      setManualAmount('');
+    } else {
+      setPaymentAmount(0);
+    }
+  };
+
+  const setExactAmount = () => {
+    if (isManualInput) {
+      setManualAmount(total.toString());
+    } else {
+      setPaymentAmount(total);
+    }
+  };
+
+  const toggleManualInput = () => {
+    setIsManualInput(!isManualInput);
+    if (!isManualInput) {
+      // Switching to manual, clear both
+      setPaymentAmount(0);
+      setManualAmount('');
+    } else {
+      // Switching to quick buttons, clear manual
+      setManualAmount('');
+      setPaymentAmount(0);
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'beverage': return 'bg-blue-100 text-blue-800';
+      case 'food': return 'bg-orange-100 text-orange-800';
+      case 'snack': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatDuration = (startTime: string) => {
+    const start = new Date(startTime);
+    const now = new Date();
+    const diffMs = now.getTime() - start.getTime();
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}j ${minutes}m`;
+    return `${hours}h ${minutes}m`;
   };
 
-  // Calculate expected cash for current session
-  const calculateExpectedCash = (session: CashierSession) => {
-    const transactions = cashierTransactions.filter(t => t.session_id === session.id);
-    const cashSales = transactions
-      .filter(t => t.payment_method === 'cash')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
+  const calculateRentalCost = (session: RentalSession) => {
+    const startTime = new Date(session.startTime);
+    const now = new Date();
+    const minutesElapsed = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
+    const hoursElapsed = Math.ceil(minutesElapsed / 60);
+    const console = mockConsoles.find(c => c.id === session.consoleId);
+    const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
+    return hoursElapsed * (rateProfile?.hourlyRate || 0);
+  };
+
+  const generateReceiptData = () => {
+    const customer = selectedCustomer ? customers.find((c: any) => c.id === selectedCustomer) : null;
+    const receiptId = `RCP-${Date.now()}`;
+    const timestamp = new Date().toLocaleString('id-ID');
     
-    // Expected = Opening + Cash Sales - Change Given
-    // For simplicity, assuming 10% of cash sales as average change
-    const estimatedChange = cashSales * 0.1;
-    return Number(session.openingCash) + cashSales - estimatedChange;
+    return {
+      id: receiptId,
+      timestamp,
+      customer,
+      items: cart,
+      subtotal,
+      tax,
+      total,
+      paymentMethod,
+      paymentAmount: actualPaymentAmount,
+      change,
+      cashier: 'Kasir 1' // This would come from logged in user
+    };
   };
 
-  // Get today's transactions for current session
-  const getTodayTransactions = () => {
-    if (!currentSession) return [];
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
     
-    const today = new Date().toDateString();
-    return cashierTransactions.filter(transaction => {
-      const transactionDate = new Date(transaction.timestamp).toDateString();
-      return transaction.session_id === currentSession.id && transactionDate === today;
-    });
-  };
-
-  // Get today's sales for current session
-  const getTodaySales = () => {
-    if (!currentSession) return [];
-    
-    const today = new Date().toDateString();
-    return sales.filter(sale => {
-      const saleDate = new Date(sale.sale_date).toDateString();
-      return sale.cashier_id === currentSession.cashierId && saleDate === today;
-    });
-  };
-
-  // Get today's rental payments for current session
-  const getTodayRentalPayments = () => {
-    if (!currentSession) return [];
-    
-    const today = new Date().toDateString();
-    return rentalSessions.filter(rental => {
-      if (!rental.start_time) return false;
-      const rentalDate = new Date(rental.start_time).toDateString();
-      return rentalDate === today && rental.payment_status === 'paid';
-    });
-  };
-
-  const handleOpenSession = async () => {
-    if (openingCash <= 0) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Saldo awal harus lebih dari 0'
-      });
-      return;
+    // Validate payment amount
+    if (paymentMethod === 'cash' && actualPaymentAmount < total) {
+      return; // Don't proceed if insufficient payment
     }
     
-    setLoading(true);
-    try {
-      // Insert new cashier session to database
-      const { data: newSession, error } = await supabase
-        .from('cashier_sessions')
-        .insert({
-          cashier_id: currentUser?.id,
-          cashier_name: currentUser?.full_name,
-          start_time: new Date().toISOString(),
-          opening_cash: openingCash,
-          total_sales: 0,
-          total_cash: 0,
-          total_card: 0,
-          total_transfer: 0,
-          total_transactions: 0,
-          status: 'active',
-          notes: notes
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Format the session data
-      setCurrentSession({
-        id: newSession.id,
-        cashierId: newSession.cashier_id,
-        cashierName: newSession.cashier_name,
-        startTime: newSession.start_time,
-        openingCash: newSession.opening_cash,
-        totalSales: newSession.total_sales,
-        totalCash: newSession.total_cash,
-        totalCard: newSession.total_card,
-        totalTransfer: newSession.total_transfer,
-        totalTransactions: newSession.total_transactions,
-        status: newSession.status,
-        notes: newSession.notes,
-        createdAt: newSession.created_at,
-        updatedAt: newSession.updated_at
-      });
-      
-      setShowOpenModal(false);
-      setNotes('');
-      
-      Swal.fire({
-        icon: 'success',
-        title: 'Sukses',
-        text: `Sesi kasir berhasil dibuka! Saldo awal: Rp ${openingCash.toLocaleString('id-ID')}`
-      });
-    } catch (err) {
-      console.error('Error opening cashier session:', err);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Gagal membuka sesi kasir. Silakan coba lagi.'
-      });
-    } finally {
-      setLoading(false);
-    }
+    const receiptData = generateReceiptData();
+    setLastTransaction(receiptData);
+    
+    // Process the payment
+    setPaymentSuccess(true);
+    setShowPaymentModal(true);
+    
+    // Clear cart and payment form
+    clearCart();
   };
 
-  const handleCloseSession = async () => {
-    if (!currentSession) return;
+  const handlePrintReceipt = () => {
+    if (!lastTransaction) return;
     
-    if (closingCash <= 0) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Jumlah setoran harus lebih dari 0'
-      });
-      return;
-    }
-
-    const expectedCash = calculateExpectedCash(currentSession);
-    const variance = closingCash - expectedCash;
-    
-    setLoading(true);
-    try {
-      // Update cashier session in database
-      const { error } = await supabase
-        .from('cashier_sessions')
-        .update({
-          end_time: new Date().toISOString(),
-          closing_cash: closingCash,
-          expected_cash: expectedCash,
-          variance: variance,
-          status: 'closed',
-          notes: notes ? `${currentSession.notes ? currentSession.notes + '\n' : ''}${notes}` : currentSession.notes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', currentSession.id);
-      
-      if (error) throw error;
-      
-      Swal.fire({
-        icon: 'success',
-        title: 'Sukses',
-        html: `
-          <p>Sesi kasir berhasil ditutup!</p>
-          <div class="mt-4 text-left">
-            <p><strong>Ringkasan:</strong></p>
-            <p>- Saldo Awal: Rp ${currentSession.openingCash.toLocaleString('id-ID')}</p>
-            <p>- Setoran: Rp ${closingCash.toLocaleString('id-ID')}</p>
-            <p>- Expected: Rp ${expectedCash.toLocaleString('id-ID')}</p>
-            <p>- Selisih: Rp ${Math.abs(variance).toLocaleString('id-ID')} ${variance >= 0 ? '(Lebih)' : '(Kurang)'}</p>
-          </div>
-        `
-      });
-      
-      setCurrentSession(null);
-      setShowCloseModal(false);
-      setClosingCash(0);
-      setNotes('');
-    } catch (err) {
-      console.error('Error closing cashier session:', err);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Gagal menutup sesi kasir. Silakan coba lagi.'
-      });
-    } finally {
-      setLoading(false);
+    // Create printable receipt
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Receipt - ${lastTransaction.id}</title>
+            <style>
+              body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; }
+              .receipt { width: 300px; margin: 0 auto; }
+              .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+              .item { display: flex; justify-content: space-between; margin: 5px 0; }
+              .total { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
+              .footer { text-align: center; margin-top: 20px; font-size: 10px; }
+            </style>
+          </head>
+          <body>
+            <div class="receipt">
+              <div class="header">
+                <h2>GAMING & BILLIARD CENTER</h2>
+                <p>PlayStation Rental + Mini Cafe</p>
+                <p>Receipt: ${lastTransaction.id}</p>
+                <p>${lastTransaction.timestamp}</p>
+                ${lastTransaction.customer ? `<p>Customer: ${lastTransaction.customer.name}</p>` : ''}
+                <p>Kasir: ${lastTransaction.cashier}</p>
+              </div>
+              
+              <div class="items">
+                ${lastTransaction.items.map((item: any) => `
+                  <div class="item">
+                    <span>${item.name} ${item.type === 'product' ? `x${item.quantity}` : ''}</span>
+                    <span>Rp ${item.total.toLocaleString('id-ID')}</span>
+                  </div>
+                  ${item.description ? `<div style="font-size: 10px; color: #666; margin-left: 10px;">${item.description}</div>` : ''}
+                `).join('')}
+              </div>
+              
+              <div class="total">
+                <div class="item">
+                  <span>Subtotal:</span>
+                  <span>Rp ${lastTransaction.subtotal.toLocaleString('id-ID')}</span>
+                </div>
+                ${lastTransaction.tax > 0 ? `
+                  <div class="item">
+                    <span>Pajak:</span>
+                    <span>Rp ${lastTransaction.tax.toLocaleString('id-ID')}</span>
+                  </div>
+                ` : ''}
+                <div class="item" style="font-weight: bold; font-size: 14px;">
+                  <span>TOTAL:</span>
+                  <span>Rp ${lastTransaction.total.toLocaleString('id-ID')}</span>
+                </div>
+                <div class="item">
+                  <span>Bayar (${lastTransaction.paymentMethod.toUpperCase()}):</span>
+                  <span>Rp ${lastTransaction.paymentAmount.toLocaleString('id-ID')}</span>
+                </div>
+                ${lastTransaction.change > 0 ? `
+                  <div class="item">
+                    <span>Kembalian:</span>
+                    <span>Rp ${lastTransaction.change.toLocaleString('id-ID')}</span>
+                  </div>
+                ` : ''}
+              </div>
+              
+              <div class="footer">
+                <p>Terima kasih atas kunjungan Anda!</p>
+                <p>Selamat bermain dan nikmati waktu Anda</p>
+                <p>---</p>
+                <p>Simpan struk ini sebagai bukti pembayaran</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
     }
   };
 
-  const todayTransactions = getTodayTransactions();
-  const todaySales = getTodaySales();
-  const todayRentals = getTodayRentalPayments();
+  const handleSendWhatsApp = () => {
+    if (!lastTransaction || !whatsappNumber) {
+      return; // Don't show alert, just return
+    }
 
-  // Calculate today's totals
-  const todayTotalSales = todaySales.reduce((sum, sale) => sum + sale.total, 0);
-  const todayTotalRentals = todayRentals.reduce((sum, rental) => sum + Number(rental.total_amount), 0);
-  const todayTotalRevenue = todayTotalSales + todayTotalRentals;
+    // Format WhatsApp message
+    const message = `
+*STRUK PEMBAYARAN*
+Gaming & Billiard Center
 
-  // Payment method breakdown for today
-  const todayCashSales = todaySales.filter(s => s.payment_method === 'cash').reduce((sum, s) => sum + s.total, 0);
-  const todayCardSales = todaySales.filter(s => s.payment_method === 'card').reduce((sum, s) => sum + s.total, 0);
-  const todayTransferSales = todaySales.filter(s => s.payment_method === 'transfer').reduce((sum, s) => sum + s.total, 0);
+Receipt: ${lastTransaction.id}
+Tanggal: ${lastTransaction.timestamp}
+${lastTransaction.customer ? `Customer: ${lastTransaction.customer.name}` : ''}
+Kasir: ${lastTransaction.cashier}
+
+*DETAIL PEMBELIAN:*
+${lastTransaction.items.map((item: any) => 
+  `• ${item.name} ${item.type === 'product' ? `x${item.quantity}` : ''} - Rp ${item.total.toLocaleString('id-ID')}`
+).join('\n')}
+
+*TOTAL PEMBAYARAN:*
+Subtotal: Rp ${lastTransaction.subtotal.toLocaleString('id-ID')}
+${lastTransaction.tax > 0 ? `Pajak: Rp ${lastTransaction.tax.toLocaleString('id-ID')}\n` : ''}*TOTAL: Rp ${lastTransaction.total.toLocaleString('id-ID')}*
+
+Bayar (${lastTransaction.paymentMethod.toUpperCase()}): Rp ${lastTransaction.paymentAmount.toLocaleString('id-ID')}
+${lastTransaction.change > 0 ? `Kembalian: Rp ${lastTransaction.change.toLocaleString('id-ID')}` : ''}
+
+Terima kasih atas kunjungan Anda! 🎮
+Selamat bermain dan nikmati waktu Anda ☕
+    `.trim();
+
+    // Format phone number for WhatsApp
+    let formattedNumber = whatsappNumber.replace(/\D/g, '');
+    if (formattedNumber.startsWith('0')) {
+      formattedNumber = '62' + formattedNumber.substring(1);
+    } else if (!formattedNumber.startsWith('62')) {
+      formattedNumber = '62' + formattedNumber;
+    }
+
+    // Create WhatsApp URL
+    const whatsappUrl = `https://wa.me/${formattedNumber}?text=${encodeURIComponent(message)}`;
+    
+    // Open WhatsApp
+    window.open(whatsappUrl, '_blank');
+    
+    setShowWhatsAppModal(false);
+    setWhatsappNumber('');
+  };
+
+  const closePaymentModal = () => {
+    setShowPaymentModal(false);
+    setPaymentSuccess(false);
+    setLastTransaction(null);
+  };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Sesi Kasir</h1>
-            <p className="text-gray-600">Kelola sesi kasir harian dan pantau transaksi</p>
+    <div className="flex h-screen bg-gray-100">
+      {/* Main Content */}
+      <div className="flex-1 p-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Kasir Terintegrasi</h1>
+          <div className="relative mb-4">
+            <input
+              type="text"
+              placeholder="Cari produk, barcode, atau customer..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+            />
           </div>
-          
-          <div className="text-right">
-            <div className="text-2xl font-bold text-gray-900">
-              {currentTime.toLocaleTimeString('id-ID', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
-            </div>
-            <div className="text-gray-600">
-              {currentTime.toLocaleDateString('id-ID', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </div>
+
+          {/* Tab Navigation */}
+          <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg mb-4">
+            <button
+              onClick={() => setActiveTab('products')}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'products'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Produk Cafe ({filteredProducts.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('rentals')}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'rentals'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Gamepad2 className="h-4 w-4" />
+              Rental Aktif ({pendingRentals.length})
+            </button>
           </div>
         </div>
 
-        {/* Session Status */}
-        <div className="mt-6">
-          {!currentSession ? (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <AlertCircle className="h-5 w-5 text-yellow-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-yellow-900">Sesi Kasir Belum Dibuka</h3>
-                    <p className="text-yellow-700 text-sm">Buka sesi kasir untuk mulai melayani transaksi</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowOpenModal(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>Memproses...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUpCircle className="h-5 w-5" />
-                      <span>Buka Kasir</span>
-                    </>
-                  )}
-                </button>
+        {/* Products Tab */}
+        {activeTab === 'products' && (
+          <>
+            {loadingProducts ? (
+              <div className="text-center text-gray-500 py-8">Memuat produk cafe...</div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                Tidak ada produk cafe yang aktif atau data belum masuk.<br />
+                Silakan cek data master produk di database.
               </div>
             ) : (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-green-900">Sesi Kasir Aktif</h3>
-                      <p className="text-green-700 text-sm">
-                        Dimulai {new Date(currentSession.startTime).toLocaleString('id-ID')} • 
-                        Durasi: {getSessionDuration(currentSession)}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowCloseModal(true)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-                    disabled={loading}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    onClick={() => addProductToCart(product)}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
                   >
-                    {loading ? (
-                      <>
-                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Memproses...</span>
-                      </>
-                    ) : (
-                      <>
-                        <ArrowDownCircle className="h-5 w-5" />
-                        <span>Tutup Kasir</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Session Details */}
-                <div className="mt-4 bg-white rounded-lg p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-green-700">
-                        <strong>Kasir:</strong> {currentSession.cashierName || currentUser?.full_name}
-                      </p>
+                    <div className="mb-3">
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
+                        {product.category}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-green-700">
-                        <strong>Saldo Awal:</strong> Rp {currentSession.openingCash.toLocaleString('id-ID')}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-green-700">
-                        <strong>Total Transaksi:</strong> {currentSession.totalTransactions || 0}
-                      </p>
+                    <h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-bold text-blue-600">
+                        Rp {product.price.toLocaleString('id-ID')}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Stok: {product.stock}
+                      </span>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
             )}
-        </div>
-      </div>
+          </>
+        )}
 
-      {/* Dashboard Stats */}
-      {currentSession && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Total Revenue Today */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Pendapatan Hari Ini</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  Rp {todayTotalRevenue.toLocaleString('id-ID')}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm">
-              <span className="text-green-600 font-medium">
-                {todaySales.length + todayRentals.length} transaksi
-              </span>
-            </div>
-          </div>
-
-          {/* Cash Sales */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Penjualan Cash</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  Rp {todayCashSales.toLocaleString('id-ID')}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <Banknote className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm">
-              <span className="text-gray-600">
-                {todaySales.filter(s => s.payment_method === 'cash').length} transaksi
-              </span>
-            </div>
-          </div>
-
-          {/* Card Sales */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Penjualan Card</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  Rp {todayCardSales.toLocaleString('id-ID')}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <CreditCard className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm">
-              <span className="text-gray-600">
-                {todaySales.filter(s => s.payment_method === 'card').length} transaksi
-              </span>
-            </div>
-          </div>
-
-          {/* Transfer Sales */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Transfer</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  Rp {todayTransferSales.toLocaleString('id-ID')}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <Receipt className="h-6 w-6 text-purple-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm">
-              <span className="text-gray-600">
-                {todaySales.filter(s => s.payment_method === 'transfer').length} transaksi
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Recent Transactions */}
-      {currentSession && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Transaksi Hari Ini</h2>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Clock className="h-4 w-4" />
-                <span>Update terakhir: {currentTime.toLocaleTimeString('id-ID')}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="divide-y divide-gray-200">
-            {todayTransactions.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <Receipt className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <p>Belum ada transaksi hari ini</p>
+        {/* Rentals Tab */}
+        {activeTab === 'rentals' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {loadingRentals ? (
+              <div className="text-center text-gray-500 py-8 col-span-full">Memuat data rental aktif...</div>
+            ) : pendingRentals.length === 0 ? (
+              <div className="text-center text-gray-500 py-8 col-span-full">
+                Tidak ada rental aktif atau pembayaran pending.<br />
+                Silakan cek data rental di database.
               </div>
             ) : (
-              todayTransactions.map((transaction) => (
-                <div key={transaction.id} className="p-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        transaction.type === 'sale' ? 'bg-green-100' : 'bg-blue-100'
-                      }`}>
-                        {transaction.type === 'sale' ? (
-                          <ShoppingCart className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <Receipt className="h-5 w-5 text-blue-600" />
-                        )}
+              pendingRentals.map((session) => {
+                const customer = customers.find((c: any) => c.id === session.customerId);
+                const console = mockConsoles.find(c => c.id === session.consoleId);
+                const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
+                const startTime = session.startTime;
+                const currentCost = calculateRentalCost({ ...session, startTime });
+                return (
+                  <div
+                    key={session.id}
+                    onClick={() => addRentalToCart({ ...session, startTime })}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Gamepad2 className="h-5 w-5 text-blue-600" />
+                        <span className="font-semibold text-gray-900">{console?.name}</span>
                       </div>
-                      <div>
-                        <h3 className="font-medium text-gray-900">{transaction.description}</h3>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                            transaction.payment_method === 'cash' ? 'bg-green-100 text-green-800' :
-                            transaction.payment_method === 'card' ? 'bg-blue-100 text-blue-800' :
-                            'bg-purple-100 text-purple-800'
-                          }`}>
-                            {transaction.payment_method.toUpperCase()}
-                          </span>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Clock className="h-4 w-4" />
-                            {new Date(transaction.timestamp).toLocaleTimeString('id-ID', { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            })}
-                          </div>
-                          <span className="text-sm text-gray-500">Ref: {transaction.reference_id}</span>
-                        </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        session.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {session.paymentStatus === 'pending' ? 'PENDING' : 'ACTIVE'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 mb-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <User className="h-4 w-4" />
+                        <span>{customer?.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Clock className="h-4 w-4" />
+                        <span>Durasi: {formatDuration(startTime)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-bold text-green-600">
+                        Rp {currentCost.toLocaleString('id-ID')}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Rp {(rateProfile?.hourlyRate || 0).toLocaleString('id-ID')}/jam
+                      </span>
+                    </div>
+
+                    <div className="mt-3 text-xs text-gray-500">
+                      Mulai: {new Date(startTime).toLocaleString('id-ID')}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Cart Sidebar */}
+      <div className="w-96 bg-white shadow-xl border-l border-gray-200 flex flex-col">
+        {/* Cart Header */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Pembayaran
+            </h2>
+            {cart.length > 0 && (
+              <button
+                onClick={clearCart}
+                className="text-red-600 hover:text-red-700 text-sm font-medium"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+
+          {/* Customer Selection */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Customer (Opsional)</label>
+            <select
+              value={selectedCustomer}
+              onChange={(e) => setSelectedCustomer(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              disabled={loadingCustomers}
+            >
+              <option value="">Pilih Customer</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>{customer.name}</option>
+              ))}
+            </select>
+            {loadingCustomers && <div className="text-xs text-gray-400 mt-1">Memuat data customer...</div>}
+          </div>
+        </div>
+
+        {/* Cart Items */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {cart.length === 0 ? (
+            <div className="text-center text-gray-500 mt-8">
+              <Receipt className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+              <p>Belum ada item</p>
+              <p className="text-sm">Pilih produk atau rental untuk memulai</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {cart.map((item) => (
+                <div key={item.id} className={`rounded-lg p-4 ${
+                  item.type === 'rental' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {item.type === 'rental' ? (
+                        <Gamepad2 className="h-4 w-4 text-blue-600" />
+                      ) : (
+                        <ShoppingCart className="h-4 w-4 text-gray-600" />
+                      )}
+                      <h4 className="font-medium text-gray-900">{item.name}</h4>
+                    </div>
+                    <button
+                      onClick={() => removeFromCart(item.id)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {item.description && (
+                    <p className="text-xs text-gray-600 mb-2">{item.description}</p>
+                  )}
+                  
+                  <div className="flex items-center justify-between">
+                    {item.type === 'product' ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-blue-600 font-medium">Rental Payment</span>
+                    )}
+                    
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">
+                        Rp {item.price.toLocaleString('id-ID')} {item.type === 'product' && `x ${item.quantity}`}
+                      </p>
+                      <p className="font-semibold text-gray-900">
+                        Rp {item.total.toLocaleString('id-ID')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Cart Summary & Payment */}
+        {cart.length > 0 && (
+          <div className="border-t border-gray-200 p-6">
+            {/* Summary */}
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Produk ({cart.filter(i => i.type === 'product').length}):</span>
+                <span>Rp {cart.filter(i => i.type === 'product').reduce((sum, i) => sum + i.total, 0).toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Rental ({cart.filter(i => i.type === 'rental').length}):</span>
+                <span>Rp {cart.filter(i => i.type === 'rental').reduce((sum, i) => sum + i.total, 0).toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Subtotal:</span>
+                <span className="font-medium">Rp {subtotal.toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Pajak:</span>
+                <span className="font-medium">Rp {tax.toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-3">
+                <span>Total:</span>
+                <span>Rp {total.toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+
+            {!showPayment ? (
+              <button
+                onClick={() => setShowPayment(true)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <Calculator className="h-5 w-5" />
+                Proses Pembayaran
+              </button>
+            ) : (
+              <div className="space-y-4">
+                {/* Payment Method */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Metode Pembayaran</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'cash', label: 'Cash', icon: DollarSign },
+                      { value: 'card', label: 'Card', icon: CreditCard },
+                      { value: 'transfer', label: 'Transfer', icon: CreditCard }
+                    ].map((method) => {
+                      const Icon = method.icon;
+                      return (
+                        <button
+                          key={method.value}
+                          onClick={() => setPaymentMethod(method.value as any)}
+                          className={`p-2 rounded-lg border text-sm font-medium transition-colors flex flex-col items-center gap-1 ${
+                            paymentMethod === method.value
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {method.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Payment Amount */}
+                {paymentMethod === 'cash' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Jumlah Bayar</label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={toggleManualInput}
+                          className={`text-xs px-2 py-1 rounded font-medium transition-colors flex items-center gap-1 ${
+                            isManualInput 
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          {isManualInput ? 'Manual' : 'Quick'}
+                        </button>
+                        <button
+                          onClick={clearPaymentAmount}
+                          className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
+                        >
+                          <X className="h-3 w-3" />
+                          Clear
+                        </button>
                       </div>
                     </div>
                     
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-green-600">
-                        +Rp {Number(transaction.amount).toLocaleString('id-ID')}
-                      </p>
-                      <p className="text-sm text-gray-600 capitalize">{transaction.type}</p>
+                    {/* Payment Amount Display */}
+                    <div className="mb-3 p-3 bg-gray-100 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-gray-900">
+                        Rp {actualPaymentAmount.toLocaleString('id-ID')}
+                      </div>
+                      {actualPaymentAmount > 0 && (
+                        <div className="text-sm mt-1">
+                          <span className={`font-medium ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            Kembalian: Rp {change.toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Manual Input or Quick Buttons */}
+                    {isManualInput ? (
+                      <div className="mb-3">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                          <p className="text-xs text-yellow-800 font-medium">
+                            📝 Mode Input Manual
+                          </p>
+                          <p className="text-xs text-yellow-700 mt-1">
+                            Masukkan jumlah pembayaran secara manual. Sistem akan menerima input nominal yang Anda masukkan, terlepas dari total tagihan yang terkalkulasi otomatis. Pastikan jumlah yang Anda masukkan sudah benar sebelum melanjutkan ke proses pembayaran.
+                          </p>
+                        </div>
+                        <input
+                          type="number"
+                          value={manualAmount}
+                          onChange={(e) => setManualAmount(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-mono"
+                          placeholder="0"
+                          min="0"
+                        />
+                        <p className="text-xs text-gray-500 mt-1 text-center">
+                          Masukkan nominal pembayaran (dalam Rupiah)
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Money Denomination Buttons */}
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          {denominations.map((denom) => (
+                            <button
+                              key={denom.value}
+                              onClick={() => addDenomination(denom.value)}
+                              className="p-3 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg font-medium transition-colors text-sm"
+                            >
+                              {denom.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Exact Amount Button */}
+                        <button
+                          onClick={setExactAmount}
+                          className="w-full p-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg font-medium transition-colors text-sm mb-3"
+                        >
+                          LUNAS (Rp {total.toLocaleString('id-ID')})
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowPayment(false)}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleCheckout}
+                    disabled={paymentMethod === 'cash' && change < 0}
+                    className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Receipt className="h-4 w-4" />
+                    Bayar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Payment Success Modal */}
+      {showPaymentModal && lastTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Pembayaran Berhasil!</h2>
+                    <p className="text-gray-600">Receipt: {lastTransaction.id}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={closePaymentModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Transaction Summary */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-green-900 mb-2">
+                    Rp {lastTransaction.total.toLocaleString('id-ID')}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-green-700">Metode Pembayaran:</span>
+                      <div className="font-medium text-green-900 capitalize">
+                        {lastTransaction.paymentMethod}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-green-700">Waktu Transaksi:</span>
+                      <div className="font-medium text-green-900">
+                        {lastTransaction.timestamp}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-green-700">Jumlah Bayar:</span>
+                      <div className="font-medium text-green-900">
+                        Rp {lastTransaction.paymentAmount.toLocaleString('id-ID')}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-green-700">Kembalian:</span>
+                      <div className="font-medium text-green-900">
+                        Rp {lastTransaction.change.toLocaleString('id-ID')}
+                      </div>
                     </div>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+              </div>
 
-      {/* Open Session Modal */}
-      {showOpenModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Buka Sesi Kasir</h2>
-              
-              {/* Cashier Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <User className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium text-blue-900">Kasir</span>
+              {/* Customer Info */}
+              {lastTransaction.customer && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <h3 className="font-medium text-gray-900 mb-2">Informasi Customer</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Nama:</span>
+                      <div className="font-medium">{lastTransaction.customer.name}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Telepon:</span>
+                      <div className="font-medium">{lastTransaction.customer.phone}</div>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-blue-800">{currentUser?.full_name}</p>
-                <p className="text-sm text-blue-600">{new Date().toLocaleString('id-ID')}</p>
-              </div>
+              )}
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Saldo Awal (Rp)
-                </label>
-                <input
-                  type="number"
-                  value={openingCash}
-                  onChange={(e) => setOpeningCash(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-
+              {/* Items Detail */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Catatan (Opsional)
-                </label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                  placeholder="Catatan untuk sesi ini..."
-                />
+                <h3 className="font-medium text-gray-900 mb-3">Detail Pembelian</h3>
+                <div className="space-y-3">
+                  {lastTransaction.items.map((item: any, index: number) => (
+                    <div key={index} className="flex justify-between items-start p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          {item.type === 'rental' ? (
+                            <Gamepad2 className="h-4 w-4 text-blue-600" />
+                          ) : (
+                            <ShoppingCart className="h-4 w-4 text-gray-600" />
+                          )}
+                          <span className="font-medium">{item.name}</span>
+                          {item.type === 'product' && (
+                            <span className="text-gray-600">x {item.quantity}</span>
+                          )}
+                        </div>
+                        {item.description && (
+                          <p className="text-xs text-gray-600 ml-6">{item.description}</p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">Rp {item.total.toLocaleString('id-ID')}</div>
+                        {item.type === 'product' && (
+                          <div className="text-xs text-gray-600">
+                            @Rp {item.price.toLocaleString('id-ID')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowOpenModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={handleOpenSession}
-                  disabled={openingCash <= 0}
-                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>Memproses...</span>
-                    </>
-                  ) : (
-                    <span>Buka Kasir</span>
+              {/* Payment Breakdown */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <h3 className="font-medium text-gray-900 mb-3">Rincian Pembayaran</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Subtotal:</span>
+                    <span>Rp {lastTransaction.subtotal.toLocaleString('id-ID')}</span>
+                  </div>
+                  {lastTransaction.tax > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Pajak:</span>
+                      <span>Rp {lastTransaction.tax.toLocaleString('id-ID')}</span>
+                    </div>
                   )}
+                  <div className="flex justify-between font-medium border-t border-gray-200 pt-2">
+                    <span>Total:</span>
+                    <span>Rp {lastTransaction.total.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Bayar ({lastTransaction.paymentMethod}):</span>
+                    <span>Rp {lastTransaction.paymentAmount.toLocaleString('id-ID')}</span>
+                  </div>
+                  {lastTransaction.change > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Kembalian:</span>
+                      <span className="font-medium">Rp {lastTransaction.change.toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={handlePrintReceipt}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Printer className="h-5 w-5" />
+                    Cetak Nota
+                  </button>
+                  
+                  <button
+                    onClick={() => setShowWhatsAppModal(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <MessageCircle className="h-5 w-5" />
+                    Kirim via WhatsApp
+                  </button>
+                </div>
+                
+                <button
+                  onClick={closePaymentModal}
+                  className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-3 rounded-lg font-medium transition-colors"
+                >
+                  Tutup & Lanjutkan
                 </button>
               </div>
             </div>
@@ -712,108 +1168,60 @@ const CashierSessionComponent: React.FC = () => {
         </div>
       )}
 
-      {/* Close Session Modal */}
-      {showCloseModal && currentSession && (
+      {/* WhatsApp Send Modal */}
+      {showWhatsAppModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
             <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Tutup Sesi Kasir</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5 text-green-600" />
+                  Kirim Nota via WhatsApp
+                </h2>
+                <button
+                  onClick={() => setShowWhatsAppModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
               
-              {/* Cashier Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <User className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium text-blue-900">Kasir</span>
-                </div>
-                <p className="text-blue-800">{currentUser?.full_name}</p>
-                <p className="text-sm text-blue-600">{new Date().toLocaleString('id-ID')}</p>
-              </div>
-
-              {/* Session Summary */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <h3 className="font-medium text-gray-900 mb-2">Ringkasan Sesi</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Saldo Awal:</span>
-                    <span className="font-medium">Rp {currentSession.openingCash.toLocaleString('id-ID')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Durasi:</span>
-                    <span className="font-medium">{getSessionDuration(currentSession)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Transaksi:</span>
-                    <span className="font-medium">{todayTransactions.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Expected Cash:</span>
-                    <span className="font-medium">Rp {calculateExpectedCash(currentSession).toLocaleString('id-ID')}</span>
-                  </div>
-                </div>
-              </div>
-
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Jumlah Setoran (Rp)
+                  Nomor WhatsApp Customer
                 </label>
                 <input
-                  type="number"
-                  value={closingCash}
-                  onChange={(e) => setClosingCash(Number(e.target.value))}
+                  type="tel"
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0"
-                  min="0"
+                  placeholder="+62 8xx-xxxx-xxxx"
                 />
-                {closingCash > 0 && (
-                  <div className="mt-2 text-sm">
-                    <span className={`font-medium ${
-                      closingCash - calculateExpectedCash(currentSession) >= 0 
-                        ? 'text-green-600' 
-                        : 'text-red-600'
-                    }`}>
-                      Selisih: Rp {Math.abs(closingCash - calculateExpectedCash(currentSession)).toLocaleString('id-ID')} 
-                      {closingCash - calculateExpectedCash(currentSession) >= 0 ? ' (Lebih)' : ' (Kurang)'}
-                    </span>
-                  </div>
-                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Format: +62xxx, 62xxx, atau 0xxx
+                </p>
               </div>
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Catatan Penutupan (Opsional)
-                </label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                  placeholder="Catatan untuk penutupan sesi..."
-                />
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-green-800">
+                  Nota akan dikirim dalam format pesan WhatsApp yang berisi detail lengkap transaksi.
+                </p>
               </div>
-
+              
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowCloseModal(false)}
+                  onClick={() => setShowWhatsAppModal(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   Batal
                 </button>
                 <button
-                  onClick={handleCloseSession}
-                  disabled={closingCash <= 0}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  onClick={handleSendWhatsApp}
+                  disabled={!whatsappNumber}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                 >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>Memproses...</span>
-                    </>
-                  ) : (
-                    <span>Tutup Kasir</span>
-                  )}
+                  <MessageCircle className="h-4 w-4" />
+                  Kirim
                 </button>
               </div>
             </div>
@@ -824,4 +1232,4 @@ const CashierSessionComponent: React.FC = () => {
   );
 };
 
-export default CashierSessionComponent;
+export default Cashier;
