@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Minus, Trash2, ShoppingCart, Calculator, CreditCard, DollarSign, Receipt, Clock, User, Gamepad2, X, Printer, MessageCircle, CheckCircle, Edit3 } from 'lucide-react';
-import { mockRentalSessions, mockCustomers, mockConsoles, mockRateProfiles } from '../data/mockData';
+import { mockRentalSessions, mockConsoles, mockRateProfiles } from '../data/mockData';
 import { db } from '../lib/supabase';
 import { Product, SaleItem, RentalSession } from '../types';
 
@@ -34,11 +34,13 @@ const Cashier: React.FC = () => {
   const [isManualInput, setIsManualInput] = useState(false);
   const [manualAmount, setManualAmount] = useState<string>('');
 
-  // State for products from Supabase
+  // State for products and customers from Supabase
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState<boolean>(true);
 
-  // Fetch products from Supabase on mount
+  // Fetch products & customers from Supabase on mount
   React.useEffect(() => {
     const fetchProducts = async () => {
       setLoadingProducts(true);
@@ -49,16 +51,26 @@ const Cashier: React.FC = () => {
           ...p,
           isActive: p.is_active,
         }));
-        console.log('Supabase products fetched:', mapped);
         setProducts(mapped);
       } catch (err) {
-        console.error('Error fetching products from Supabase:', err);
         setProducts([]);
       } finally {
         setLoadingProducts(false);
       }
     };
+    const fetchCustomers = async () => {
+      setLoadingCustomers(true);
+      try {
+        const data = await db.customers.getAll();
+        setCustomers(data || []);
+      } catch (err) {
+        setCustomers([]);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
     fetchProducts();
+    fetchCustomers();
   }, []);
 
   // Filter products from Supabase
@@ -98,7 +110,7 @@ const Cashier: React.FC = () => {
   };
 
   const addRentalToCart = (session: RentalSession) => {
-    const customer = mockCustomers.find(c => c.id === session.customerId);
+    const customer = customers.find((c: any) => c.id === session.customerId);
     const console = mockConsoles.find(c => c.id === session.consoleId);
     
     // Calculate current rental cost
@@ -244,7 +256,7 @@ const Cashier: React.FC = () => {
   };
 
   const generateReceiptData = () => {
-    const customer = selectedCustomer ? mockCustomers.find(c => c.id === selectedCustomer) : null;
+    const customer = selectedCustomer ? customers.find((c: any) => c.id === selectedCustomer) : null;
     const receiptId = `RCP-${Date.now()}`;
     const timestamp = new Date().toLocaleString('id-ID');
     
@@ -506,7 +518,7 @@ Selamat bermain dan nikmati waktu Anda ☕
         {activeTab === 'rentals' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pendingRentals.map((session) => {
-              const customer = mockCustomers.find(c => c.id === session.customerId);
+              const customer = customers.find((c: any) => c.id === session.customerId);
               const console = mockConsoles.find(c => c.id === session.consoleId);
               const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
               const currentCost = calculateRentalCost(session);
@@ -585,12 +597,14 @@ Selamat bermain dan nikmati waktu Anda ☕
               value={selectedCustomer}
               onChange={(e) => setSelectedCustomer(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              disabled={loadingCustomers}
             >
               <option value="">Pilih Customer</option>
-              {mockCustomers.map(customer => (
+              {customers.map((customer) => (
                 <option key={customer.id} value={customer.id}>{customer.name}</option>
               ))}
             </select>
+            {loadingCustomers && <div className="text-xs text-gray-400 mt-1">Memuat data customer...</div>}
           </div>
         </div>
 
