@@ -1192,50 +1192,7 @@ const ActiveRentals: React.FC = () => {
         </div>
       )}
 
-      {/* Summary Stats */}
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Gamepad2 className="h-6 w-6 text-green-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">{activeSessions.length}</h3>
-          <p className="text-gray-600 text-sm">Active Sessions</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <DollarSign className="h-6 w-6 text-blue-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            Rp {activeSessions.reduce((sum, session) => sum + calculateCurrentCost(session), 0).toLocaleString('id-ID')}
-          </h3>
-          <p className="text-gray-600 text-sm">Current Revenue</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Clock className="h-6 w-6 text-purple-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {activeSessions.length > 0 ? Math.round(activeSessions.reduce((sum, session) => {
-              const start = new Date(session.start_time);
-              const now = new Date();
-              return sum + (now.getTime() - start.getTime()) / (1000 * 60 * 60);
-            }, 0) / activeSessions.length) : 0}h
-          </h3>
-          <p className="text-gray-600 text-sm">Average Duration</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <User className="h-6 w-6 text-orange-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {new Set(activeSessions.map(s => s.customer_id)).size}
-          </h3>
-          <p className="text-gray-600 text-sm">Active Customers</p>
-        </div>
-      </div>
+      {/* Panel summary stats di bawah dihapus sesuai permintaan */}
     </div>
   );
 };
