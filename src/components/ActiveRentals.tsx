@@ -80,6 +80,8 @@ const ActiveRentals: React.FC = () => {
   const [nonMemberName, setNonMemberName] = useState<string>('');
   const [nonMemberPhone, setNonMemberPhone] = useState<string>('');
   const [countdownTimers, setCountdownTimers] = useState<Record<string, number>>({});
+  // Toggle view mode: 'simple' | 'detail'
+  const [viewMode, setViewMode] = useState<'simple' | 'detail'>('simple');
   // Tambahan: countdown detik
   const [countdownSeconds, setCountdownSeconds] = useState<Record<string, number>>({});
   const [elapsedTimers, setElapsedTimers] = useState<Record<string, number>>({});
@@ -634,7 +636,7 @@ const ActiveRentals: React.FC = () => {
         <p className="text-gray-600">Monitor all consoles and manage rental sessions</p>
       </div>
 
-      {/* Time Display & Filter */}
+      {/* Time Display, Filter & View Mode Toggle */}
       <div className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex items-center gap-2">
           <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
@@ -643,7 +645,7 @@ const ActiveRentals: React.FC = () => {
           </span>
         </div>
 
-        {/* Filter Buttons & History Button */}
+        {/* Filter Buttons, View Mode Toggle & History Button */}
         <div className="flex gap-2 flex-wrap items-center">
           <button
             className={`px-4 py-2 rounded-lg font-medium border transition-colors ${consoleFilter === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
@@ -676,6 +678,23 @@ const ActiveRentals: React.FC = () => {
           >
             Lihat History
           </button>
+          {/* View Mode Toggle */}
+          <div className="ml-2 flex gap-1">
+            <button
+              type="button"
+              className={`px-3 py-2 rounded-lg font-medium border text-xs transition-colors ${viewMode === 'simple' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
+              onClick={() => setViewMode('simple')}
+            >
+              Simple
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-2 rounded-lg font-medium border text-xs transition-colors ${viewMode === 'detail' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
+              onClick={() => setViewMode('detail')}
+            >
+              Detail
+            </button>
+          </div>
         </div>
       </div>
       {/* History Modal */}
@@ -771,190 +790,306 @@ const ActiveRentals: React.FC = () => {
       )}
 
       {/* Console Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter)).map((console) => {
-          const isActive = console.status === 'rented';
-          const activeSession = activeSessions.find(s => s.console_id === console.id);
-          const rateProfile = getConsoleRateProfile(console.id);
-          
-          return (
-            <div 
-              key={console.id} 
-              className={`rounded-xl overflow-hidden shadow-sm border ${
-                console.status === 'available' ? 'border-green-200 bg-white' : 
-                console.status === 'rented' ? 'border-blue-200 bg-white' : 
-                'border-red-200 bg-white'
-              }`}
-            >
-              {/* Header */}
-              <div className={`p-4 ${
-                console.status === 'available' ? 'bg-purple-600' : 
-                console.status === 'rented' ? 'bg-purple-600' : 
-                'bg-purple-600'
-              } text-white`}>
-                <div className="flex items-center gap-3">
-                  <Gamepad2 className="h-6 w-6" />
-                  <h3 className="font-semibold text-lg">{console.name}</h3>
+      {viewMode === 'simple' ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter)).map((console) => {
+            const isActive = console.status === 'rented';
+            const activeSession = activeSessions.find(s => s.console_id === console.id);
+            const rateProfile = getConsoleRateProfile(console.id);
+            return (
+              <div
+                key={console.id}
+                className={`rounded-lg shadow border text-xs p-2 flex flex-col items-stretch min-w-0 ${
+                  console.status === 'available' ? 'border-green-200 bg-white' :
+                  console.status === 'rented' ? 'border-blue-200 bg-white' :
+                  'border-red-200 bg-white'
+                }`}
+                style={{ minWidth: 0 }}
+              >
+                {/* Header */}
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-t-lg ${
+                  console.status === 'available' ? 'bg-purple-600' :
+                  console.status === 'rented' ? 'bg-purple-600' :
+                  'bg-purple-600'
+                } text-white`}
+                  style={{ fontSize: '0.95em' }}
+                >
+                  <Gamepad2 className="h-4 w-4" />
+                  <span className="font-semibold truncate">{console.name}</span>
                   {console.location && (
-                    <span className="text-sm opacity-80">{console.location}</span>
+                    <span className="text-[10px] opacity-80 ml-auto">{console.location}</span>
                   )}
                 </div>
-                <div className="mt-2 flex justify-between items-center">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    console.status === 'available' ? 'bg-green-500 text-white' : 
-                    console.status === 'rented' ? 'bg-blue-500 text-white' : 
-                    'bg-red-500 text-white'
-                  }`}>
-                    {console.status === 'available' ? 'AVAILABLE' : 
-                     console.status === 'rented' ? 'ACTIVE' : 
-                     'MAINTENANCE'}
-                  </span>
-                  {console.location && (
-                    <span className="text-sm opacity-80">{console.location}</span>
-                  )}
-                </div>
-              </div>
 
-              {/* Body */}
-              <div className="p-4">
-                {/* Rate Info */}
-                <div className="mb-4">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Tarif per Jam
-                  </h4>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Per Jam</span>
-                    <span className="font-semibold text-blue-600">
-                      Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString('id-ID') : '0'}
+                {/* Body */}
+                <div className="flex-1 flex flex-col gap-1 p-2">
+                  {/* Tarif & Status */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500 flex items-center gap-1"><DollarSign className="h-3 w-3" />{rateProfile ? rateProfile.hourly_rate.toLocaleString('id-ID') : '0'}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      console.status === 'available' ? 'bg-green-500 text-white' :
+                      console.status === 'rented' ? 'bg-blue-500 text-white' :
+                      'bg-red-500 text-white'
+                    }`}>
+                      {console.status === 'available' ? 'READY' :
+                       console.status === 'rented' ? 'ACTIVE' :
+                       'MAINT.'}
                     </span>
                   </div>
-                </div>
 
-                {/* Active Session Info */}
-                {isActive && activeSession && (
-                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-blue-600" />
-                        <span className="font-medium text-blue-800">
-                          {activeSession.customers?.name}
-                        </span>
+                  {/* Active Session Info (simple) */}
+                  {isActive && activeSession && (
+                    <div className="mt-1 mb-1 p-1 bg-blue-50 rounded border border-blue-100 flex flex-col gap-1">
+                      <div className="flex items-center gap-1">
+                        <User className="h-3 w-3 text-blue-600" />
+                        <span className="truncate font-semibold text-blue-800">{activeSession.customers?.name}</span>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        activeSession.duration_minutes 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {activeSession.duration_minutes ? 'BAYAR DIMUKA' : 'PAY AS YOU GO'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-blue-600">Mulai:</span>
-                        <p className="font-medium">
-                          {new Date(activeSession.start_time).toLocaleTimeString('id-ID', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-blue-600">Durasi:</span>
-                        <p className="font-medium">
-                          {activeSession.duration_minutes ? (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
-                              <span className="font-bold text-purple-700">
-                                {formatCountdown(countdownTimers[activeSession.id] || 0)} tersisa
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3 text-green-600 animate-pulse" />
-                              <span className="font-bold text-green-700">
-                                {formatDuration(activeSession.start_time)}
-                              </span>
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-blue-600">Biaya:</span>
-                        <p className="font-medium">Rp {calculateCurrentCost(activeSession).toLocaleString('id-ID')}</p>
-                      </div>
-                      <div>
-                        <span className="text-blue-600">Status:</span>
-                        <p className="font-medium">{activeSession.payment_status.toUpperCase()}</p>
-                      </div>
-                    </div>
-                    
-                    {/* Live Timer Display */}
-                    <div className="mt-2 pt-2 border-t border-blue-200">
-                      <div className="text-center font-mono text-lg font-bold text-blue-700">
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
                         {activeSession.duration_minutes
                           ? formatCountdownHMS(countdownSeconds[activeSession.id] ?? 0)
-                          : new Date().toLocaleTimeString('id-ID', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit'
-                            })}
+                          : formatDuration(activeSession.start_time)}
+                      </div>
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span>Rp {calculateCurrentCost(activeSession).toLocaleString('id-ID')}</span>
+                        <span className="ml-auto font-bold text-[10px] text-purple-700">{activeSession.duration_minutes ? 'PREPAID' : 'PAYGO'}</span>
                       </div>
                     </div>
+                  )}
+
+                  {/* Action Buttons (icon only, tooltip) */}
+                  <div className="flex gap-1 mt-auto">
+                    {console.status === 'available' ? (
+                      <button
+                        onClick={() => setShowStartRentalModal(console.id)}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white py-1 rounded flex items-center justify-center text-xs"
+                        title="Start Rental"
+                      >
+                        <Play className="h-4 w-4" />
+                      </button>
+                    ) : console.status === 'rented' && activeSession ? (
+                      <button
+                        onClick={() => handleEndSession(activeSession.id)}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-1 rounded flex items-center justify-center text-xs"
+                        title="End Rental"
+                      >
+                        <Square className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="flex-1 bg-gray-400 text-white py-1 rounded flex items-center justify-center text-xs cursor-not-allowed"
+                        title="In Maintenance"
+                      >
+                        <Wrench className="h-4 w-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (console.status === 'rented' && activeSession) {
+                          setShowProductModal(activeSession.id);
+                        } else {
+                          Swal.fire('Info', 'Konsol harus dalam status aktif untuk menambahkan produk', 'info');
+                        }
+                      }}
+                      className={`flex-1 ${console.status === 'rented' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 cursor-not-allowed'} text-white py-1 rounded flex items-center justify-center text-xs`}
+                      disabled={console.status !== 'rented'}
+                      title="Add Products"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                    </button>
                   </div>
-                )}
-
-                {/* Action Buttons */}
-                {console.status === 'available' ? (
-                  <button 
-                    onClick={() => setShowStartRentalModal(console.id)}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
-                  >
-                    <Play className="h-5 w-5" />
-                    Start Rental
-                  </button>
-                ) : console.status === 'rented' && activeSession ? (
-                  <button 
-                    onClick={() => handleEndSession(activeSession.id)}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
-                  >
-                    <Square className="h-5 w-5" />
-                    End Rental
-                  </button>
-                ) : (
-                  <button 
-                    disabled
-                    className="w-full bg-gray-400 text-white py-3 rounded-lg font-medium mb-2 cursor-not-allowed"
-                  >
-                    <Wrench className="h-5 w-5 inline mr-2" />
-                    In Maintenance
-                  </button>
-                )}
-
-                {/* Add Products Button */}
-                <button 
-                  onClick={() => {
-                    if (console.status === 'rented' && activeSession) {
-                      setShowProductModal(activeSession.id);
-                    } else {
-                      Swal.fire('Info', 'Konsol harus dalam status aktif untuk menambahkan produk', 'info');
-                    }
-                  }}
-                  className={`w-full ${
-                    console.status === 'rented' 
-                      ? 'bg-orange-500 hover:bg-orange-600' 
-                      : 'bg-gray-400 cursor-not-allowed'
-                  } text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
-                  disabled={console.status !== 'rented'}
-                >
-                  <ShoppingCart className="h-5 w-5" />
-                  Add Products
-                </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        // DETAIL MODE: Card besar (seperti sebelumnya)
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter)).map((console) => {
+            const isActive = console.status === 'rented';
+            const activeSession = activeSessions.find(s => s.console_id === console.id);
+            const rateProfile = getConsoleRateProfile(console.id);
+            return (
+              <div
+                key={console.id}
+                className={`rounded-xl overflow-hidden shadow-sm border ${
+                  console.status === 'available' ? 'border-green-200 bg-white' :
+                  console.status === 'rented' ? 'border-blue-200 bg-white' :
+                  'border-red-200 bg-white'
+                }`}
+              >
+                {/* Header */}
+                <div className={`p-4 ${
+                  console.status === 'available' ? 'bg-purple-600' :
+                  console.status === 'rented' ? 'bg-purple-600' :
+                  'bg-purple-600'
+                } text-white`}>
+                  <div className="flex items-center gap-3">
+                    <Gamepad2 className="h-6 w-6" />
+                    <h3 className="font-semibold text-lg">{console.name}</h3>
+                    {console.location && (
+                      <span className="text-sm opacity-80">{console.location}</span>
+                    )}
+                  </div>
+                  <div className="mt-2 flex justify-between items-center">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      console.status === 'available' ? 'bg-green-500 text-white' :
+                      console.status === 'rented' ? 'bg-blue-500 text-white' :
+                      'bg-red-500 text-white'
+                    }`}>
+                      {console.status === 'available' ? 'AVAILABLE' :
+                       console.status === 'rented' ? 'ACTIVE' :
+                       'MAINTENANCE'}
+                    </span>
+                    {console.location && (
+                      <span className="text-sm opacity-80">{console.location}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="p-4">
+                  {/* Rate Info */}
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Tarif per Jam
+                    </h4>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Per Jam</span>
+                      <span className="font-semibold text-blue-600">
+                        Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString('id-ID') : '0'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Active Session Info */}
+                  {isActive && activeSession && (
+                    <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-blue-600" />
+                          <span className="font-medium text-blue-800">
+                            {activeSession.customers?.name}
+                          </span>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          activeSession.duration_minutes
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {activeSession.duration_minutes ? 'BAYAR DIMUKA' : 'PAY AS YOU GO'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-blue-600">Mulai:</span>
+                          <p className="font-medium">
+                            {new Date(activeSession.start_time).toLocaleTimeString('id-ID', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-blue-600">Durasi:</span>
+                          <p className="font-medium">
+                            {activeSession.duration_minutes ? (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
+                                <span className="font-bold text-purple-700">
+                                  {formatCountdown(countdownTimers[activeSession.id] || 0)} tersisa
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3 text-green-600 animate-pulse" />
+                                <span className="font-bold text-green-700">
+                                  {formatDuration(activeSession.start_time)}
+                                </span>
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-blue-600">Biaya:</span>
+                          <p className="font-medium">Rp {calculateCurrentCost(activeSession).toLocaleString('id-ID')}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-600">Status:</span>
+                          <p className="font-medium">{activeSession.payment_status.toUpperCase()}</p>
+                        </div>
+                      </div>
+
+                      {/* Live Timer Display */}
+                      <div className="mt-2 pt-2 border-t border-blue-200">
+                        <div className="text-center font-mono text-lg font-bold text-blue-700">
+                          {activeSession.duration_minutes
+                            ? formatCountdownHMS(countdownSeconds[activeSession.id] ?? 0)
+                            : new Date().toLocaleTimeString('id-ID', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                              })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  {console.status === 'available' ? (
+                    <button
+                      onClick={() => setShowStartRentalModal(console.id)}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                    >
+                      <Play className="h-5 w-5" />
+                      Start Rental
+                    </button>
+                  ) : console.status === 'rented' && activeSession ? (
+                    <button
+                      onClick={() => handleEndSession(activeSession.id)}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                    >
+                      <Square className="h-5 w-5" />
+                      End Rental
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="w-full bg-gray-400 text-white py-3 rounded-lg font-medium mb-2 cursor-not-allowed"
+                    >
+                      <Wrench className="h-5 w-5 inline mr-2" />
+                      In Maintenance
+                    </button>
+                  )}
+
+                  {/* Add Products Button */}
+                  <button
+                    onClick={() => {
+                      if (console.status === 'rented' && activeSession) {
+                        setShowProductModal(activeSession.id);
+                      } else {
+                        Swal.fire('Info', 'Konsol harus dalam status aktif untuk menambahkan produk', 'info');
+                      }
+                    }}
+                    className={`w-full ${
+                      console.status === 'rented'
+                        ? 'bg-orange-500 hover:bg-orange-600'
+                        : 'bg-gray-400 cursor-not-allowed'
+                    } text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+                    disabled={console.status !== 'rented'}
+                  >
+                    <ShoppingCart className="h-5 w-5" />
+                    Add Products
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* No Consoles */}
       {consoles.length === 0 && (
