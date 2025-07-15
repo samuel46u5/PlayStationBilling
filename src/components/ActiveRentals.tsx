@@ -60,6 +60,7 @@ interface CartItem {
 
 const ActiveRentals: React.FC = () => {
   const [consoles, setConsoles] = useState<Console[]>([]);
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [consoleFilter, setConsoleFilter] = useState<'all' | 'available' | 'rented' | 'maintenance'>('all');
   const [rateProfiles, setRateProfiles] = useState<RateProfile[]>([]);
   const [activeSessions, setActiveSessions] = useState<RentalSession[]>([]);
@@ -87,21 +88,12 @@ const ActiveRentals: React.FC = () => {
     loadData();
   }, []);
   
-  // Set up countdown timers for prepaid sessions
+  // Real-time clock for header
   useEffect(() => {
-    // Clear all existing intervals when component unmounts
-    const intervalIds: NodeJS.Timeout[] = [];
-    
-    // Update current time every second
-    const timeInterval = setInterval(() => {
+    const interval = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
-    intervalIds.push(timeInterval);
-    
-    return () => {
-      Object.values(countdownIntervals).forEach(interval => clearInterval(interval));
-      intervalIds.forEach(id => clearInterval(id));
-    };
+    return () => clearInterval(interval);
   }, []);
   
   // Set up countdown timers for prepaid sessions
@@ -614,7 +606,7 @@ const ActiveRentals: React.FC = () => {
         <div className="flex items-center gap-2">
           <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
           <span className="text-xl font-bold font-mono">
-            {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
         </div>
 
