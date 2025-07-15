@@ -17,6 +17,9 @@ interface PaymentItem {
 }
 
 const Cashier: React.FC = () => {
+  // State untuk consoles dan rateProfiles dari database
+  const [consoles, setConsoles] = useState<any[]>([]);
+  const [rateProfiles, setRateProfiles] = useState<any[]>([]);
   const [cart, setCart] = useState<PaymentItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'products' | 'rentals'>('products');
@@ -91,6 +94,26 @@ const Cashier: React.FC = () => {
     fetchProducts();
     fetchCustomers();
     fetchRentals();
+    // Fetch consoles dari database
+    const fetchConsoles = async () => {
+      try {
+        const data = await db.consoles.getAll();
+        setConsoles(data || []);
+      } catch (err) {
+        setConsoles([]);
+      }
+    };
+    // Fetch rateProfiles dari database
+    const fetchRateProfiles = async () => {
+      try {
+        const data = await db.rateProfiles.getAll();
+        setRateProfiles(data || []);
+      } catch (err) {
+        setRateProfiles([]);
+      }
+    };
+    fetchConsoles();
+    fetchRateProfiles();
   }, []);
 
   // Filter products from Supabase
@@ -544,21 +567,44 @@ Selamat bermain dan nikmati waktu Anda ☕
               </div>
             ) : (
               pendingRentals.map((session) => {
-                const customer = customers.find((c: any) => c.id === session.customerId);
-                const console = mockConsoles.find(c => c.id === session.consoleId);
-                const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
-                const startTime = session.startTime;
-                const currentCost = calculateRentalCost({ ...session, startTime });
+                // Ambil customer dari hasil query database
+                const customer = customers.find((c) => c.id === session.customerId);
+                // Ambil console dari state hasil fetch database
+                const console = consoles.find((c) => c.id === session.consoleId) || { name: '-' };
+                // Ambil rateProfile dari session.applied_rate_profile (jsonb Supabase)
+                const rateProfile = session.appliedRateProfile || { hourly_rate: 0 };
+
+                // Durasi
+                let durationText = '';
+                if (session.startTime) {
+                  const start = new Date(session.startTime);
+                  const now = new Date();
+                  const diffMs = now.getTime() - start.getTime();
+                  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+                  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                  durationText = `${hours}h ${minutes}m`;
+                }
+
+                // Harga rental
+                let currentCost = 0;
+                if (session.startTime && rateProfile && typeof rateProfile.hourlyRate === 'number') {
+                  const start = new Date(session.startTime);
+                  const now = new Date();
+                  const minutesElapsed = Math.floor((now.getTime() - start.getTime()) / (1000 * 60));
+                  const hoursElapsed = Math.ceil(minutesElapsed / 60);
+                  currentCost = hoursElapsed * rateProfile.hourlyRate;
+                }
+
                 return (
                   <div
                     key={session.id}
-                    onClick={() => addRentalToCart({ ...session, startTime })}
+                    onClick={() => addRentalToCart(session)}
                     className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Gamepad2 className="h-5 w-5 text-blue-600" />
-                        <span className="font-semibold text-gray-900">{console?.name}</span>
+                        <span className="font-semibold text-gray-900">{console && console.name ? console.name : '-'}</span>
                       </div>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         session.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
@@ -570,25 +616,25 @@ Selamat bermain dan nikmati waktu Anda ☕
                     <div className="space-y-2 mb-3">
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <User className="h-4 w-4" />
-                        <span>{customer?.name}</span>
+                        <span>{customer && customer.name ? customer.name : '-'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Clock className="h-4 w-4" />
-                        <span>Durasi: {formatDuration(startTime)}</span>
+                        <span>Durasi: {durationText}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <span className="text-lg font-bold text-green-600">
-                        Rp {currentCost.toLocaleString('id-ID')}
+                        Rp {currentCost ? currentCost.toLocaleString('id-ID') : '0'}
                       </span>
                       <span className="text-sm text-gray-500">
-                        Rp {(rateProfile?.hourlyRate || 0).toLocaleString('id-ID')}/jam
+                        Rp {rateProfile && typeof rateProfile.hourlyRate === 'number' ? rateProfile.hourlyRate.toLocaleString('id-ID') : '0'}/jam
                       </span>
                     </div>
 
                     <div className="mt-3 text-xs text-gray-500">
-                      Mulai: {new Date(startTime).toLocaleString('id-ID')}
+                      Mulai: {session.startTime ? new Date(session.startTime).toLocaleString('id-ID') : '-'}
                     </div>
                   </div>
                 );
