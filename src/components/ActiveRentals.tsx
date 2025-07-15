@@ -292,6 +292,19 @@ const ActiveRentals: React.FC = () => {
     return `Sisa Waktu : ${pad(hours)}:${pad(mins)}:${pad(secs)}`;
   };
 
+  // Format elapsed time in HH:MM:SS for PAY AS YOU GO
+  const formatElapsedHMS = (startTime: string) => {
+    const start = new Date(startTime);
+    const now = new Date();
+    let diff = Math.floor((now.getTime() - start.getTime()) / 1000); // in seconds
+    if (diff < 0) diff = 0;
+    const hours = Math.floor(diff / 3600);
+    const mins = Math.floor((diff % 3600) / 60);
+    const secs = diff % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `Durasi : ${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+  };
+
   const calculateCurrentCost = (session: RentalSession) => {
     const start = new Date(session.start_time);
     const now = new Date();
@@ -848,7 +861,7 @@ const ActiveRentals: React.FC = () => {
                         <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
                         {activeSession.duration_minutes
                           ? formatCountdownHMS(countdownSeconds[activeSession.id] ?? 0)
-                          : formatDuration(activeSession.start_time)}
+                          : formatElapsedHMS(activeSession.start_time)}
                       </div>
                       <div className="flex items-center gap-1 text-[11px]">
                         <span>Rp {calculateCurrentCost(activeSession).toLocaleString('id-ID')}</span>
@@ -1004,12 +1017,12 @@ const ActiveRentals: React.FC = () => {
                                 </span>
                               </span>
                             ) : (
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3 text-green-600 animate-pulse" />
-                                <span className="font-bold text-green-700">
-                                  {formatDuration(activeSession.start_time)}
-                                </span>
-                              </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-green-600 animate-pulse" />
+                            <span className="font-bold text-green-700">
+                              {formatElapsedHMS(activeSession.start_time)}
+                            </span>
+                          </span>
                             )}
                           </p>
                         </div>
@@ -1028,11 +1041,7 @@ const ActiveRentals: React.FC = () => {
                         <div className="text-center font-mono text-lg font-bold text-blue-700">
                           {activeSession.duration_minutes
                             ? formatCountdownHMS(countdownSeconds[activeSession.id] ?? 0)
-                            : new Date().toLocaleTimeString('id-ID', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit'
-                              })}
+                            : formatElapsedHMS(activeSession.start_time)}
                         </div>
                       </div>
                     </div>
