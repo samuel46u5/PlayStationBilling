@@ -60,6 +60,7 @@ interface CartItem {
 
 const ActiveRentals: React.FC = () => {
   const [consoles, setConsoles] = useState<Console[]>([]);
+  const [consoleFilter, setConsoleFilter] = useState<'all' | 'available' | 'rented' | 'maintenance'>('all');
   const [rateProfiles, setRateProfiles] = useState<RateProfile[]>([]);
   const [activeSessions, setActiveSessions] = useState<RentalSession[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -608,34 +609,47 @@ const ActiveRentals: React.FC = () => {
         <p className="text-gray-600">Monitor all consoles and manage rental sessions</p>
       </div>
 
-      {/* Time Display */}
-      <div className="mb-8 flex justify-between items-center">
+      {/* Time Display & Filter */}
+      <div className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex items-center gap-2">
           <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
           <span className="text-xl font-bold font-mono">
             {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
         </div>
-        
-        <div className="flex gap-2">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="text-sm">Available ({consoles.filter(c => c.status === 'available').length})</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span className="text-sm">Active ({consoles.filter(c => c.status === 'rented').length})</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <span className="text-sm">Maintenance ({consoles.filter(c => c.status === 'maintenance').length})</span>
-          </div>
+
+        {/* Filter Buttons */}
+        <div className="flex gap-2 flex-wrap">
+          <button
+            className={`px-4 py-2 rounded-lg font-medium border transition-colors ${consoleFilter === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
+            onClick={() => setConsoleFilter('all')}
+          >
+            Semua
+          </button>
+          <button
+            className={`px-4 py-2 rounded-lg font-medium border transition-colors ${consoleFilter === 'available' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-green-50'}`}
+            onClick={() => setConsoleFilter('available')}
+          >
+            Available ({consoles.filter(c => c.status === 'available').length})
+          </button>
+          <button
+            className={`px-4 py-2 rounded-lg font-medium border transition-colors ${consoleFilter === 'rented' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
+            onClick={() => setConsoleFilter('rented')}
+          >
+            Active ({consoles.filter(c => c.status === 'rented').length})
+          </button>
+          <button
+            className={`px-4 py-2 rounded-lg font-medium border transition-colors ${consoleFilter === 'maintenance' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-red-50'}`}
+            onClick={() => setConsoleFilter('maintenance')}
+          >
+            Maintenance ({consoles.filter(c => c.status === 'maintenance').length})
+          </button>
         </div>
       </div>
 
       {/* Console Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {consoles.map((console) => {
+        {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter)).map((console) => {
           const isActive = console.status === 'rented';
           const activeSession = activeSessions.find(s => s.console_id === console.id);
           const rateProfile = getConsoleRateProfile(console.id);
