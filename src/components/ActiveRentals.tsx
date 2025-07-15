@@ -344,55 +344,48 @@ const ActiveRentals: React.FC = () => {
       Swal.fire('Error', 'Silakan pilih customer terlebih dahulu', 'warning');
       return;
     }
-    
-    if (customerType === 'non-member' && (!nonMemberName || !nonMemberPhone)) {
-      Swal.fire('Error', 'Nama dan nomor telepon wajib diisi untuk non-member', 'warning');
+    if (customerType === 'non-member' && !nonMemberName) {
+      Swal.fire('Error', 'Nama wajib diisi untuk non-member', 'warning');
       return;
     }
 
     try {
       let customerId = selectedCustomerId;
-      
+
       // Jika non-member, buat customer baru
       if (customerType === 'non-member') {
-        const { data: newCustomer, error: customerError } = await supabase
-          .from('customers');
-        
         // Prepare customer data
         const customerData: any = {
           name: nonMemberName,
           status: 'active',
           join_date: new Date().toISOString().split('T')[0]
         };
-        
-        // Only add phone if provided
         if (nonMemberPhone) {
           customerData.phone = nonMemberPhone;
         }
-        
-        const { data: insertedCustomer, error: insertError } = await newCustomer
+        const { data: insertedCustomer, error: insertError } = await supabase
+          .from('customers')
           .insert(customerData)
           .select()
           .single();
-          
         if (insertError) throw insertError;
         customerId = insertedCustomer.id;
       }
-      
+
       // Hitung biaya jika prepaid
       let totalAmount = 0;
       let paidAmount = 0;
       let paymentStatus = 'pending';
-      
+
       if (rentalType === 'prepaid') {
         const console = consoles.find(c => c.id === consoleId);
         const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
         const hourlyRate = rateProfile?.hourly_rate || 0;
-        
+
         totalAmount = hourlyRate * rentalDuration;
         paidAmount = totalAmount;
         paymentStatus = 'paid';
-        
+
         // Konfirmasi pembayaran
         const paymentResult = await Swal.fire({
           title: 'Konfirmasi Pembayaran',
@@ -408,12 +401,12 @@ const ActiveRentals: React.FC = () => {
           confirmButtonText: 'Bayar',
           cancelButtonText: 'Batal'
         });
-        
+
         if (!paymentResult.isConfirmed) {
           return;
         }
       }
-      
+
       // Create new rental session
       const { error: rentalError } = await supabase
         .from('rental_sessions')
@@ -427,7 +420,6 @@ const ActiveRentals: React.FC = () => {
           start_time: new Date().toISOString(),
           duration_minutes: rentalType === 'prepaid' ? rentalDuration * 60 : null
         });
-        
       if (rentalError) throw rentalError;
 
       // Update console status
@@ -435,7 +427,6 @@ const ActiveRentals: React.FC = () => {
         .from('consoles')
         .update({ status: 'rented' })
         .eq('id', consoleId);
-        
       if (consoleError) throw consoleError;
 
       setShowStartRentalModal(null);

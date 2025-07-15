@@ -180,9 +180,13 @@ const RateManagement: React.FC = () => {
       name: newRateProfile.name,
       description: newRateProfile.description,
       hourly_rate: newRateProfile.hourlyRate,
+      daily_rate: 0, // wajib diisi
+      weekly_rate: 0, // wajib diisi
+      monthly_rate: null, // opsional
       peak_hour_rate: newRateProfile.peakHourRate,
       peak_hour_start: newRateProfile.peakHourStart,
       peak_hour_end: newRateProfile.peakHourEnd,
+      weekend_multiplier: 1.0, // default sesuai schema lama
       applicable_equipment_types: newRateProfile.applicableEquipmentTypes,
       is_active: newRateProfile.isActive,
       created_by: null, // TODO: isi user id jika sudah ada auth
