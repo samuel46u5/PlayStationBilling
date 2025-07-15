@@ -85,16 +85,24 @@ const ActiveRentals: React.FC = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historySessions, setHistorySessions] = useState<RentalSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyStartDate, setHistoryStartDate] = useState<string>('');
+  const [historyEndDate, setHistoryEndDate] = useState<string>('');
   // Load history sessions
-  const loadHistorySessions = async () => {
+  const loadHistorySessions = async (startDate?: string, endDate?: string) => {
     setLoadingHistory(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('rental_sessions')
         .select(`*, customers(name, phone), consoles(name, location)`)
-        .in('status', ['completed', 'overdue'])
-        .order('end_time', { ascending: false })
-        .limit(50);
+        .in('status', ['completed', 'overdue']);
+      if (startDate) {
+        query = query.gte('end_time', startDate + 'T00:00:00');
+      }
+      if (endDate) {
+        query = query.lte('end_time', endDate + 'T23:59:59');
+      }
+      query = query.order('end_time', { ascending: false }).limit(50);
+      const { data, error } = await query;
       if (error) throw error;
       setHistorySessions(data || []);
     } catch (error) {
@@ -659,7 +667,7 @@ const ActiveRentals: React.FC = () => {
           </button>
           <button
             className="px-4 py-2 rounded-lg font-medium border border-gray-400 bg-white text-gray-700 hover:bg-gray-100 ml-2"
-            onClick={() => { setShowHistoryModal(true); loadHistorySessions(); }}
+            onClick={() => { setShowHistoryModal(true); loadHistorySessions(historyStartDate, historyEndDate); }}
             type="button"
           >
             Lihat History
@@ -680,6 +688,40 @@ const ActiveRentals: React.FC = () => {
                   <X className="h-6 w-6" />
                 </button>
               </div>
+              {/* Filter tanggal */}
+              <form className="flex flex-wrap gap-4 mb-4 items-end" onSubmit={e => { e.preventDefault(); loadHistorySessions(historyStartDate, historyEndDate); }}>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Tanggal Mulai</label>
+                  <input
+                    type="date"
+                    value={historyStartDate}
+                    onChange={e => setHistoryStartDate(e.target.value)}
+                    className="border px-2 py-1 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Tanggal Selesai</label>
+                  <input
+                    type="date"
+                    value={historyEndDate}
+                    onChange={e => setHistoryEndDate(e.target.value)}
+                    className="border px-2 py-1 rounded"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-blue-600 text-white font-medium hover:bg-blue-700"
+                >
+                  Filter
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+                  onClick={() => { setHistoryStartDate(''); setHistoryEndDate(''); loadHistorySessions(); }}
+                >
+                  Reset
+                </button>
+              </form>
               {loadingHistory ? (
                 <div className="text-center py-8 text-gray-500">Memuat data...</div>
               ) : historySessions.length === 0 ? (
