@@ -82,6 +82,27 @@ const ActiveRentals: React.FC = () => {
   const [countdownTimers, setCountdownTimers] = useState<Record<string, number>>({});
   const [elapsedTimers, setElapsedTimers] = useState<Record<string, number>>({});
   const [countdownIntervals, setCountdownIntervals] = useState<Record<string, NodeJS.Timeout>>({});
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historySessions, setHistorySessions] = useState<RentalSession[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  // Load history sessions
+  const loadHistorySessions = async () => {
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('rental_sessions')
+        .select(`*, customers(name, phone), consoles(name, location)`)
+        .in('status', ['completed', 'overdue'])
+        .order('end_time', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setHistorySessions(data || []);
+    } catch (error) {
+      Swal.fire('Error', 'Gagal memuat history rental', 'error');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   // Load data on component mount
   useEffect(() => {
@@ -610,8 +631,8 @@ const ActiveRentals: React.FC = () => {
           </span>
         </div>
 
-        {/* Filter Buttons */}
-        <div className="flex gap-2 flex-wrap">
+        {/* Filter Buttons & History Button */}
+        <div className="flex gap-2 flex-wrap items-center">
           <button
             className={`px-4 py-2 rounded-lg font-medium border transition-colors ${consoleFilter === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
             onClick={() => setConsoleFilter('all')}
@@ -636,8 +657,72 @@ const ActiveRentals: React.FC = () => {
           >
             Maintenance ({consoles.filter(c => c.status === 'maintenance').length})
           </button>
+          <button
+            className="px-4 py-2 rounded-lg font-medium border border-gray-400 bg-white text-gray-700 hover:bg-gray-100 ml-2"
+            onClick={() => { setShowHistoryModal(true); loadHistorySessions(); }}
+            type="button"
+          >
+            Lihat History
+          </button>
         </div>
       </div>
+      {/* History Modal */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">History Active Rentals</h2>
+                <button
+                  onClick={() => setShowHistoryModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              {loadingHistory ? (
+                <div className="text-center py-8 text-gray-500">Memuat data...</div>
+              ) : historySessions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">Tidak ada history rental ditemukan.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm border">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="px-3 py-2 border">Waktu Mulai</th>
+                        <th className="px-3 py-2 border">Waktu Selesai</th>
+                        <th className="px-3 py-2 border">Customer</th>
+                        <th className="px-3 py-2 border">Console</th>
+                        <th className="px-3 py-2 border">Durasi</th>
+                        <th className="px-3 py-2 border">Total</th>
+                        <th className="px-3 py-2 border">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historySessions.map((session) => {
+                        const start = new Date(session.start_time);
+                        const end = session.end_time ? new Date(session.end_time) : null;
+                        const duration = end ? Math.round((end.getTime() - start.getTime()) / 60000) : null;
+                        return (
+                          <tr key={session.id} className="border-b hover:bg-gray-50">
+                            <td className="px-3 py-2 border font-mono">{start.toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                            <td className="px-3 py-2 border font-mono">{end ? end.toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}</td>
+                            <td className="px-3 py-2 border">{session.customers?.name || '-'}</td>
+                            <td className="px-3 py-2 border">{session.consoles?.name || '-'}</td>
+                            <td className="px-3 py-2 border">{duration !== null ? `${Math.floor(duration/60)}j ${duration%60}m` : '-'}</td>
+                            <td className="px-3 py-2 border">Rp {session.total_amount.toLocaleString('id-ID')}</td>
+                            <td className="px-3 py-2 border">{session.status.toUpperCase()}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Console Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
