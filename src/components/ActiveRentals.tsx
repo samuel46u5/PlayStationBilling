@@ -80,6 +80,8 @@ const ActiveRentals: React.FC = () => {
   const [nonMemberName, setNonMemberName] = useState<string>('');
   const [nonMemberPhone, setNonMemberPhone] = useState<string>('');
   const [countdownTimers, setCountdownTimers] = useState<Record<string, number>>({});
+  // Tambahan: countdown detik
+  const [countdownSeconds, setCountdownSeconds] = useState<Record<string, number>>({});
   const [elapsedTimers, setElapsedTimers] = useState<Record<string, number>>({});
   const [countdownIntervals, setCountdownIntervals] = useState<Record<string, NodeJS.Timeout>>({});
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -130,56 +132,57 @@ const ActiveRentals: React.FC = () => {
     // Clear previous intervals
     Object.values(countdownIntervals).forEach(interval => clearInterval(interval));
     setCountdownIntervals({});
-    
+
     const newElapsedTimers: Record<string, number> = {};
     const newCountdownTimers: Record<string, number> = {};
+    const newCountdownSeconds: Record<string, number> = {};
     const newIntervals: Record<string, NodeJS.Timeout> = {};
-    
+
     activeSessions.forEach(session => {
       const startTime = new Date(session.start_time).getTime();
       const now = new Date().getTime();
       const elapsedMs = now - startTime;
       const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
-      
+
       // For all sessions, track elapsed time
       newElapsedTimers[session.id] = elapsedMinutes;
-      
+
       // For prepaid sessions, also track countdown
       if (session.duration_minutes) {
         const durationMs = session.duration_minutes * 60 * 1000;
-        const endTime = new Date(startTime + durationMs).getTime();
+        const endTime = startTime + durationMs;
         const remainingMs = Math.max(0, endTime - now);
         const remainingMinutes = Math.floor(remainingMs / (1000 * 60));
-        
         newCountdownTimers[session.id] = remainingMinutes;
-        
-        // Set up interval to update countdown
+        newCountdownSeconds[session.id] = Math.floor(remainingMs / 1000);
+
+        // Set up interval to update countdown per second
         if (remainingMs > 0) {
           const interval = setInterval(() => {
-            setCountdownTimers(prev => {
-              const current = prev[session.id];
+            setCountdownSeconds(prev => {
+              const current = prev[session.id] ?? Math.floor((endTime - Date.now()) / 1000);
               if (current <= 1) {
                 clearInterval(newIntervals[session.id]);
                 delete newIntervals[session.id];
-                return {...prev, [session.id]: 0};
+                return { ...prev, [session.id]: 0 };
               }
-              return {...prev, [session.id]: current - 1};
+              return { ...prev, [session.id]: current - 1 };
             });
-          }, 60000); // Update every minute
-          
+          }, 1000); // Update every second
           newIntervals[session.id] = interval;
         }
       }
     });
-    
+
     setElapsedTimers(newElapsedTimers);
     setCountdownTimers(newCountdownTimers);
+    setCountdownSeconds(newCountdownSeconds);
     setCountdownIntervals(newIntervals);
-    
+
     // Set up interval to update elapsed time for all sessions
     const elapsedInterval = setInterval(() => {
       setElapsedTimers(prev => {
-        const newTimers = {...prev};
+        const newTimers = { ...prev };
         activeSessions.forEach(session => {
           const startTime = new Date(session.start_time).getTime();
           const now = new Date().getTime();
@@ -190,7 +193,7 @@ const ActiveRentals: React.FC = () => {
         return newTimers;
       });
     }, 60000); // Update every minute
-    
+
     return () => {
       clearInterval(elapsedInterval);
       Object.values(newIntervals).forEach(interval => clearInterval(interval));
@@ -275,6 +278,16 @@ const ActiveRentals: React.FC = () => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours}h ${mins}m`;
+  };
+
+  // Format countdown in HH:MM:SS for Live Timer Display
+  const formatCountdownHMS = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    // Pad with zero
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `Sisa Waktu : ${pad(hours)}:${pad(mins)}:${pad(secs)}`;
   };
 
   const calculateCurrentCost = (session: RentalSession) => {
@@ -879,11 +892,13 @@ const ActiveRentals: React.FC = () => {
                     {/* Live Timer Display */}
                     <div className="mt-2 pt-2 border-t border-blue-200">
                       <div className="text-center font-mono text-lg font-bold text-blue-700">
-                        {new Date().toLocaleTimeString('id-ID', { 
-                          hour: '2-digit', 
-                          minute: '2-digit',
-                          second: '2-digit'
-                        })}
+                        {activeSession.duration_minutes
+                          ? formatCountdownHMS(countdownSeconds[activeSession.id] ?? 0)
+                          : new Date().toLocaleTimeString('id-ID', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit'
+                            })}
                       </div>
                     </div>
                   </div>
