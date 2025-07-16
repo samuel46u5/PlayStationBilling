@@ -77,7 +77,8 @@ const Consoles: React.FC = () => {
       const purchaseDate = (document.getElementById('add-purchase-date') as HTMLInputElement)?.value;
       const warrantyExpiry = (document.getElementById('add-warranty') as HTMLInputElement)?.value;
       let ipAddress = (document.getElementById('add-ip') as HTMLInputElement)?.value;
-      const relayCommand = (document.getElementById('add-relay') as HTMLInputElement)?.value;
+      const relayCommandOn = (document.getElementById('add-relay-on') as HTMLInputElement)?.value;
+      const relayCommandOff = (document.getElementById('add-relay-off') as HTMLInputElement)?.value;
       const notes = (document.getElementById('add-notes') as HTMLTextAreaElement)?.value;
       // Field opsional: null jika kosong
       const safe = (v: string | undefined) => v && v.trim() !== '' ? v : null;
@@ -98,7 +99,8 @@ const Consoles: React.FC = () => {
         purchase_date: safe(purchaseDate),
         warranty_expiry: safe(warrantyExpiry),
         ip_address: safe(ipAddress),
-        relay_command: safe(relayCommand),
+        relay_command_on: safe(relayCommandOn),
+        relay_command_off: safe(relayCommandOff),
         notes: safe(notes)
       };
       await db.insert('consoles', insertData);
@@ -138,7 +140,8 @@ const Consoles: React.FC = () => {
         purchase_date: safe(editConsoleData.purchase_date),
         warranty_expiry: safe(editConsoleData.warranty_expiry),
         ip_address: safe(editConsoleData.ip_address),
-        relay_command: safe(editConsoleData.relay_command),
+        relay_command_on: safe(editConsoleData.relay_command_on),
+        relay_command_off: safe(editConsoleData.relay_command_off),
         notes: safe(editConsoleData.notes)
       };
       await db.update('consoles', consoleId, updateData);
@@ -612,14 +615,22 @@ const Consoles: React.FC = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay</label>
-                      <input
-                        id="add-relay"
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay ON</label>
+                    <input
+                      id="add-relay-on"
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay OFF</label>
+                    <input
+                      id="add-relay-off"
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
                       <textarea
@@ -778,12 +789,22 @@ const Consoles: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay ON</label>
                         <input
-                          id="edit-relay"
+                          id="edit-relay-on"
                           type="text"
-                          value={editConsoleData.relay_command || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command: e.target.value }))}
+                          value={editConsoleData.relay_command_on || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_on: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay OFF</label>
+                        <input
+                          id="edit-relay-off"
+                          type="text"
+                          value={editConsoleData.relay_command_off || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_off: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
