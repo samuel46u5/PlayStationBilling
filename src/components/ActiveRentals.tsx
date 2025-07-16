@@ -1203,24 +1203,26 @@ const ActiveRentals: React.FC = () => {
                   )}
 
                   {/* Add Products Button */}
-                  <button
-                    onClick={() => {
-                      if (console.status === 'rented' && activeSession) {
-                        setShowProductModal(activeSession.id);
-                      } else {
-                        Swal.fire('Info', 'Konsol harus dalam status aktif untuk menambahkan produk', 'info');
-                      }
-                    }}
-                    className={`w-full ${
-                      console.status === 'rented'
-                        ? 'bg-orange-500 hover:bg-orange-600'
-                        : 'bg-gray-400 cursor-not-allowed'
-                    } text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
-                    disabled={console.status !== 'rented'}
-                  >
-                    <ShoppingCart className="h-5 w-5" />
-                    Add Products
-                  </button>
+                  {!activeSession?.duration_minutes && (
+                    <button
+                      onClick={() => {
+                        if (console.status === 'rented' && activeSession) {
+                          setShowProductModal(activeSession.id);
+                        } else {
+                          Swal.fire('Info', 'Konsol harus dalam status aktif untuk menambahkan produk', 'info');
+                        }
+                      }}
+                      className={`w-full ${
+                        console.status === 'rented'
+                          ? 'bg-orange-500 hover:bg-orange-600'
+                          : 'bg-gray-400 cursor-not-allowed'
+                      } text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+                      disabled={console.status !== 'rented'}
+                    >
+                      <ShoppingCart className="h-5 w-5" />
+                      Add Products
+                    </button>
+                  )}
                 </div>
               </div>
             );
