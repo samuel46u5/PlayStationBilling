@@ -315,21 +315,15 @@ const ActiveRentals: React.FC = () => {
     const start = new Date(session.start_time);
     const now = new Date();
     const diffMs = now.getTime() - start.getTime();
-    const totalMinutes = Math.ceil(diffMs / (1000 * 60));
+    const hours = Math.ceil(diffMs / (1000 * 60 * 60));
+    
     // Find console and its rate profile
     const console = consoles.find(c => c.id === session.console_id);
     const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
+    
+    // Use rate profile hourly rate or default to 15000
     const hourlyRate = rateProfile?.hourly_rate || 15000;
-
-    if (totalMinutes <= 60) {
-      // Minimal 1 jam
-      return hourlyRate;
-    } else {
-      // 1 jam pertama, sisanya per menit
-      const extraMinutes = totalMinutes - 60;
-      const perMinuteRate = hourlyRate / 60;
-      return hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
-    }
+    return hours * hourlyRate;
   };
 
   const handleEndSession = async (sessionId: string) => {
@@ -426,14 +420,8 @@ const ActiveRentals: React.FC = () => {
         const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
         const hourlyRate = rateProfile?.hourly_rate || 0;
 
-        // Billing rule: minimal 1 jam, setelah itu per menit
-        if (totalDurationMinutes! <= 60) {
-          totalAmount = hourlyRate;
-        } else {
-          const extraMinutes = totalDurationMinutes! - 60;
-          const perMinuteRate = hourlyRate / 60;
-          totalAmount = hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
-        }
+        // Hitung total biaya berdasarkan total menit
+        totalAmount = Math.ceil(totalDurationMinutes! / 60) * hourlyRate;
         paidAmount = totalAmount;
         paymentStatus = 'paid';
 
@@ -1402,18 +1390,6 @@ const ActiveRentals: React.FC = () => {
                         ? rateProfiles.find(r => r.id === console.rate_profile_id)
                         : null;
                       
-                      let totalDurationMinutes = rentalDurationHours * 60 + rentalDurationMinutes;
-                      let hourlyRate = rateProfile?.hourly_rate || 0;
-                      let totalAmount = 0;
-                      if (rentalType === 'prepaid') {
-                        if (totalDurationMinutes <= 60) {
-                          totalAmount = hourlyRate;
-                        } else {
-                          const extraMinutes = totalDurationMinutes - 60;
-                          const perMinuteRate = hourlyRate / 60;
-                          totalAmount = hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
-                        }
-                      }
                       return (
                         <>
                           <div className="flex justify-between">
@@ -1434,7 +1410,7 @@ const ActiveRentals: React.FC = () => {
                             <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
                               <span className="text-gray-800">Total ({rentalDurationHours} jam {rentalDurationMinutes} menit):</span>
                               <span className="text-green-600">
-                                Rp {totalAmount.toLocaleString('id-ID')}
+                                Rp {((rateProfile?.hourly_rate || 0) * Math.ceil(rentalDurationHours + rentalDurationMinutes / 60)).toLocaleString('id-ID')}
                               </span>
                             </div>
                           )}
