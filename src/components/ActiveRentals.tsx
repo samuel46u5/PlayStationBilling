@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard, UserPlus, Users } from 'lucide-react';
+import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard, UserPlus, Users, MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Swal from 'sweetalert2';
 
@@ -82,7 +82,7 @@ const ActiveRentals: React.FC = () => {
   const [nonMemberPhone, setNonMemberPhone] = useState<string>('');
   const [countdownTimers, setCountdownTimers] = useState<Record<string, number>>({});
   // Toggle view mode: 'simple' | 'detail'
-  const [viewMode, setViewMode] = useState<'simple' | 'detail'>('simple');
+  const [viewMode, setViewMode] = useState<'simple' | 'detail' | 'list'>('simple');
   // Tambahan: countdown detik
   const [countdownSeconds, setCountdownSeconds] = useState<Record<string, number>>({});
   const [elapsedTimers, setElapsedTimers] = useState<Record<string, number>>({});
@@ -719,6 +719,13 @@ const ActiveRentals: React.FC = () => {
             >
               Detail
             </button>
+            <button
+              type="button"
+              className={`px-3 py-2 rounded-lg font-medium border text-xs transition-colors ${viewMode === 'list' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
+              onClick={() => setViewMode('list')}
+            >
+              List
+            </button>
           </div>
         </div>
       </div>
@@ -926,6 +933,84 @@ const ActiveRentals: React.FC = () => {
                       <ShoppingCart className="h-4 w-4" />
                     </button>
                   </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : viewMode === 'list' ? (
+        // LIST MODE: Tampilkan dalam bentuk list
+        <div className="divide-y divide-gray-200">
+          {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter))
+            .filter(c => c.name.toLowerCase().includes(searchConsole.toLowerCase()))
+            .map((console) => {
+            const isActive = console.status === 'rented';
+            const activeSession = activeSessions.find(s => s.console_id === console.id);
+            const rateProfile = getConsoleRateProfile(console.id);
+            return (
+              <div
+                key={console.id}
+                className={`py-4 px-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 ${
+                  console.status === 'available' ? 'bg-green-50' :
+                  console.status === 'rented' ? 'bg-blue-50' :
+                  'bg-red-50'
+                } rounded-lg transition-all`}
+              >
+                {/* Left: Status & Console Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-3 h-3 rounded-full ${console.status === 'available' ? 'bg-green-500' : console.status === 'rented' ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+                    <h3 className="text-lg font-semibold text-gray-900 truncate">{console.name}</h3>
+                  </div>
+                  <div className="text-sm text-gray-600 flex flex-wrap gap-4">
+                    <div className="flex items-center gap-1">
+                      <Gamepad2 className="h-4 w-4 text-gray-500" />
+                      <span>{console.equipment_type_id}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      <span>{rateProfile ? rateProfile.hourly_rate.toLocaleString('id-ID') : '0'}/jam</span>
+                    </div>
+                    {console.location && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-4 w-4 text-gray-500" />
+                        <span>{console.location}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right: Action & Status */}
+                <div className="shrink-0">
+                  {isActive && activeSession ? (
+                    <div className="flex flex-col items-end">
+                      {/* Status Badge */}
+                      <span className={`text-[10px] font-bold rounded-full py-1 px-3 mb-2 ${
+                        activeSession.duration_minutes ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {activeSession.duration_minutes ? 'BAYAR DIMUKA' : 'PAY AS YOU GO'}
+                      </span>
+                      
+                      {/* End Session Button */}
+                      <button
+                        onClick={() => handleEndSession(activeSession.id)}
+                        className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                        title="Akhiri Sesi"
+                      >
+                        <Square className="h-5 w-5" />
+                        Akhiri Sesi
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowStartRentalModal(console.id)}
+                      className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                      title="Mulai Rental"
+                    >
+                      <Play className="h-5 w-5" />
+                      Mulai Rental
+                    </button>
+                  )}
                 </div>
               </div>
             );
