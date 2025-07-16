@@ -77,7 +77,8 @@ const ActiveRentals: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [customerType, setCustomerType] = useState<'member' | 'non-member'>('member');
   const [rentalType, setRentalType] = useState<'pay-as-you-go' | 'prepaid'>('pay-as-you-go');
-  const [rentalDuration, setRentalDuration] = useState<number>(1);
+  const [rentalDurationHours, setRentalDurationHours] = useState<number>(1);
+  const [rentalDurationMinutes, setRentalDurationMinutes] = useState<number>(0);
   const [nonMemberName, setNonMemberName] = useState<string>('');
   const [nonMemberPhone, setNonMemberPhone] = useState<string>('');
   const [countdownTimers, setCountdownTimers] = useState<Record<string, number>>({});
@@ -167,6 +168,10 @@ const ActiveRentals: React.FC = () => {
               if (current <= 1) {
                 clearInterval(newIntervals[session.id]);
                 delete newIntervals[session.id];
+                // Otomatis end rental jika prepaid dan waktu habis
+                if (session.duration_minutes) {
+                  handleEndSession(session.id);
+                }
                 return { ...prev, [session.id]: 0 };
               }
               return { ...prev, [session.id]: current - 1 };
@@ -406,12 +411,17 @@ const ActiveRentals: React.FC = () => {
       let paidAmount = 0;
       let paymentStatus = 'pending';
 
+      let totalDurationMinutes = rentalType === 'prepaid'
+        ? (rentalDurationHours * 60 + rentalDurationMinutes)
+        : null;
+
       if (rentalType === 'prepaid') {
         const console = consoles.find(c => c.id === consoleId);
         const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
         const hourlyRate = rateProfile?.hourly_rate || 0;
 
-        totalAmount = hourlyRate * rentalDuration;
+        // Hitung total biaya berdasarkan total menit
+        totalAmount = Math.ceil(totalDurationMinutes! / 60) * hourlyRate;
         paidAmount = totalAmount;
         paymentStatus = 'paid';
 
@@ -420,7 +430,7 @@ const ActiveRentals: React.FC = () => {
           title: 'Konfirmasi Pembayaran',
           html: `
             <div class="text-left">
-              <p><strong>Durasi:</strong> ${rentalDuration} jam</p>
+              <p><strong>Durasi:</strong> ${rentalDurationHours} jam ${rentalDurationMinutes} menit</p>
               <p><strong>Tarif per jam:</strong> Rp ${hourlyRate.toLocaleString('id-ID')}</p>
               <p><strong>Total:</strong> Rp ${totalAmount.toLocaleString('id-ID')}</p>
             </div>
@@ -447,7 +457,7 @@ const ActiveRentals: React.FC = () => {
           total_amount: totalAmount,
           paid_amount: paidAmount,
           start_time: new Date().toISOString(),
-          duration_minutes: rentalType === 'prepaid' ? rentalDuration * 60 : null
+          duration_minutes: rentalType === 'prepaid' ? totalDurationMinutes : null
         });
       if (rentalError) throw rentalError;
 
@@ -462,7 +472,8 @@ const ActiveRentals: React.FC = () => {
       setSelectedCustomerId('');
       setCustomerType('member');
       setRentalType('pay-as-you-go');
-      setRentalDuration(1);
+      setRentalDurationHours(1);
+      setRentalDurationMinutes(0);
       setNonMemberName('');
       setNonMemberPhone('');
       await loadData();
@@ -1321,15 +1332,35 @@ const ActiveRentals: React.FC = () => {
                   
                   {rentalType === 'prepaid' && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Durasi Rental (jam)</label>
-                      <input
-                        type="tel" 
-                        value={rentalDuration}
-                        onChange={(e) => setRentalDuration(Math.max(1, parseInt(e.target.value) || 1))}
-                        min="1"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Opsional</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Durasi Rental</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={rentalDurationHours}
+                          onChange={e => {
+                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                            setRentalDurationHours(val);
+                          }}
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Jam"
+                        />
+                        <span className="self-center">jam</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={rentalDurationMinutes}
+                          onChange={e => {
+                            let val = Math.max(0, Math.min(59, parseInt(e.target.value) || 0));
+                            setRentalDurationMinutes(val);
+                          }}
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Menit"
+                        />
+                        <span className="self-center">menit</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Jam dan menit akan digabung sebagai total durasi.</p>
                     </div>
                   )}
                 </div>
@@ -1361,9 +1392,9 @@ const ActiveRentals: React.FC = () => {
                           </div>
                           {rentalType === 'prepaid' && (
                             <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
-                              <span className="text-gray-800">Total ({rentalDuration} jam):</span>
+                              <span className="text-gray-800">Total ({rentalDurationHours} jam {rentalDurationMinutes} menit):</span>
                               <span className="text-green-600">
-                                Rp {((rateProfile?.hourly_rate || 0) * rentalDuration).toLocaleString('id-ID')}
+                                Rp {((rateProfile?.hourly_rate || 0) * Math.ceil(rentalDurationHours + rentalDurationMinutes / 60)).toLocaleString('id-ID')}
                               </span>
                             </div>
                           )}
