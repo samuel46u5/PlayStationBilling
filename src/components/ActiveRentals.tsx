@@ -909,7 +909,15 @@ const ActiveRentals: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-1 text-[11px]">
                         <span>Rp {calculateCurrentCost(activeSession).toLocaleString('id-ID')}</span>
-                        <span className="ml-auto font-bold text-[10px] text-purple-700">{activeSession.duration_minutes ? 'PREPAID' : 'PAYGO'}</span>
+                        <span
+                          className={`ml-auto font-bold text-[10px] px-2 py-0.5 rounded-full ${
+                            activeSession.duration_minutes
+                              ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                              : 'bg-green-100 text-green-700 border border-green-300'
+                          }`}
+                        >
+                          {activeSession.duration_minutes ? 'BAYAR DIMUKA' : 'PAY AS YOU GO'}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -1008,8 +1016,10 @@ const ActiveRentals: React.FC = () => {
                   {isActive && activeSession ? (
                     <div className="flex flex-col items-end">
                       {/* Status Badge */}
-                      <span className={`text-[10px] font-bold rounded-full py-1 px-3 mb-2 ${
-                        activeSession.duration_minutes ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                      <span className={`text-[10px] font-bold rounded-full py-1 px-3 mb-2 border ${
+                        activeSession.duration_minutes
+                          ? 'bg-purple-100 text-purple-800 border-purple-300'
+                          : 'bg-green-100 text-green-800 border-green-300'
                       }`}>
                         {activeSession.duration_minutes ? 'BAYAR DIMUKA' : 'PAY AS YOU GO'}
                       </span>
@@ -1104,7 +1114,13 @@ const ActiveRentals: React.FC = () => {
 
                   {/* Active Session Info */}
                   {isActive && activeSession && (
-                    <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <div
+                      className={`mb-4 p-3 rounded-lg border ${
+                        activeSession.duration_minutes
+                          ? 'bg-purple-50 border-purple-100'
+                          : 'bg-green-50 border-green-100'
+                      }`}
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-blue-600" />
@@ -1112,10 +1128,10 @@ const ActiveRentals: React.FC = () => {
                             {activeSession.customers?.name}
                           </span>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
                           activeSession.duration_minutes
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-green-100 text-green-800'
+                            ? 'bg-purple-100 text-purple-800 border-purple-300'
+                            : 'bg-green-100 text-green-800 border-green-300'
                         }`}>
                           {activeSession.duration_minutes ? 'BAYAR DIMUKA' : 'PAY AS YOU GO'}
                         </span>
