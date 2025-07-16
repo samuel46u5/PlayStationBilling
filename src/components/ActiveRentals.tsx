@@ -62,6 +62,7 @@ const ActiveRentals: React.FC = () => {
   const [consoles, setConsoles] = useState<Console[]>([]);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [consoleFilter, setConsoleFilter] = useState<'all' | 'available' | 'rented' | 'maintenance'>('all');
+  const [searchConsole, setSearchConsole] = useState('');
   const [rateProfiles, setRateProfiles] = useState<RateProfile[]>([]);
   const [activeSessions, setActiveSessions] = useState<RentalSession[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -651,11 +652,22 @@ const ActiveRentals: React.FC = () => {
 
       {/* Time Display, Filter & View Mode Toggle */}
       <div className="mb-8 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
-          <span className="text-xl font-bold font-mono">
-            {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
+            <span className="text-xl font-bold font-mono">
+              {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          </div>
+          {/* Search Console */}
+          <input
+            type="text"
+            placeholder="Cari nama console..."
+            value={searchConsole}
+            onChange={e => setSearchConsole(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            style={{ minWidth: 180 }}
+          />
         </div>
 
         {/* Filter Buttons, View Mode Toggle & History Button */}
@@ -805,7 +817,9 @@ const ActiveRentals: React.FC = () => {
       {/* Console Grid */}
       {viewMode === 'simple' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter)).map((console) => {
+          {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter))
+            .filter(c => c.name.toLowerCase().includes(searchConsole.toLowerCase()))
+            .map((console) => {
             const isActive = console.status === 'rented';
             const activeSession = activeSessions.find(s => s.console_id === console.id);
             const rateProfile = getConsoleRateProfile(console.id);
@@ -920,7 +934,9 @@ const ActiveRentals: React.FC = () => {
       ) : (
         // DETAIL MODE: Card besar (seperti sebelumnya)
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter)).map((console) => {
+          {(consoleFilter === 'all' ? consoles : consoles.filter(c => c.status === consoleFilter))
+            .filter(c => c.name.toLowerCase().includes(searchConsole.toLowerCase()))
+            .map((console) => {
             const isActive = console.status === 'rented';
             const activeSession = activeSessions.find(s => s.console_id === console.id);
             const rateProfile = getConsoleRateProfile(console.id);
