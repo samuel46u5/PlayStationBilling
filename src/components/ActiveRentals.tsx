@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard, UserPlus, Users, MapPin } from 'lucide-react';
+import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard, UserPlus, Users, MapPin, Wrench } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Swal from 'sweetalert2';
 
@@ -93,6 +93,11 @@ const ActiveRentals: React.FC = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyStartDate, setHistoryStartDate] = useState<string>('');
   const [historyEndDate, setHistoryEndDate] = useState<string>('');
+  const [showPaymentModal, setShowPaymentModal] = useState<null | { session: RentalSession, productsTotal: number }>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris'>('cash');
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [changeAmount, setChangeAmount] = useState<number>(0);
+
   // Load history sessions
   const loadHistorySessions = async (startDate?: string, endDate?: string) => {
     setLoadingHistory(true);
@@ -341,35 +346,77 @@ const ActiveRentals: React.FC = () => {
         const session = activeSessions.find(s => s.id === sessionId);
         if (!session) return;
 
-        const endTime = new Date().toISOString();
+        // Hitung total biaya rental
         const totalCost = calculateCurrentCost(session);
 
-        // Update rental session
-        const { error: updateError } = await supabase
-          .from('rental_sessions')
-          .update({
-            end_time: endTime,
-            total_amount: totalCost,
-            status: 'completed'
-          })
-          .eq('id', sessionId);
-          
-        if (updateError) throw updateError;
+        // Hitung total produk dari keranjang (jika ada)
+        // Asumsi: produk yang dibeli sudah dicatat di sales, jadi di sini hanya contoh penjumlahan
+        // Jika ingin ambil produk dari sesi, tambahkan logika sesuai kebutuhan
+        const productsTotal = 0; // ganti dengan logika jika produk per sesi tersedia
 
-        // Update console status
-        const { error: consoleError } = await supabase
-          .from('consoles')
-          .update({ status: 'available' })
-          .eq('id', session.console_id);
-          
-        if (consoleError) throw consoleError;
+        // Tampilkan modal pembayaran kasir
+        setShowPaymentModal({ session, productsTotal });
+        setPaymentAmount(totalCost + productsTotal);
+        setChangeAmount(0);
 
-        await loadData();
-        Swal.fire('Berhasil', 'Sesi rental berhasil diakhiri', 'success');
+        // Proses update status rental & console dilakukan setelah pembayaran di modal
       } catch (error) {
         console.error('Error ending session:', error);
         Swal.fire('Error', 'Gagal mengakhiri sesi rental', 'error');
       }
+    }
+  };
+
+  // Fungsi proses pembayaran kasir
+  const handleProcessPayment = async () => {
+    if (!showPaymentModal) return;
+    const { session, productsTotal } = showPaymentModal;
+    const totalCost = calculateCurrentCost(session);
+    const total = totalCost + productsTotal;
+
+    if (paymentAmount < total) {
+      Swal.fire('Error', 'Nominal pembayaran kurang dari total', 'warning');
+      return;
+    }
+
+    try {
+      // Catat transaksi pembayaran ke sales/payments
+      await supabase.from('sales').insert({
+        customer_id: session.customer_id,
+        subtotal: totalCost,
+        tax: 0,
+        discount: 0,
+        total: total,
+        payment_method: paymentMethod,
+        payment_amount: paymentAmount,
+        change_amount: paymentAmount - total,
+        sale_date: new Date().toISOString(),
+        cashier_id: null,
+        session_id: null
+      });
+
+      // Update rental session
+      await supabase
+        .from('rental_sessions')
+        .update({
+          end_time: new Date().toISOString(),
+          total_amount: totalCost,
+          status: 'completed'
+        })
+        .eq('id', session.id);
+
+      // Update console status
+      await supabase
+        .from('consoles')
+        .update({ status: 'available' })
+        .eq('id', session.console_id);
+
+      setShowPaymentModal(null);
+      await loadData();
+      Swal.fire('Berhasil', 'Pembayaran berhasil, rental telah diakhiri', 'success');
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      Swal.fire('Error', 'Gagal memproses pembayaran', 'error');
     }
   };
 
@@ -1606,6 +1653,87 @@ const ActiveRentals: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pembayaran Kasir */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Pembayaran Kasir</h2>
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between">
+                  <span>Customer:</span>
+                  <span className="font-medium">{showPaymentModal.session.customers?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Durasi:</span>
+                  <span className="font-medium">{formatElapsedHMS(showPaymentModal.session.start_time)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Rental:</span>
+                  <span className="font-medium">Rp {calculateCurrentCost(showPaymentModal.session).toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Produk:</span>
+                  <span className="font-medium">Rp {showPaymentModal.productsTotal.toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between font-bold border-t pt-2">
+                  <span>Total Bayar:</span>
+                  <span>Rp {(calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal).toLocaleString('id-ID')}</span> 
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Metode Pembayaran</label>
+                <select
+                  value={paymentMethod}
+                  onChange={e => setPaymentMethod(e.target.value as any)}
+                  className="w-full px-3 py-2 border rounded"
+                >
+                  <option value="cash">Tunai</option>
+                  <option value="qris">QRIS</option>
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Nominal Pembayaran</label>
+                <input
+                  type="number"
+                  min={calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal}
+                  value={paymentAmount}
+                  onChange={e => {
+                    const val = parseInt(e.target.value) || 0;
+                    setPaymentAmount(val);
+                    setChangeAmount(val - (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal));
+                  }}
+                  className="w-full px-3 py-2 border rounded"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Kembalian</label>
+                <input
+                  type="text"
+                  value={`Rp ${changeAmount > 0 ? changeAmount.toLocaleString('id-ID') : 0}`}
+                  readOnly
+                  className="w-full px-3 py-2 border rounded bg-gray-100"
+                />
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowPaymentModal(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleProcessPayment}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Proses Pembayaran & Akhiri Rental
+                </button>
+              </div>
             </div>
           </div>
         </div>
