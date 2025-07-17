@@ -319,16 +319,23 @@ const ActiveRentals: React.FC = () => {
   const calculateCurrentCost = (session: RentalSession) => {
     const start = new Date(session.start_time);
     const now = new Date();
-    const diffMs = now.getTime() - start.getTime();
-    const hours = Math.ceil(diffMs / (1000 * 60 * 60));
-    
-    // Find console and its rate profile
+    let totalMinutes = 0;
+    if (session.duration_minutes) {
+      totalMinutes = session.duration_minutes;
+    } else {
+      const diffMs = now.getTime() - start.getTime();
+      totalMinutes = Math.ceil(diffMs / (1000 * 60));
+    }
     const console = consoles.find(c => c.id === session.console_id);
     const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
-    
-    // Use rate profile hourly rate or default to 15000
     const hourlyRate = rateProfile?.hourly_rate || 15000;
-    return hours * hourlyRate;
+    if (totalMinutes <= 60) {
+      return hourlyRate;
+    } else {
+      const extraMinutes = totalMinutes - 60;
+      const perMinuteRate = hourlyRate / 60;
+      return hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
+    }
   };
 
   const handleEndSession = async (sessionId: string) => {
@@ -467,9 +474,14 @@ const ActiveRentals: React.FC = () => {
         const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
         const hourlyRate = rateProfile?.hourly_rate || 0;
 
-        // Hitung tarif per menit dan total biaya tanpa pembulatan jam
-        const ratePerMinute = hourlyRate / 60;
-        totalAmount = Math.round(totalDurationMinutes! * ratePerMinute);
+        // Billing rule: minimal 1 jam, setelah itu per menit
+        if (totalDurationMinutes! <= 60) {
+          totalAmount = hourlyRate;
+        } else {
+          const extraMinutes = totalDurationMinutes! - 60;
+          const perMinuteRate = hourlyRate / 60;
+          totalAmount = hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
+        }
         paidAmount = totalAmount;
         paymentStatus = 'paid';
 
@@ -1460,7 +1472,19 @@ const ActiveRentals: React.FC = () => {
                             <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
                               <span className="text-gray-800">Total ({rentalDurationHours} jam {rentalDurationMinutes} menit):</span>
                               <span className="text-green-600">
-                                Rp {((rateProfile?.hourly_rate || 0) * Math.ceil(rentalDurationHours + rentalDurationMinutes / 60)).toLocaleString('id-ID')}
+                                {(() => {
+                                  const hourlyRate = rateProfile?.hourly_rate || 0;
+                                  const totalDurationMinutes = rentalDurationHours * 60 + rentalDurationMinutes;
+                                  let totalAmount = 0;
+                                  if (totalDurationMinutes <= 60) {
+                                    totalAmount = hourlyRate;
+                                  } else {
+                                    const extraMinutes = totalDurationMinutes - 60;
+                                    const perMinuteRate = hourlyRate / 60;
+                                    totalAmount = hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
+                                  }
+                                  return `Rp ${totalAmount.toLocaleString('id-ID')}`;
+                                })()}
                               </span>
                             </div>
                           )}
