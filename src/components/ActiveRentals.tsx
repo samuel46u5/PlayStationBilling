@@ -467,8 +467,9 @@ const ActiveRentals: React.FC = () => {
         const rateProfile = rateProfiles.find(r => r.id === console?.rate_profile_id);
         const hourlyRate = rateProfile?.hourly_rate || 0;
 
-        // Hitung total biaya berdasarkan total menit
-        totalAmount = Math.ceil(totalDurationMinutes! / 60) * hourlyRate;
+        // Hitung tarif per menit dan total biaya tanpa pembulatan jam
+        const ratePerMinute = hourlyRate / 60;
+        totalAmount = Math.round(totalDurationMinutes! * ratePerMinute);
         paidAmount = totalAmount;
         paymentStatus = 'paid';
 
