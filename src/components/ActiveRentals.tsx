@@ -332,38 +332,26 @@ const ActiveRentals: React.FC = () => {
   };
 
   const handleEndSession = async (sessionId: string) => {
-    const result = await Swal.fire({
-      title: 'Akhiri Sesi Rental?',
-      text: 'Apakah Anda yakin ingin mengakhiri sesi rental ini?',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Ya, Akhiri',
-      cancelButtonText: 'Batal'
-    });
+    // langsung buka modal pembayaran kasir tanpa konfirmasi swal
+    try {
+      const session = activeSessions.find(s => s.id === sessionId);
+      if (!session) return;
 
-    if (result.isConfirmed) {
-      try {
-        const session = activeSessions.find(s => s.id === sessionId);
-        if (!session) return;
+      // Hitung total biaya rental
+      const totalCost = calculateCurrentCost(session);
 
-        // Hitung total biaya rental
-        const totalCost = calculateCurrentCost(session);
+      // Hitung total produk dari keranjang (jika ada)
+      const productsTotal = 0; // ganti dengan logika jika produk per sesi tersedia
 
-        // Hitung total produk dari keranjang (jika ada)
-        // Asumsi: produk yang dibeli sudah dicatat di sales, jadi di sini hanya contoh penjumlahan
-        // Jika ingin ambil produk dari sesi, tambahkan logika sesuai kebutuhan
-        const productsTotal = 0; // ganti dengan logika jika produk per sesi tersedia
+      // Tampilkan modal pembayaran kasir
+      setShowPaymentModal({ session, productsTotal });
+      setPaymentAmount(totalCost + productsTotal);
+      setChangeAmount(0);
 
-        // Tampilkan modal pembayaran kasir
-        setShowPaymentModal({ session, productsTotal });
-        setPaymentAmount(totalCost + productsTotal);
-        setChangeAmount(0);
-
-        // Proses update status rental & console dilakukan setelah pembayaran di modal
-      } catch (error) {
-        console.error('Error ending session:', error);
-        Swal.fire('Error', 'Gagal mengakhiri sesi rental', 'error');
-      }
+      // Proses update status rental & console dilakukan setelah pembayaran di modal
+    } catch (error) {
+      console.error('Error ending session:', error);
+      Swal.fire('Error', 'Gagal mengakhiri sesi rental', 'error');
     }
   };
 
@@ -380,6 +368,12 @@ const ActiveRentals: React.FC = () => {
     }
 
     try {
+      // Jalankan relay_command_off jika ada (pindah ke sini)
+      const consoleObj = consoles.find(c => c.id === session.console_id);
+      if (consoleObj?.relay_command_off) {
+        fetch(consoleObj.relay_command_off).catch(() => {});
+      }
+
       // Catat transaksi pembayaran ke sales/payments
       await supabase.from('sales').insert({
         customer_id: session.customer_id,
@@ -431,6 +425,12 @@ const ActiveRentals: React.FC = () => {
     }
 
     try {
+      // Jalankan relay_command_on jika ada
+      const consoleObj = consoles.find(c => c.id === consoleId);
+      if (consoleObj?.relay_command_on) {
+        fetch(consoleObj.relay_command_on).catch(() => {});
+      }
+
       let customerId = selectedCustomerId;
 
       // Jika non-member, buat customer baru
