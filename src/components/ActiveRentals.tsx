@@ -102,28 +102,15 @@ const ActiveRentals: React.FC = () => {
   const loadHistorySessions = async (startDate?: string, endDate?: string) => {
     setLoadingHistory(true);
     try {
-      // Set default tanggal hari ini jika tidak ada filter
-      let start = startDate;
-      let end = endDate;
-      if (!start && !end) {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        start = `${yyyy}-${mm}-${dd}`;
-        end = `${yyyy}-${mm}-${dd}`;
-        setHistoryStartDate(start);
-        setHistoryEndDate(end);
-      }
       let query = supabase
         .from('rental_sessions')
         .select(`*, customers(name, phone), consoles(name, location)`)
         .in('status', ['completed', 'overdue']);
-      if (start) {
-        query = query.gte('end_time', start + 'T00:00:00');
+      if (startDate) {
+        query = query.gte('end_time', startDate + 'T00:00:00');
       }
-      if (end) {
-        query = query.lte('end_time', end + 'T23:59:59');
+      if (endDate) {
+        query = query.lte('end_time', endDate + 'T23:59:59');
       }
       query = query.order('end_time', { ascending: false }).limit(50);
       const { data, error } = await query;
