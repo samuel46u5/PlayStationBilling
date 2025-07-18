@@ -1773,6 +1773,43 @@ const ActiveRentals: React.FC = () => {
                       <span>Rp {cartTotal.toLocaleString('id-ID')}</span> 
                     </div>
                     <div className="space-y-2">
+                      {/* Tombol Tambahkan ke Billing hanya muncul untuk Pay As You Go dan billing belum dibayar */}
+                      {(() => {
+                        const session = activeSessions.find(s => s.id === showProductModal);
+                        if (session && !session.duration_minutes && session.payment_status !== 'paid') {
+                          return (
+                            <button
+                              onClick={() => {
+                                // Validasi produk tidak ganda
+                                const newItems = cart.filter(item => {
+                                  return !session.sale_items?.some(sale => sale.product_id === item.productId);
+                                }).map(item => ({
+                                  product_id: item.productId,
+                                  product_name: item.productName,
+                                  quantity: item.quantity,
+                                  price: item.price
+                                }));
+                                if (newItems.length === 0) {
+                                  Swal.fire('Info', 'Semua produk di keranjang sudah ada di billing.', 'info');
+                                  return;
+                                }
+                                // Update session.sale_items
+                                session.sale_items = [...(session.sale_items || []), ...newItems];
+                                // Kosongkan keranjang
+                                clearCart();
+                                // Trigger re-render
+                                setActiveSessions([...activeSessions]);
+                                Swal.fire('Berhasil', 'Produk berhasil ditambahkan ke billing.', 'success');
+                              }}
+                              className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                            >
+                              <ShoppingCart className="h-5 w-5" />
+                              Tambahkan ke Billing
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                       <button
                         onClick={() => handleCheckoutProducts(showProductModal)}
                         className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
