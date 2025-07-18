@@ -93,6 +93,10 @@ const ActiveRentals: React.FC = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyStartDate, setHistoryStartDate] = useState<string>('');
   const [historyEndDate, setHistoryEndDate] = useState<string>('');
+  // Pagination states for history
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState<null | { session: RentalSession, productsTotal: number }>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris'>('cash');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -102,17 +106,37 @@ const ActiveRentals: React.FC = () => {
   const loadHistorySessions = async (startDate?: string, endDate?: string) => {
     setLoadingHistory(true);
     try {
+      // Get total count for pagination
+      let countQuery = supabase
+        .from('rental_sessions')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['completed', 'overdue']);
+      if (startDate) {
+        countQuery = countQuery.gte('end_time', startDate + 'T00:00:00');
+      }
+      if (endDate) {
+        countQuery = countQuery.lte('end_time', endDate + 'T23:59:59');
+      }
+      const { count, error: countError } = await countQuery;
+      if (countError) throw countError;
+      setTotalItems(count || 0);
+      setTotalPages(Math.max(1, Math.ceil((count || 0) / 10)));
+
+      // Fetch paginated data
+      const startIdx = (currentPage - 1) * 10;
+      const endIdx = startIdx + 9;
       let query = supabase
         .from('rental_sessions')
         .select(`*, customers(name, phone), consoles(name, location)`)
-        .in('status', ['completed', 'overdue']);
+        .in('status', ['completed', 'overdue'])
+        .order('end_time', { ascending: false })
+        .range(startIdx, endIdx);
       if (startDate) {
         query = query.gte('end_time', startDate + 'T00:00:00');
       }
       if (endDate) {
         query = query.lte('end_time', endDate + 'T23:59:59');
       }
-      query = query.order('end_time', { ascending: false }).limit(50);
       const { data, error } = await query;
       if (error) throw error;
       setHistorySessions(data || []);
@@ -844,7 +868,7 @@ const ActiveRentals: React.FC = () => {
                 </button>
               </div>
               {/* Filter tanggal */}
-              <form className="flex flex-wrap gap-4 mb-4 items-end" onSubmit={e => { e.preventDefault(); loadHistorySessions(historyStartDate, historyEndDate); }}>
+              <form className="flex flex-wrap gap-4 mb-4 items-end" onSubmit={e => { e.preventDefault(); setCurrentPage(1); loadHistorySessions(historyStartDate, historyEndDate); }}>
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Tanggal Mulai</label>
                   <input
@@ -872,7 +896,7 @@ const ActiveRentals: React.FC = () => {
                 <button
                   type="button"
                   className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
-                  onClick={() => { setHistoryStartDate(''); setHistoryEndDate(''); loadHistorySessions(); }}
+                  onClick={() => { setHistoryStartDate(''); setHistoryEndDate(''); setCurrentPage(1); loadHistorySessions(); }}
                 >
                   Reset
                 </button>
@@ -882,39 +906,70 @@ const ActiveRentals: React.FC = () => {
               ) : historySessions.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">Tidak ada history rental ditemukan.</div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm border">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="px-3 py-2 border">Waktu Mulai</th>
-                        <th className="px-3 py-2 border">Waktu Selesai</th>
-                        <th className="px-3 py-2 border">Customer</th>
-                        <th className="px-3 py-2 border">Console</th>
-                        <th className="px-3 py-2 border">Durasi</th>
-                        <th className="px-3 py-2 border">Total</th>
-                        <th className="px-3 py-2 border">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historySessions.map((session) => {
-                        const start = new Date(session.start_time);
-                        const end = session.end_time ? new Date(session.end_time) : null;
-                        const duration = end ? Math.round((end.getTime() - start.getTime()) / 60000) : null;
-                        return (
-                          <tr key={session.id} className="border-b hover:bg-gray-50">
-                            <td className="px-3 py-2 border font-mono">{start.toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-                            <td className="px-3 py-2 border font-mono">{end ? end.toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}</td>
-                            <td className="px-3 py-2 border">{session.customers?.name || '-'}</td>
-                            <td className="px-3 py-2 border">{session.consoles?.name || '-'}</td>
-                            <td className="px-3 py-2 border">{duration !== null ? `${Math.floor(duration/60)}j ${duration%60}m` : '-'}</td>
-                            <td className="px-3 py-2 border">Rp {session.total_amount.toLocaleString('id-ID')}</td>
-                            <td className="px-3 py-2 border">{session.status.toUpperCase()}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm border">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="px-3 py-2 border">Waktu Mulai</th>
+                          <th className="px-3 py-2 border">Waktu Selesai</th>
+                          <th className="px-3 py-2 border">Customer</th>
+                          <th className="px-3 py-2 border">Console</th>
+                          <th className="px-3 py-2 border">Durasi</th>
+                          <th className="px-3 py-2 border">Total</th>
+                          <th className="px-3 py-2 border">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historySessions.map((session) => {
+                          const start = new Date(session.start_time);
+                          const end = session.end_time ? new Date(session.end_time) : null;
+                          const duration = end ? Math.round((end.getTime() - start.getTime()) / 60000) : null;
+                          return (
+                            <tr key={session.id} className="border-b hover:bg-gray-50">
+                              <td className="px-3 py-2 border font-mono">{start.toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                              <td className="px-3 py-2 border font-mono">{end ? end.toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}</td>
+                              <td className="px-3 py-2 border">{session.customers?.name || '-'}</td>
+                              <td className="px-3 py-2 border">{session.consoles?.name || '-'}</td>
+                              <td className="px-3 py-2 border">{duration !== null ? `${Math.floor(duration/60)}j ${duration%60}m` : '-'}</td>
+                              <td className="px-3 py-2 border">Rp {session.total_amount.toLocaleString('id-ID')}</td>
+                              <td className="px-3 py-2 border">{session.status.toUpperCase()}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Pagination Controls */}
+                  <div className="flex justify-between items-center mt-4">
+                    <button
+                      className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+                      disabled={currentPage === 1}
+                      onClick={() => { if (currentPage > 1) { setCurrentPage(currentPage - 1); loadHistorySessions(historyStartDate, historyEndDate); } }}
+                    >
+                      Previous
+                    </button>
+                    <div className="flex gap-1 items-center">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          className={`px-2 py-1 rounded ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-blue-100'}`}
+                          onClick={() => { setCurrentPage(page); loadHistorySessions(historyStartDate, historyEndDate); }}
+                          disabled={page === currentPage}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+                      disabled={currentPage === totalPages}
+                      onClick={() => { if (currentPage < totalPages) { setCurrentPage(currentPage + 1); loadHistorySessions(historyStartDate, historyEndDate); } }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
