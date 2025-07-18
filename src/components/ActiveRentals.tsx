@@ -1748,8 +1748,47 @@ const ActiveRentals: React.FC = () => {
                       <span>Total:</span>
                       <span>Rp {cartTotal.toLocaleString('id-ID')}</span> 
                     </div>
-                    
                     <div className="space-y-2">
+                      {/* Tambahkan ke Billing untuk PAY AS YOU GO */}
+                      {(() => {
+                        const session = activeSessions.find(s => s.id === showProductModal);
+                        const isPayAsYouGo = session && !session.duration_minutes;
+                        if (isPayAsYouGo) {
+                          return (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const saleItems = cart.map(item => ({
+                                    session_id: session.id,
+                                    product_id: item.productId,
+                                    product_name: item.productName,
+                                    quantity: item.quantity,
+                                    price: item.price,
+                                    total: item.total,
+                                    paid: false // custom field to mark unpaid
+                                  }));
+                                  const { error: itemsError } = await supabase
+                                    .from('sale_items')
+                                    .insert(saleItems);
+                                  if (itemsError) throw itemsError;
+                                  clearCart();
+                                  setShowProductModal(null);
+                                  await loadData();
+                                  Swal.fire('Berhasil', 'Produk berhasil ditambahkan ke billing. Akan ditagihkan saat checkout.', 'success');
+                                } catch (error) {
+                                  console.error('Error adding products to billing:', error);
+                                  Swal.fire('Error', 'Gagal menambahkan produk ke billing', 'error');
+                                }
+                              }}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                            >
+                              <ShoppingCart className="h-5 w-5" />
+                              Tambahkan ke Billing
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                       <button
                         onClick={() => handleCheckoutProducts(showProductModal)}
                         className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
