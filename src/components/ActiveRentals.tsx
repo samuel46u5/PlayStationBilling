@@ -1,4 +1,17 @@
 import React, { useState, useEffect } from 'react';
+
+interface SaleItem {
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  price: number;
+  total?: number;
+}
+
+interface RentalSession {
+  // ...existing properties...
+  sale_items?: SaleItem[];
+}
 import { Clock, User, Gamepad2, DollarSign, Play, Pause, Square, Plus, ShoppingCart, Minus, X, Calculator, CreditCard, UserPlus, Users, MapPin, Wrench } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Swal from 'sweetalert2';
@@ -1621,6 +1634,36 @@ const ActiveRentals: React.FC = () => {
                 </button>
               </div>
 
+              {/* Pending Products (already added to billing) */}
+              {(() => {
+                const session = activeSessions.find(s => s.id === showProductModal);
+                if (session && session.sale_items && session.sale_items.length > 0 && !session.duration_minutes) {
+                  return (
+                    <div className="mb-6">
+                      <h3 className="text-md font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                        <ShoppingCart className="h-5 w-5" />
+                        Produk Sudah Ditambahkan (Pending Payment)
+                      </h3>
+                      <div className="space-y-2">
+                        {session.sale_items.map((prod, idx) => (
+                          <div key={prod.product_id || idx} className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                            <div>
+                              <span className="font-medium text-gray-900">{prod.product_name}</span>
+                              <span className="ml-2 text-xs text-gray-500">x{prod.quantity}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-bold text-yellow-700">Rp {prod.price.toLocaleString('id-ID')}</span>
+                              <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-200 text-yellow-800 text-xs font-semibold">Pending Payment</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {/* Search and Filter */}
               <div className="flex gap-4 mb-6">
                 <div className="flex-1">
@@ -1708,31 +1751,12 @@ const ActiveRentals: React.FC = () => {
                             <X className="h-4 w-4" />
                           </button>
                         </div>
-                        
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => updateQuantity(item.productId, item.quantity - 1)}
-                              className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center"
-                            >
-                              <Minus className="h-4 w-4" />
-                            </button>
-                            <span className="w-8 text-center font-medium">{item.quantity}</span>
-                            <button
-                              onClick={() => updateQuantity(item.productId, item.quantity + 1)}
-                              className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
+                            <span className="text-sm text-gray-700">x{item.quantity}</span>
                           </div>
-                          
                           <div className="text-right">
-                            <p className="text-sm text-gray-600">
-                              Rp {item.price.toLocaleString('id-ID')} x {item.quantity}
-                            </p>
-                            <p className="font-semibold text-gray-900">
-                              Rp {item.total.toLocaleString('id-ID')}
-                            </p>
+                            <span className="font-bold text-blue-700">Rp {item.price.toLocaleString('id-ID')}</span>
                           </div>
                         </div>
                       </div>
@@ -1749,46 +1773,6 @@ const ActiveRentals: React.FC = () => {
                       <span>Rp {cartTotal.toLocaleString('id-ID')}</span> 
                     </div>
                     <div className="space-y-2">
-                      {/* Tambahkan ke Billing untuk PAY AS YOU GO */}
-                      {(() => {
-                        const session = activeSessions.find(s => s.id === showProductModal);
-                        const isPayAsYouGo = session && !session.duration_minutes;
-                        if (isPayAsYouGo) {
-                          return (
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const saleItems = cart.map(item => ({
-                                    session_id: session.id,
-                                    product_id: item.productId,
-                                    product_name: item.productName,
-                                    quantity: item.quantity,
-                                    price: item.price,
-                                    total: item.total,
-                                    paid: false // custom field to mark unpaid
-                                  }));
-                                  const { error: itemsError } = await supabase
-                                    .from('sale_items')
-                                    .insert(saleItems);
-                                  if (itemsError) throw itemsError;
-                                  clearCart();
-                                  setShowProductModal(null);
-                                  await loadData();
-                                  Swal.fire('Berhasil', 'Produk berhasil ditambahkan ke billing. Akan ditagihkan saat checkout.', 'success');
-                                } catch (error) {
-                                  console.error('Error adding products to billing:', error);
-                                  Swal.fire('Error', 'Gagal menambahkan produk ke billing', 'error');
-                                }
-                              }}
-                              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
-                            >
-                              <ShoppingCart className="h-5 w-5" />
-                              Tambahkan ke Billing
-                            </button>
-                          );
-                        }
-                        return null;
-                      })()}
                       <button
                         onClick={() => handleCheckoutProducts(showProductModal)}
                         className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
