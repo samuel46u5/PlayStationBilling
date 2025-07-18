@@ -371,10 +371,13 @@ const ActiveRentals: React.FC = () => {
       const session = activeSessions.find(s => s.id === sessionId);
       if (!session) return;
 
-      // Jalankan relay_command_off jika ada (selalu dijalankan untuk end rental)
-      const consoleObj = consoles.find(c => c.id === session.console_id);
-      if (consoleObj?.relay_command_off) {
-        fetch(consoleObj.relay_command_off).catch(() => {});
+      // Untuk BAYAR DIMUKA (prepaid), relay_command_off dijalankan di sini
+      let isPrepaid = session.duration_minutes && session.payment_status === 'paid';
+      if (isPrepaid) {
+        const consoleObj = consoles.find(c => c.id === session.console_id);
+        if (consoleObj?.relay_command_off) {
+          fetch(consoleObj.relay_command_off).catch(() => {});
+        }
       }
 
       // Jika prepaid (bayar dimuka), langsung update status tanpa modal pembayaran
@@ -428,10 +431,12 @@ const ActiveRentals: React.FC = () => {
     }
 
     try {
-      // Jalankan relay_command_off jika ada (pindah ke sini)
-      const consoleObj = consoles.find(c => c.id === session.console_id);
-      if (consoleObj?.relay_command_off) {
-        fetch(consoleObj.relay_command_off).catch(() => {});
+      // Jalankan relay_command_off untuk PAY AS YOU GO
+      if (!session.duration_minutes) {
+        const consoleObj = consoles.find(c => c.id === session.console_id);
+        if (consoleObj?.relay_command_off) {
+          fetch(consoleObj.relay_command_off).catch(() => {});
+        }
       }
 
       // Catat transaksi pembayaran ke sales/payments
