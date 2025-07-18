@@ -1669,6 +1669,13 @@ const ActiveRentals: React.FC = () => {
                           </div>
                         ))}
                       </div>
+                      {/* Total Produk Pending Payment */}
+                      <div className="flex justify-between items-center mt-4 px-3 py-2 bg-yellow-100 rounded-lg font-bold text-yellow-800">
+                        <span>Total Produk Pending Payment:</span>
+                        <span>
+                          Rp {session.sale_items.reduce((total, prod) => total + (prod.price * prod.quantity), 0).toLocaleString('id-ID')}
+                        </span>
+                      </div>
                     </div>
                   );
                 }
