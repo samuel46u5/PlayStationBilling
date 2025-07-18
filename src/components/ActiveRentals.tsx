@@ -1651,9 +1651,20 @@ const ActiveRentals: React.FC = () => {
                               <span className="font-medium text-gray-900">{prod.product_name}</span>
                               <span className="ml-2 text-xs text-gray-500">x{prod.quantity}</span>
                             </div>
-                            <div className="text-right">
+                            <div className="flex items-center gap-2">
                               <span className="font-bold text-yellow-700">Rp {prod.price.toLocaleString('id-ID')}</span>
                               <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-200 text-yellow-800 text-xs font-semibold">Pending Payment</span>
+                              <button
+                                onClick={() => {
+                                  // Hapus produk dari sale_items
+                                  session.sale_items = session.sale_items.filter((item, i) => i !== idx);
+                                  setActiveSessions([...activeSessions]);
+                                }}
+                                className="ml-2 text-red-500 hover:text-red-700 px-2 py-1 rounded"
+                                title="Hapus produk dari billing"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
                             </div>
                           </div>
                         ))}
