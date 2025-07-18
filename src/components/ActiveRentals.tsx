@@ -618,16 +618,16 @@ const ActiveRentals: React.FC = () => {
   // Product cart functions
   const addToCart = (product: Product) => {
     const existingItem = cart.find(item => item.productId === product.id);
-    
+    let newQuantity = 1;
     if (existingItem) {
       if (existingItem.quantity >= product.stock) {
         Swal.fire('Stok Tidak Cukup', `Stok ${product.name} hanya tersisa ${product.stock}`, 'warning');
         return;
       }
-      
+      newQuantity = existingItem.quantity + 1;
       setCart(cart.map(item =>
         item.productId === product.id
-          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
+          ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
           : item
       ));
     } else {
@@ -639,6 +639,60 @@ const ActiveRentals: React.FC = () => {
         total: product.price
       };
       setCart([...cart, newItem]);
+    }
+
+    // Simpan ke database sebagai pending jika sedang menambahkan produk pada sesi rental aktif
+    if (showProductModal) {
+      const sessionId = showProductModal;
+      const cartItem = existingItem
+        ? { ...existingItem, quantity: newQuantity, total: newQuantity * product.price }
+        : {
+            productId: product.id,
+            productName: product.name,
+            price: product.price,
+            quantity: 1,
+            total: product.price
+          };
+
+      // Cek apakah sudah ada data untuk session_id dan product_id
+      supabase
+        .from('rental_session_products')
+        .select('id')
+        .eq('session_id', sessionId)
+        .eq('product_id', cartItem.productId)
+        .single()
+        .then(async ({ data, error }) => {
+          if (error && error.code !== 'PGRST116') {
+            // Error selain not found
+            console.error('Error checking pending product:', error);
+            Swal.fire('Error', 'Gagal cek produk pending', 'error');
+            return;
+          }
+          if (data) {
+            // Sudah ada, update quantity dan total
+            const { id } = data;
+            const { quantity, total } = cartItem;
+            const { price, product_name } = cartItem;
+            const { productId } = cartItem;
+            await supabase
+              .from('rental_session_products')
+              .update({ quantity, total, price, product_name })
+              .eq('id', id);
+          } else {
+            // Belum ada, insert baru
+            await supabase
+              .from('rental_session_products')
+              .insert({
+                session_id: sessionId,
+                product_id: cartItem.productId,
+                product_name: cartItem.productName,
+                price: cartItem.price,
+                quantity: cartItem.quantity,
+                total: cartItem.total,
+                status: 'pending'
+              });
+          }
+        });
     }
   };
 
