@@ -156,7 +156,7 @@ const ActiveRentals: React.FC = () => {
       // For all sessions, track elapsed time
       newElapsedTimers[session.id] = elapsedMinutes;
 
-      // For prepaid sessions, also track countdown
+      // Untuk prepaid (BAYAR DIMUKA), cek apakah waktu sudah habis
       if (session.duration_minutes) {
         const durationMs = session.duration_minutes * 60 * 1000;
         const endTime = startTime + durationMs;
@@ -165,8 +165,12 @@ const ActiveRentals: React.FC = () => {
         newCountdownTimers[session.id] = remainingMinutes;
         newCountdownSeconds[session.id] = Math.floor(remainingMs / 1000);
 
-        // Set up interval to update countdown per second
-        if (remainingMs > 0) {
+        // Otomatis end rental jika prepaid dan waktu habis
+        if (remainingMs <= 0 && session.status === 'active' && session.payment_status === 'paid') {
+          // End rental otomatis tanpa interaksi user
+          handleEndSession(session.id);
+        } else if (remainingMs > 0) {
+          // Set up interval to update countdown per second
           const interval = setInterval(() => {
             setCountdownSeconds(prev => {
               const current = prev[session.id] ?? Math.floor((endTime - Date.now()) / 1000);
@@ -174,7 +178,7 @@ const ActiveRentals: React.FC = () => {
                 clearInterval(newIntervals[session.id]);
                 delete newIntervals[session.id];
                 // Otomatis end rental jika prepaid dan waktu habis
-                if (session.duration_minutes) {
+                if (session.duration_minutes && session.status === 'active' && session.payment_status === 'paid') {
                   handleEndSession(session.id);
                 }
                 return { ...prev, [session.id]: 0 };
@@ -339,22 +343,47 @@ const ActiveRentals: React.FC = () => {
   };
 
   const handleEndSession = async (sessionId: string) => {
-    // langsung buka modal pembayaran kasir tanpa konfirmasi swal
     try {
       const session = activeSessions.find(s => s.id === sessionId);
       if (!session) return;
 
+      // Jalankan relay_command_off jika ada (selalu dijalankan untuk end rental)
+      const consoleObj = consoles.find(c => c.id === session.console_id);
+      if (consoleObj?.relay_command_off) {
+        fetch(consoleObj.relay_command_off).catch(() => {});
+      }
+
+      // Jika prepaid (bayar dimuka), langsung update status tanpa modal pembayaran
+      if (session.duration_minutes && session.payment_status === 'paid') {
+        // Update rental session
+        await supabase
+          .from('rental_sessions')
+          .update({
+            end_time: new Date().toISOString(),
+            status: 'completed'
+          })
+          .eq('id', session.id);
+
+        // Update console status
+        await supabase
+          .from('consoles')
+          .update({ status: 'available' })
+          .eq('id', session.console_id);
+
+        await loadData();
+        Swal.fire('Berhasil', 'Rental telah diakhiri otomatis (bayar dimuka)', 'success');
+        return;
+      }
+
+      // Untuk pay-as-you-go, buka modal pembayaran seperti biasa
       // Hitung total biaya rental
       const totalCost = calculateCurrentCost(session);
-
       // Hitung total produk dari keranjang (jika ada)
       const productsTotal = 0; // ganti dengan logika jika produk per sesi tersedia
-
       // Tampilkan modal pembayaran kasir
       setShowPaymentModal({ session, productsTotal });
       setPaymentAmount(totalCost + productsTotal);
       setChangeAmount(0);
-
       // Proses update status rental & console dilakukan setelah pembayaran di modal
     } catch (error) {
       console.error('Error ending session:', error);
