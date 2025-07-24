@@ -85,27 +85,26 @@ const ActiveRentals: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   // Fetch cart items from rental_session_products when product modal is opened
   useEffect(() => {
-    const fetchCartItems = async () => {
+    // Ambil produk billing (pending payment) dan produk keranjang terpisah
+    const fetchProductData = async () => {
       if (!showProductModal) return;
-      const { data, error } = await supabase
+      // Produk billing (pending payment)
+      const { data: billingData, error: billingError } = await supabase
         .from('rental_session_products')
         .select('*')
         .eq('session_id', showProductModal)
         .eq('status', 'pending');
-      if (!error && Array.isArray(data)) {
-        setCart(data.map(item => ({
-          productId: item.product_id,
-          productName: item.product_name,
-          price: item.price,
-          quantity: item.quantity,
-          total: item.total
-        })));
+      if (!billingError && Array.isArray(billingData)) {
+        setBillingProducts(billingData);
       } else {
-        setCart([]);
+        setBillingProducts([]);
       }
+      // Produk keranjang tetap dari state cart
     };
-    fetchCartItems();
+    fetchProductData();
   }, [showProductModal]);
+  // Produk billing (pending payment)
+  const [billingProducts, setBillingProducts] = useState<any[]>([]);
   const [searchProduct, setSearchProduct] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -1712,69 +1711,68 @@ const ActiveRentals: React.FC = () => {
                 </button>
               </div>
 
-              {/* Pending Products (already added to billing) */}
-              {(() => {
-                const session = activeSessions.find(s => s.id === showProductModal);
-                if (session && session.sale_items && session.sale_items.length > 0 && !session.duration_minutes) {
-                  return (
-                    <div className="mb-6">
-                      <h3 className="text-md font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                        <ShoppingCart className="h-5 w-5" />
-                        Produk Sudah Ditambahkan (Pending Payment)
-                      </h3>
-                      <div className="space-y-2">
-                        {session.sale_items.map((prod, idx) => (
-                          <div key={prod.product_id || idx} className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
-                            <div>
-                              <span className="font-medium text-gray-900">{prod.product_name}</span>
-                              <span className="ml-2 text-xs text-gray-500">x{prod.quantity}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-yellow-700">Rp {prod.price.toLocaleString('id-ID')}</span>
-                              <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-200 text-yellow-800 text-xs font-semibold">Pending Payment</span>
-                              <button
-                                onClick={async () => {
-                                  const result = await Swal.fire({
-                                    title: 'Konfirmasi',
-                                    text: `Hapus produk ${prod.product_name} dari billing?`,
-                                    icon: 'warning',
-                                    showCancelButton: true,
-                                    confirmButtonText: 'Ya, hapus',
-                                    cancelButtonText: 'Batal',
-                                  });
-                                  if (result.isConfirmed) {
-                                    try {
-                                      // Pastikan session.id adalah sale_id
-                                      await deleteSaleItem(prod.product_id, session.id);
-                                      // Reload data dari database agar UI sinkron
-                                      await loadData();
-                                      Swal.fire('Berhasil', 'Produk berhasil dihapus dari billing.', 'success');
-                                    } catch (err) {
-                                      Swal.fire('Gagal', 'Gagal menghapus produk dari database.', 'error');
-                                    }
-                                  }
-                                }}
-                                className="ml-2 text-red-500 hover:text-red-700 px-2 py-1 rounded"
-                                title="Hapus produk dari billing"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+              {/* Produk Sudah Ditambahkan (Pending Payment) */}
+              {billingProducts.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-md font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5" />
+                    Produk Sudah Ditambahkan (Pending Payment)
+                  </h3>
+                  <div className="space-y-2">
+                    {billingProducts.map((prod, idx) => (
+                      <div key={prod.product_id || idx} className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                        <div>
+                          <span className="font-medium text-gray-900">{prod.product_name}</span>
+                          <span className="ml-2 text-xs text-gray-500">x{prod.quantity}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-yellow-700">Rp {prod.price.toLocaleString('id-ID')}</span>
+                          <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-200 text-yellow-800 text-xs font-semibold">Pending Payment</span>
+                          <button
+                            onClick={async () => {
+                              const result = await Swal.fire({
+                                title: 'Konfirmasi',
+                                text: `Hapus produk ${prod.product_name} dari billing?`,
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonText: 'Ya, hapus',
+                                cancelButtonText: 'Batal',
+                              });
+                              if (result.isConfirmed) {
+                                try {
+                                  await deleteSaleItem(prod.product_id, prod.session_id);
+                                  await loadData();
+                                  // Refresh billingProducts
+                                  const { data: billingData } = await supabase
+                                    .from('rental_session_products')
+                                    .select('*')
+                                    .eq('session_id', prod.session_id)
+                                    .eq('status', 'pending');
+                                  setBillingProducts(billingData || []);
+                                  Swal.fire('Berhasil', 'Produk berhasil dihapus dari billing.', 'success');
+                                } catch (err) {
+                                  Swal.fire('Gagal', 'Gagal menghapus produk dari database.', 'error');
+                                }
+                              }
+                            }}
+                            className="ml-2 text-red-500 hover:text-red-700 px-2 py-1 rounded"
+                            title="Hapus produk dari billing"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
-                      {/* Total Produk Pending Payment */}
-                      <div className="flex justify-between items-center mt-4 px-3 py-2 bg-yellow-100 rounded-lg font-bold text-yellow-800">
-                        <span>Total Produk Pending Payment:</span>
-                        <span>
-                          Rp {session.sale_items.reduce((total, prod) => total + (prod.price * prod.quantity), 0).toLocaleString('id-ID')}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
+                    ))}
+                  </div>
+                  {/* Total Produk Pending Payment */}
+                  <div className="flex justify-between items-center mt-4 px-3 py-2 bg-yellow-100 rounded-lg font-bold text-yellow-800">
+                    <span>Total Produk Pending Payment:</span>
+                    <span>
+                      Rp {billingProducts.reduce((total, prod) => total + (prod.price * prod.quantity), 0).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Search and Filter */}
               <div className="flex gap-4 mb-6">
@@ -1904,27 +1902,36 @@ const ActiveRentals: React.FC = () => {
                         if (session && !session.duration_minutes && session.payment_status !== 'paid') {
                           return (
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 // Validasi produk tidak ganda
                                 const newItems = cart.filter(item => {
                                   return !session.sale_items?.some(sale => sale.product_id === item.productId);
-                                }).map(item => ({
-                                  product_id: item.productId,
-                                  product_name: item.productName,
-                                  quantity: item.quantity,
-                                  price: item.price
-                                }));
+                                });
                                 if (newItems.length === 0) {
                                   Swal.fire('Info', 'Semua produk di keranjang sudah ada di billing.', 'info');
                                   return;
                                 }
-                                // Update session.sale_items
-                                session.sale_items = [...(session.sale_items || []), ...newItems];
-                                // Kosongkan keranjang
-                                clearCart();
-                                // Trigger re-render
-                                setActiveSessions([...activeSessions]);
-                                Swal.fire('Berhasil', 'Produk berhasil ditambahkan ke billing.', 'success');
+                                // Insert ke database rental_session_products
+                                try {
+                                  for (const item of newItems) {
+                                    await supabase
+                                      .from('rental_session_products')
+                                      .insert({
+                                        session_id: session.id,
+                                        product_id: item.productId,
+                                        product_name: item.productName,
+                                        quantity: item.quantity,
+                                        price: item.price,
+                                        total: item.price * item.quantity,
+                                        status: 'pending'
+                                      });
+                                  }
+                                  clearCart();
+                                  await loadData();
+                                  Swal.fire('Berhasil', 'Produk berhasil ditambahkan ke billing.', 'success');
+                                } catch (err) {
+                                  Swal.fire('Gagal', 'Gagal menambahkan produk ke billing.', 'error');
+                                }
                               }}
                               className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
                             >
