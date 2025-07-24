@@ -82,6 +82,29 @@ const ActiveRentals: React.FC = () => {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showProductModal, setShowProductModal] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Fetch cart items from rental_session_products when product modal is opened
+  useEffect(() => {
+    const fetchCartItems = async () => {
+      if (!showProductModal) return;
+      const { data, error } = await supabase
+        .from('rental_session_products')
+        .select('*')
+        .eq('session_id', showProductModal)
+        .eq('status', 'pending');
+      if (!error && Array.isArray(data)) {
+        setCart(data.map(item => ({
+          productId: item.product_id,
+          productName: item.product_name,
+          price: item.price,
+          quantity: item.quantity,
+          total: item.total
+        })));
+      } else {
+        setCart([]);
+      }
+    };
+    fetchCartItems();
+  }, [showProductModal]);
   const [searchProduct, setSearchProduct] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
