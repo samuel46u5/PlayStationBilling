@@ -1743,13 +1743,11 @@ const ActiveRentals: React.FC = () => {
                                     cancelButtonText: 'Batal',
                                   });
                                   if (result.isConfirmed) {
-                                    // Hapus dari database
                                     try {
-                                      // Asumsi ada fungsi deleteSaleItem(product_id, session_id)
+                                      // Pastikan session.id adalah sale_id
                                       await deleteSaleItem(prod.product_id, session.id);
-                                      // Hapus produk dari sale_items
-                                      session.sale_items = (session.sale_items ?? []).filter((_, i) => i !== idx);
-                                      setActiveSessions([...activeSessions]);
+                                      // Reload data dari database agar UI sinkron
+                                      await loadData();
                                       Swal.fire('Berhasil', 'Produk berhasil dihapus dari billing.', 'success');
                                     } catch (err) {
                                       Swal.fire('Gagal', 'Gagal menghapus produk dari database.', 'error');

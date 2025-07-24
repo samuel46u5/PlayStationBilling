@@ -8,10 +8,10 @@ import { supabase } from './supabase';
  */
 export async function deleteSaleItem(productId: string, sessionId: string): Promise<boolean> {
   const { error } = await supabase
-    .from('sale_items')
+    .from('rental_session_products')
     .delete()
     .eq('product_id', productId)
-    .eq('sale_id', sessionId);
+    .eq('session_id', sessionId);
   if (error) throw error;
   return true;
 }
