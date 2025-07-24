@@ -1710,6 +1710,8 @@ const ActiveRentals: React.FC = () => {
                   <X className="h-6 w-6" />
                 </button>
               </div>
+              {/* Refresh billingProducts setiap kali modal dibuka */}
+              {/* Refresh billingProducts hanya saat modal dibuka, gunakan useEffect agar tidak berulang di render */}
 
               {/* Produk Sudah Ditambahkan (Pending Payment) */}
               {billingProducts.length > 0 && (
@@ -1903,31 +1905,60 @@ const ActiveRentals: React.FC = () => {
                           return (
                             <button
                               onClick={async () => {
-                                // Validasi produk tidak ganda
+                                // Ambil produk billing yang sudah ada
+                                const { data: billingData } = await supabase
+                                  .from('rental_session_products')
+                                  .select('product_id, quantity')
+                                  .eq('session_id', session.id)
+                                  .eq('status', 'pending');
+                                // Filter hanya produk di keranjang yang belum ada di billing (fokus hanya pada productId)
                                 const newItems = cart.filter(item => {
-                                  return !session.sale_items?.some(sale => sale.product_id === item.productId);
+                                  const billingItem = (billingData || []).find(b => b.product_id === item.productId);
+                                  // Jika belum ada di billing, baru diinsert
+                                  return !billingItem;
                                 });
                                 if (newItems.length === 0) {
-                                  Swal.fire('Info', 'Semua produk di keranjang sudah ada di billing.', 'info');
+                                  // Tetap jalankan clearCart dan refresh billingProducts meski semua produk sudah ada di billing
+                                  clearCart();
+                                  setBillingProducts([]); // Force re-render
+                                  setTimeout(async () => {
+                                    const { data: refreshedBilling } = await supabase
+                                      .from('rental_session_products')
+                                      .select('*')
+                                      .eq('session_id', session.id)
+                                      .eq('status', 'pending');
+                                    console.log('Refreshed billing:', refreshedBilling);
+                                    setBillingProducts(refreshedBilling || []);
+                                  }, 200);
+                                  // Tidak tampilkan dialog
                                   return;
                                 }
-                                // Insert ke database rental_session_products
                                 try {
-                                  for (const item of newItems) {
-                                    await supabase
-                                      .from('rental_session_products')
-                                      .insert({
-                                        session_id: session.id,
-                                        product_id: item.productId,
-                                        product_name: item.productName,
-                                        quantity: item.quantity,
-                                        price: item.price,
-                                        total: item.price * item.quantity,
-                                        status: 'pending'
-                                      });
-                                  }
+                                  // Insert batch ke database
+                                  const insertData = newItems.map(item => ({
+                                    session_id: session.id,
+                                    product_id: item.productId,
+                                    product_name: item.productName,
+                                    quantity: item.quantity,
+                                    price: item.price,
+                                    total: item.price * item.quantity,
+                                    status: 'pending'
+                                  }));
+                                  await supabase
+                                    .from('rental_session_products')
+                                    .insert(insertData);
+                                  // Setelah insert, clear cart dan force re-render billingProducts
                                   clearCart();
-                                  await loadData();
+                                  setBillingProducts([]); // Force re-render
+                                  setTimeout(async () => {
+                                    const { data: refreshedBilling } = await supabase
+                                      .from('rental_session_products')
+                                      .select('*')
+                                      .eq('session_id', session.id)
+                                      .eq('status', 'pending');
+                                    console.log('Refreshed billing:', refreshedBilling);
+                                    setBillingProducts(refreshedBilling || []);
+                                  }, 200);
                                   Swal.fire('Berhasil', 'Produk berhasil ditambahkan ke billing.', 'success');
                                 } catch (err) {
                                   Swal.fire('Gagal', 'Gagal menambahkan produk ke billing.', 'error');
