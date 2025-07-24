@@ -1,3 +1,4 @@
+import { deleteSaleItem } from '../lib/deleteSaleItem';
 import React, { useState, useEffect } from 'react';
 
 interface SaleItem {
@@ -1732,10 +1733,28 @@ const ActiveRentals: React.FC = () => {
                               <span className="font-bold text-yellow-700">Rp {prod.price.toLocaleString('id-ID')}</span>
                               <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-200 text-yellow-800 text-xs font-semibold">Pending Payment</span>
                               <button
-                                onClick={() => {
-                                  // Hapus produk dari sale_items
-                                  session.sale_items = session.sale_items.filter((item, i) => i !== idx);
-                                  setActiveSessions([...activeSessions]);
+                                onClick={async () => {
+                                  const result = await Swal.fire({
+                                    title: 'Konfirmasi',
+                                    text: `Hapus produk ${prod.product_name} dari billing?`,
+                                    icon: 'warning',
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Ya, hapus',
+                                    cancelButtonText: 'Batal',
+                                  });
+                                  if (result.isConfirmed) {
+                                    // Hapus dari database
+                                    try {
+                                      // Asumsi ada fungsi deleteSaleItem(product_id, session_id)
+                                      await deleteSaleItem(prod.product_id, session.id);
+                                      // Hapus produk dari sale_items
+                                      session.sale_items = (session.sale_items ?? []).filter((_, i) => i !== idx);
+                                      setActiveSessions([...activeSessions]);
+                                      Swal.fire('Berhasil', 'Produk berhasil dihapus dari billing.', 'success');
+                                    } catch (err) {
+                                      Swal.fire('Gagal', 'Gagal menghapus produk dari database.', 'error');
+                                    }
+                                  }
                                 }}
                                 className="ml-2 text-red-500 hover:text-red-700 px-2 py-1 rounded"
                                 title="Hapus produk dari billing"
@@ -1840,7 +1859,20 @@ const ActiveRentals: React.FC = () => {
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-medium text-gray-900">{item.productName}</h4>
                           <button
-                            onClick={() => removeFromCart(item.productId)}
+                            onClick={async () => {
+                              const result = await Swal.fire({
+                                title: 'Konfirmasi',
+                                text: `Hapus produk ${item.productName} dari keranjang?`,
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonText: 'Ya, hapus',
+                                cancelButtonText: 'Batal',
+                              });
+                              if (result.isConfirmed) {
+                                setCart(prev => prev.filter(cartItem => cartItem.productId !== item.productId));
+                                Swal.fire('Berhasil', 'Produk dihapus dari keranjang.', 'success');
+                              }
+                            }}
                             className="text-red-500 hover:text-red-700"
                           >
                             <X className="h-4 w-4" />
