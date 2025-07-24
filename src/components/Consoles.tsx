@@ -80,6 +80,7 @@ const Consoles: React.FC = () => {
       const relayCommandOn = (document.getElementById('add-relay-on') as HTMLInputElement)?.value;
       const relayCommandOff = (document.getElementById('add-relay-off') as HTMLInputElement)?.value;
       const relayCommandStatus = (document.getElementById('add-relay-status') as HTMLInputElement)?.value;
+      const powerTvCommand = (document.getElementById('add-power-tv') as HTMLInputElement)?.value;
       const notes = (document.getElementById('add-notes') as HTMLTextAreaElement)?.value;
       // Field opsional: null jika kosong
       const safe = (v: string | undefined) => v && v.trim() !== '' ? v : null;
@@ -103,6 +104,7 @@ const Consoles: React.FC = () => {
         relay_command_on: safe(relayCommandOn),
         relay_command_off: safe(relayCommandOff),
         relay_command_status: safe(relayCommandStatus),
+        power_tv_command: safe(powerTvCommand),
         notes: safe(notes)
       };
       await db.insert('consoles', insertData);
@@ -145,6 +147,7 @@ const Consoles: React.FC = () => {
         relay_command_on: safe(editConsoleData.relay_command_on),
         relay_command_off: safe(editConsoleData.relay_command_off),
         relay_command_status: safe(editConsoleData.relay_command_status),
+        power_tv_command: safe(editConsoleData.power_tv_command),
         notes: safe(editConsoleData.notes)
       };
       await db.update('consoles', consoleId, updateData);
@@ -642,6 +645,14 @@ const Consoles: React.FC = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Power TV</label>
+                    <input
+                      id="add-power-tv"
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
                       <textarea
@@ -826,6 +837,16 @@ const Consoles: React.FC = () => {
                           type="text"
                           value={editConsoleData.relay_command_status || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_status: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Power TV</label>
+                        <input
+                          id="edit-power-tv"
+                          type="text"
+                          value={editConsoleData.power_tv_command || ''}
+                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, power_tv_command: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
