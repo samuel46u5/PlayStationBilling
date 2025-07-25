@@ -834,51 +834,31 @@ const Consoles: React.FC = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay ON</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.relay_command_on || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_on: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay OFF</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.relay_command_off || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_off: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay STATUS</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.relay_command_status || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_status: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Power TV</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.power_tv_command || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, power_tv_command: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Cek Power TV</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.perintah_cek_power_tv || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, perintah_cek_power_tv: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
+                      <RunCommandInput
+                        label="Perintah Relay ON"
+                        value={editConsoleData.relay_command_on || ''}
+                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, relay_command_on: v }))}
+                      />
+                      <RunCommandInput
+                        label="Perintah Relay OFF"
+                        value={editConsoleData.relay_command_off || ''}
+                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, relay_command_off: v }))}
+                      />
+                      <RunCommandInput
+                        label="Perintah Relay STATUS"
+                        value={editConsoleData.relay_command_status || ''}
+                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, relay_command_status: v }))}
+                      />
+                      <RunCommandInput
+                        label="Perintah Power TV"
+                        value={editConsoleData.power_tv_command || ''}
+                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, power_tv_command: v }))}
+                      />
+                      <RunCommandInput
+                        label="Perintah Cek Power TV"
+                        value={editConsoleData.perintah_cek_power_tv || ''}
+                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, perintah_cek_power_tv: v }))}
+                      />
                     </>
                   )}
                 </form>
@@ -906,3 +886,52 @@ const Consoles: React.FC = () => {
 };
 
 export default Consoles;
+
+// Komponen input + tombol Run, posisi simetris, tombol di dalam input group
+interface RunCommandInputProps {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}
+
+const RunCommandInput: React.FC<RunCommandInputProps> = ({ label, value, onChange }) => {
+  const handleRun = async () => {
+    if (!value || value.trim() === '') {
+      Swal.fire('Gagal', 'Perintah kosong', 'error');
+      return;
+    }
+    try {
+      const url = value.trim();
+      if (!/^https?:\/\//.test(url)) {
+        Swal.fire('Gagal', 'URL perintah tidak valid', 'error');
+        return;
+      }
+      const res = await fetch(url);
+      const text = await res.text();
+      Swal.fire('Hasil', `<pre style="text-align:left;white-space:pre-wrap;">${text}</pre>`, 'info');
+    } catch (err: any) {
+      Swal.fire('Gagal', err.message || 'Gagal menjalankan perintah', 'error');
+    }
+  };
+  return (
+    <div className="mb-2">
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+        />
+        <button
+          type="button"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg border border-gray-300 hover:bg-blue-100 text-blue-600"
+          title="Run"
+          onClick={handleRun}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" /></svg>
+        </button>
+      </div>
+    </div>
+  );
+};
