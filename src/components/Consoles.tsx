@@ -688,7 +688,7 @@ const Consoles: React.FC = () => {
       {showEditForm && editConsoleData && (() => {
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
               <div className="p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Konsol</h2>
                 <div className="flex gap-2 mb-6">
