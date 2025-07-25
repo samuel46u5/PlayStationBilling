@@ -1,3 +1,4 @@
+import { Power } from 'lucide-react';
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 
@@ -1462,6 +1463,32 @@ const ActiveRentals: React.FC = () => {
                           <Wrench className="h-4 w-4" />
                         </button>
                       )}
+                      {/* Tombol Tes TV */}
+                      <button
+                        onClick={async () => {
+                          if (console.power_tv_command) {
+                            try {
+                              const response = await fetch(console.power_tv_command);
+                              if (response.ok) {
+                                Swal.fire('Tes TV', 'Perintah power ON dikirim ke TV.', 'success');
+                              } else {
+                                const text = await response.text();
+                                console.error('Tes TV error:', response.status, text);
+                                Swal.fire('Tes TV', `Gagal mengirim perintah ke TV. Status: ${response.status}`, 'error');
+                              }
+                            } catch (err) {
+                              console.error('Tes TV fetch error:', err);
+                              Swal.fire('Tes TV', 'Gagal mengirim perintah ke TV (fetch error).', 'error');
+                            }
+                          } else {
+                            Swal.fire('Tes TV', 'Perintah power ON tidak tersedia.', 'info');
+                          }
+                        }}
+                        className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                        title="Tes TV (Power ON)"
+                      >
+                        <Power className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => {
                           if (console.status === "rented" && activeSession) {
