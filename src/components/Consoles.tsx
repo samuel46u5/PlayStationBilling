@@ -18,7 +18,7 @@ const Consoles: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
-  const [editTab, setEditTab] = useState<'umum' | 'teknis'>('umum');
+  const [editTab, setEditTab] = useState<'umum' | 'teknis' | 'perintah'>('umum');
   const [addTab, setAddTab] = useState<'umum' | 'teknis'>('umum');
   const [editConsoleData, setEditConsoleData] = useState<any>(null);
 
@@ -706,25 +706,31 @@ const Consoles: React.FC = () => {
                   >
                     Detail Teknis
                   </button>
+                  <button
+                    type="button"
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${editTab === 'perintah' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                    onClick={() => setEditTab('perintah')}
+                  >
+                    Daftar Perintah
+                  </button>
                 </div>
                 <form className="space-y-4">
                   {editTab === 'umum' && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nama Konsol</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nama Konsol *</label>
                         <input
-                          id="edit-name"
                           type="text"
-                          value={editConsoleData.name || ''}
+                          value={editConsoleData.name}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, name: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="mis. PlayStation 5 - Station 1"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Konsol</label>
                         <select
-                          id="edit-equipment-type"
-                          value={editConsoleData.equipment_type_id || ''}
+                          value={editConsoleData.equipment_type_id}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, equipment_type_id: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
@@ -736,8 +742,7 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                         <select
-                          id="edit-status"
-                          value={editConsoleData.status || ''}
+                          value={editConsoleData.status}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, status: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
@@ -749,7 +754,6 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
                         <input
-                          id="edit-location"
                           type="text"
                           value={editConsoleData.location || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, location: e.target.value }))}
@@ -759,7 +763,6 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
                         <input
-                          id="edit-serial"
                           type="text"
                           value={editConsoleData.serial_number || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, serial_number: e.target.value }))}
@@ -768,13 +771,12 @@ const Consoles: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <input
-                          id="edit-active"
                           type="checkbox"
                           checked={!!editConsoleData.is_active}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, is_active: e.target.checked }))}
                           className="h-4 w-4 text-blue-600 border-gray-300 rounded"
                         />
-                        <label htmlFor="edit-active" className="text-sm text-gray-700">Aktif</label>
+                        <label className="text-sm text-gray-700">Aktif</label>
                       </div>
                     </>
                   )}
@@ -783,9 +785,8 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
                         <input
-                          id="edit-purchase-date"
                           type="date"
-                          value={editConsoleData.purchase_date ? editConsoleData.purchase_date.slice(0,10) : ''}
+                          value={editConsoleData.purchase_date || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, purchase_date: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
@@ -793,9 +794,8 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Garansi s/d</label>
                         <input
-                          id="edit-warranty"
                           type="date"
-                          value={editConsoleData.warranty_expiry ? editConsoleData.warranty_expiry.slice(0,10) : ''}
+                          value={editConsoleData.warranty_expiry || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, warranty_expiry: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
@@ -803,7 +803,6 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
                         <input
-                          id="edit-ip"
                           type="text"
                           value={editConsoleData.ip_address || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, ip_address: e.target.value }))}
@@ -813,7 +812,6 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay ON</label>
                         <input
-                          id="edit-relay-on"
                           type="text"
                           value={editConsoleData.relay_command_on || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_on: e.target.value }))}
@@ -823,7 +821,6 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay OFF</label>
                         <input
-                          id="edit-relay-off"
                           type="text"
                           value={editConsoleData.relay_command_off || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_off: e.target.value }))}
@@ -833,7 +830,6 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay STATUS</label>
                         <input
-                          id="edit-relay-status"
                           type="text"
                           value={editConsoleData.relay_command_status || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, relay_command_status: e.target.value }))}
@@ -843,7 +839,6 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Power TV</label>
                         <input
-                          id="edit-power-tv"
                           type="text"
                           value={editConsoleData.power_tv_command || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, power_tv_command: e.target.value }))}
@@ -853,7 +848,6 @@ const Consoles: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
                         <textarea
-                          id="edit-notes"
                           value={editConsoleData.notes || ''}
                           onChange={e => setEditConsoleData((prev: any) => ({ ...prev, notes: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -861,6 +855,11 @@ const Consoles: React.FC = () => {
                           placeholder="Catatan tambahan tentang konsol ini"
                         />
                       </div>
+                    </>
+                  )}
+                  {editTab === 'perintah' && (
+                    <>
+                      {/* Tab Daftar Perintah, biarkan kosong dulu */}
                     </>
                   )}
                 </form>
