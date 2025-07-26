@@ -2120,7 +2120,12 @@ const ActiveRentals: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status Relay:</span>
                       <span className="font-medium flex items-center gap-2">
-                        {relayStatus}
+                        {/* Tampilkan hasil JSON relayStatus jika ada */}
+                        {relayStatus ? (
+                          <span>{typeof relayStatus === 'object' ? JSON.stringify(relayStatus) : relayStatus}</span>
+                        ) : (
+                          <span>-</span>
+                        )}
                         {selectedConsole?.relay_command_status && (
                           <button
                             type="button"
