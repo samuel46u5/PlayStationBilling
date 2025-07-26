@@ -1478,17 +1478,7 @@ const ActiveRentals: React.FC = () => {
                           </span>
                         </div>
                         {/* Status Relay dan power tv command */}
-                        <div className="mt-1 text-xs text-gray-700">
-                          <div>
-                            <span className="font-semibold">Status Relay:</span> {relayStatus}
-                          </div>
-                          <div>
-                            <span className="font-semibold">power tv command:</span> {(() => {
-                              const c = consoles.find((cc) => cc.id === console.id);
-                              return c?.power_tv_command || <span className="italic text-gray-400">(tidak ada)</span>;
-                            })()}
-                          </div>
-                        </div>
+                   
                       </div>
                     )}
 
