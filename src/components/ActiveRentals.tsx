@@ -2103,7 +2103,19 @@ const ActiveRentals: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status TV:</span>
                       <span className="font-medium flex items-center gap-2">
-                        {tvStatusJson ? <span>{tvStatusJson}</span> : <span>-</span>}
+                        {/* Tampilkan hanya nilai status dari output TV */}
+                        {tvStatusJson ? (
+                          <span>{(() => {
+                            try {
+                              const obj = typeof tvStatusJson === 'string' ? JSON.parse(tvStatusJson) : tvStatusJson;
+                              return obj && obj.status ? obj.status : JSON.stringify(obj);
+                            } catch {
+                              return tvStatusJson;
+                            }
+                          })()}</span>
+                        ) : (
+                          <span>-</span>
+                        )}
                         {selectedConsole?.perintah_cek_power_tv && (
                           <button
                             type="button"
@@ -2120,9 +2132,16 @@ const ActiveRentals: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status Relay:</span>
                       <span className="font-medium flex items-center gap-2">
-                        {/* Tampilkan hasil JSON relayStatus jika ada */}
+                        {/* Tampilkan hanya nilai POWER dari output relay */}
                         {relayStatus ? (
-                          <span>{typeof relayStatus === 'object' ? JSON.stringify(relayStatus) : relayStatus}</span>
+                          <span>{(() => {
+                            try {
+                              const obj = typeof relayStatus === 'string' ? JSON.parse(relayStatus) : relayStatus;
+                              return obj && obj.data && obj.data.POWER ? obj.data.POWER : JSON.stringify(obj);
+                            } catch {
+                              return relayStatus;
+                            }
+                          })()}</span>
                         ) : (
                           <span>-</span>
                         )}
