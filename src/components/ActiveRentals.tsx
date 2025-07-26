@@ -2103,14 +2103,18 @@ const ActiveRentals: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status TV:</span>
                       <span className="font-medium flex items-center gap-2">
-                        {/* Tampilkan hanya nilai status dari output TV */}
+                        {/* Metode pembacaan status TV dan relay disamakan */}
                         {tvStatusJson ? (
                           <span>{(() => {
                             try {
                               const obj = typeof tvStatusJson === 'string' ? JSON.parse(tvStatusJson) : tvStatusJson;
-                              return obj && obj.status ? obj.status : JSON.stringify(obj);
+                              const status = typeof obj === 'object' && obj !== null && 'status' in obj ? obj.status : undefined;
+                              if (typeof status === 'string') {
+                                return status.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF';
+                              }
+                              return '-';
                             } catch {
-                              return tvStatusJson;
+                              return '-';
                             }
                           })()}</span>
                         ) : (
@@ -2132,14 +2136,18 @@ const ActiveRentals: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status Relay:</span>
                       <span className="font-medium flex items-center gap-2">
-                        {/* Tampilkan hanya nilai POWER dari output relay */}
+                        {/* Metode pembacaan status TV dan relay disamakan */}
                         {relayStatus ? (
                           <span>{(() => {
                             try {
                               const obj = typeof relayStatus === 'string' ? JSON.parse(relayStatus) : relayStatus;
-                              return obj && obj.data && obj.data.POWER ? obj.data.POWER : JSON.stringify(obj);
+                              const power = typeof obj === 'object' && obj !== null && 'data' in obj && obj.data && typeof obj.data.POWER === 'string' ? obj.data.POWER : undefined;
+                              if (typeof power === 'string') {
+                                return power.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF';
+                              }
+                              return '-';
                             } catch {
-                              return relayStatus;
+                              return '-';
                             }
                           })()}</span>
                         ) : (
