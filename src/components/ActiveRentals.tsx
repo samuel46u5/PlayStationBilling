@@ -2121,27 +2121,47 @@ const ActiveRentals: React.FC = () => {
                           <span>-</span>
                         )}
                         {selectedConsole?.perintah_cek_power_tv && (
-                          <button
-                            type="button"
-                            className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300 border border-gray-300 text-gray-700"
-                            onClick={() => {
-                              Swal.fire('Isi Perintah perintah_cek_power_tv', `<pre style='text-align:left'>${selectedConsole.perintah_cek_power_tv}</pre>`, 'info');
-                            }}
-                          >
-                            Lihat
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300 border border-gray-300 text-gray-700"
+                              onClick={() => {
+                                Swal.fire('Isi Perintah perintah_cek_power_tv', `<pre style='text-align:left'>${selectedConsole.perintah_cek_power_tv}</pre>`, 'info');
+                              }}
+                            >
+                              Lihat
+                            </button>
+                            <button
+                              type="button"
+                              className="ml-1 px-2 py-0.5 text-xs rounded bg-blue-200 hover:bg-blue-300 border border-blue-300 text-blue-700"
+                              title="Refresh Status TV"
+                              onClick={async () => {
+                                if (selectedConsole?.perintah_cek_power_tv) {
+                                  try {
+                                    const res = await fetch(selectedConsole.perintah_cek_power_tv);
+                                    const data = await res.json();
+                                    setTvStatusJson(data);
+                                  } catch (err) {
+                                    setTvStatusJson('-');
+                                  }
+                                }
+                              }}
+                            >
+                              &#x21bb;
+                            </button>
+                          </>
                         )}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status Relay:</span>
                       <span className="font-medium flex items-center gap-2">
-                        {/* Metode pembacaan status TV dan relay disamakan */}
+                        {/* Metode pembacaan status relay sesuai output baru */}
                         {relayStatus ? (
                           <span>{(() => {
                             try {
                               const obj = typeof relayStatus === 'string' ? JSON.parse(relayStatus) : relayStatus;
-                              const power = typeof obj === 'object' && obj !== null && 'data' in obj && obj.data && typeof obj.data.POWER === 'string' ? obj.data.POWER : undefined;
+                              const power = typeof obj === 'object' && obj !== null && 'POWER' in obj && typeof obj.POWER === 'string' ? obj.POWER : undefined;
                               if (typeof power === 'string') {
                                 return power.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF';
                               }
@@ -2154,15 +2174,35 @@ const ActiveRentals: React.FC = () => {
                           <span>-</span>
                         )}
                         {selectedConsole?.relay_command_status && (
-                          <button
-                            type="button"
-                            className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300 border border-gray-300 text-gray-700"
-                            onClick={() => {
-                              Swal.fire('Isi Perintah relay_command_status', `<pre style='text-align:left'>${selectedConsole.relay_command_status}</pre>`, 'info');
-                            }}
-                          >
-                            Lihat
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300 border border-gray-300 text-gray-700"
+                              onClick={() => {
+                                Swal.fire('Isi Perintah relay_command_status', `<pre style='text-align:left'>${selectedConsole.relay_command_status}</pre>`, 'info');
+                              }}
+                            >
+                              Lihat
+                            </button>
+                            <button
+                              type="button"
+                              className="ml-1 px-2 py-0.5 text-xs rounded bg-blue-200 hover:bg-blue-300 border border-blue-300 text-blue-700"
+                              title="Refresh Status Relay"
+                              onClick={async () => {
+                                if (selectedConsole?.relay_command_status) {
+                                  try {
+                                    const res = await fetch(selectedConsole.relay_command_status);
+                                    const data = await res.json();
+                                    setRelayStatus(data);
+                                  } catch (err) {
+                                    setRelayStatus('-');
+                                  }
+                                }
+                              }}
+                            >
+                              &#x21bb;
+                            </button>
+                          </>
                         )}
                       </span>
                     </div>
