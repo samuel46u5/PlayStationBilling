@@ -48,6 +48,8 @@ interface Console {
   relay_command_on?: string;
   relay_command_off?: string;
   power_tv_command?: string;
+  relay_command_status?: string;
+  perintah_cek_power_tv?: string;
 }
 
 interface RateProfile {
@@ -95,6 +97,9 @@ interface CartItem {
 }
 
 const ActiveRentals: React.FC = () => {
+  // State untuk status relay dan TV
+  const [relayStatus, setRelayStatus] = useState<'ON' | 'OFF'>('OFF');
+  const [tvStatus, setTvStatus] = useState<'ON' | 'OFF'>('OFF');
   const [consoles, setConsoles] = useState<Console[]>([]);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [consoleFilter, setConsoleFilter] = useState<
@@ -107,6 +112,35 @@ const ActiveRentals: React.FC = () => {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showProductModal, setShowProductModal] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [billingProducts, setBillingProducts] = useState<any[]>([]);
+  const [searchProduct, setSearchProduct] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [showStartRentalModal, setShowStartRentalModal] = useState<string | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customerType, setCustomerType] = useState<"member" | "non-member">("member");
+  const [rentalType, setRentalType] = useState<"pay-as-you-go" | "prepaid">("pay-as-you-go");
+  const [rentalDurationHours, setRentalDurationHours] = useState<number>(1);
+  const [rentalDurationMinutes, setRentalDurationMinutes] = useState<number>(0);
+
+  // --- TV Status JSON and selectedConsole hooks must be after all state declarations ---
+  const [tvStatusJson, setTvStatusJson] = React.useState<string>("");
+  const selectedConsole = React.useMemo(() =>
+    showStartRentalModal ? consoles.find((c: any) => c.id === showStartRentalModal) : undefined,
+    [showStartRentalModal, consoles]
+  );
+  React.useEffect(() => {
+    if (showStartRentalModal && selectedConsole?.perintah_cek_power_tv) {
+      setTvStatusJson("");
+      fetch(String(selectedConsole.perintah_cek_power_tv))
+        .then(res => res.text())
+        .then(text => setTvStatusJson(text))
+        .catch(() => setTvStatusJson("Gagal cek status"));
+    } else {
+      setTvStatusJson("");
+    }
+  }, [showStartRentalModal, selectedConsole?.perintah_cek_power_tv]);
   // Fetch cart items from rental_session_products when product modal is opened
   useEffect(() => {
     // Ambil produk billing (pending payment) dan produk keranjang terpisah
@@ -128,23 +162,35 @@ const ActiveRentals: React.FC = () => {
     fetchProductData();
   }, [showProductModal]);
   // Produk billing (pending payment)
-  const [billingProducts, setBillingProducts] = useState<any[]>([]);
-  const [searchProduct, setSearchProduct] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [showStartRentalModal, setShowStartRentalModal] = useState<
-    string | null
-  >(null);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [customerType, setCustomerType] = useState<"member" | "non-member">(
-    "member"
-  );
-  const [rentalType, setRentalType] = useState<"pay-as-you-go" | "prepaid">(
-    "pay-as-you-go"
-  );
-  const [rentalDurationHours, setRentalDurationHours] = useState<number>(1);
-  const [rentalDurationMinutes, setRentalDurationMinutes] = useState<number>(0);
+
+  // Jalankan perintah cek status relay/tv saat modal Start Rental dibuka
+  useEffect(() => {
+    if (!showStartRentalModal) return;
+    const console = consoles.find((c) => c.id === showStartRentalModal);
+    if (!console) return;
+    // Cek status relay (jika ada endpoint relay_command_status)
+    if (console.relay_command_status) {
+      fetch(console.relay_command_status)
+        .then((res) => res.text())
+        .then((text) => {
+          setRelayStatus(text.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF');
+        })
+        .catch(() => setRelayStatus('OFF'));
+    } else {
+      setRelayStatus('OFF');
+    }
+    // Cek status TV (jika ada endpoint power_tv_command)
+    if (console.power_tv_command) {
+      fetch(console.power_tv_command)
+        .then((res) => res.text())
+        .then((text) => {
+          setTvStatus(text.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF');
+        })
+        .catch(() => setTvStatus('OFF'));
+    } else {
+      setTvStatus('OFF');
+    }
+  }, [showStartRentalModal, consoles]);
   const [nonMemberName, setNonMemberName] = useState<string>("");
   const [nonMemberPhone, setNonMemberPhone] = useState<string>("");
   const [countdownTimers, setCountdownTimers] = useState<
@@ -2050,74 +2096,73 @@ const ActiveRentals: React.FC = () => {
                     Console Information
                   </h4>
                   <div className="space-y-2 text-sm">
-                    {(() => {
-                      const console = consoles.find(
-                        (c) => c.id === showStartRentalModal
-                      );
-                      const rateProfile = console?.rate_profile_id
-                        ? rateProfiles.find(
-                            (r) => r.id === console.rate_profile_id
-                          )
-                        : null;
-
-                      return (
-                        <>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Console:</span>
-                            <span className="font-medium">{console?.name}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Location:</span>
-                            <span className="font-medium">
-                              {console?.location || "-"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Hourly Rate:</span>
-                            <span className="font-medium">
-                              Rp{" "}
-                              {rateProfile
-                                ? rateProfile.hourly_rate.toLocaleString(
-                                    "id-ID"
-                                  )
-                                : "0"}
-                              /jam
-                            </span>
-                          </div>
-                          {rentalType === "prepaid" && (
-                            <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
-                              <span className="text-gray-800">
-                                Total ({rentalDurationHours} jam{" "}
-                                {rentalDurationMinutes} menit):
-                              </span>
-                              <span className="text-green-600">
-                                {(() => {
-                                  const hourlyRate =
-                                    rateProfile?.hourly_rate || 0;
-                                  const totalDurationMinutes =
-                                    rentalDurationHours * 60 +
-                                    rentalDurationMinutes;
-                                  let totalAmount = 0;
-                                  if (totalDurationMinutes <= 60) {
-                                    totalAmount = hourlyRate;
-                                  } else {
-                                    const extraMinutes =
-                                      totalDurationMinutes - 60;
-                                    const perMinuteRate = hourlyRate / 60;
-                                    totalAmount =
-                                      hourlyRate +
-                                      Math.ceil(extraMinutes * perMinuteRate);
-                                  }
-                                  return `Rp ${totalAmount.toLocaleString(
-                                    "id-ID"
-                                  )}`;
-                                })()}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Console:</span>
+                      <span className="font-medium">{selectedConsole?.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Location:</span>
+                      <span className="font-medium">{selectedConsole?.location || "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Hourly Rate:</span>
+                      <span className="font-medium">Rp {selectedConsole?.rate_profile_id ? (rateProfiles.find((r) => r.id === selectedConsole.rate_profile_id)?.hourly_rate.toLocaleString("id-ID") ?? "0") : "0"}/jam</span>
+                    </div>
+                    {/* Status TV & Relay */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status TV:</span>
+                      <span className="font-medium flex items-center gap-2">
+                        {tvStatusJson ? <span>{tvStatusJson}</span> : <span>-</span>}
+                        {selectedConsole?.perintah_cek_power_tv && (
+                          <button
+                            type="button"
+                            className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300 border border-gray-300 text-gray-700"
+                            onClick={() => {
+                              Swal.fire('Isi Perintah perintah_cek_power_tv', `<pre style='text-align:left'>${selectedConsole.perintah_cek_power_tv}</pre>`, 'info');
+                            }}
+                          >
+                            Lihat
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status Relay:</span>
+                      <span className="font-medium flex items-center gap-2">
+                        {relayStatus}
+                        {selectedConsole?.relay_command_status && (
+                          <button
+                            type="button"
+                            className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300 border border-gray-300 text-gray-700"
+                            onClick={() => {
+                              Swal.fire('Isi Perintah relay_command_status', `<pre style='text-align:left'>${selectedConsole.relay_command_status}</pre>`, 'info');
+                            }}
+                          >
+                            Lihat
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                    {rentalType === "prepaid" && (
+                      <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
+                        <span className="text-gray-800">Total ({rentalDurationHours} jam {rentalDurationMinutes} menit):</span>
+                        <span className="text-green-600">
+                          {(() => {
+                            const hourlyRate = selectedConsole?.rate_profile_id ? (rateProfiles.find((r) => r.id === selectedConsole.rate_profile_id)?.hourly_rate ?? 0) : 0;
+                            const totalDurationMinutes = rentalDurationHours * 60 + rentalDurationMinutes;
+                            let totalAmount = 0;
+                            if (totalDurationMinutes <= 60) {
+                              totalAmount = hourlyRate;
+                            } else {
+                              const extraMinutes = totalDurationMinutes - 60;
+                              const perMinuteRate = hourlyRate / 60;
+                              totalAmount = hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
+                            }
+                            return `Rp ${totalAmount.toLocaleString("id-ID")}`;
+                          })()}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </form>
