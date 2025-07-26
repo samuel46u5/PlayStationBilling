@@ -647,6 +647,22 @@ const ActiveRentals: React.FC = () => {
         return;
       }
 
+      // --- Cek status TV dan relay sebelum mulai rental, matikan otomatis jika masih ON ---
+      let tvStatusNow = tvStatusJson?.toUpperCase?.() || "";
+      let relayStatusNow = relayStatus?.toUpperCase?.() || "";
+      if ((tvStatusNow === "ON" || relayStatusNow === "ON") && (latestConsole.power_tv_command || latestConsole.relay_command_off)) {
+        // Matikan otomatis tanpa konfirmasi
+        if (latestConsole.power_tv_command && tvStatusNow === "ON") {
+          await fetch(latestConsole.power_tv_command).catch(() => {});
+        }
+        if (latestConsole.relay_command_off && relayStatusNow === "ON") {
+          await fetch(latestConsole.relay_command_off).catch(() => {});
+        }
+        // Tunggu beberapa detik agar benar-benar OFF
+        await new Promise((res) => setTimeout(res, 2000));
+        // (Opsional) bisa fetch ulang status TV/relay jika ingin lebih akurat
+      }
+
       // Jalankan power_tv_command jika ada (untuk TV)
       if (latestConsole.power_tv_command) {
         fetch(latestConsole.power_tv_command).catch(() => {});
