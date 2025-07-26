@@ -163,7 +163,7 @@ const ActiveRentals: React.FC = () => {
   }, [showProductModal]);
   // Produk billing (pending payment)
 
-  // Jalankan perintah cek status relay/tv saat modal Start Rental dibuka
+  // Jalankan perintah cek status relay saat modal Start Rental dibuka
   useEffect(() => {
     if (!showStartRentalModal) return;
     const console = consoles.find((c) => c.id === showStartRentalModal);
@@ -178,17 +178,6 @@ const ActiveRentals: React.FC = () => {
         .catch(() => setRelayStatus('OFF'));
     } else {
       setRelayStatus('OFF');
-    }
-    // Cek status TV (jika ada endpoint power_tv_command)
-    if (console.power_tv_command) {
-      fetch(console.power_tv_command)
-        .then((res) => res.text())
-        .then((text) => {
-          setTvStatus(text.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF');
-        })
-        .catch(() => setTvStatus('OFF'));
-    } else {
-      setTvStatus('OFF');
     }
   }, [showStartRentalModal, consoles]);
   const [nonMemberName, setNonMemberName] = useState<string>("");
@@ -646,6 +635,7 @@ const ActiveRentals: React.FC = () => {
       return;
     }
 
+
     try {
       // Jalankan relay_command_on jika ada
       const consoleObj = consoles.find((c) => c.id === consoleId);
@@ -653,8 +643,9 @@ const ActiveRentals: React.FC = () => {
         fetch(consoleObj.relay_command_on).catch(() => {});
       }
 
-      if (consoleObj?.power_tv_command) {
-        fetch(consoleObj.power_tv_command).catch(() => {});
+      // Jalankan perintah_cek_power_tv saat mulai rental
+      if (consoleObj?.perintah_cek_power_tv) {
+        fetch(consoleObj.perintah_cek_power_tv).catch(() => {});
       }
 
       let customerId = selectedCustomerId;
