@@ -635,17 +635,25 @@ const ActiveRentals: React.FC = () => {
       return;
     }
 
-
     try {
-      // Jalankan relay_command_on jika ada
-      const consoleObj = consoles.find((c) => c.id === consoleId);
-      if (consoleObj?.relay_command_on) {
-        fetch(consoleObj.relay_command_on).catch(() => {});
+      // Ambil data console terbaru dari database
+      const { data: latestConsole, error: latestConsoleError } = await supabase
+        .from("consoles")
+        .select("*")
+        .eq("id", consoleId)
+        .single();
+      if (latestConsoleError || !latestConsole) {
+        Swal.fire("Error", "Gagal mengambil data console terbaru", "error");
+        return;
       }
 
-      // Jalankan perintah_cek_power_tv saat mulai rental
-      if (consoleObj?.perintah_cek_power_tv) {
-        fetch(consoleObj.perintah_cek_power_tv).catch(() => {});
+      // Jalankan power_tv_command jika ada (untuk TV)
+      if (latestConsole.power_tv_command) {
+        fetch(latestConsole.power_tv_command).catch(() => {});
+      }
+      // Jalankan relay_command_on jika ada (untuk relay)
+      if (latestConsole.relay_command_on) {
+        fetch(latestConsole.relay_command_on).catch(() => {});
       }
 
       let customerId = selectedCustomerId;
@@ -681,9 +689,8 @@ const ActiveRentals: React.FC = () => {
           : null;
 
       if (rentalType === "prepaid") {
-        const console = consoles.find((c) => c.id === consoleId);
         const rateProfile = rateProfiles.find(
-          (r) => r.id === console?.rate_profile_id
+          (r) => r.id === latestConsole.rate_profile_id
         );
         const hourlyRate = rateProfile?.hourly_rate || 0;
 
@@ -1470,6 +1477,18 @@ const ActiveRentals: React.FC = () => {
                               : "PAY AS YOU GO"}
                           </span>
                         </div>
+                        {/* Status Relay dan power tv command */}
+                        <div className="mt-1 text-xs text-gray-700">
+                          <div>
+                            <span className="font-semibold">Status Relay:</span> {relayStatus}
+                          </div>
+                          <div>
+                            <span className="font-semibold">power tv command:</span> {(() => {
+                              const c = consoles.find((cc) => cc.id === console.id);
+                              return c?.power_tv_command || <span className="italic text-gray-400">(tidak ada)</span>;
+                            })()}
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -2205,6 +2224,11 @@ const ActiveRentals: React.FC = () => {
                           </>
                         )}
                       </span>
+                    </div>
+                    {/* Power TV Command */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">power tv command:</span>
+                      <span className="font-medium break-all">{selectedConsole?.power_tv_command || <span className="italic text-gray-400">(tidak ada)</span>}</span>
                     </div>
                     {rentalType === "prepaid" && (
                       <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
