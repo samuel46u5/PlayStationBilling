@@ -906,12 +906,38 @@ const RunCommandInput: React.FC<RunCommandInputProps> = ({ label, value, onChang
         Swal.fire('Gagal', 'URL perintah tidak valid', 'error');
         return;
       }
-      // Untuk relay command, jika fetch gagal (CORS), tetap tampilkan notifikasi berhasil
+      if (label === 'Perintah Relay STATUS') {
+        try {
+          // Coba fetch normal dulu
+          let res = null;
+          try {
+            res = await fetch(url);
+          } catch (err) {
+            // Jika error (CORS), coba fetch dengan mode no-cors
+            try {
+              await fetch(url, { mode: 'no-cors' });
+              Swal.fire('Gagal', 'Tidak bisa mengambil status (CORS error, response tidak bisa dibaca dari browser). Coba akses dari backend/server.', 'error');
+            } catch (err2) {
+              Swal.fire('Gagal', 'Gagal menjalankan perintah', 'error');
+            }
+            return;
+          }
+          if (res && res.ok) {
+            const text = await res.text();
+            Swal.fire('Hasil', `<pre style="text-align:left;white-space:pre-wrap;">${text}</pre>`, 'info');
+          } else {
+            Swal.fire('Gagal', 'Gagal mendapatkan status', 'error');
+          }
+        } catch (err: any) {
+          Swal.fire('Gagal', err.message || 'Gagal menjalankan perintah', 'error');
+        }
+        return;
+      }
+      // Untuk perintah lain, abaikan CORS error
       let res = null;
       try {
         res = await fetch(url);
       } catch (fetchErr) {
-        // CORS error atau network error
         Swal.fire('Berhasil', 'Perintah berhasil dikirim (CORS error diabaikan)', 'success');
         return;
       }
@@ -919,7 +945,6 @@ const RunCommandInput: React.FC<RunCommandInputProps> = ({ label, value, onChang
         const text = await res.text();
         Swal.fire('Hasil', `<pre style="text-align:left;white-space:pre-wrap;">${text}</pre>`, 'info');
       } else {
-        // Jika fetch gagal (misal CORS), tetap tampilkan notifikasi berhasil
         Swal.fire('Berhasil', 'Perintah berhasil dikirim (CORS error diabaikan)', 'success');
       }
     } catch (err: any) {
