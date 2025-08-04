@@ -2253,16 +2253,75 @@ const ActiveRentals: React.FC = () => {
                       <span className="text-gray-600">power tv command:</span>
                       <span className="font-medium break-all">{selectedConsole?.power_tv_command || <span className="italic text-gray-400">(tidak ada)</span>}</span>
                     </div>
-                    {/* Tombol Reset Status dipindah ke bawah */}
-                    <div className="flex justify-center mt-6">
-                      <button
-                        type="button"
-                        className="px-4 py-2 rounded bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 font-semibold shadow-sm"
-                        onClick={() => { /* logika reset status menyusul */ }}
-                      >
-                        Reset Status
-                      </button>
-                    </div>
+                    {/* Tombol Reset Status hanya muncul jika status TV atau Relay ON */}
+                    {(() => {
+                      // Cek status TV
+                      let tvOn = false;
+                      try {
+                        if (tvStatusJson) {
+                          const obj = typeof tvStatusJson === 'string' ? JSON.parse(tvStatusJson) : tvStatusJson;
+                          const status = typeof obj === 'object' && obj !== null && 'status' in obj ? obj.status : undefined;
+                          if (typeof status === 'string') {
+                            tvOn = status.trim().toUpperCase() === 'ON';
+                          }
+                        }
+                      } catch {}
+                      // Cek status relay
+                      let relayOn = false;
+                      try {
+                        if (relayStatus) {
+                          if (typeof relayStatus === 'string') {
+                            const trimmed = relayStatus.trim().toUpperCase();
+                            if (trimmed === 'ON') relayOn = true;
+                            else if (trimmed !== 'OFF') {
+                              const obj = JSON.parse(relayStatus);
+                              if (typeof obj === 'object' && obj !== null && 'POWER' in obj && typeof obj.POWER === 'string') {
+                                relayOn = obj.POWER.trim().toUpperCase() === 'ON';
+                              }
+                            }
+                          } else if (typeof relayStatus === 'object' && relayStatus !== null && 'POWER' in (relayStatus as any) && typeof (relayStatus as any).POWER === 'string') {
+                            relayOn = (relayStatus as any).POWER.trim().toUpperCase() === 'ON';
+                          }
+                        }
+                      } catch {}
+                      if (!tvOn && !relayOn) return null;
+                      return (
+                        <div className="flex justify-center mt-6">
+                          <button
+                            type="button"
+                            className="px-4 py-2 rounded bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 font-semibold shadow-sm"
+                            onClick={async () => {
+                              // Matikan TV jika ON
+                              if (tvOn && selectedConsole?.power_tv_command) {
+                                try { await fetch(selectedConsole.power_tv_command); } catch {}
+                              }
+                              // Matikan relay jika ON
+                              if (relayOn && selectedConsole?.relay_command_off) {
+                                try { await fetch(selectedConsole.relay_command_off); } catch {}
+                              }
+                              // Refresh status TV
+                              if (selectedConsole?.perintah_cek_power_tv) {
+                                try {
+                                  const res = await fetch(selectedConsole.perintah_cek_power_tv);
+                                  const data = await res.json();
+                                  setTvStatusJson(data);
+                                } catch { setTvStatusJson('-'); }
+                              }
+                              // Refresh status relay
+                              if (selectedConsole?.relay_command_status) {
+                                try {
+                                  const res = await fetch(selectedConsole.relay_command_status);
+                                  const data = await res.json();
+                                  setRelayStatus(data);
+                                } catch { setRelayStatus('-'); }
+                              }
+                            }}
+                          >
+                            Reset Status
+                          </button>
+                        </div>
+                      );
+                    })()}
                     {rentalType === "prepaid" && (
                       <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
                         <span className="text-gray-800">Total ({rentalDurationHours} jam {rentalDurationMinutes} menit):</span>
