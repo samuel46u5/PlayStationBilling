@@ -1,3 +1,8 @@
+
+
+  // ...existing code...
+
+  // ...existing code...
 import { Power } from 'lucide-react';
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
@@ -130,6 +135,7 @@ const ActiveRentals: React.FC = () => {
     showStartRentalModal ? consoles.find((c: any) => c.id === showStartRentalModal) : undefined,
     [showStartRentalModal, consoles]
   );
+
   React.useEffect(() => {
     if (showStartRentalModal && selectedConsole?.perintah_cek_power_tv) {
       setTvStatusJson("");
@@ -141,6 +147,33 @@ const ActiveRentals: React.FC = () => {
       setTvStatusJson("");
     }
   }, [showStartRentalModal, selectedConsole?.perintah_cek_power_tv]);
+
+  // Polling status TV & relay secara real-time saat modal Start Rental tampil
+  const [statusIntervalId, setStatusIntervalId] = React.useState<NodeJS.Timeout | null>(null);
+  React.useEffect(() => {
+    if (!showStartRentalModal || !selectedConsole) {
+      if (statusIntervalId) clearInterval(statusIntervalId);
+      setStatusIntervalId(null);
+      return;
+    }
+    // Interval pengecekan status setiap 3 detik
+    const interval = setInterval(() => {
+      if (selectedConsole.perintah_cek_power_tv) {
+        fetch(selectedConsole.perintah_cek_power_tv)
+          .then(res => res.text())
+          .then(text => setTvStatusJson(text))
+          .catch(() => setTvStatusJson("Gagal cek status"));
+      }
+      if (selectedConsole.relay_command_status) {
+        fetch(selectedConsole.relay_command_status)
+          .then(res => res.text())
+          .then(text => setRelayStatus(text))
+          .catch(() => setRelayStatus("-"));
+      }
+    }, 3000);
+    setStatusIntervalId(interval);
+    return () => clearInterval(interval);
+  }, [showStartRentalModal, selectedConsole]);
   // Fetch cart items from rental_session_products when product modal is opened
   useEffect(() => {
     // Ambil produk billing (pending payment) dan produk keranjang terpisah
