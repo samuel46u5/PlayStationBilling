@@ -2675,37 +2675,46 @@ const ActiveRentals: React.FC = () => {
                           return (
                             <button
                               onClick={async () => {
-                                // Validasi produk tidak ganda
-                                const newItems = cart.filter((item) => {
-                                  return !session.sale_items?.some(
-                                    (sale) => sale.product_id === item.productId
-                                  );
-                                });
-                                if (newItems.length === 0) {
-                                  Swal.fire(
-                                    "Info",
-                                    "Semua produk di keranjang sudah ada di billing.",
-                                    "info"
-                                  );
-                                  return;
-                                }
-                                // Insert ke database rental_session_products
                                 try {
-                                  for (const item of newItems) {
-                                    await supabase
-                                      .from("rental_session_products")
-                                      .insert({
-                                        session_id: session.id,
-                                        product_id: item.productId,
-                                        product_name: item.productName,
-                                        quantity: item.quantity,
-                                        price: item.price,
-                                        total: item.price * item.quantity,
-                                        status: "pending",
-                                      });
+                                  for (const item of cart) {
+                                    const existing = billingProducts.find(
+                                      (bp) => bp.product_id === item.productId
+                                    );
+                                    if (existing) {
+                                      // Update quantity jika sudah ada
+                                      await supabase
+                                        .from("rental_session_products")
+                                        .update({
+                                          quantity: existing.quantity + item.quantity,
+                                          total: (existing.quantity + item.quantity) * item.price,
+                                        })
+                                        .eq("session_id", session.id)
+                                        .eq("product_id", item.productId)
+                                        .eq("status", "pending");
+                                    } else {
+                                      // Insert baru jika belum ada
+                                      await supabase
+                                        .from("rental_session_products")
+                                        .insert({
+                                          session_id: session.id,
+                                          product_id: item.productId,
+                                          product_name: item.productName,
+                                          quantity: item.quantity,
+                                          price: item.price,
+                                          total: item.price * item.quantity,
+                                          status: "pending",
+                                        });
+                                    }
                                   }
                                   clearCart();
                                   await loadData();
+                                  // Refresh billingProducts
+                                  const { data: billingData } = await supabase
+                                    .from("rental_session_products")
+                                    .select("*")
+                                    .eq("session_id", session.id)
+                                    .eq("status", "pending");
+                                  setBillingProducts(billingData || []);
                                   Swal.fire(
                                     "Berhasil",
                                     "Produk berhasil ditambahkan ke billing.",
