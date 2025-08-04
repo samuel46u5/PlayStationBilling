@@ -2728,19 +2728,6 @@ const ActiveRentals: React.FC = () => {
                         }
                         return null;
                       })()}
-                      <button
-                        onClick={() => handleCheckoutProducts(showProductModal)}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Calculator className="h-5 w-5" />
-                        Proses Pembayaran
-                      </button>
-                      <button
-                        onClick={clearCart}
-                        className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors"
-                      >
-                        Kosongkan Keranjang
-                      </button>
                     </div>
                   </div>
                 </div>
