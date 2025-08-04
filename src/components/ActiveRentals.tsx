@@ -98,7 +98,7 @@ interface CartItem {
 
 const ActiveRentals: React.FC = () => {
   // State untuk status relay dan TV
-  const [relayStatus, setRelayStatus] = useState<'ON' | 'OFF'>('OFF');
+  const [relayStatus, setRelayStatus] = useState<string>('OFF');
   const [tvStatus, setTvStatus] = useState<'ON' | 'OFF'>('OFF');
   const [consoles, setConsoles] = useState<Console[]>([]);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
@@ -2185,10 +2185,27 @@ const ActiveRentals: React.FC = () => {
                         {relayStatus ? (
                           <span>{(() => {
                             try {
-                              const obj = typeof relayStatus === 'string' ? JSON.parse(relayStatus) : relayStatus;
-                              const power = typeof obj === 'object' && obj !== null && 'POWER' in obj && typeof obj.POWER === 'string' ? obj.POWER : undefined;
-                              if (typeof power === 'string') {
-                                return power.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF';
+                              // Jika respons langsung 'ON' atau 'OFF'
+                              if (typeof relayStatus === 'string') {
+                                const trimmed = relayStatus.trim().toUpperCase();
+                                if (trimmed === 'ON' || trimmed === 'OFF') {
+                                  return trimmed;
+                                }
+                                // Coba parse JSON jika bukan string ON/OFF
+                                const obj = JSON.parse(relayStatus);
+                                if (typeof obj === 'object' && obj !== null && 'POWER' in obj && typeof obj.POWER === 'string') {
+                                  const power = obj.POWER.trim().toUpperCase();
+                                  if (power === 'ON' || power === 'OFF') {
+                                    return power;
+                                  }
+                                }
+                              }
+                              // Jika relayStatus sudah object
+                              if (typeof relayStatus === 'object' && relayStatus !== null && 'POWER' in relayStatus && typeof relayStatus.POWER === 'string') {
+                                const power = relayStatus.POWER.trim().toUpperCase();
+                                if (power === 'ON' || power === 'OFF') {
+                                  return power;
+                                }
                               }
                               return '-';
                             } catch {
@@ -2235,6 +2252,16 @@ const ActiveRentals: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">power tv command:</span>
                       <span className="font-medium break-all">{selectedConsole?.power_tv_command || <span className="italic text-gray-400">(tidak ada)</span>}</span>
+                    </div>
+                    {/* Tombol Reset Status dipindah ke bawah */}
+                    <div className="flex justify-center mt-6">
+                      <button
+                        type="button"
+                        className="px-4 py-2 rounded bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 font-semibold shadow-sm"
+                        onClick={() => { /* logika reset status menyusul */ }}
+                      >
+                        Reset Status
+                      </button>
                     </div>
                     {rentalType === "prepaid" && (
                       <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
