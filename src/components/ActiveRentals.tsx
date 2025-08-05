@@ -580,8 +580,25 @@ const ActiveRentals: React.FC = () => {
       // Untuk pay-as-you-go, buka modal pembayaran seperti biasa
       // Hitung total biaya rental
       const totalCost = calculateCurrentCost(session);
-      // Hitung total produk dari keranjang (jika ada)
-      const productsTotal = 0; // ganti dengan logika jika produk per sesi tersedia
+
+      // Ambil total produk dari rental_session_products
+      let productsTotal = 0;
+      try {
+        const { data: productRows, error: productErr } = await supabase
+          .from("rental_session_products")
+          .select("quantity, price")
+          .eq("session_id", session.id)
+          .in("status", ["pending", "completed"]);
+        if (!productErr && Array.isArray(productRows)) {
+          productsTotal = productRows.reduce(
+            (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
+            0
+          );
+        }
+      } catch (e) {
+        // Jika error, biarkan productsTotal = 0
+      }
+
       // Tampilkan modal pembayaran kasir
       setShowPaymentModal({ session, productsTotal });
       setPaymentAmount(totalCost + productsTotal);
