@@ -721,6 +721,21 @@ const ActiveRentals: React.FC = () => {
     }
 
     try {
+      // Pastikan tidak ada session aktif sebelumnya untuk console ini
+      const { data: existingSessions, error: existingSessionsError } = await supabase
+        .from("rental_sessions")
+        .select("id")
+        .eq("console_id", consoleId)
+        .eq("status", "active");
+      if (!existingSessionsError && Array.isArray(existingSessions) && existingSessions.length > 0) {
+        // Akhiri semua session aktif lama
+        const sessionIds = existingSessions.map((s) => s.id);
+        await supabase
+          .from("rental_sessions")
+          .update({ status: "completed", end_time: new Date().toISOString() })
+          .in("id", sessionIds);
+      }
+
       // Ambil data console terbaru dari database
       const { data: latestConsole, error: latestConsoleError } = await supabase
         .from("consoles")
