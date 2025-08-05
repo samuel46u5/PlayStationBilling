@@ -252,6 +252,8 @@ const ActiveRentals: React.FC = () => {
     session: RentalSession;
     productsTotal: number;
   }>(null);
+  // Mapping sessionId -> total produk
+  const [productsTotalMap, setProductsTotalMap] = useState<Record<string, number>>({});
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
@@ -457,8 +459,6 @@ const ActiveRentals: React.FC = () => {
         throw productError;
       }
 
-      console.log("Fetched products:", productData);
-
       // Fetch customers
       const { data: customerData, error: customerError } = await supabase
         .from("customers")
@@ -467,11 +467,34 @@ const ActiveRentals: React.FC = () => {
 
       if (customerError) throw customerError;
 
+      // Fetch total produk per session aktif
+      let productsTotalMap: Record<string, number> = {};
+      if (Array.isArray(rentalData)) {
+        const sessionIds = rentalData.map((s) => s.id);
+        if (sessionIds.length > 0) {
+          const { data: productRows, error: productRowsError } = await supabase
+            .from("rental_session_products")
+            .select("session_id, quantity, price")
+            .in("session_id", sessionIds)
+            .in("status", ["pending", "completed"]);
+          if (!productRowsError && Array.isArray(productRows)) {
+            for (const sessionId of sessionIds) {
+              const items = productRows.filter((row) => row.session_id === sessionId);
+              productsTotalMap[sessionId] = items.reduce(
+                (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
+                0
+              );
+            }
+          }
+        }
+      }
+
       setConsoles(consoleData || []);
       setRateProfiles(rateData || []);
       setActiveSessions(rentalData || []);
       setProducts(productData || []);
       setCustomers(customerData || []);
+      setProductsTotalMap(productsTotalMap);
     } catch (error) {
       console.error("Error loading data:", error);
       Swal.fire("Error", "Gagal memuat data", "error");
@@ -1914,11 +1937,7 @@ const ActiveRentals: React.FC = () => {
                             <span className="text-green-700">Total Produk:</span>
                             <p className="font-medium">
                               Rp{" "}
-                              {activeSession.productsTotal !== undefined
-                                ? activeSession.productsTotal.toLocaleString("id-ID")
-                                : activeSession.id
-                                  ? (window.__productsTotalCache?.[activeSession.id] ?? 0).toLocaleString("id-ID")
-                                  : "0"}
+                              {productsTotalMap[activeSession.id]?.toLocaleString("id-ID") ?? "0"}
                             </p>
                           </div>
                           <div>
