@@ -1901,17 +1901,46 @@ const ActiveRentals: React.FC = () => {
                               ).toLocaleString("id-ID")}
                             </p>
                           </div>
+
+
                           <div>
                             <span className="text-green-700">Total Produk:</span>
-                            <p className="font-medium">
-                              Rp{" "}
-                              {activeSession.productsTotal !== undefined
-                                ? activeSession.productsTotal.toLocaleString("id-ID")
-                                : activeSession.id
-                                  ? (window.__productsTotalCache?.[activeSession.id] ?? 0).toLocaleString("id-ID")
-                                  : "0"}
-                            </p>
+                            <ProductTotal sessionId={activeSession.id} />
                           </div>
+
+
+// Komponen untuk menampilkan total produk per sesi
+function ProductTotal({ sessionId }: { sessionId: string }) {
+  const [productsTotal, setProductsTotal] = useState(0);
+  useEffect(() => {
+    let ignore = false;
+    const fetchProductsTotal = async () => {
+      try {
+        const { data: productRows, error: productErr } = await supabase
+          .from("rental_session_products")
+          .select("quantity, price")
+          .eq("session_id", sessionId)
+          .in("status", ["pending", "completed"]);
+        if (!productErr && Array.isArray(productRows)) {
+          const total = productRows.reduce(
+            (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
+            0
+          );
+          if (!ignore) setProductsTotal(total);
+        } else {
+          if (!ignore) setProductsTotal(0);
+        }
+      } catch {
+        if (!ignore) setProductsTotal(0);
+      }
+    };
+    fetchProductsTotal();
+    return () => { ignore = true; };
+  }, [sessionId]);
+  return (
+    <p className="font-medium">Rp {productsTotal.toLocaleString("id-ID")}</p>
+  );
+}
                           <div>
                             <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
