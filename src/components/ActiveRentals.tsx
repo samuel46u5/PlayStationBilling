@@ -1,11 +1,8 @@
 
-
-  // ...existing code...
-
-  // ...existing code...
-import { Power } from 'lucide-react';
-import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
+import { Power } from 'lucide-react';
+
+import { deleteSaleItem } from "../lib/deleteSaleItem";
 
 interface SaleItem {
   product_id: string;
@@ -101,8 +98,9 @@ interface CartItem {
   total: number;
 }
 
-const ActiveRentals: React.FC = () => {
 
+
+const ActiveRentals: React.FC = () => {
   // Untuk interface pembayaran mirip Cashier
   const [isManualInput, setIsManualInput] = useState(false);
   // State untuk status relay dan TV
@@ -138,6 +136,34 @@ const ActiveRentals: React.FC = () => {
     showStartRentalModal ? consoles.find((c: any) => c.id === showStartRentalModal) : undefined,
     [showStartRentalModal, consoles]
   );
+
+  // State untuk menyimpan total produk per sesi aktif
+  const [productsTotalMap, setProductsTotalMap] = useState<Record<string, number>>({});
+
+  // Ambil total produk untuk semua sesi aktif setiap kali activeSessions berubah
+  useEffect(() => {
+    const fetchProductsTotal = async () => {
+      const newMap: Record<string, number> = {};
+      for (const session of activeSessions) {
+        const { data: productRows, error } = await supabase
+          .from("rental_session_products")
+          .select("quantity, price")
+          .eq("session_id", session.id)
+          .in("status", ["pending", "completed"]);
+        if (!error && Array.isArray(productRows)) {
+          newMap[session.id] = productRows.reduce(
+            (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
+            0
+          );
+        } else {
+          newMap[session.id] = 0;
+        }
+      }
+      setProductsTotalMap(newMap);
+    };
+    if (activeSessions.length > 0) fetchProductsTotal();
+    else setProductsTotalMap({});
+  }, [activeSessions]);
 
   React.useEffect(() => {
     if (showStartRentalModal && selectedConsole?.perintah_cek_power_tv) {
@@ -1896,22 +1922,17 @@ const ActiveRentals: React.FC = () => {
                             <span className="text-blue-600">Biaya:</span>
                             <p className="font-medium">
                               Rp{" "}
-                              {calculateCurrentCost(
-                                activeSession
-                              ).toLocaleString("id-ID")}
+                              {calculateCurrentCost(activeSession).toLocaleString("id-ID")}
                             </p>
                           </div>
-                          <div>
-                            <span className="text-green-700">Total Produk:</span>
-                            <p className="font-medium">
-                              Rp{" "}
-                              {activeSession.productsTotal !== undefined
-                                ? activeSession.productsTotal.toLocaleString("id-ID")
-                                : activeSession.id
-                                  ? (window.__productsTotalCache?.[activeSession.id] ?? 0).toLocaleString("id-ID")
-                                  : "0"}
-                            </p>
-                          </div>
+                          {typeof productsTotalMap[activeSession.id] !== "undefined" && (
+                            <div>
+                              <span className="text-green-700">Total Produk:</span>
+                              <p className="font-medium">
+                                Rp {productsTotalMap[activeSession.id].toLocaleString("id-ID")}
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
