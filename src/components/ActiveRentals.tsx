@@ -1902,6 +1902,17 @@ const ActiveRentals: React.FC = () => {
                             </p>
                           </div>
                           <div>
+                            <span className="text-green-700">Total Produk:</span>
+                            <p className="font-medium">
+                              Rp{" "}
+                              {activeSession.productsTotal !== undefined
+                                ? activeSession.productsTotal.toLocaleString("id-ID")
+                                : activeSession.id
+                                  ? (window.__productsTotalCache?.[activeSession.id] ?? 0).toLocaleString("id-ID")
+                                  : "0"}
+                            </p>
+                          </div>
+                          <div>
                             <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
                               {activeSession.payment_status.toUpperCase()}
