@@ -102,6 +102,9 @@ interface CartItem {
 }
 
 const ActiveRentals: React.FC = () => {
+
+  // Untuk interface pembayaran mirip Cashier
+  const [isManualInput, setIsManualInput] = useState(false);
   // State untuk status relay dan TV
   const [relayStatus, setRelayStatus] = useState<string>('OFF');
   const [tvStatus, setTvStatus] = useState<'ON' | 'OFF'>('OFF');
@@ -2746,101 +2749,116 @@ const ActiveRentals: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Pembayaran Kasir */}
+      {/* Modal Pembayaran Kasir Style (Cashier) */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
             <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Pembayaran Kasir
-              </h2>
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between">
-                  <span>Customer:</span>
-                  <span className="font-medium">
-                    {showPaymentModal.session.customers?.name}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Durasi:</span>
-                  <span className="font-medium">
-                    {formatElapsedHMS(showPaymentModal.session.start_time)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total Rental:</span>
-                  <span className="font-medium">
-                    Rp{" "}
-                    {calculateCurrentCost(
-                      showPaymentModal.session
-                    ).toLocaleString("id-ID")}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total Produk:</span>
-                  <span className="font-medium">
-                    Rp {showPaymentModal.productsTotal.toLocaleString("id-ID")}
-                  </span>
-                </div>
-                <div className="flex justify-between font-bold border-t pt-2">
-                  <span>Total Bayar:</span>
-                  <span>
-                    Rp{" "}
-                    {(
-                      calculateCurrentCost(showPaymentModal.session) +
-                      showPaymentModal.productsTotal
-                    ).toLocaleString("id-ID")}
-                  </span>
+              {/* Header Total */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="text-xl font-bold text-gray-700">Total:</div>
+                <div className="text-2xl font-bold text-right text-blue-700">Rp {(calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal).toLocaleString("id-ID")}</div>
+              </div>
+              {/* Metode Pembayaran */}
+              <div className="mb-4">
+                <div className="mb-2 font-medium text-gray-700">Metode Pembayaran</div>
+                <div className="flex gap-2 mb-2">
+                  {[
+                    { key: 'cash', label: 'Cash', icon: <span className="inline-block mr-1">💵</span> },
+                    { key: 'card', label: 'Card', icon: <span className="inline-block mr-1">💳</span> },
+                    { key: 'transfer', label: 'Transfer', icon: <span className="inline-block mr-1">🏦</span> },
+                  ].map((method) => (
+                    <button
+                      key={method.key}
+                      type="button"
+                      className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${paymentMethod === method.key ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                      onClick={() => setPaymentMethod(method.key as typeof paymentMethod)}
+                    >
+                      {method.icon} {method.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">
-                  Metode Pembayaran
-                </label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full px-3 py-2 border rounded"
-                >
-                  <option value="cash">Tunai</option>
-                  <option value="qris">QRIS</option>
-                </select>
+              {/* Customer & Rental Info */}
+              <div className="mb-4 text-sm text-gray-600">
+                <div className="flex justify-between"><span>Customer:</span><span className="font-medium">{showPaymentModal.session.customers?.name}</span></div>
+                <div className="flex justify-between"><span>Durasi:</span><span className="font-medium">{formatElapsedHMS(showPaymentModal.session.start_time)}</span></div>
+                <div className="flex justify-between"><span>Total Rental:</span><span className="font-medium">Rp {calculateCurrentCost(showPaymentModal.session).toLocaleString("id-ID")}</span></div>
+                <div className="flex justify-between"><span>Total Produk:</span><span className="font-medium">Rp {showPaymentModal.productsTotal.toLocaleString("id-ID")}</span></div>
               </div>
+              {/* Jumlah Bayar */}
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">
-                  Nominal Pembayaran
-                </label>
-                <input
-                  type="number"
-                  min={
-                    calculateCurrentCost(showPaymentModal.session) +
-                    showPaymentModal.productsTotal
-                  }
-                  value={paymentAmount}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value) || 0;
-                    setPaymentAmount(val);
-                    setChangeAmount(
-                      val -
-                        (calculateCurrentCost(showPaymentModal.session) +
-                          showPaymentModal.productsTotal)
-                    );
-                  }}
-                  className="w-full px-3 py-2 border rounded"
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-gray-700">Jumlah Bayar</div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={`text-xs px-2 py-1 rounded border ${!isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
+                      onClick={() => { setIsManualInput(false); setPaymentAmount(0); }}
+                    >
+                      Quick
+                    </button>
+                    <button
+                      type="button"
+                      className={`text-xs px-2 py-1 rounded border ${isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
+                      onClick={() => { setIsManualInput(true); setPaymentAmount(0); }}
+                    >
+                      Manual
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                      onClick={() => setPaymentAmount(0)}
+                    >
+                      × Clear
+                    </button>
+                  </div>
+                </div>
+                {!isManualInput ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      {[1000, 5000, 10000, 20000, 50000, 100000].map((nom) => (
+                        <button
+                          key={nom}
+                          type="button"
+                          className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100"
+                          onClick={() => setPaymentAmount((prev) => prev + nom)}
+                        >
+                          {nom >= 1000 ? `${nom/1000}K` : nom}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
+                      onClick={() => setPaymentAmount(calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal)}
+                    >
+                      LUNAS (Rp {(calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal).toLocaleString("id-ID")})
+                    </button>
+                  </>
+                ) : (
+                  <input
+                    type="number"
+                    min={0}
+                    value={paymentAmount}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setPaymentAmount(val);
+                    }}
+                    className="w-full px-3 py-3 border rounded text-center text-2xl font-mono mb-2"
+                    placeholder="Masukkan nominal bayar"
+                  />
+                )}
+                <div className="text-center text-3xl font-mono font-bold py-2 border-b border-gray-200 mb-2">
+                  Rp {paymentAmount.toLocaleString("id-ID")}
+                </div>
               </div>
+              {/* Change */}
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">
-                  Kembalian
-                </label>
-                <input
-                  type="text"
-                  value={`Rp ${
-                    changeAmount > 0 ? changeAmount.toLocaleString("id-ID") : 0
-                  }`}
-                  readOnly
-                  className="w-full px-3 py-2 border rounded bg-gray-100"
-                />
+                <div className="font-medium text-gray-700 mb-1">Kembalian</div>
+                <div className="text-2xl font-mono font-bold text-green-700 text-center">
+                  Rp {(paymentAmount - (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal) > 0 ? (paymentAmount - (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal)).toLocaleString("id-ID") : 0)}
+                </div>
               </div>
               <div className="flex gap-3 mt-6">
                 <button
@@ -2851,9 +2869,10 @@ const ActiveRentals: React.FC = () => {
                 </button>
                 <button
                   onClick={handleProcessPayment}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${paymentAmount < (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={paymentAmount < (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal)}
                 >
-                  Proses Pembayaran & Akhiri Rental
+                  Bayar
                 </button>
               </div>
             </div>
