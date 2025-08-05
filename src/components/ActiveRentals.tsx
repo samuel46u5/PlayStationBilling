@@ -1901,14 +1901,17 @@ const ActiveRentals: React.FC = () => {
                               ).toLocaleString("id-ID")}
                             </p>
                           </div>
-                          {typeof productsTotalMap[activeSession.id] !== "undefined" && (
-                            <div>
-                              <span className="text-green-700">Total Produk:</span>
-                              <p className="font-medium">
-                                Rp {productsTotalMap[activeSession.id].toLocaleString("id-ID")}
-                              </p>
-                            </div>
-                          )}
+                          <div>
+                            <span className="text-green-700">Total Produk:</span>
+                            <p className="font-medium">
+                              Rp{" "}
+                              {activeSession.productsTotal !== undefined
+                                ? activeSession.productsTotal.toLocaleString("id-ID")
+                                : activeSession.id
+                                  ? (window.__productsTotalCache?.[activeSession.id] ?? 0).toLocaleString("id-ID")
+                                  : "0"}
+                            </p>
+                          </div>
                           <div>
                             <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
@@ -2782,7 +2785,7 @@ const ActiveRentals: React.FC = () => {
               {/* Header Total */}
               <div className="flex items-center justify-between mb-6">
                 <div className="text-xl font-bold text-gray-700">Total:</div>
-                <div className="text-2xl font-bold text-right text-blue-700">Rp {(calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal).toLocaleString("id-ID")}</div>
+                <div className="text-2xl font-bold text-right text-blue-700">Rp {(calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0)).toLocaleString("id-ID")}</div>
               </div>
               {/* Metode Pembayaran */}
               <div className="mb-4">
@@ -2809,7 +2812,7 @@ const ActiveRentals: React.FC = () => {
                 <div className="flex justify-between"><span>Customer:</span><span className="font-medium">{showPaymentModal.session.customers?.name}</span></div>
                 <div className="flex justify-between"><span>Durasi:</span><span className="font-medium">{formatElapsedHMS(showPaymentModal.session.start_time)}</span></div>
                 <div className="flex justify-between"><span>Total Rental:</span><span className="font-medium">Rp {calculateCurrentCost(showPaymentModal.session).toLocaleString("id-ID")}</span></div>
-                <div className="flex justify-between"><span>Total Produk:</span><span className="font-medium">Rp {showPaymentModal.productsTotal.toLocaleString("id-ID")}</span></div>
+                <div className="flex justify-between"><span>Total Produk:</span><span className="font-medium">Rp {(showPaymentModal.productsTotal ?? 0).toLocaleString("id-ID")}</span></div>
               </div>
               {/* Jumlah Bayar */}
               <div className="mb-4">
@@ -2856,9 +2859,9 @@ const ActiveRentals: React.FC = () => {
                     <button
                       type="button"
                       className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
-                      onClick={() => setPaymentAmount(calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal)}
+                    onClick={() => setPaymentAmount(calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0))}
                     >
-                      LUNAS (Rp {(calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal).toLocaleString("id-ID")})
+                      LUNAS (Rp {(calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0)).toLocaleString("id-ID")})
                     </button>
                   </>
                 ) : (
@@ -2882,7 +2885,7 @@ const ActiveRentals: React.FC = () => {
               <div className="mb-4">
                 <div className="font-medium text-gray-700 mb-1">Kembalian</div>
                 <div className="text-2xl font-mono font-bold text-green-700 text-center">
-                  Rp {(paymentAmount - (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal) > 0 ? (paymentAmount - (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal)).toLocaleString("id-ID") : 0)}
+                  Rp {(paymentAmount - (calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0)) > 0 ? (paymentAmount - (calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0))).toLocaleString("id-ID") : 0)}
                 </div>
               </div>
               <div className="flex gap-3 mt-6">
@@ -2894,8 +2897,8 @@ const ActiveRentals: React.FC = () => {
                 </button>
                 <button
                   onClick={handleProcessPayment}
-                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${paymentAmount < (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  disabled={paymentAmount < (calculateCurrentCost(showPaymentModal.session) + showPaymentModal.productsTotal)}
+                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${paymentAmount < (calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={paymentAmount < (calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0))}
                 >
                   Bayar
                 </button>
