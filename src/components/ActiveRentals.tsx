@@ -1824,13 +1824,27 @@ const ActiveRentals: React.FC = () => {
                         : "bg-purple-600"
                     } text-white`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Gamepad2 className="h-6 w-6" />
-                      <h3 className="font-semibold text-lg">{console.name}</h3>
-                      {console.location && (
-                        <span className="text-sm opacity-80">
-                          {console.location}
-                        </span>
+                    <div className="flex items-center gap-3 justify-between">
+                      <div className="flex items-center gap-3">
+                        <Gamepad2 className="h-6 w-6" />
+                        <h3 className="font-semibold text-lg">{console.name}</h3>
+                        {console.location && (
+                          <span className="text-sm opacity-80">
+                            {console.location}
+                          </span>
+                        )}
+                      </div>
+                      {/* Total Rp. */}
+                      {console.status === "rented" && activeSession && (
+                        <div className="text-right">
+                          <div className="text-xs font-semibold opacity-80">Total</div>
+                          <div className="text-lg font-bold">
+                            Rp {(
+                              calculateCurrentCost(activeSession) +
+                              (productsTotalMap[activeSession.id] || 0)
+                            ).toLocaleString("id-ID")}
+                          </div>
+                        </div>
                       )}
                     </div>
                     <div className="mt-2 flex justify-between items-center">
