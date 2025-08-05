@@ -101,6 +101,9 @@ interface CartItem {
   total: number;
 }
 
+
+
+
 const ActiveRentals: React.FC = () => {
 
   // Untuk interface pembayaran mirip Cashier
@@ -244,6 +247,7 @@ const ActiveRentals: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+
   const [showPaymentModal, setShowPaymentModal] = useState<null | {
     session: RentalSession;
     productsTotal: number;
@@ -251,6 +255,11 @@ const ActiveRentals: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
+
+  // Reset paymentAmount ke 0 setiap kali showPaymentModal berubah (end rental)
+  React.useEffect(() => {
+    if (showPaymentModal) setPaymentAmount(0);
+  }, [showPaymentModal]);
 
   // Load history sessions
   const loadHistorySessions = async (startDate?: string, endDate?: string) => {
