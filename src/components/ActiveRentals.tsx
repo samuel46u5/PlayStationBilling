@@ -1939,7 +1939,7 @@ const ActiveRentals: React.FC = () => {
                                   <span className="font-bold text-purple-700">
                                     {formatCountdown(
                                       countdownTimers[activeSession.id] || 0
-                                    )}{" "}
+                                    )}
                                     tersisa
                                   </span>
                                 </span>
@@ -1956,8 +1956,7 @@ const ActiveRentals: React.FC = () => {
                           <div>
                             <span className="text-blue-600">Biaya:</span>
                             <p className="font-medium">
-                              Rp{" "}
-                              {calculateCurrentCost(
+                              Rp {calculateCurrentCost(
                                 activeSession
                               ).toLocaleString("id-ID")}
                             </p>
@@ -1965,9 +1964,20 @@ const ActiveRentals: React.FC = () => {
                           <div>
                             <span className="text-green-700">Total Produk:</span>
                             <p className="font-medium">
-                              Rp{" "}
-                              {productsTotalMap[activeSession.id]?.toLocaleString("id-ID") ?? "0"}
+                              Rp {productsTotalMap[activeSession.id]?.toLocaleString("id-ID") ?? "0"}
                             </p>
+                          </div>
+                          {/* Tarif per Jam Card Hijau */}
+                          <div className="col-span-2">
+                            <div className="bg-green-100 rounded-lg p-3 flex items-center justify-between mt-2">
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="h-4 w-4 text-green-700" />
+                                <span className="font-semibold text-green-800">Tarif per Jam</span>
+                              </div>
+                              <span className="font-semibold text-blue-600 text-lg">
+                                Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString("id-ID") : "0"}
+                              </span>
+                            </div>
                           </div>
                           <div>
                             <span className="text-blue-600">Status:</span>
