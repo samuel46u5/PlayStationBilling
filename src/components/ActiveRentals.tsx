@@ -800,6 +800,12 @@ const ActiveRentals: React.FC = () => {
       const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
       const [isManualInput, setIsManualInput] = useState(false);
       const [paymentAmount, setPaymentAmount] = useState(totalAmount);
+      // Reset paymentAmount hanya saat modal pertama kali dibuka
+      useEffect(() => {
+        if (open) {
+          setPaymentAmount(totalAmount);
+        }
+      }, [open, totalAmount]);
       // Kembalian
       const change = paymentAmount - totalAmount;
       if (!open) return null;
@@ -843,14 +849,14 @@ const ActiveRentals: React.FC = () => {
                     <button
                       type="button"
                       className={`text-xs px-2 py-1 rounded border ${!isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
-                      onClick={() => { setIsManualInput(false); setPaymentAmount(totalAmount); }}
+                      onClick={() => setIsManualInput(false)}
                     >
                       Quick
                     </button>
                     <button
                       type="button"
                       className={`text-xs px-2 py-1 rounded border ${isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
-                      onClick={() => { setIsManualInput(true); setPaymentAmount(totalAmount); }}
+                      onClick={() => setIsManualInput(true)}
                     >
                       Manual
                     </button>
@@ -1166,6 +1172,15 @@ const ActiveRentals: React.FC = () => {
   };
 
   // Render PrepaidPaymentModal setelah Start Rental Modal
+  // State untuk pause pengecekan Console Information
+  const [pauseConsoleInfoCheck, setPauseConsoleInfoCheck] = useState(false);
+
+  // Pause timer pengecekan Console Information saat modal pembayaran prepaid tampil
+  useEffect(() => {
+    setPauseConsoleInfoCheck(!!showPrepaidPaymentModal);
+  }, [showPrepaidPaymentModal]);
+
+  // ...existing code...
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
@@ -2072,6 +2087,8 @@ const ActiveRentals: React.FC = () => {
       )}
 
       {/* Start Rental Modal */}
+      {/* Timer pengecekan Console Information DIHENTIKAN jika pauseConsoleInfoCheck true */}
+      {/* ...existing code... */}
       {showStartRentalModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
@@ -2981,18 +2998,16 @@ const ActiveRentals: React.FC = () => {
         </div>
       )}
 
-      {/* Prepaid Payment Modal */}
-      {showPrepaidPaymentModal && (
-        <PrepaidPaymentModal2
-          open={!!showPrepaidPaymentModal}
-          onClose={() => setShowPrepaidPaymentModal(null)}
-          onConfirm={handleConfirmPrepaidPayment}
-          duration={`${showPrepaidPaymentModal.rentalDurationHours} jam ${showPrepaidPaymentModal.rentalDurationMinutes} menit`}
-          hourlyRate={showPrepaidPaymentModal.hourlyRate}
-          totalAmount={showPrepaidPaymentModal.totalAmount}
-          loading={prepaidPaymentLoading}
-        />
-      )}
+      {/* Prepaid Payment Modal - render di root, bukan di dalam loop/grid/list/detail */}
+      <PrepaidPaymentModal2
+        open={!!showPrepaidPaymentModal}
+        onClose={() => setShowPrepaidPaymentModal(null)}
+        onConfirm={handleConfirmPrepaidPayment}
+        duration={showPrepaidPaymentModal ? `${showPrepaidPaymentModal.rentalDurationHours} jam ${showPrepaidPaymentModal.rentalDurationMinutes} menit` : ''}
+        hourlyRate={showPrepaidPaymentModal ? showPrepaidPaymentModal.hourlyRate : 0}
+        totalAmount={showPrepaidPaymentModal ? showPrepaidPaymentModal.totalAmount : 0}
+        loading={prepaidPaymentLoading}
+      />
 
       {/* Panel summary stats di bawah dihapus sesuai permintaan */}
     </div>
