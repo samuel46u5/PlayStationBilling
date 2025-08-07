@@ -1873,33 +1873,22 @@ const ActiveRentals: React.FC = () => {
 
                   {/* Body */}
                   <div className="p-4">
-                    {/* Add Products Button */}
-                    {!activeSession?.duration_minutes && (
-                      <button
-                        onClick={() => {
-                          if (console.status === "rented" && activeSession) {
-                            setShowProductModal(activeSession.id);
-                          } else {
-                            Swal.fire(
-                              "Info",
-                              "Konsol harus dalam status aktif untuk menambahkan produk",
-                              "info"
-                            );
-                          }
-                        }}
-                        
-                      
-                        className={`w-full ${
-                          console.status === "rented"
-                            ? "bg-orange-500 hover:bg-orange-600"
-                            : "bg-gray-400 cursor-not-allowed"
-                        } text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
-                        disabled={console.status !== "rented"}
-                      >
-                        <ShoppingCart className="h-5 w-5" />
-                        Add Products agus
-                      </button>
-                    )}
+                    {/* Rate Info */}
+                    <div className="mb-4">
+                      <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4" />
+                        Tarif per Jam
+                      </h4>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Per Jam</span>
+                        <span className="font-semibold text-blue-600">
+                          Rp{" "}
+                          {rateProfile
+                            ? rateProfile.hourly_rate.toLocaleString("id-ID")
+                            : "0"}
+                        </span>
+                      </div>
+                    </div>
 
                     {/* Active Session Info */}
                     {isActive && activeSession && (
@@ -1973,31 +1962,28 @@ const ActiveRentals: React.FC = () => {
                             </p>
                           </div>
                           <div>
-                            <span className="text-blue-600">Total Produk:</span>
+                            <span className="text-green-700">Total Produk:</span>
                             <p className="font-medium">
                               Rp {productsTotalMap[activeSession.id]?.toLocaleString("id-ID") ?? "0"}
                             </p>
                           </div>
                           {/* Tarif per Jam Card Hijau */}
                           <div className="col-span-2">
-                        
-                          
-                        
+                            <div className="bg-green-100 rounded-lg p-3 flex items-center justify-between mt-2">
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="h-4 w-4 text-green-700" />
+                                <span className="font-semibold text-green-800">Tarif per Jam</span>
+                              </div>
+                              <span className="font-semibold text-blue-600 text-lg">
+                                Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString("id-ID") : "0"}
+                              </span>
+                            </div>
                           </div>
-                            <div>
+                          <div>
                             <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
                               {activeSession.payment_status.toUpperCase()}
                             </p>
-                          </div>
-                          <div>
-                             <div className="flex items-center gap-2">
-                                {/* <DollarSign className="h-4 w-4 text-green-700" /> */}
-                                <span className="text-blue-600">Tarif per Jam</span>
-                              </div>
-                              <span className="font-medium">
-                                Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString("id-ID") : "0"}
-                              </span>
                           </div>
                         </div>
 
@@ -2041,7 +2027,31 @@ const ActiveRentals: React.FC = () => {
                       </button>
                     )}
 
-                    
+                    {/* Add Products Button */}
+                    {!activeSession?.duration_minutes && (
+                      <button
+                        onClick={() => {
+                          if (console.status === "rented" && activeSession) {
+                            setShowProductModal(activeSession.id);
+                          } else {
+                            Swal.fire(
+                              "Info",
+                              "Konsol harus dalam status aktif untuk menambahkan produk",
+                              "info"
+                            );
+                          }
+                        }}
+                        className={`w-full ${
+                          console.status === "rented"
+                            ? "bg-orange-500 hover:bg-orange-600"
+                            : "bg-gray-400 cursor-not-allowed"
+                        } text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+                        disabled={console.status !== "rented"}
+                      >
+                        <ShoppingCart className="h-5 w-5" />
+                        Add Products
+                      </button>
+                    )}
                   </div>
                 </div>
               );
