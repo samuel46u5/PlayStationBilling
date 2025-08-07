@@ -779,6 +779,158 @@ const ActiveRentals: React.FC = () => {
     );
   };
 
+    // Modal pembayaran prepaid, UI sama dengan kasir (end rental), tapi logic tetap prepaid
+    const PrepaidPaymentModal2 = ({
+      open,
+      onClose,
+      onConfirm,
+      duration,
+      hourlyRate,
+      totalAmount,
+      loading
+    }: {
+      open: boolean;
+      onClose: () => void;
+      onConfirm: (paymentMethod: "cash" | "qris") => void;
+      duration: string;
+      hourlyRate: number;
+      totalAmount: number;
+      loading: boolean;
+    }) => {
+      const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
+      const [isManualInput, setIsManualInput] = useState(false);
+      const [paymentAmount, setPaymentAmount] = useState(totalAmount);
+      // Kembalian
+      const change = paymentAmount - totalAmount;
+      if (!open) return null;
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="text-xl font-bold text-gray-700">Total:</div>
+                <div className="text-2xl font-bold text-right text-blue-700">Rp {totalAmount.toLocaleString("id-ID")}</div>
+              </div>
+              <div className="mb-4">
+                <div className="mb-2 font-medium text-gray-700">Metode Pembayaran</div>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${paymentMethod === 'cash' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                    onClick={() => setPaymentMethod('cash')}
+                    disabled={loading}
+                  >
+                    <span className="inline-block mr-1">💵</span> Cash
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${paymentMethod === 'qris' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                    onClick={() => setPaymentMethod('qris')}
+                    disabled={loading}
+                  >
+                    <span className="inline-block mr-1">🏧</span> QRIS
+                  </button>
+                </div>
+              </div>
+              <div className="mb-4 text-sm text-gray-600">
+                <div className="flex justify-between"><span>Durasi:</span><span className="font-medium">{duration}</span></div>
+                <div className="flex justify-between"><span>Tarif per jam:</span><span className="font-medium">Rp {hourlyRate.toLocaleString("id-ID")}</span></div>
+              </div>
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-gray-700">Jumlah Bayar</div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={`text-xs px-2 py-1 rounded border ${!isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
+                      onClick={() => { setIsManualInput(false); setPaymentAmount(totalAmount); }}
+                    >
+                      Quick
+                    </button>
+                    <button
+                      type="button"
+                      className={`text-xs px-2 py-1 rounded border ${isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
+                      onClick={() => { setIsManualInput(true); setPaymentAmount(totalAmount); }}
+                    >
+                      Manual
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                      onClick={() => setPaymentAmount(0)}
+                    >
+                      × Clear
+                    </button>
+                  </div>
+                </div>
+                {!isManualInput ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      {[1000, 5000, 10000, 20000, 50000, 100000].map((nom) => (
+                        <button
+                          key={nom}
+                          type="button"
+                          className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100"
+                          onClick={() => setPaymentAmount((prev) => prev + nom)}
+                        >
+                          {nom >= 1000 ? `${nom/1000}K` : nom}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
+                      onClick={() => setPaymentAmount(totalAmount)}
+                    >
+                      LUNAS (Rp {totalAmount.toLocaleString("id-ID")})
+                    </button>
+                  </>
+                ) : (
+                  <input
+                    type="number"
+                    min={0}
+                    value={paymentAmount}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setPaymentAmount(val);
+                    }}
+                    className="w-full px-3 py-3 border rounded text-center text-2xl font-mono mb-2"
+                    placeholder="Masukkan nominal bayar"
+                  />
+                )}
+                <div className="text-center text-3xl font-mono font-bold py-2 border-b border-gray-200 mb-2">
+                  Rp {paymentAmount.toLocaleString("id-ID")}
+                </div>
+              </div>
+              {/* Change */}
+              <div className="mb-4">
+                <div className="font-medium text-gray-700 mb-1">Kembalian</div>
+                <div className="text-2xl font-mono font-bold text-green-700 text-center">
+                  Rp {(change > 0 ? change.toLocaleString("id-ID") : 0)}
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={onClose}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                  disabled={loading}
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => onConfirm(paymentMethod)}
+                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${paymentAmount < totalAmount ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={paymentAmount < totalAmount || loading}
+                >
+                  Bayar & Mulai
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
   // Tambahkan state untuk modal pembayaran prepaid
   type PrepaidPaymentModalState = {
     console: any;
@@ -2831,7 +2983,7 @@ const ActiveRentals: React.FC = () => {
 
       {/* Prepaid Payment Modal */}
       {showPrepaidPaymentModal && (
-        <PrepaidPaymentModal
+        <PrepaidPaymentModal2
           open={!!showPrepaidPaymentModal}
           onClose={() => setShowPrepaidPaymentModal(null)}
           onConfirm={handleConfirmPrepaidPayment}
