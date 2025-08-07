@@ -555,21 +555,6 @@ const ActiveRentals: React.FC = () => {
         </div>
       )}
 
-      {/* Payment Module - hanya untuk prepaid */}
-      <PrepaidPaymentModule
-        isOpen={showPrepaidPayment}
-        onClose={() => setShowPrepaidPayment(false)}
-        onConfirm={handleStartPrepaidRental}
-        totalAmount={calculateRentalAmount()}
-        customerName={selectedCustomer?.name || ''}
-        consoleName={selectedConsole?.name || ''}
-        duration={selectedDuration}
-        rateDetails={selectedRateProfile ? {
-          baseRate: selectedRateProfile.hourlyRate,
-          peakHourRate: selectedRateProfile.peakHourRate,
-          weekendMultiplier: selectedRateProfile.weekendMultiplier
-        } : undefined}
-      />
     </div>
   );
 };
