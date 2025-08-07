@@ -1,9 +1,10 @@
 // ...existing code...
 
-  // ...existing code...
-import { Power } from 'lucide-react';
+// ...existing code...
+import { Power } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
+import RealTimeClock from "./RealTimeClock";
 
 interface SaleItem {
   product_id: string;
@@ -99,18 +100,13 @@ interface CartItem {
   total: number;
 }
 
-
-
-
 const ActiveRentals: React.FC = () => {
-
   // Untuk interface pembayaran mirip Cashier
   const [isManualInput, setIsManualInput] = useState(false);
   // State untuk status relay dan TV
-  const [relayStatus, setRelayStatus] = useState<string>('OFF');
-  const [tvStatus, setTvStatus] = useState<'ON' | 'OFF'>('OFF');
+  const [relayStatus, setRelayStatus] = useState<string>("OFF");
+  const [tvStatus, setTvStatus] = useState<"ON" | "OFF">("OFF");
   const [consoles, setConsoles] = useState<Console[]>([]);
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [consoleFilter, setConsoleFilter] = useState<
     "all" | "available" | "rented" | "maintenance"
   >("all");
@@ -125,18 +121,27 @@ const ActiveRentals: React.FC = () => {
   const [searchProduct, setSearchProduct] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [loading, setLoading] = useState(true);
-  const [showStartRentalModal, setShowStartRentalModal] = useState<string | null>(null);
+  const [showStartRentalModal, setShowStartRentalModal] = useState<
+    string | null
+  >(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [customers, setCustomers] = useState<any[]>([]);
-  const [customerType, setCustomerType] = useState<"member" | "non-member">("member");
-  const [rentalType, setRentalType] = useState<"pay-as-you-go" | "prepaid">("pay-as-you-go");
+  const [customerType, setCustomerType] = useState<"member" | "non-member">(
+    "member"
+  );
+  const [rentalType, setRentalType] = useState<"pay-as-you-go" | "prepaid">(
+    "pay-as-you-go"
+  );
   const [rentalDurationHours, setRentalDurationHours] = useState<number>(1);
   const [rentalDurationMinutes, setRentalDurationMinutes] = useState<number>(0);
 
   // --- TV Status JSON and selectedConsole hooks must be after all state declarations ---
   const [tvStatusJson, setTvStatusJson] = React.useState<string>("");
-  const selectedConsole = React.useMemo(() =>
-    showStartRentalModal ? consoles.find((c: any) => c.id === showStartRentalModal) : undefined,
+  const selectedConsole = React.useMemo(
+    () =>
+      showStartRentalModal
+        ? consoles.find((c: any) => c.id === showStartRentalModal)
+        : undefined,
     [showStartRentalModal, consoles]
   );
 
@@ -144,8 +149,8 @@ const ActiveRentals: React.FC = () => {
     if (showStartRentalModal && selectedConsole?.perintah_cek_power_tv) {
       setTvStatusJson("");
       fetch(String(selectedConsole.perintah_cek_power_tv))
-        .then(res => res.text())
-        .then(text => setTvStatusJson(text))
+        .then((res) => res.text())
+        .then((text) => setTvStatusJson(text))
         .catch(() => setTvStatusJson("Gagal cek status"));
     } else {
       setTvStatusJson("");
@@ -153,7 +158,8 @@ const ActiveRentals: React.FC = () => {
   }, [showStartRentalModal, selectedConsole?.perintah_cek_power_tv]);
 
   // Polling status TV & relay secara real-time saat modal Start Rental tampil
-  const [statusIntervalId, setStatusIntervalId] = React.useState<NodeJS.Timeout | null>(null);
+  const [statusIntervalId, setStatusIntervalId] =
+    React.useState<NodeJS.Timeout | null>(null);
   React.useEffect(() => {
     if (!showStartRentalModal || !selectedConsole) {
       if (statusIntervalId) clearInterval(statusIntervalId);
@@ -164,14 +170,14 @@ const ActiveRentals: React.FC = () => {
     const interval = setInterval(() => {
       if (selectedConsole.perintah_cek_power_tv) {
         fetch(selectedConsole.perintah_cek_power_tv)
-          .then(res => res.text())
-          .then(text => setTvStatusJson(text))
+          .then((res) => res.text())
+          .then((text) => setTvStatusJson(text))
           .catch(() => setTvStatusJson("Gagal cek status"));
       }
       if (selectedConsole.relay_command_status) {
         fetch(selectedConsole.relay_command_status)
-          .then(res => res.text())
-          .then(text => setRelayStatus(text))
+          .then((res) => res.text())
+          .then((text) => setRelayStatus(text))
           .catch(() => setRelayStatus("-"));
       }
     }, 3000);
@@ -210,11 +216,11 @@ const ActiveRentals: React.FC = () => {
       fetch(console.relay_command_status)
         .then((res) => res.text())
         .then((text) => {
-          setRelayStatus(text.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF');
+          setRelayStatus(text.trim().toUpperCase() === "ON" ? "ON" : "OFF");
         })
-        .catch(() => setRelayStatus('OFF'));
+        .catch(() => setRelayStatus("OFF"));
     } else {
-      setRelayStatus('OFF');
+      setRelayStatus("OFF");
     }
   }, [showStartRentalModal, consoles]);
   const [nonMemberName, setNonMemberName] = useState<string>("");
@@ -251,7 +257,9 @@ const ActiveRentals: React.FC = () => {
     productsTotal: number;
   }>(null);
   // Mapping sessionId -> total produk
-  const [productsTotalMap, setProductsTotalMap] = useState<Record<string, number>>({});
+  const [productsTotalMap, setProductsTotalMap] = useState<
+    Record<string, number>
+  >({});
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
@@ -312,12 +320,12 @@ const ActiveRentals: React.FC = () => {
   }, []);
 
   // Real-time clock for header
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     setCurrentTime(new Date());
+  //   }, 1000);
+  //   return () => clearInterval(interval);
+  // }, []);
 
   // Set up countdown timers for prepaid sessions
   useEffect(() => {
@@ -477,7 +485,9 @@ const ActiveRentals: React.FC = () => {
             .in("status", ["pending", "completed"]);
           if (!productRowsError && Array.isArray(productRows)) {
             for (const sessionId of sessionIds) {
-              const items = productRows.filter((row) => row.session_id === sessionId);
+              const items = productRows.filter(
+                (row) => row.session_id === sessionId
+              );
               productsTotalMap[sessionId] = items.reduce(
                 (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
                 0
@@ -716,7 +726,7 @@ const ActiveRentals: React.FC = () => {
     duration,
     hourlyRate,
     totalAmount,
-    loading
+    loading,
   }: {
     open: boolean;
     onClose: () => void;
@@ -734,22 +744,42 @@ const ActiveRentals: React.FC = () => {
           <div className="p-6">
             <h2 className="text-xl font-semibold mb-4">Pembayaran </h2>
             <div className="mb-4">
-              <p><strong>Durasi:</strong> {duration}</p>
-              <p><strong>Tarif per jam:</strong> Rp {hourlyRate.toLocaleString("id-ID")}</p>
-              <p><strong>Total:</strong> <span className="text-lg font-bold text-blue-700">Rp {totalAmount.toLocaleString("id-ID")}</span></p>
+              <p>
+                <strong>Durasi:</strong> {duration}
+              </p>
+              <p>
+                <strong>Tarif per jam:</strong> Rp{" "}
+                {hourlyRate.toLocaleString("id-ID")}
+              </p>
+              <p>
+                <strong>Total:</strong>{" "}
+                <span className="text-lg font-bold text-blue-700">
+                  Rp {totalAmount.toLocaleString("id-ID")}
+                </span>
+              </p>
             </div>
             <div className="mb-4">
-              <label className="block mb-1 font-medium">Metode Pembayaran</label>
+              <label className="block mb-1 font-medium">
+                Metode Pembayaran
+              </label>
               <div className="flex gap-3">
                 <button
-                  className={`px-4 py-2 rounded-lg border font-medium ${paymentMethod === "cash" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300"}`}
+                  className={`px-4 py-2 rounded-lg border font-medium ${
+                    paymentMethod === "cash"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300"
+                  }`}
                   onClick={() => setPaymentMethod("cash")}
                   disabled={loading}
                 >
                   Tunai
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-lg border font-medium ${paymentMethod === "qris" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300"}`}
+                  className={`px-4 py-2 rounded-lg border font-medium ${
+                    paymentMethod === "qris"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300"
+                  }`}
                   onClick={() => setPaymentMethod("qris")}
                   disabled={loading}
                 >
@@ -779,163 +809,195 @@ const ActiveRentals: React.FC = () => {
     );
   };
 
-    // Modal pembayaran prepaid, UI sama dengan kasir (end rental), tapi logic tetap prepaid
-    const PrepaidPaymentModal2 = ({
-      open,
-      onClose,
-      onConfirm,
-      duration,
-      hourlyRate,
-      totalAmount,
-      loading
-    }: {
-      open: boolean;
-      onClose: () => void;
-      onConfirm: (paymentMethod: "cash" | "qris") => void;
-      duration: string;
-      hourlyRate: number;
-      totalAmount: number;
-      loading: boolean;
-    }) => {
-      const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
-      const [isManualInput, setIsManualInput] = useState(false);
-      const [paymentAmount, setPaymentAmount] = useState(totalAmount);
-      // Reset paymentAmount hanya saat modal pertama kali dibuka
-      useEffect(() => {
-        if (open) {
-          setPaymentAmount(totalAmount);
-        }
-      }, [open, totalAmount]);
-      // Kembalian
-      const change = paymentAmount - totalAmount;
-      if (!open) return null;
-      return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="text-xl font-bold text-gray-700">Total:</div>
-                <div className="text-2xl font-bold text-right text-blue-700">Rp {totalAmount.toLocaleString("id-ID")}</div>
+  // Modal pembayaran prepaid, UI sama dengan kasir (end rental), tapi logic tetap prepaid
+  const PrepaidPaymentModal2 = ({
+    open,
+    onClose,
+    onConfirm,
+    duration,
+    hourlyRate,
+    totalAmount,
+    loading,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onConfirm: (paymentMethod: "cash" | "qris") => void;
+    duration: string;
+    hourlyRate: number;
+    totalAmount: number;
+    loading: boolean;
+  }) => {
+    const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
+    const [isManualInput, setIsManualInput] = useState(false);
+    const [paymentAmount, setPaymentAmount] = useState(totalAmount);
+    // Reset paymentAmount hanya saat modal pertama kali dibuka
+    useEffect(() => {
+      if (open) {
+        setPaymentAmount(totalAmount);
+      }
+    }, [open, totalAmount]);
+    // Kembalian
+    const change = paymentAmount - totalAmount;
+    if (!open) return null;
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="text-xl font-bold text-gray-700">Total:</div>
+              <div className="text-2xl font-bold text-right text-blue-700">
+                Rp {totalAmount.toLocaleString("id-ID")}
               </div>
-              <div className="mb-4">
-                <div className="mb-2 font-medium text-gray-700">Metode Pembayaran</div>
-                <div className="flex gap-2 mb-2">
-                  <button
-                    type="button"
-                    className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${paymentMethod === 'cash' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
-                    onClick={() => setPaymentMethod('cash')}
-                    disabled={loading}
-                  >
-                    <span className="inline-block mr-1">💵</span> Cash
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${paymentMethod === 'qris' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
-                    onClick={() => setPaymentMethod('qris')}
-                    disabled={loading}
-                  >
-                    <span className="inline-block mr-1">🏧</span> QRIS
-                  </button>
-                </div>
+            </div>
+            <div className="mb-4">
+              <div className="mb-2 font-medium text-gray-700">
+                Metode Pembayaran
               </div>
-              <div className="mb-4 text-sm text-gray-600">
-                <div className="flex justify-between"><span>Durasi:</span><span className="font-medium">{duration}</span></div>
-                <div className="flex justify-between"><span>Tarif per jam:</span><span className="font-medium">Rp {hourlyRate.toLocaleString("id-ID")}</span></div>
-              </div>
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-medium text-gray-700">Jumlah Bayar</div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className={`text-xs px-2 py-1 rounded border ${!isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
-                      onClick={() => setIsManualInput(false)}
-                    >
-                      Quick
-                    </button>
-                    <button
-                      type="button"
-                      className={`text-xs px-2 py-1 rounded border ${isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
-                      onClick={() => setIsManualInput(true)}
-                    >
-                      Manual
-                    </button>
-                    <button
-                      type="button"
-                      className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
-                      onClick={() => setPaymentAmount(0)}
-                    >
-                      × Clear
-                    </button>
-                  </div>
-                </div>
-                {!isManualInput ? (
-                  <>
-                    <div className="grid grid-cols-3 gap-2 mb-2">
-                      {[1000, 5000, 10000, 20000, 50000, 100000].map((nom) => (
-                        <button
-                          key={nom}
-                          type="button"
-                          className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100"
-                          onClick={() => setPaymentAmount((prev) => prev + nom)}
-                        >
-                          {nom >= 1000 ? `${nom/1000}K` : nom}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
-                      onClick={() => setPaymentAmount(totalAmount)}
-                    >
-                      LUNAS (Rp {totalAmount.toLocaleString("id-ID")})
-                    </button>
-                  </>
-                ) : (
-                  <input
-                    type="number"
-                    min={0}
-                    value={paymentAmount}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value) || 0;
-                      setPaymentAmount(val);
-                    }}
-                    className="w-full px-3 py-3 border rounded text-center text-2xl font-mono mb-2"
-                    placeholder="Masukkan nominal bayar"
-                  />
-                )}
-                <div className="text-center text-3xl font-mono font-bold py-2 border-b border-gray-200 mb-2">
-                  Rp {paymentAmount.toLocaleString("id-ID")}
-                </div>
-              </div>
-              {/* Change */}
-              <div className="mb-4">
-                <div className="font-medium text-gray-700 mb-1">Kembalian</div>
-                <div className="text-2xl font-mono font-bold text-green-700 text-center">
-                  Rp {(change > 0 ? change.toLocaleString("id-ID") : 0)}
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-2 mb-2">
                 <button
-                  onClick={onClose}
-                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                  type="button"
+                  className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${
+                    paymentMethod === "cash"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                  }`}
+                  onClick={() => setPaymentMethod("cash")}
                   disabled={loading}
                 >
-                  Batal
+                  <span className="inline-block mr-1">💵</span> Cash
                 </button>
                 <button
-                  onClick={() => onConfirm(paymentMethod)}
-                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${paymentAmount < totalAmount ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  disabled={paymentAmount < totalAmount || loading}
+                  type="button"
+                  className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${
+                    paymentMethod === "qris"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                  }`}
+                  onClick={() => setPaymentMethod("qris")}
+                  disabled={loading}
                 >
-                  Bayar & Mulai
+                  <span className="inline-block mr-1">🏧</span> QRIS
                 </button>
               </div>
             </div>
+            <div className="mb-4 text-sm text-gray-600">
+              <div className="flex justify-between">
+                <span>Durasi:</span>
+                <span className="font-medium">{duration}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Tarif per jam:</span>
+                <span className="font-medium">
+                  Rp {hourlyRate.toLocaleString("id-ID")}
+                </span>
+              </div>
+            </div>
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-gray-700">Jumlah Bayar</div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      !isManualInput
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => setIsManualInput(false)}
+                  >
+                    Quick
+                  </button>
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      isManualInput
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => setIsManualInput(true)}
+                  >
+                    Manual
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                    onClick={() => setPaymentAmount(0)}
+                  >
+                    × Clear
+                  </button>
+                </div>
+              </div>
+              {!isManualInput ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {[1000, 5000, 10000, 20000, 50000, 100000].map((nom) => (
+                      <button
+                        key={nom}
+                        type="button"
+                        className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100"
+                        onClick={() => setPaymentAmount((prev) => prev + nom)}
+                      >
+                        {nom >= 1000 ? `${nom / 1000}K` : nom}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
+                    onClick={() => setPaymentAmount(totalAmount)}
+                  >
+                    LUNAS (Rp {totalAmount.toLocaleString("id-ID")})
+                  </button>
+                </>
+              ) : (
+                <input
+                  type="number"
+                  min={0}
+                  value={paymentAmount}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setPaymentAmount(val);
+                  }}
+                  className="w-full px-3 py-3 border rounded text-center text-2xl font-mono mb-2"
+                  placeholder="Masukkan nominal bayar"
+                />
+              )}
+              <div className="text-center text-3xl font-mono font-bold py-2 border-b border-gray-200 mb-2">
+                Rp {paymentAmount.toLocaleString("id-ID")}
+              </div>
+            </div>
+            {/* Change */}
+            <div className="mb-4">
+              <div className="font-medium text-gray-700 mb-1">Kembalian</div>
+              <div className="text-2xl font-mono font-bold text-green-700 text-center">
+                Rp {change > 0 ? change.toLocaleString("id-ID") : 0}
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                disabled={loading}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => onConfirm(paymentMethod)}
+                className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
+                  paymentAmount < totalAmount
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
+                disabled={paymentAmount < totalAmount || loading}
+              >
+                Bayar & Mulai
+              </button>
+            </div>
           </div>
         </div>
-      );
-    };
+      </div>
+    );
+  };
 
   // Tambahkan state untuk modal pembayaran prepaid
   type PrepaidPaymentModalState = {
@@ -946,7 +1008,8 @@ const ActiveRentals: React.FC = () => {
     rentalDurationHours: number;
     rentalDurationMinutes: number;
   } | null;
-  const [showPrepaidPaymentModal, setShowPrepaidPaymentModal] = useState<PrepaidPaymentModalState>(null);
+  const [showPrepaidPaymentModal, setShowPrepaidPaymentModal] =
+    useState<PrepaidPaymentModalState>(null);
   const [prepaidPaymentLoading, setPrepaidPaymentLoading] = useState(false);
 
   // Ganti handleStartRental untuk prepaid agar memunculkan modal pembayaran
@@ -961,12 +1024,17 @@ const ActiveRentals: React.FC = () => {
     }
     try {
       // Pastikan tidak ada session aktif sebelumnya untuk console ini
-      const { data: existingSessions, error: existingSessionsError } = await supabase
-        .from("rental_sessions")
-        .select("id")
-        .eq("console_id", consoleId)
-        .eq("status", "active");
-      if (!existingSessionsError && Array.isArray(existingSessions) && existingSessions.length > 0) {
+      const { data: existingSessions, error: existingSessionsError } =
+        await supabase
+          .from("rental_sessions")
+          .select("id")
+          .eq("console_id", consoleId)
+          .eq("status", "active");
+      if (
+        !existingSessionsError &&
+        Array.isArray(existingSessions) &&
+        existingSessions.length > 0
+      ) {
         // Akhiri semua session aktif lama
         const sessionIds = existingSessions.map((s) => s.id);
         await supabase
@@ -987,7 +1055,10 @@ const ActiveRentals: React.FC = () => {
       // --- Cek status TV dan relay sebelum mulai rental, matikan otomatis jika masih ON ---
       let tvStatusNow = tvStatusJson?.toUpperCase?.() || "";
       let relayStatusNow = relayStatus?.toUpperCase?.() || "";
-      if ((tvStatusNow === "ON" || relayStatusNow === "ON") && (latestConsole.power_tv_command || latestConsole.relay_command_off)) {
+      if (
+        (tvStatusNow === "ON" || relayStatusNow === "ON") &&
+        (latestConsole.power_tv_command || latestConsole.relay_command_off)
+      ) {
         // Matikan otomatis tanpa konfirmasi
         if (latestConsole.power_tv_command && tvStatusNow === "ON") {
           await fetch(latestConsole.power_tv_command).catch(() => {});
@@ -1097,11 +1168,19 @@ const ActiveRentals: React.FC = () => {
     }
   };
   // Handler konfirmasi pembayaran prepaid
-  const handleConfirmPrepaidPayment = async (paymentMethod: "cash" | "qris") => {
+  const handleConfirmPrepaidPayment = async (
+    paymentMethod: "cash" | "qris"
+  ) => {
     if (!showPrepaidPaymentModal) return;
     setPrepaidPaymentLoading(true);
     try {
-      const { console: latestConsole, totalAmount, duration, rentalDurationHours, rentalDurationMinutes } = showPrepaidPaymentModal;
+      const {
+        console: latestConsole,
+        totalAmount,
+        duration,
+        rentalDurationHours,
+        rentalDurationMinutes,
+      } = showPrepaidPaymentModal;
       let customerId = selectedCustomerId;
       if (customerType === "non-member") {
         const customerData: any = {
@@ -1135,6 +1214,7 @@ const ActiveRentals: React.FC = () => {
           payment_method: paymentMethod,
         });
       if (rentalError) throw rentalError;
+
       // Update console status
       const { error: consoleError } = await supabase
         .from("consoles")
@@ -1150,7 +1230,14 @@ const ActiveRentals: React.FC = () => {
       setRentalDurationMinutes(0);
       setNonMemberName("");
       setNonMemberPhone("");
+      if (latestConsole.power_tv_command) {
+        fetch(latestConsole.power_tv_command).catch(() => {});
+      }
+      if (latestConsole.relay_command_on) {
+        fetch(latestConsole.relay_command_on).catch(() => {});
+      }
       await loadData();
+
       Swal.fire("Berhasil", "Sesi rental berhasil dimulai", "success");
     } catch (error) {
       console.error("Error starting prepaid rental:", error);
@@ -1168,7 +1255,9 @@ const ActiveRentals: React.FC = () => {
   const getConsoleRateProfile = (consoleId: string) => {
     const consoleObj = consoles.find((c: ConsoleType) => c.id === consoleId);
     if (!consoleObj || !consoleObj.rate_profile_id) return null;
-    return rateProfiles.find((r) => r.id === consoleObj.rate_profile_id) || null;
+    return (
+      rateProfiles.find((r) => r.id === consoleObj.rate_profile_id) || null
+    );
   };
 
   // Render PrepaidPaymentModal setelah Start Rental Modal
@@ -1197,13 +1286,7 @@ const ActiveRentals: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
-            <span className="text-xl font-bold font-mono">
-              {currentTime.toLocaleTimeString("id-ID", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
-            </span>
+            <RealTimeClock />
           </div>
           {/* Search Console */}
           <input
@@ -1631,7 +1714,6 @@ const ActiveRentals: React.FC = () => {
                           </span>
                         </div>
                         {/* Status Relay dan power tv command */}
-                   
                       </div>
                     )}
 
@@ -1667,20 +1749,42 @@ const ActiveRentals: React.FC = () => {
                         onClick={async () => {
                           if (console.power_tv_command) {
                             try {
-                              const response = await fetch(console.power_tv_command);
+                              const response = await fetch(
+                                console.power_tv_command
+                              );
                               if (response.ok) {
-                                Swal.fire('Tes TV', 'Perintah power ON dikirim ke TV.', 'success');
+                                Swal.fire(
+                                  "Tes TV",
+                                  "Perintah power ON dikirim ke TV.",
+                                  "success"
+                                );
                               } else {
                                 const text = await response.text();
-                                console.error('Tes TV error:', response.status, text);
-                                Swal.fire('Tes TV', `Gagal mengirim perintah ke TV. Status: ${response.status}`, 'error');
+                                console.error(
+                                  "Tes TV error:",
+                                  response.status,
+                                  text
+                                );
+                                Swal.fire(
+                                  "Tes TV",
+                                  `Gagal mengirim perintah ke TV. Status: ${response.status}`,
+                                  "error"
+                                );
                               }
                             } catch (err) {
-                              console.error('Tes TV fetch error:', err);
-                              Swal.fire('Tes TV', 'Gagal mengirim perintah ke TV (fetch error).', 'error');
+                              console.error("Tes TV fetch error:", err);
+                              Swal.fire(
+                                "Tes TV",
+                                "Gagal mengirim perintah ke TV (fetch error).",
+                                "error"
+                              );
                             }
                           } else {
-                            Swal.fire('Tes TV', 'Perintah power ON tidak tersedia.', 'info');
+                            Swal.fire(
+                              "Tes TV",
+                              "Perintah power ON tidak tersedia.",
+                              "info"
+                            );
                           }
                         }}
                         className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-1 rounded flex items-center justify-center text-xs"
@@ -1864,7 +1968,9 @@ const ActiveRentals: React.FC = () => {
                     <div className="flex items-center gap-3 justify-between">
                       <div className="flex items-center gap-3">
                         <Gamepad2 className="h-6 w-6" />
-                        <h3 className="font-semibold text-lg">{console.name}</h3>
+                        <h3 className="font-semibold text-lg">
+                          {console.name}
+                        </h3>
                         {console.location && (
                           <span className="text-sm opacity-80">
                             {console.location}
@@ -1874,9 +1980,12 @@ const ActiveRentals: React.FC = () => {
                       {/* Total Rp. */}
                       {console.status === "rented" && activeSession && (
                         <div className="text-right">
-                          <div className="text-xs font-semibold opacity-80">Total</div>
+                          <div className="text-xs font-semibold opacity-80">
+                            Total
+                          </div>
                           <div className="text-lg font-bold">
-                            Rp {(
+                            Rp{" "}
+                            {(
                               calculateCurrentCost(activeSession) +
                               (productsTotalMap[activeSession.id] || 0)
                             ).toLocaleString("id-ID")}
@@ -1910,8 +2019,6 @@ const ActiveRentals: React.FC = () => {
 
                   {/* Body */}
                   <div className="p-4">
-                    
-                  
                     {/* Active Session Info */}
                     {isActive && activeSession && (
                       <div
@@ -1978,11 +2085,12 @@ const ActiveRentals: React.FC = () => {
                           <div>
                             <span className="text-blue-600">Biaya:</span>
                             <p className="font-medium">
-                              Rp {calculateCurrentCost(
+                              Rp{" "}
+                              {calculateCurrentCost(
                                 activeSession
                               ).toLocaleString("id-ID")}
                             </p>
-                             <span className="text-blue-600">Status:</span>
+                            <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
                               {activeSession.payment_status.toUpperCase()}
                             </p>
@@ -1990,15 +2098,23 @@ const ActiveRentals: React.FC = () => {
                           <div>
                             <span className="text-blue-600">Total Produk:</span>
                             <p className="font-medium">
-                              Rp {productsTotalMap[activeSession.id]?.toLocaleString("id-ID") ?? "0"}
+                              Rp{" "}
+                              {productsTotalMap[
+                                activeSession.id
+                              ]?.toLocaleString("id-ID") ?? "0"}
                             </p>
-                            <span className="text-blue-600">Tarif per Jam </span>
+                            <span className="text-blue-600">
+                              Tarif per Jam{" "}
+                            </span>
                             <p className="font-medium">
-                              Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString("id-ID") : "0"}
+                              Rp{" "}
+                              {rateProfile
+                                ? rateProfile.hourly_rate.toLocaleString(
+                                    "id-ID"
+                                  )
+                                : "0"}
                             </p>
                           </div>
-
-                      
                         </div>
 
                         {/* Live Timer Display */}
@@ -2261,15 +2377,29 @@ const ActiveRentals: React.FC = () => {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Console:</span>
-                      <span className="font-medium">{selectedConsole?.name}</span>
+                      <span className="font-medium">
+                        {selectedConsole?.name}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Location:</span>
-                      <span className="font-medium">{selectedConsole?.location || "-"}</span>
+                      <span className="font-medium">
+                        {selectedConsole?.location || "-"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Hourly Rate:</span>
-                      <span className="font-medium">Rp {selectedConsole?.rate_profile_id ? (rateProfiles.find((r) => r.id === selectedConsole.rate_profile_id)?.hourly_rate.toLocaleString("id-ID") ?? "0") : "0"}/jam</span>
+                      <span className="font-medium">
+                        Rp{" "}
+                        {selectedConsole?.rate_profile_id
+                          ? rateProfiles
+                              .find(
+                                (r) => r.id === selectedConsole.rate_profile_id
+                              )
+                              ?.hourly_rate.toLocaleString("id-ID") ?? "0"
+                          : "0"}
+                        /jam
+                      </span>
                     </div>
                     {/* Status TV & Relay */}
                     <div className="flex justify-between">
@@ -2277,18 +2407,30 @@ const ActiveRentals: React.FC = () => {
                       <span className="font-medium flex items-center gap-2">
                         {/* Metode pembacaan status TV dan relay disamakan */}
                         {tvStatusJson ? (
-                          <span>{(() => {
-                            try {
-                              const obj = typeof tvStatusJson === 'string' ? JSON.parse(tvStatusJson) : tvStatusJson;
-                              const status = typeof obj === 'object' && obj !== null && 'status' in obj ? obj.status : undefined;
-                              if (typeof status === 'string') {
-                                return status.trim().toUpperCase() === 'ON' ? 'ON' : 'OFF';
+                          <span>
+                            {(() => {
+                              try {
+                                const obj =
+                                  typeof tvStatusJson === "string"
+                                    ? JSON.parse(tvStatusJson)
+                                    : tvStatusJson;
+                                const status =
+                                  typeof obj === "object" &&
+                                  obj !== null &&
+                                  "status" in obj
+                                    ? obj.status
+                                    : undefined;
+                                if (typeof status === "string") {
+                                  return status.trim().toUpperCase() === "ON"
+                                    ? "ON"
+                                    : "OFF";
+                                }
+                                return "-";
+                              } catch {
+                                return "-";
                               }
-                              return '-';
-                            } catch {
-                              return '-';
-                            }
-                          })()}</span>
+                            })()}
+                          </span>
                         ) : (
                           <span>-</span>
                         )}
@@ -2298,7 +2440,11 @@ const ActiveRentals: React.FC = () => {
                               type="button"
                               className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300 border border-gray-300 text-gray-700"
                               onClick={() => {
-                                Swal.fire('Isi Perintah perintah_cek_power_tv', `<pre style='text-align:left'>${selectedConsole.perintah_cek_power_tv}</pre>`, 'info');
+                                Swal.fire(
+                                  "Isi Perintah perintah_cek_power_tv",
+                                  `<pre style='text-align:left'>${selectedConsole.perintah_cek_power_tv}</pre>`,
+                                  "info"
+                                );
                               }}
                             >
                               Lihat
@@ -2310,11 +2456,13 @@ const ActiveRentals: React.FC = () => {
                               onClick={async () => {
                                 if (selectedConsole?.perintah_cek_power_tv) {
                                   try {
-                                    const res = await fetch(selectedConsole.perintah_cek_power_tv);
+                                    const res = await fetch(
+                                      selectedConsole.perintah_cek_power_tv
+                                    );
                                     const data = await res.json();
                                     setTvStatusJson(data);
                                   } catch (err) {
-                                    setTvStatusJson('-');
+                                    setTvStatusJson("-");
                                   }
                                 }
                               }}
@@ -2330,35 +2478,51 @@ const ActiveRentals: React.FC = () => {
                       <span className="font-medium flex items-center gap-2">
                         {/* Metode pembacaan status relay sesuai output baru */}
                         {relayStatus ? (
-                          <span>{(() => {
-                            try {
-                              // Jika respons langsung 'ON' atau 'OFF'
-                              if (typeof relayStatus === 'string') {
-                                const trimmed = relayStatus.trim().toUpperCase();
-                                if (trimmed === 'ON' || trimmed === 'OFF') {
-                                  return trimmed;
+                          <span>
+                            {(() => {
+                              try {
+                                // Jika respons langsung 'ON' atau 'OFF'
+                                if (typeof relayStatus === "string") {
+                                  const trimmed = relayStatus
+                                    .trim()
+                                    .toUpperCase();
+                                  if (trimmed === "ON" || trimmed === "OFF") {
+                                    return trimmed;
+                                  }
+                                  // Coba parse JSON jika bukan string ON/OFF
+                                  const obj = JSON.parse(relayStatus);
+                                  if (
+                                    typeof obj === "object" &&
+                                    obj !== null &&
+                                    "POWER" in obj &&
+                                    typeof obj.POWER === "string"
+                                  ) {
+                                    const power =
+                                      obj.POWER.trim().toUpperCase();
+                                    if (power === "ON" || power === "OFF") {
+                                      return power;
+                                    }
+                                  }
                                 }
-                                // Coba parse JSON jika bukan string ON/OFF
-                                const obj = JSON.parse(relayStatus);
-                                if (typeof obj === 'object' && obj !== null && 'POWER' in obj && typeof obj.POWER === 'string') {
-                                  const power = obj.POWER.trim().toUpperCase();
-                                  if (power === 'ON' || power === 'OFF') {
+                                // Jika relayStatus sudah object
+                                if (
+                                  typeof relayStatus === "object" &&
+                                  relayStatus !== null &&
+                                  "POWER" in relayStatus &&
+                                  typeof relayStatus.POWER === "string"
+                                ) {
+                                  const power =
+                                    relayStatus.POWER.trim().toUpperCase();
+                                  if (power === "ON" || power === "OFF") {
                                     return power;
                                   }
                                 }
+                                return "-";
+                              } catch {
+                                return "-";
                               }
-                              // Jika relayStatus sudah object
-                              if (typeof relayStatus === 'object' && relayStatus !== null && 'POWER' in relayStatus && typeof relayStatus.POWER === 'string') {
-                                const power = relayStatus.POWER.trim().toUpperCase();
-                                if (power === 'ON' || power === 'OFF') {
-                                  return power;
-                                }
-                              }
-                              return '-';
-                            } catch {
-                              return '-';
-                            }
-                          })()}</span>
+                            })()}
+                          </span>
                         ) : (
                           <span>-</span>
                         )}
@@ -2368,7 +2532,11 @@ const ActiveRentals: React.FC = () => {
                               type="button"
                               className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300 border border-gray-300 text-gray-700"
                               onClick={() => {
-                                Swal.fire('Isi Perintah relay_command_status', `<pre style='text-align:left'>${selectedConsole.relay_command_status}</pre>`, 'info');
+                                Swal.fire(
+                                  "Isi Perintah relay_command_status",
+                                  `<pre style='text-align:left'>${selectedConsole.relay_command_status}</pre>`,
+                                  "info"
+                                );
                               }}
                             >
                               Lihat
@@ -2380,11 +2548,13 @@ const ActiveRentals: React.FC = () => {
                               onClick={async () => {
                                 if (selectedConsole?.relay_command_status) {
                                   try {
-                                    const res = await fetch(selectedConsole.relay_command_status);
+                                    const res = await fetch(
+                                      selectedConsole.relay_command_status
+                                    );
                                     const data = await res.json();
                                     setRelayStatus(data);
                                   } catch (err) {
-                                    setRelayStatus('-');
+                                    setRelayStatus("-");
                                   }
                                 }
                               }}
@@ -2398,7 +2568,13 @@ const ActiveRentals: React.FC = () => {
                     {/* Power TV Command */}
                     <div className="flex justify-between">
                       <span className="text-gray-600">power tv command:</span>
-                      <span className="font-medium break-all">{selectedConsole?.power_tv_command || <span className="italic text-gray-400">(tidak ada)</span>}</span>
+                      <span className="font-medium break-all">
+                        {selectedConsole?.power_tv_command || (
+                          <span className="italic text-gray-400">
+                            (tidak ada)
+                          </span>
+                        )}
+                      </span>
                     </div>
                     {/* Tombol Reset Status hanya muncul jika status TV atau Relay ON */}
                     {(() => {
@@ -2406,10 +2582,18 @@ const ActiveRentals: React.FC = () => {
                       let tvOn = false;
                       try {
                         if (tvStatusJson) {
-                          const obj = typeof tvStatusJson === 'string' ? JSON.parse(tvStatusJson) : tvStatusJson;
-                          const status = typeof obj === 'object' && obj !== null && 'status' in obj ? obj.status : undefined;
-                          if (typeof status === 'string') {
-                            tvOn = status.trim().toUpperCase() === 'ON';
+                          const obj =
+                            typeof tvStatusJson === "string"
+                              ? JSON.parse(tvStatusJson)
+                              : tvStatusJson;
+                          const status =
+                            typeof obj === "object" &&
+                            obj !== null &&
+                            "status" in obj
+                              ? obj.status
+                              : undefined;
+                          if (typeof status === "string") {
+                            tvOn = status.trim().toUpperCase() === "ON";
                           }
                         }
                       } catch {}
@@ -2417,17 +2601,31 @@ const ActiveRentals: React.FC = () => {
                       let relayOn = false;
                       try {
                         if (relayStatus) {
-                          if (typeof relayStatus === 'string') {
+                          if (typeof relayStatus === "string") {
                             const trimmed = relayStatus.trim().toUpperCase();
-                            if (trimmed === 'ON') relayOn = true;
-                            else if (trimmed !== 'OFF') {
+                            if (trimmed === "ON") relayOn = true;
+                            else if (trimmed !== "OFF") {
                               const obj = JSON.parse(relayStatus);
-                              if (typeof obj === 'object' && obj !== null && 'POWER' in obj && typeof obj.POWER === 'string') {
-                                relayOn = obj.POWER.trim().toUpperCase() === 'ON';
+                              if (
+                                typeof obj === "object" &&
+                                obj !== null &&
+                                "POWER" in obj &&
+                                typeof obj.POWER === "string"
+                              ) {
+                                relayOn =
+                                  obj.POWER.trim().toUpperCase() === "ON";
                               }
                             }
-                          } else if (typeof relayStatus === 'object' && relayStatus !== null && 'POWER' in (relayStatus as any) && typeof (relayStatus as any).POWER === 'string') {
-                            relayOn = (relayStatus as any).POWER.trim().toUpperCase() === 'ON';
+                          } else if (
+                            typeof relayStatus === "object" &&
+                            relayStatus !== null &&
+                            "POWER" in (relayStatus as any) &&
+                            typeof (relayStatus as any).POWER === "string"
+                          ) {
+                            relayOn =
+                              (
+                                relayStatus as any
+                              ).POWER.trim().toUpperCase() === "ON";
                           }
                         }
                       } catch {}
@@ -2440,27 +2638,44 @@ const ActiveRentals: React.FC = () => {
                             onClick={async () => {
                               // Matikan TV jika ON
                               if (tvOn && selectedConsole?.power_tv_command) {
-                                try { await fetch(selectedConsole.power_tv_command); } catch {}
+                                try {
+                                  await fetch(selectedConsole.power_tv_command);
+                                } catch {}
                               }
                               // Matikan relay jika ON
-                              if (relayOn && selectedConsole?.relay_command_off) {
-                                try { await fetch(selectedConsole.relay_command_off); } catch {}
+                              if (
+                                relayOn &&
+                                selectedConsole?.relay_command_off
+                              ) {
+                                try {
+                                  await fetch(
+                                    selectedConsole.relay_command_off
+                                  );
+                                } catch {}
                               }
                               // Refresh status TV
                               if (selectedConsole?.perintah_cek_power_tv) {
                                 try {
-                                  const res = await fetch(selectedConsole.perintah_cek_power_tv);
+                                  const res = await fetch(
+                                    selectedConsole.perintah_cek_power_tv
+                                  );
                                   const data = await res.json();
                                   setTvStatusJson(data);
-                                } catch { setTvStatusJson('-'); }
+                                } catch {
+                                  setTvStatusJson("-");
+                                }
                               }
                               // Refresh status relay
                               if (selectedConsole?.relay_command_status) {
                                 try {
-                                  const res = await fetch(selectedConsole.relay_command_status);
+                                  const res = await fetch(
+                                    selectedConsole.relay_command_status
+                                  );
                                   const data = await res.json();
                                   setRelayStatus(data);
-                                } catch { setRelayStatus('-'); }
+                                } catch {
+                                  setRelayStatus("-");
+                                }
                               }
                             }}
                           >
@@ -2471,18 +2686,29 @@ const ActiveRentals: React.FC = () => {
                     })()}
                     {rentalType === "prepaid" && (
                       <div className="flex justify-between border-t border-gray-200 pt-2 mt-2 font-medium">
-                        <span className="text-gray-800">Total ({rentalDurationHours} jam {rentalDurationMinutes} menit):</span>
+                        <span className="text-gray-800">
+                          Total ({rentalDurationHours} jam{" "}
+                          {rentalDurationMinutes} menit):
+                        </span>
                         <span className="text-green-600">
                           {(() => {
-                            const hourlyRate = selectedConsole?.rate_profile_id ? (rateProfiles.find((r) => r.id === selectedConsole.rate_profile_id)?.hourly_rate ?? 0) : 0;
-                            const totalDurationMinutes = rentalDurationHours * 60 + rentalDurationMinutes;
+                            const hourlyRate = selectedConsole?.rate_profile_id
+                              ? rateProfiles.find(
+                                  (r) =>
+                                    r.id === selectedConsole.rate_profile_id
+                                )?.hourly_rate ?? 0
+                              : 0;
+                            const totalDurationMinutes =
+                              rentalDurationHours * 60 + rentalDurationMinutes;
                             let totalAmount = 0;
                             if (totalDurationMinutes <= 60) {
                               totalAmount = hourlyRate;
                             } else {
                               const extraMinutes = totalDurationMinutes - 60;
                               const perMinuteRate = hourlyRate / 60;
-                              totalAmount = hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
+                              totalAmount =
+                                hourlyRate +
+                                Math.ceil(extraMinutes * perMinuteRate);
                             }
                             return `Rp ${totalAmount.toLocaleString("id-ID")}`;
                           })()}
@@ -2734,7 +2960,8 @@ const ActiveRentals: React.FC = () => {
                               if (result.isConfirmed) {
                                 setCart((prev) =>
                                   prev.filter(
-                                    (cartItem) => cartItem.productId !== item.productId
+                                    (cartItem) =>
+                                      cartItem.productId !== item.productId
                                   )
                                 );
                                 Swal.fire(
@@ -2806,8 +3033,12 @@ const ActiveRentals: React.FC = () => {
                                       await supabase
                                         .from("rental_session_products")
                                         .update({
-                                          quantity: existing.quantity + item.quantity,
-                                          total: (existing.quantity + item.quantity) * item.price,
+                                          quantity:
+                                            existing.quantity + item.quantity,
+                                          total:
+                                            (existing.quantity +
+                                              item.quantity) *
+                                            item.price,
                                         })
                                         .eq("session_id", session.id)
                                         .eq("product_id", item.productId)
@@ -2875,22 +3106,48 @@ const ActiveRentals: React.FC = () => {
               {/* Header Total */}
               <div className="flex items-center justify-between mb-6">
                 <div className="text-xl font-bold text-gray-700">Total:</div>
-                <div className="text-2xl font-bold text-right text-blue-700">Rp {(calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0)).toLocaleString("id-ID")}</div>
+                <div className="text-2xl font-bold text-right text-blue-700">
+                  Rp{" "}
+                  {(
+                    calculateCurrentCost(showPaymentModal.session) +
+                    (showPaymentModal.productsTotal ?? 0)
+                  ).toLocaleString("id-ID")}
+                </div>
               </div>
               {/* Metode Pembayaran */}
               <div className="mb-4">
-                <div className="mb-2 font-medium text-gray-700">Metode Pembayaran</div>
+                <div className="mb-2 font-medium text-gray-700">
+                  Metode Pembayaran
+                </div>
                 <div className="flex gap-2 mb-2">
                   {[
-                    { key: 'cash', label: 'Cash', icon: <span className="inline-block mr-1">💵</span> },
-                    { key: 'card', label: 'Card', icon: <span className="inline-block mr-1">💳</span> },
-                    { key: 'transfer', label: 'Transfer', icon: <span className="inline-block mr-1">🏦</span> },
+                    {
+                      key: "cash",
+                      label: "Cash",
+                      icon: <span className="inline-block mr-1">💵</span>,
+                    },
+                    {
+                      key: "card",
+                      label: "Card",
+                      icon: <span className="inline-block mr-1">💳</span>,
+                    },
+                    {
+                      key: "transfer",
+                      label: "Transfer",
+                      icon: <span className="inline-block mr-1">🏦</span>,
+                    },
                   ].map((method) => (
                     <button
                       key={method.key}
                       type="button"
-                      className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${paymentMethod === method.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
-                      onClick={() => setPaymentMethod(method.key as typeof paymentMethod)}
+                      className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${
+                        paymentMethod === method.key
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                      }`}
+                      onClick={() =>
+                        setPaymentMethod(method.key as typeof paymentMethod)
+                      }
                     >
                       {method.icon} {method.label}
                     </button>
@@ -2899,10 +3156,36 @@ const ActiveRentals: React.FC = () => {
               </div>
               {/* Customer & Rental Info */}
               <div className="mb-4 text-sm text-gray-600">
-                <div className="flex justify-between"><span>Customer:</span><span className="font-medium">{showPaymentModal.session.customers?.name}</span></div>
-                <div className="flex justify-between"><span>Durasi:</span><span className="font-medium">{formatElapsedHMS(showPaymentModal.session.start_time)}</span></div>
-                <div className="flex justify-between"><span>Total Rental:</span><span className="font-medium">Rp {calculateCurrentCost(showPaymentModal.session).toLocaleString("id-ID")}</span></div>
-                <div className="flex justify-between"><span>Total Produk:</span><span className="font-medium">Rp {(showPaymentModal.productsTotal ?? 0).toLocaleString("id-ID")}</span></div>
+                <div className="flex justify-between">
+                  <span>Customer:</span>
+                  <span className="font-medium">
+                    {showPaymentModal.session.customers?.name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Durasi:</span>
+                  <span className="font-medium">
+                    {formatElapsedHMS(showPaymentModal.session.start_time)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Rental:</span>
+                  <span className="font-medium">
+                    Rp{" "}
+                    {calculateCurrentCost(
+                      showPaymentModal.session
+                    ).toLocaleString("id-ID")}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Produk:</span>
+                  <span className="font-medium">
+                    Rp{" "}
+                    {(showPaymentModal.productsTotal ?? 0).toLocaleString(
+                      "id-ID"
+                    )}
+                  </span>
+                </div>
               </div>
               {/* Jumlah Bayar */}
               <div className="mb-4">
@@ -2911,15 +3194,29 @@ const ActiveRentals: React.FC = () => {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className={`text-xs px-2 py-1 rounded border ${!isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
-                      onClick={() => { setIsManualInput(false); setPaymentAmount(0); }}
+                      className={`text-xs px-2 py-1 rounded border ${
+                        !isManualInput
+                          ? "bg-blue-100 border-blue-300 text-blue-700"
+                          : "bg-white border-gray-300 text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setIsManualInput(false);
+                        setPaymentAmount(0);
+                      }}
                     >
                       Quick
                     </button>
                     <button
                       type="button"
-                      className={`text-xs px-2 py-1 rounded border ${isManualInput ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700'}`}
-                      onClick={() => { setIsManualInput(true); setPaymentAmount(0); }}
+                      className={`text-xs px-2 py-1 rounded border ${
+                        isManualInput
+                          ? "bg-blue-100 border-blue-300 text-blue-700"
+                          : "bg-white border-gray-300 text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setIsManualInput(true);
+                        setPaymentAmount(0);
+                      }}
                     >
                       Manual
                     </button>
@@ -2942,16 +3239,26 @@ const ActiveRentals: React.FC = () => {
                           className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100"
                           onClick={() => setPaymentAmount((prev) => prev + nom)}
                         >
-                          {nom >= 1000 ? `${nom/1000}K` : nom}
+                          {nom >= 1000 ? `${nom / 1000}K` : nom}
                         </button>
                       ))}
                     </div>
                     <button
                       type="button"
                       className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
-                    onClick={() => setPaymentAmount(calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0))}
+                      onClick={() =>
+                        setPaymentAmount(
+                          calculateCurrentCost(showPaymentModal.session) +
+                            (showPaymentModal.productsTotal ?? 0)
+                        )
+                      }
                     >
-                      LUNAS (Rp {(calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0)).toLocaleString("id-ID")})
+                      LUNAS (Rp{" "}
+                      {(
+                        calculateCurrentCost(showPaymentModal.session) +
+                        (showPaymentModal.productsTotal ?? 0)
+                      ).toLocaleString("id-ID")}
+                      )
                     </button>
                   </>
                 ) : (
@@ -2975,7 +3282,17 @@ const ActiveRentals: React.FC = () => {
               <div className="mb-4">
                 <div className="font-medium text-gray-700 mb-1">Kembalian</div>
                 <div className="text-2xl font-mono font-bold text-green-700 text-center">
-                  Rp {(paymentAmount - (calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0)) > 0 ? (paymentAmount - (calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0))).toLocaleString("id-ID") : 0)}
+                  Rp{" "}
+                  {paymentAmount -
+                    (calculateCurrentCost(showPaymentModal.session) +
+                      (showPaymentModal.productsTotal ?? 0)) >
+                  0
+                    ? (
+                        paymentAmount -
+                        (calculateCurrentCost(showPaymentModal.session) +
+                          (showPaymentModal.productsTotal ?? 0))
+                      ).toLocaleString("id-ID")
+                    : 0}
                 </div>
               </div>
               <div className="flex gap-3 mt-6">
@@ -2987,8 +3304,18 @@ const ActiveRentals: React.FC = () => {
                 </button>
                 <button
                   onClick={handleProcessPayment}
-                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${paymentAmount < (calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0)) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  disabled={paymentAmount < (calculateCurrentCost(showPaymentModal.session) + (showPaymentModal.productsTotal ?? 0))}
+                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
+                    paymentAmount <
+                    calculateCurrentCost(showPaymentModal.session) +
+                      (showPaymentModal.productsTotal ?? 0)
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                  disabled={
+                    paymentAmount <
+                    calculateCurrentCost(showPaymentModal.session) +
+                      (showPaymentModal.productsTotal ?? 0)
+                  }
                 >
                   Bayar
                 </button>
@@ -3003,9 +3330,17 @@ const ActiveRentals: React.FC = () => {
         open={!!showPrepaidPaymentModal}
         onClose={() => setShowPrepaidPaymentModal(null)}
         onConfirm={handleConfirmPrepaidPayment}
-        duration={showPrepaidPaymentModal ? `${showPrepaidPaymentModal.rentalDurationHours} jam ${showPrepaidPaymentModal.rentalDurationMinutes} menit` : ''}
-        hourlyRate={showPrepaidPaymentModal ? showPrepaidPaymentModal.hourlyRate : 0}
-        totalAmount={showPrepaidPaymentModal ? showPrepaidPaymentModal.totalAmount : 0}
+        duration={
+          showPrepaidPaymentModal
+            ? `${showPrepaidPaymentModal.rentalDurationHours} jam ${showPrepaidPaymentModal.rentalDurationMinutes} menit`
+            : ""
+        }
+        hourlyRate={
+          showPrepaidPaymentModal ? showPrepaidPaymentModal.hourlyRate : 0
+        }
+        totalAmount={
+          showPrepaidPaymentModal ? showPrepaidPaymentModal.totalAmount : 0
+        }
         loading={prepaidPaymentLoading}
       />
 
