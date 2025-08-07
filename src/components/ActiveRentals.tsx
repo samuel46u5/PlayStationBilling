@@ -1,6 +1,4 @@
-
-
-  // ...existing code...
+// ...existing code...
 
   // ...existing code...
 import { Power } from 'lucide-react';
@@ -686,7 +684,7 @@ const ActiveRentals: React.FC = () => {
         .from("rental_sessions")
         .update({
           end_time: new Date().toISOString(),
-          total_amount: totalCost,
+          total_amount: total,
           status: "completed",
         })
         .eq("id", session.id);
@@ -710,6 +708,90 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
+  // PrepaidPaymentModal: Modal pembayaran untuk Bayar di Muka
+  const PrepaidPaymentModal = ({
+    open,
+    onClose,
+    onConfirm,
+    duration,
+    hourlyRate,
+    totalAmount,
+    loading
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onConfirm: (paymentMethod: "cash" | "qris") => void;
+    duration: string;
+    hourlyRate: number;
+    totalAmount: number;
+    loading: boolean;
+  }) => {
+    const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
+    if (!open) return null;
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+          <div className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Pembayaran </h2>
+            <div className="mb-4">
+              <p><strong>Durasi:</strong> {duration}</p>
+              <p><strong>Tarif per jam:</strong> Rp {hourlyRate.toLocaleString("id-ID")}</p>
+              <p><strong>Total:</strong> <span className="text-lg font-bold text-blue-700">Rp {totalAmount.toLocaleString("id-ID")}</span></p>
+            </div>
+            <div className="mb-4">
+              <label className="block mb-1 font-medium">Metode Pembayaran</label>
+              <div className="flex gap-3">
+                <button
+                  className={`px-4 py-2 rounded-lg border font-medium ${paymentMethod === "cash" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300"}`}
+                  onClick={() => setPaymentMethod("cash")}
+                  disabled={loading}
+                >
+                  Tunai
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg border font-medium ${paymentMethod === "qris" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300"}`}
+                  onClick={() => setPaymentMethod("qris")}
+                  disabled={loading}
+                >
+                  QRIS
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+                onClick={onClose}
+                disabled={loading}
+              >
+                Batal
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-blue-600 text-white font-medium hover:bg-blue-700"
+                onClick={() => onConfirm(paymentMethod)}
+                disabled={loading}
+              >
+                Bayar & Mulai
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Tambahkan state untuk modal pembayaran prepaid
+  type PrepaidPaymentModalState = {
+    console: any;
+    duration: number;
+    hourlyRate: number;
+    totalAmount: number;
+    rentalDurationHours: number;
+    rentalDurationMinutes: number;
+  } | null;
+  const [showPrepaidPaymentModal, setShowPrepaidPaymentModal] = useState<PrepaidPaymentModalState>(null);
+  const [prepaidPaymentLoading, setPrepaidPaymentLoading] = useState(false);
+
+  // Ganti handleStartRental untuk prepaid agar memunculkan modal pembayaran
   const handleStartRental = async (consoleId: string) => {
     if (customerType === "member" && !selectedCustomerId) {
       Swal.fire("Error", "Silakan pilih customer terlebih dahulu", "warning");
@@ -719,7 +801,6 @@ const ActiveRentals: React.FC = () => {
       Swal.fire("Error", "Nama wajib diisi untuk non-member", "warning");
       return;
     }
-
     try {
       // Pastikan tidak ada session aktif sebelumnya untuk console ini
       const { data: existingSessions, error: existingSessionsError } = await supabase
@@ -735,7 +816,6 @@ const ActiveRentals: React.FC = () => {
           .update({ status: "completed", end_time: new Date().toISOString() })
           .in("id", sessionIds);
       }
-
       // Ambil data console terbaru dari database
       const { data: latestConsole, error: latestConsoleError } = await supabase
         .from("consoles")
@@ -746,7 +826,6 @@ const ActiveRentals: React.FC = () => {
         Swal.fire("Error", "Gagal mengambil data console terbaru", "error");
         return;
       }
-
       // --- Cek status TV dan relay sebelum mulai rental, matikan otomatis jika masih ON ---
       let tvStatusNow = tvStatusJson?.toUpperCase?.() || "";
       let relayStatusNow = relayStatus?.toUpperCase?.() || "";
@@ -760,23 +839,19 @@ const ActiveRentals: React.FC = () => {
         }
         // Tunggu beberapa detik agar benar-benar OFF
         await new Promise((res) => setTimeout(res, 2000));
-        // (Opsional) bisa fetch ulang status TV/relay jika ingin lebih akurat
       }
-
-      // Jalankan power_tv_command jika ada (untuk TV)
-      if (latestConsole.power_tv_command) {
-        fetch(latestConsole.power_tv_command).catch(() => {});
+      // Jalankan power_tv_command dan relay_command_on hanya untuk pay-as-you-go
+      if (rentalType !== "prepaid") {
+        if (latestConsole.power_tv_command) {
+          fetch(latestConsole.power_tv_command).catch(() => {});
+        }
+        if (latestConsole.relay_command_on) {
+          fetch(latestConsole.relay_command_on).catch(() => {});
+        }
       }
-      // Jalankan relay_command_on jika ada (untuk relay)
-      if (latestConsole.relay_command_on) {
-        fetch(latestConsole.relay_command_on).catch(() => {});
-      }
-
       let customerId = selectedCustomerId;
-
       // Jika non-member, buat customer baru
       if (customerType === "non-member") {
-        // Prepare customer data
         const customerData: any = {
           name: nonMemberName,
           status: "active",
@@ -793,23 +868,19 @@ const ActiveRentals: React.FC = () => {
         if (insertError) throw insertError;
         customerId = insertedCustomer.id;
       }
-
       // Hitung biaya jika prepaid
       let totalAmount = 0;
       let paidAmount = 0;
       let paymentStatus = "pending";
-
       let totalDurationMinutes =
         rentalType === "prepaid"
           ? rentalDurationHours * 60 + rentalDurationMinutes
           : null;
-
       if (rentalType === "prepaid") {
         const rateProfile = rateProfiles.find(
           (r) => r.id === latestConsole.rate_profile_id
         );
         const hourlyRate = rateProfile?.hourly_rate || 0;
-
         // Billing rule: minimal 1 jam, setelah itu per menit
         if (totalDurationMinutes! <= 60) {
           totalAmount = hourlyRate;
@@ -820,33 +891,18 @@ const ActiveRentals: React.FC = () => {
         }
         paidAmount = totalAmount;
         paymentStatus = "paid";
-
-        // Konfirmasi pembayaran
-        const paymentResult = await Swal.fire({
-          title: "Konfirmasi Pembayaran",
-          html: `
-            <div class="text-left">
-              <p><strong>Durasi:</strong> ${rentalDurationHours} jam ${rentalDurationMinutes} menit</p>
-              <p><strong>Tarif per jam:</strong> Rp ${hourlyRate.toLocaleString(
-                "id-ID"
-              )}</p>
-              <p><strong>Total:</strong> Rp ${totalAmount.toLocaleString(
-                "id-ID"
-              )}</p>
-            </div>
-          `,
-          icon: "info",
-          showCancelButton: true,
-          confirmButtonText: "Bayar",
-          cancelButtonText: "Batal",
+        // Tampilkan modal pembayaran prepaid
+        setShowPrepaidPaymentModal({
+          console: latestConsole,
+          duration: totalDurationMinutes!,
+          hourlyRate,
+          totalAmount,
+          rentalDurationHours,
+          rentalDurationMinutes,
         });
-
-        if (!paymentResult.isConfirmed) {
-          return;
-        }
+        return; // Tunggu konfirmasi modal
       }
-
-      // Create new rental session
+      // Create new rental session (pay-as-you-go)
       const { error: rentalError } = await supabase
         .from("rental_sessions")
         .insert({
@@ -861,14 +917,12 @@ const ActiveRentals: React.FC = () => {
             rentalType === "prepaid" ? totalDurationMinutes : null,
         });
       if (rentalError) throw rentalError;
-
       // Update console status
       const { error: consoleError } = await supabase
         .from("consoles")
         .update({ status: "rented" })
         .eq("id", consoleId);
       if (consoleError) throw consoleError;
-
       setShowStartRentalModal(null);
       setSelectedCustomerId("");
       setCustomerType("member");
@@ -884,266 +938,82 @@ const ActiveRentals: React.FC = () => {
       Swal.fire("Error", "Gagal memulai sesi rental", "error");
     }
   };
-
-  // Product cart functions
-  const addToCart = (product: Product) => {
-    const existingItem = cart.find((item) => item.productId === product.id);
-    let newQuantity = 1;
-    if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
-        Swal.fire(
-          "Stok Tidak Cukup",
-          `Stok ${product.name} hanya tersisa ${product.stock}`,
-          "warning"
-        );
-        return;
-      }
-      newQuantity = existingItem.quantity + 1;
-      setCart(
-        cart.map((item) =>
-          item.productId === product.id
-            ? {
-                ...item,
-                quantity: newQuantity,
-                total: newQuantity * item.price,
-              }
-            : item
-        )
-      );
-    } else {
-      const newItem: CartItem = {
-        productId: product.id,
-        productName: product.name,
-        price: product.price,
-        quantity: 1,
-        total: product.price,
-      };
-      setCart([...cart, newItem]);
-    }
-
-    // Simpan ke database sebagai pending jika sedang menambahkan produk pada sesi rental aktif
-    if (showProductModal) {
-      const sessionId = showProductModal;
-      const cartItem = existingItem
-        ? {
-            ...existingItem,
-            quantity: newQuantity,
-            total: newQuantity * product.price,
-          }
-        : {
-            productId: product.id,
-            productName: product.name,
-            price: product.price,
-            quantity: 1,
-            total: product.price,
-          };
-
-      // Cek apakah sudah ada data untuk session_id dan product_id
-      supabase
-        .from("rental_session_products")
-        .select("id")
-        .eq("session_id", sessionId)
-        .eq("product_id", cartItem.productId)
-        .single()
-        .then(async ({ data, error }) => {
-          if (error && error.code !== "PGRST116") {
-            // Error selain not found
-            console.error("Error checking pending product:", error);
-            Swal.fire("Error", "Gagal cek produk pending", "error");
-            return;
-          }
-          if (data) {
-            // Sudah ada, update quantity dan total
-            const { id } = data;
-            const { quantity, total } = cartItem;
-            const { price, product_name } = cartItem;
-            const { productId } = cartItem;
-            await supabase
-              .from("rental_session_products")
-              .update({ quantity, total, price, product_name })
-              .eq("id", id);
-          } else {
-            // Belum ada, insert baru
-            await supabase.from("rental_session_products").insert({
-              session_id: sessionId,
-              product_id: cartItem.productId,
-              product_name: cartItem.productName,
-              price: cartItem.price,
-              quantity: cartItem.quantity,
-              total: cartItem.total,
-              status: "pending",
-            });
-          }
-        });
-    }
-  };
-
-  const updateQuantity = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-
-    const product = products.find((p) => p.id === productId);
-    if (product && newQuantity > product.stock) {
-      Swal.fire(
-        "Stok Tidak Cukup",
-        `Stok ${product.name} hanya tersisa ${product.stock}`,
-        "warning"
-      );
-      return;
-    }
-
-    setCart(
-      cart.map((item) =>
-        item.productId === productId
-          ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
-          : item
-      )
-    );
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter((item) => item.productId !== productId));
-  };
-
-  const clearCart = () => {
-    setCart([]);
-  };
-
-  const handleCheckoutProducts = async (sessionId: string) => {
-    if (cart.length === 0) {
-      Swal.fire(
-        "Keranjang Kosong",
-        "Silakan pilih produk terlebih dahulu",
-        "warning"
-      );
-      return;
-    }
-
+  // Handler konfirmasi pembayaran prepaid
+  const handleConfirmPrepaidPayment = async (paymentMethod: "cash" | "qris") => {
+    if (!showPrepaidPaymentModal) return;
+    setPrepaidPaymentLoading(true);
     try {
-      const session = activeSessions.find((s) => s.id === sessionId);
-      if (!session) return;
-
-      // Calculate totals
-      const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
-      const total = subtotal;
-
-      // Create sale in database
-      const { data: sale, error: saleError } = await supabase
-        .from("sales")
-        .insert({
-          customer_id: session.customer_id,
-          subtotal: subtotal,
-          tax: 0,
-          discount: 0,
-          total: total,
-          payment_method: "cash",
-          payment_amount: total,
-          change_amount: 0,
-          sale_date: new Date().toISOString(),
-          cashier_id: null, // Will be updated when auth is implemented
-          session_id: null, // Optional: link to cashier session if needed
-        })
-        .select()
-        .single();
-
-      if (saleError) throw saleError;
-
-      // Create sale items
-      const saleItems = cart.map((item) => ({
-        sale_id: sale.id,
-        product_id: item.productId,
-        product_name: item.productName,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.total,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("sale_items")
-        .insert(saleItems);
-
-      if (itemsError) throw itemsError;
-
-      // Update product stock
-      for (const item of cart) {
-        const { error: stockError } = await supabase
-          .from("products")
-          .select("stock")
-          .eq("id", item.productId)
-          .single()
-          .then(({ data, error }) => {
-            if (error) throw error;
-            return supabase
-              .from("products")
-              .update({ stock: data.stock - item.quantity })
-              .eq("id", item.productId);
-          });
-
-        if (stockError) throw stockError;
+      const { console: latestConsole, totalAmount, duration, rentalDurationHours, rentalDurationMinutes } = showPrepaidPaymentModal;
+      let customerId = selectedCustomerId;
+      if (customerType === "non-member") {
+        const customerData: any = {
+          name: nonMemberName,
+          status: "active",
+          join_date: new Date().toISOString().split("T")[0],
+        };
+        if (nonMemberPhone) {
+          customerData.phone = nonMemberPhone;
+        }
+        const { data: insertedCustomer, error: insertError } = await supabase
+          .from("customers")
+          .insert(customerData)
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        customerId = insertedCustomer.id;
       }
-
-      clearCart();
-      setShowProductModal(null);
+      // Create new rental session
+      const { error: rentalError } = await supabase
+        .from("rental_sessions")
+        .insert({
+          customer_id: customerId,
+          console_id: latestConsole.id,
+          status: "active",
+          payment_status: "paid",
+          total_amount: totalAmount,
+          paid_amount: totalAmount,
+          start_time: new Date().toISOString(),
+          duration_minutes: duration,
+          payment_method: paymentMethod,
+        });
+      if (rentalError) throw rentalError;
+      // Update console status
+      const { error: consoleError } = await supabase
+        .from("consoles")
+        .update({ status: "rented" })
+        .eq("id", latestConsole.id);
+      if (consoleError) throw consoleError;
+      setShowPrepaidPaymentModal(null);
+      setShowStartRentalModal(null);
+      setSelectedCustomerId("");
+      setCustomerType("member");
+      setRentalType("pay-as-you-go");
+      setRentalDurationHours(1);
+      setRentalDurationMinutes(0);
+      setNonMemberName("");
+      setNonMemberPhone("");
       await loadData();
-
-      Swal.fire(
-        "Berhasil",
-        `Penjualan produk berhasil dicatat. Total: Rp ${total.toLocaleString(
-          "id-ID"
-        )}`,
-        "success"
-      );
+      Swal.fire("Berhasil", "Sesi rental berhasil dimulai", "success");
     } catch (error) {
-      console.error("Error processing sale:", error);
-      Swal.fire("Error", "Gagal memproses penjualan produk", "error");
+      console.error("Error starting prepaid rental:", error);
+      Swal.fire("Error", "Gagal memulai sesi rental", "error");
+    } finally {
+      setPrepaidPaymentLoading(false);
     }
   };
 
-  // Filter products
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.name
-      .toLowerCase()
-      .includes(searchProduct.toLowerCase());
-    const matchesCategory =
-      selectedCategory === "all" || product.category === selectedCategory;
-    return matchesSearch && matchesCategory && product.stock > 0;
-  });
-
-  const categories = [...new Set(products.map((p) => p.category))];
-  const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "beverage":
-        return "bg-blue-100 text-blue-800";
-      case "food":
-        return "bg-orange-100 text-orange-800";
-      case "snack":
-        return "bg-green-100 text-green-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
+  // Tambahkan fungsi utilitas getConsoleRateProfile agar error hilang
+  type ConsoleType = {
+    id: string;
+    rate_profile_id?: string;
   };
-
   const getConsoleRateProfile = (consoleId: string) => {
-    const console = consoles.find((c) => c.id === consoleId);
-    if (!console || !console.rate_profile_id) return null;
-    return rateProfiles.find((r) => r.id === console.rate_profile_id);
+    const consoleObj = consoles.find((c: ConsoleType) => c.id === consoleId);
+    if (!consoleObj || !consoleObj.rate_profile_id) return null;
+    return rateProfiles.find((r) => r.id === consoleObj.rate_profile_id) || null;
   };
 
-  if (loading) {
-    return (
-      <div className="p-6 bg-gray-50 min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Memuat data...</p>
-        </div>
-      </div>
-    );
-  }
-
+  // Render PrepaidPaymentModal setelah Start Rental Modal
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
@@ -2469,7 +2339,7 @@ const ActiveRentals: React.FC = () => {
                   }
                   className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {rentalType === "prepaid" ? "Bayar & Mulai" : "Mulai Rental"}
+                  {rentalType === "prepaid" ? "Bayar" : "Mulai Rental"}
                 </button>
               </div>
             </div>
@@ -2695,8 +2565,7 @@ const ActiveRentals: React.FC = () => {
                               if (result.isConfirmed) {
                                 setCart((prev) =>
                                   prev.filter(
-                                    (cartItem) =>
-                                      cartItem.productId !== item.productId
+                                    (cartItem) => cartItem.productId !== item.productId
                                   )
                                 );
                                 Swal.fire(
@@ -2725,6 +2594,14 @@ const ActiveRentals: React.FC = () => {
                         </div>
                       </div>
                     ))}
+
+                    {/* Total Keranjang */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <div className="flex justify-between text-lg font-bold">
+                        <span>Total:</span>
+                        <span>Rp {cartTotal.toLocaleString("id-ID")}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2843,7 +2720,7 @@ const ActiveRentals: React.FC = () => {
                     <button
                       key={method.key}
                       type="button"
-                      className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${paymentMethod === method.key ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                      className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${paymentMethod === method.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
                       onClick={() => setPaymentMethod(method.key as typeof paymentMethod)}
                     >
                       {method.icon} {method.label}
@@ -2950,6 +2827,19 @@ const ActiveRentals: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Prepaid Payment Modal */}
+      {showPrepaidPaymentModal && (
+        <PrepaidPaymentModal
+          open={!!showPrepaidPaymentModal}
+          onClose={() => setShowPrepaidPaymentModal(null)}
+          onConfirm={handleConfirmPrepaidPayment}
+          duration={`${showPrepaidPaymentModal.rentalDurationHours} jam ${showPrepaidPaymentModal.rentalDurationMinutes} menit`}
+          hourlyRate={showPrepaidPaymentModal.hourlyRate}
+          totalAmount={showPrepaidPaymentModal.totalAmount}
+          loading={prepaidPaymentLoading}
+        />
       )}
 
       {/* Panel summary stats di bawah dihapus sesuai permintaan */}
