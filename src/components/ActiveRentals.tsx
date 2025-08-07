@@ -108,7 +108,7 @@ const ActiveRentals: React.FC = () => {
     return Math.ceil(currentHours) * rateProfile.hourlyRate;
   };
 
-  // Handler untuk mengakhiri rental - tetap menggunakan cara lama
+  // Handler untuk mengakhiri rental - TETAP menggunakan dialog confirm sederhana
   const handleEndRental = async (rental: RentalSession) => {
     const customer = rental.customer || mockCustomers.find(c => c.id === rental.customerId);
     const console = rental.console || mockConsoles.find(c => c.id === rental.consoleId);

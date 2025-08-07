@@ -35,7 +35,7 @@ const Cashier: React.FC = () => {
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherHours, setVoucherHours] = useState<number>(0);
   
-  // Payment states - hanya untuk prepaid
+  // Payment state untuk prepaid
   const [showPrepaidPayment, setShowPrepaidPayment] = useState(false);
 
 
@@ -112,7 +112,7 @@ const Cashier: React.FC = () => {
     setCart(cart.filter(item => item.productId !== productId));
   };
 
-  // Handler untuk prepaid rental - buka payment module
+  // Handler untuk prepaid rental - HANYA mengganti dialog confirm dengan payment module
   const handlePayAndStart = () => {
     if (!selectedCustomer || !selectedConsole || !selectedRateProfile) {
       Swal.fire('Error', 'Silakan pilih customer, console, dan pastikan rate profile tersedia', 'warning');
@@ -201,14 +201,14 @@ const Cashier: React.FC = () => {
     }
   };
 
-  // Handler untuk POS sale - tetap menggunakan cara lama
+  // Handler untuk POS sale - tetap menggunakan confirm dialog seperti semula
   const handleProcessSale = () => {
     if (cart.length === 0) {
       Swal.fire('Error', 'Keranjang kosong', 'warning');
       return;
     }
 
-    // Tetap menggunakan confirm dialog untuk POS
+    // Menggunakan confirm dialog seperti semula
     if (confirm(`Konfirmasi penjualan dengan total Rp ${cartTotal.toLocaleString('id-ID')}?`)) {
       handleCompletePOSSale({
         method: 'cash',
@@ -217,7 +217,7 @@ const Cashier: React.FC = () => {
     }
   };
 
-  // Handler untuk memproses POS sale
+  // Handler untuk memproses POS sale - tidak berubah
   const handleCompletePOSSale = async (paymentData: PaymentData) => {
     try {
       // Create sale record
@@ -838,7 +838,7 @@ const Cashier: React.FC = () => {
         </div>
       )}
 
-      {/* Payment Module - hanya untuk prepaid */}
+      {/* Payment Module - HANYA mengganti dialog confirm untuk prepaid */}
       <PrepaidPaymentModule
         isOpen={showPrepaidPayment}
         onClose={() => setShowPrepaidPayment(false)}
