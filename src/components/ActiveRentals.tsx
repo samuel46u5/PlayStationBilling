@@ -1873,23 +1873,8 @@ const ActiveRentals: React.FC = () => {
 
                   {/* Body */}
                   <div className="p-4">
-                    {/* Rate Info */}
-                    <div className="mb-4">
-                      <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                        <DollarSign className="h-4 w-4" />
-                        Tarif per Jam
-                      </h4>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Per Jam</span>
-                        <span className="font-semibold text-blue-600">
-                          Rp{" "}
-                          {rateProfile
-                            ? rateProfile.hourly_rate.toLocaleString("id-ID")
-                            : "0"}
-                        </span>
-                      </div>
-                    </div>
-
+                    
+                  
                     {/* Active Session Info */}
                     {isActive && activeSession && (
                       <div
@@ -1960,31 +1945,23 @@ const ActiveRentals: React.FC = () => {
                                 activeSession
                               ).toLocaleString("id-ID")}
                             </p>
-                          </div>
-                          <div>
-                            <span className="text-green-700">Total Produk:</span>
-                            <p className="font-medium">
-                              Rp {productsTotalMap[activeSession.id]?.toLocaleString("id-ID") ?? "0"}
-                            </p>
-                          </div>
-                          {/* Tarif per Jam Card Hijau */}
-                          <div className="col-span-2">
-                            <div className="bg-green-100 rounded-lg p-3 flex items-center justify-between mt-2">
-                              <div className="flex items-center gap-2">
-                                <DollarSign className="h-4 w-4 text-green-700" />
-                                <span className="font-semibold text-green-800">Tarif per Jam</span>
-                              </div>
-                              <span className="font-semibold text-blue-600 text-lg">
-                                Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString("id-ID") : "0"}
-                              </span>
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-blue-600">Status:</span>
+                             <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
                               {activeSession.payment_status.toUpperCase()}
                             </p>
                           </div>
+                          <div>
+                            <span className="text-blue-600">Total Produk:</span>
+                            <p className="font-medium">
+                              Rp {productsTotalMap[activeSession.id]?.toLocaleString("id-ID") ?? "0"}
+                            </p>
+                            <span className="text-blue-600">Tarif per Jam </span>
+                            <p className="font-medium">
+                              Rp {rateProfile ? rateProfile.hourly_rate.toLocaleString("id-ID") : "0"}
+                            </p>
+                          </div>
+
+                      
                         </div>
 
                         {/* Live Timer Display */}
