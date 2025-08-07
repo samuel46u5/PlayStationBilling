@@ -1,1103 +1,877 @@
-import React, { useState } from 'react';
-import { Plus, Minus, Trash2, ShoppingCart, Calculator, CreditCard, DollarSign, Receipt, Clock, User, Gamepad2, X, Printer, MessageCircle, CheckCircle, Edit3 } from 'lucide-react';
-import { mockConsoles, mockRateProfiles } from '../data/mockData';
-import { db } from '../lib/supabase';
-import { Product, SaleItem, RentalSession } from '../types';
-
-interface PaymentItem {
-  id: string;
-  type: 'product' | 'rental';
-  name: string;
-  description?: string;
-  quantity: number;
-  price: number;
-  total: number;
-  productId?: string;
-  rentalSessionId?: string;
-}
+import React, { useState, useEffect } from 'react';
+import { Plus, Search, ShoppingCart, Gamepad2, User, Clock, DollarSign, Minus, X, Calculator, Receipt, CreditCard, Banknote, Smartphone, CheckCircle, AlertCircle, Package, Ticket } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { mockCustomers, mockConsoles, mockProducts, mockRateProfiles, mockVouchers } from '../data/mockData';
+import { Customer, Console, Product, RateProfile, Voucher } from '../types';
+import Swal from 'sweetalert2';
+import PrepaidPaymentModule from './PrepaidPaymentModule';
+import PayAsYouGoPaymentModule from './PayAsYouGoPaymentModule';
+import { PaymentData } from './PaymentModule';
+import { usePaymentModule } from '../hooks/usePaymentModule';
 
 const Cashier: React.FC = () => {
-  // State untuk consoles dan rateProfiles dari database
-  const [consoles, setConsoles] = useState<any[]>([]);
-  const [rateProfiles, setRateProfiles] = useState<any[]>([]);
-  const [cart, setCart] = useState<PaymentItem[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'products' | 'rentals'>('products');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [showPayment, setShowPayment] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
-  const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [lastTransaction, setLastTransaction] = useState<any>(null);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [activeTab, setActiveTab] = useState<'prepaid' | 'payasyougo' | 'pos'>('prepaid');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedConsole, setSelectedConsole] = useState<Console | null>(null);
+  const [selectedDuration, setSelectedDuration] = useState<number>(2);
+  const [selectedRateProfile, setSelectedRateProfile] = useState<RateProfile | null>(null);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showConsoleModal, setShowConsoleModal] = useState(false);
+  const [searchCustomer, setSearchCustomer] = useState('');
+  const [searchConsole, setSearchConsole] = useState('');
   
-  // Manual input states
-  const [isManualInput, setIsManualInput] = useState(false);
-  const [manualAmount, setManualAmount] = useState<string>('');
+  // POS States
+  const [cart, setCart] = useState<Array<{
+    productId: string;
+    productName: string;
+    price: number;
+    quantity: number;
+    total: number;
+  }>>([]);
+  const [searchProduct, setSearchProduct] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  
+  // Voucher States
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
+  const [voucherCode, setVoucherCode] = useState('');
+  const [voucherHours, setVoucherHours] = useState<number>(0);
 
-  // State for products, customers, and rentals from Supabase
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [loadingCustomers, setLoadingCustomers] = useState<boolean>(true);
-  const [rentals, setRentals] = useState<RentalSession[]>([]);
-  const [loadingRentals, setLoadingRentals] = useState<boolean>(true);
-
-  // Fetch products, customers, and rentals from Supabase on mount
-  React.useEffect(() => {
-    const fetchProducts = async () => {
-      setLoadingProducts(true);
+  // Payment Module Integration
+  const {
+    isPaymentOpen,
+    paymentType,
+    paymentData,
+    openPrepaidPayment,
+    openPayAsYouGoPayment,
+    closePayment,
+    handlePaymentConfirm
+  } = usePaymentModule({
+    onPaymentSuccess: async (payment: PaymentData) => {
       try {
-        const data = await db.products.getAll();
-        // Map is_active (snake_case) ke isActive (camelCase)
-        const mapped = (data || []).map((p: any) => ({
-          ...p,
-          isActive: p.is_active,
-        }));
-        setProducts(mapped);
-      } catch (err) {
-        setProducts([]);
-      } finally {
-        setLoadingProducts(false);
-      }
-    };
-    const fetchCustomers = async () => {
-      setLoadingCustomers(true);
-      try {
-        const data = await db.customers.getAll();
-        setCustomers(data || []);
-      } catch (err) {
-        setCustomers([]);
-      } finally {
-        setLoadingCustomers(false);
-      }
-    };
-    const fetchRentals = async () => {
-      setLoadingRentals(true);
-      try {
-        // Use getActive to fetch active/pending rentals
-        const data = await db.rentals.getActive();
-        // If error, data is array of GenericStringError, else RentalSession[]
-        if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && 'id' in data[0]) {
-          setRentals(data);
+        if (paymentType === 'prepaid') {
+          await handleStartPrepaidRental(payment);
         } else {
-          setRentals([]);
+          await handleCompletePOSSale(payment);
         }
-      } catch (err) {
-        setRentals([]);
-      } finally {
-        setLoadingRentals(false);
+        
+        Swal.fire({
+          icon: 'success',
+          title: 'Pembayaran Berhasil!',
+          text: paymentType === 'prepaid' 
+            ? 'Rental telah dimulai' 
+            : 'Transaksi berhasil diproses',
+          timer: 2000,
+          timerProgressBar: true
+        });
+      } catch (error) {
+        console.error('Payment processing error:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal Memproses Pembayaran',
+          text: 'Terjadi kesalahan saat memproses pembayaran'
+        });
       }
-    };
-    fetchProducts();
-    fetchCustomers();
-    fetchRentals();
-    // Fetch consoles dari database
-    const fetchConsoles = async () => {
-      try {
-        const data = await db.consoles.getAll();
-        setConsoles(data || []);
-      } catch (err) {
-        setConsoles([]);
-      }
-    };
-    // Fetch rateProfiles dari database
-    const fetchRateProfiles = async () => {
-      try {
-        const data = await db.rateProfiles.getAll();
-        setRateProfiles(data || []);
-      } catch (err) {
-        setRateProfiles([]);
-      }
-    };
-    fetchConsoles();
-    fetchRateProfiles();
-  }, []);
+    },
+    onPaymentError: (error: Error) => {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error Pembayaran',
+        text: error.message
+      });
+    }
+  });
 
-  // Filter products from Supabase
-  const filteredProducts = products.filter(product =>
-    product.isActive && (
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.barcode?.includes(searchTerm)
-    )
+  const filteredCustomers = mockCustomers.filter(customer =>
+    customer.name.toLowerCase().includes(searchCustomer.toLowerCase()) ||
+    customer.phone.includes(searchCustomer)
   );
 
-  // Filter active rentals that need payment (from Supabase)
-  const pendingRentals = rentals;
+  const availableConsoles = mockConsoles.filter(console => console.status === 'available');
+  const filteredConsoles = availableConsoles.filter(console =>
+    console.name.toLowerCase().includes(searchConsole.toLowerCase())
+  );
 
-  const addProductToCart = (product: Product) => {
-    const existingItem = cart.find(item => item.productId === product.id && item.type === 'product');
+  const filteredProducts = mockProducts.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(searchProduct.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
+    return matchesSearch && matchesCategory && product.isActive;
+  });
+
+  const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
+
+  const calculateRentalAmount = () => {
+    if (!selectedConsole || !selectedRateProfile || !selectedDuration) return 0;
+    return selectedRateProfile.hourlyRate * selectedDuration;
+  };
+
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setShowCustomerModal(false);
+    setSearchCustomer('');
+  };
+
+  const handleSelectConsole = (console: Console) => {
+    setSelectedConsole(console);
+    const rateProfile = mockRateProfiles.find(rp => rp.id === console.rateProfileId);
+    setSelectedRateProfile(rateProfile || null);
+    setShowConsoleModal(false);
+    setSearchConsole('');
+  };
+
+  const handleAddToCart = (product: Product) => {
+    const existingItem = cart.find(item => item.productId === product.id);
+    
     if (existingItem) {
       setCart(cart.map(item =>
-        item.productId === product.id && item.type === 'product'
+        item.productId === product.id
           ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
           : item
       ));
     } else {
-      const newItem: PaymentItem = {
-        id: `product-${product.id}-${Date.now()}`,
-        type: 'product',
-        name: product.name,
-        description: product.description,
-        quantity: 1,
+      setCart([...cart, {
+        productId: product.id,
+        productName: product.name,
         price: product.price,
-        total: product.price,
-        productId: product.id
-      };
-      setCart([...cart, newItem]);
+        quantity: 1,
+        total: product.price
+      }]);
     }
   };
 
-  const addRentalToCart = (session: RentalSession) => {
-    const customer = customers.find((c: any) => c.id === session.customerId);
-    const console = mockConsoles.find(c => c.id === session.consoleId);
-    
-    // Calculate current rental cost
-    const startTime = new Date(session.startTime);
-    const now = new Date();
-    const minutesElapsed = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
-    const hoursElapsed = Math.ceil(minutesElapsed / 60);
-    
-    // Get the rate profile for this console
-    const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
-    const currentCost = hoursElapsed * (rateProfile?.hourlyRate || 0);
-
-    const existingItem = cart.find(item => item.rentalSessionId === session.id);
-    if (existingItem) {
-      // Update existing rental item with current cost
+  const handleUpdateCartQuantity = (productId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      setCart(cart.filter(item => item.productId !== productId));
+    } else {
       setCart(cart.map(item =>
-        item.rentalSessionId === session.id
-          ? { ...item, price: currentCost, total: currentCost }
+        item.productId === productId
+          ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
           : item
       ));
-    } else {
-      const newItem: PaymentItem = {
-        id: `rental-${session.id}-${Date.now()}`,
-        type: 'rental',
-        name: `${console?.name} Rental`,
-        description: `Customer: ${customer?.name} | Duration: ${Math.floor(minutesElapsed / 60)}h ${minutesElapsed % 60}m`,
-        quantity: 1,
-        price: currentCost,
-        total: currentCost,
-        rentalSessionId: session.id
-      };
-      setCart([...cart, newItem]);
     }
   };
 
-  const updateQuantity = (itemId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(itemId);
+  const handleRemoveFromCart = (productId: string) => {
+    setCart(cart.filter(item => item.productId !== productId));
+  };
+
+  // Updated handler for prepaid rental - now opens payment module
+  const handlePayAndStart = () => {
+    if (!selectedCustomer || !selectedConsole || !selectedRateProfile) {
+      Swal.fire('Error', 'Silakan pilih customer, console, dan pastikan rate profile tersedia', 'warning');
       return;
     }
-    setCart(cart.map(item =>
-      item.id === itemId
-        ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
-        : item
-    ));
+
+    const totalAmount = calculateRentalAmount();
+    
+    openPrepaidPayment({
+      totalAmount,
+      customerName: selectedCustomer.name,
+      consoleName: selectedConsole.name,
+      duration: selectedDuration,
+      rateDetails: {
+        baseRate: selectedRateProfile.hourlyRate,
+        peakHourRate: selectedRateProfile.peakHourRate,
+        weekendMultiplier: selectedRateProfile.weekendMultiplier
+      }
+    });
   };
 
-  const removeFromCart = (itemId: string) => {
-    setCart(cart.filter(item => item.id !== itemId));
-  };
+  // Handler for processing prepaid rental after payment confirmation
+  const handleStartPrepaidRental = async (paymentData: PaymentData) => {
+    if (!selectedCustomer || !selectedConsole || !selectedRateProfile) return;
 
-  const clearCart = () => {
-    setCart([]);
-    setShowPayment(false);
-    setPaymentAmount(0);
-    setSelectedCustomer('');
-    setIsManualInput(false);
-    setManualAmount('');
-  };
+    try {
+      const rentalData = {
+        customer_id: selectedCustomer.id,
+        console_id: selectedConsole.id,
+        start_time: new Date().toISOString(),
+        duration_minutes: selectedDuration * 60,
+        rate_type: 'hourly',
+        base_amount: selectedRateProfile.hourlyRate * selectedDuration,
+        total_amount: calculateRentalAmount(),
+        paid_amount: paymentData.amount,
+        status: 'active',
+        payment_status: 'paid',
+        applied_rate_profile: {
+          id: selectedRateProfile.id,
+          name: selectedRateProfile.name,
+          hourlyRate: selectedRateProfile.hourlyRate
+        }
+      };
 
-  const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
-  const tax = 0; // No tax for now
-  const total = subtotal + tax;
-  
-  // Use manual amount if in manual mode, otherwise use paymentAmount
-  const actualPaymentAmount = isManualInput ? parseFloat(manualAmount) || 0 : paymentAmount;
-  const change = actualPaymentAmount - total;
+      // Save rental session to database
+      const { data: rental, error: rentalError } = await supabase
+        .from('rental_sessions')
+        .insert(rentalData)
+        .select()
+        .single();
 
-  // Money denomination buttons (in thousands)
-  const denominations = [
-    { label: '1K', value: 1000 },
-    { label: '5K', value: 5000 },
-    { label: '10K', value: 10000 },
-    { label: '20K', value: 20000 },
-    { label: '50K', value: 50000 },
-    { label: '100K', value: 100000 }
-  ];
+      if (rentalError) throw rentalError;
 
-  const addDenomination = (value: number) => {
-    if (isManualInput) {
-      const currentValue = parseFloat(manualAmount) || 0;
-      setManualAmount((currentValue + value).toString());
-    } else {
-      setPaymentAmount(prev => prev + value);
+      // Update console status
+      await supabase
+        .from('consoles')
+        .update({ status: 'rented' })
+        .eq('id', selectedConsole.id);
+
+      // Create payment record
+      const paymentRecord = {
+        customer_id: selectedCustomer.id,
+        customer_name: selectedCustomer.name,
+        amount: paymentData.amount,
+        payment_method: paymentData.method,
+        reference_id: rental.id,
+        reference_type: 'rental',
+        status: 'completed',
+        notes: paymentData.notes
+      };
+
+      await supabase
+        .from('payments')
+        .insert(paymentRecord);
+
+      // Reset form
+      setSelectedCustomer(null);
+      setSelectedConsole(null);
+      setSelectedDuration(2);
+      setSelectedRateProfile(null);
+
+    } catch (error: any) {
+      console.error('Rental creation error:', error);
+      throw new Error('Gagal memulai rental: ' + error.message);
     }
   };
 
-  const clearPaymentAmount = () => {
-    if (isManualInput) {
-      setManualAmount('');
-    } else {
-      setPaymentAmount(0);
+  // Updated handler for POS sale - now opens payment module
+  const handleProcessSale = () => {
+    if (cart.length === 0) {
+      Swal.fire('Error', 'Keranjang kosong', 'warning');
+      return;
+    }
+
+    openPayAsYouGoPayment({
+      totalAmount: cartTotal,
+      customerName: selectedCustomer?.name || 'Walk-in Customer',
+      consoleName: 'POS Sale',
+      duration: 0,
+      items: cart.map(item => ({
+        name: item.productName,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total
+      })),
+      breakdown: {
+        subtotal: cartTotal,
+        tax: 0,
+        discount: 0,
+        lateFee: 0
+      }
+    });
+  };
+
+  // Handler for processing POS sale after payment confirmation
+  const handleCompletePOSSale = async (paymentData: PaymentData) => {
+    try {
+      // Create sale record
+      const saleData = {
+        customer_id: selectedCustomer?.id,
+        subtotal: cartTotal,
+        tax: 0,
+        discount: 0,
+        total: cartTotal,
+        payment_method: paymentData.method,
+        payment_amount: paymentData.amount,
+        change_amount: paymentData.changeAmount || 0
+      };
+
+      const { data: sale, error: saleError } = await supabase
+        .from('sales')
+        .insert(saleData)
+        .select()
+        .single();
+
+      if (saleError) throw saleError;
+
+      // Create sale items
+      const saleItems = cart.map(item => ({
+        sale_id: sale.id,
+        product_id: item.productId,
+        product_name: item.productName,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total
+      }));
+
+      await supabase
+        .from('sale_items')
+        .insert(saleItems);
+
+      // Update product stock
+      for (const item of cart) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('stock')
+          .eq('id', item.productId)
+          .single();
+
+        if (product) {
+          await supabase
+            .from('products')
+            .update({ stock: product.stock - item.quantity })
+            .eq('id', item.productId);
+        }
+      }
+
+      // Reset cart and customer
+      setCart([]);
+      setSelectedCustomer(null);
+
+    } catch (error: any) {
+      console.error('Sale processing error:', error);
+      throw new Error('Gagal memproses penjualan: ' + error.message);
     }
   };
 
-  const setExactAmount = () => {
-    if (isManualInput) {
-      setManualAmount(total.toString());
-    } else {
-      setPaymentAmount(total);
+  const handleApplyVoucher = () => {
+    if (!selectedVoucher || voucherHours <= 0) {
+      Swal.fire('Error', 'Pilih voucher dan masukkan jam yang valid', 'warning');
+      return;
     }
-  };
 
-  const toggleManualInput = () => {
-    setIsManualInput(!isManualInput);
-    if (!isManualInput) {
-      // Switching to manual, clear both
-      setPaymentAmount(0);
-      setManualAmount('');
-    } else {
-      // Switching to quick buttons, clear manual
-      setManualAmount('');
-      setPaymentAmount(0);
+    if (voucherHours > selectedVoucher.remainingHours) {
+      Swal.fire('Error', 'Jam yang digunakan melebihi sisa voucher', 'warning');
+      return;
     }
+
+    // Apply voucher logic here
+    Swal.fire('Success', `Voucher ${selectedVoucher.voucherCode} berhasil diterapkan untuk ${voucherHours} jam`, 'success');
+    setShowVoucherModal(false);
+    setSelectedVoucher(null);
+    setVoucherCode('');
+    setVoucherHours(0);
   };
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'beverage': return 'bg-blue-100 text-blue-800';
-      case 'food': return 'bg-orange-100 text-orange-800';
-      case 'snack': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const formatDuration = (startTime: string) => {
-    const start = new Date(startTime);
-    const now = new Date();
-    const diffMs = now.getTime() - start.getTime();
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
-  };
-
-  const calculateRentalCost = (session: RentalSession) => {
-    const startTime = new Date(session.startTime);
-    const now = new Date();
-    const minutesElapsed = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
-    const hoursElapsed = Math.ceil(minutesElapsed / 60);
-    const console = mockConsoles.find(c => c.id === session.consoleId);
-    const rateProfile = mockRateProfiles.find(profile => profile.id === console?.rateProfileId);
-    return hoursElapsed * (rateProfile?.hourlyRate || 0);
-  };
-
-  const generateReceiptData = () => {
-    const customer = selectedCustomer ? customers.find((c: any) => c.id === selectedCustomer) : null;
-    const receiptId = `RCP-${Date.now()}`;
-    const timestamp = new Date().toLocaleString('id-ID');
-    
-    return {
-      id: receiptId,
-      timestamp,
-      customer,
-      items: cart,
-      subtotal,
-      tax,
-      total,
-      paymentMethod,
-      paymentAmount: actualPaymentAmount,
-      change,
-      cashier: 'Kasir 1' // This would come from logged in user
-    };
-  };
-
-  const handleCheckout = () => {
-    if (cart.length === 0) return;
-    
-    // Validate payment amount
-    if (paymentMethod === 'cash' && actualPaymentAmount < total) {
-      return; // Don't proceed if insufficient payment
-    }
-    
-    const receiptData = generateReceiptData();
-    setLastTransaction(receiptData);
-    
-    // Process the payment
-    setPaymentSuccess(true);
-    setShowPaymentModal(true);
-    
-    // Clear cart and payment form
-    clearCart();
-  };
-
-  const handlePrintReceipt = () => {
-    if (!lastTransaction) return;
-    
-    // Create printable receipt
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Receipt - ${lastTransaction.id}</title>
-            <style>
-              body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; }
-              .receipt { width: 300px; margin: 0 auto; }
-              .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
-              .item { display: flex; justify-content: space-between; margin: 5px 0; }
-              .total { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
-              .footer { text-align: center; margin-top: 20px; font-size: 10px; }
-            </style>
-          </head>
-          <body>
-            <div class="receipt">
-              <div class="header">
-                <h2>GAMING & BILLIARD CENTER</h2>
-                <p>PlayStation Rental + Mini Cafe</p>
-                <p>Receipt: ${lastTransaction.id}</p>
-                <p>${lastTransaction.timestamp}</p>
-                ${lastTransaction.customer ? `<p>Customer: ${lastTransaction.customer.name}</p>` : ''}
-                <p>Kasir: ${lastTransaction.cashier}</p>
-              </div>
-              
-              <div class="items">
-                ${lastTransaction.items.map((item: any) => `
-                  <div class="item">
-                    <span>${item.name} ${item.type === 'product' ? `x${item.quantity}` : ''}</span>
-                    <span>Rp ${item.total.toLocaleString('id-ID')}</span>
+  const renderPrepaidTab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Gamepad2 className="h-5 w-5 text-blue-600" />
+          Rental Bayar di Muka
+        </h2>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Customer Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Customer *</label>
+            <div className="space-y-2">
+              {selectedCustomer ? (
+                <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <User className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{selectedCustomer.name}</p>
+                      <p className="text-sm text-gray-600">{selectedCustomer.phone}</p>
+                    </div>
                   </div>
-                  ${item.description ? `<div style="font-size: 10px; color: #666; margin-left: 10px;">${item.description}</div>` : ''}
-                `).join('')}
-              </div>
-              
-              <div class="total">
-                <div class="item">
-                  <span>Subtotal:</span>
-                  <span>Rp ${lastTransaction.subtotal.toLocaleString('id-ID')}</span>
+                  <button
+                    onClick={() => setSelectedCustomer(null)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-                ${lastTransaction.tax > 0 ? `
-                  <div class="item">
-                    <span>Pajak:</span>
-                    <span>Rp ${lastTransaction.tax.toLocaleString('id-ID')}</span>
-                  </div>
-                ` : ''}
-                <div class="item" style="font-weight: bold; font-size: 14px;">
-                  <span>TOTAL:</span>
-                  <span>Rp ${lastTransaction.total.toLocaleString('id-ID')}</span>
-                </div>
-                <div class="item">
-                  <span>Bayar (${lastTransaction.paymentMethod.toUpperCase()}):</span>
-                  <span>Rp ${lastTransaction.paymentAmount.toLocaleString('id-ID')}</span>
-                </div>
-                ${lastTransaction.change > 0 ? `
-                  <div class="item">
-                    <span>Kembalian:</span>
-                    <span>Rp ${lastTransaction.change.toLocaleString('id-ID')}</span>
-                  </div>
-                ` : ''}
-              </div>
-              
-              <div class="footer">
-                <p>Terima kasih atas kunjungan Anda!</p>
-                <p>Selamat bermain dan nikmati waktu Anda</p>
-                <p>---</p>
-                <p>Simpan struk ini sebagai bukti pembayaran</p>
-              </div>
+              ) : (
+                <button
+                  onClick={() => setShowCustomerModal(true)}
+                  className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="h-4 w-4 text-gray-400" />
+                  <span className="text-gray-600">Pilih Customer</span>
+                </button>
+              )}
             </div>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
-    }
-  };
-
-  const handleSendWhatsApp = () => {
-    if (!lastTransaction || !whatsappNumber) {
-      return; // Don't show alert, just return
-    }
-
-    // Format WhatsApp message
-    const message = `
-*STRUK PEMBAYARAN*
-Gaming & Billiard Center
-
-Receipt: ${lastTransaction.id}
-Tanggal: ${lastTransaction.timestamp}
-${lastTransaction.customer ? `Customer: ${lastTransaction.customer.name}` : ''}
-Kasir: ${lastTransaction.cashier}
-
-*DETAIL PEMBELIAN:*
-${lastTransaction.items.map((item: any) => 
-  `• ${item.name} ${item.type === 'product' ? `x${item.quantity}` : ''} - Rp ${item.total.toLocaleString('id-ID')}`
-).join('\n')}
-
-*TOTAL PEMBAYARAN:*
-Subtotal: Rp ${lastTransaction.subtotal.toLocaleString('id-ID')}
-${lastTransaction.tax > 0 ? `Pajak: Rp ${lastTransaction.tax.toLocaleString('id-ID')}\n` : ''}*TOTAL: Rp ${lastTransaction.total.toLocaleString('id-ID')}*
-
-Bayar (${lastTransaction.paymentMethod.toUpperCase()}): Rp ${lastTransaction.paymentAmount.toLocaleString('id-ID')}
-${lastTransaction.change > 0 ? `Kembalian: Rp ${lastTransaction.change.toLocaleString('id-ID')}` : ''}
-
-Terima kasih atas kunjungan Anda! 🎮
-Selamat bermain dan nikmati waktu Anda ☕
-    `.trim();
-
-    // Format phone number for WhatsApp
-    let formattedNumber = whatsappNumber.replace(/\D/g, '');
-    if (formattedNumber.startsWith('0')) {
-      formattedNumber = '62' + formattedNumber.substring(1);
-    } else if (!formattedNumber.startsWith('62')) {
-      formattedNumber = '62' + formattedNumber;
-    }
-
-    // Create WhatsApp URL
-    const whatsappUrl = `https://wa.me/${formattedNumber}?text=${encodeURIComponent(message)}`;
-    
-    // Open WhatsApp
-    window.open(whatsappUrl, '_blank');
-    
-    setShowWhatsAppModal(false);
-    setWhatsappNumber('');
-  };
-
-  const closePaymentModal = () => {
-    setShowPaymentModal(false);
-    setPaymentSuccess(false);
-    setLastTransaction(null);
-  };
-
-  return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Main Content */}
-      <div className="flex-1 p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Kasir Terintegrasi</h1>
-          <div className="relative mb-4">
-            <input
-              type="text"
-              placeholder="Cari produk, barcode, atau customer..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-            />
           </div>
 
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg mb-4">
+          {/* Console Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Console *</label>
+            <div className="space-y-2">
+              {selectedConsole ? (
+                <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <Gamepad2 className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{selectedConsole.name}</p>
+                      <p className="text-sm text-gray-600">
+                        Rp {selectedRateProfile?.hourlyRate.toLocaleString('id-ID') || '0'}/jam
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedConsole(null);
+                      setSelectedRateProfile(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowConsoleModal(true)}
+                  className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="h-4 w-4 text-gray-400" />
+                  <span className="text-gray-600">Pilih Console</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Duration and Voucher */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Durasi (jam)</label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSelectedDuration(Math.max(1, selectedDuration - 1))}
+                className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center transition-colors"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <input
+                type="number"
+                value={selectedDuration}
+                onChange={(e) => setSelectedDuration(Math.max(1, Number(e.target.value)))}
+                className="flex-1 text-center text-lg font-semibold py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                min="1"
+                max="24"
+              />
+              <button
+                onClick={() => setSelectedDuration(selectedDuration + 1)}
+                className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Voucher (Opsional)</label>
             <button
-              onClick={() => setActiveTab('products')}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center gap-2 ${
-                activeTab === 'products'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
+              onClick={() => setShowVoucherModal(true)}
+              className="w-full p-3 border border-gray-300 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors flex items-center justify-center gap-2"
             >
-              <ShoppingCart className="h-4 w-4" />
-              Produk Cafe ({filteredProducts.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('rentals')}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center gap-2 ${
-                activeTab === 'rentals'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <Gamepad2 className="h-4 w-4" />
-              Rental Aktif ({pendingRentals.length})
+              <Ticket className="h-4 w-4 text-purple-600" />
+              <span className="text-gray-600">Gunakan Voucher</span>
             </button>
           </div>
         </div>
 
-        {/* Products Tab */}
-        {activeTab === 'products' && (
-          <>
-            {loadingProducts ? (
-              <div className="text-center text-gray-500 py-8">Memuat produk cafe...</div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                Tidak ada produk cafe yang aktif atau data belum masuk.<br />
-                Silakan cek data master produk di database.
+        {/* Rental Summary */}
+        {selectedCustomer && selectedConsole && selectedRateProfile && (
+          <div className="mt-6 bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Calculator className="h-4 w-4" />
+              Ringkasan Rental
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Customer:</span>
+                <span className="font-medium">{selectedCustomer.name}</span>
               </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    onClick={() => addProductToCart(product)}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
-                  >
-                    <div className="mb-3">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(product.category)}`}>
-                        {product.category}
-                      </span>
-                    </div>
-                    <h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-blue-600">
-                        Rp {product.price.toLocaleString('id-ID')}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        Stok: {product.stock}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex justify-between">
+                <span className="text-gray-600">Console:</span>
+                <span className="font-medium">{selectedConsole.name}</span>
               </div>
-            )}
-          </>
-        )}
-
-        {/* Rentals Tab */}
-        {activeTab === 'rentals' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {loadingRentals ? (
-              <div className="text-center text-gray-500 py-8 col-span-full">Memuat data rental aktif...</div>
-            ) : pendingRentals.length === 0 ? (
-              <div className="text-center text-gray-500 py-8 col-span-full">
-                Tidak ada rental aktif atau pembayaran pending.<br />
-                Silakan cek data rental di database.
+              <div className="flex justify-between">
+                <span className="text-gray-600">Durasi:</span>
+                <span className="font-medium">{selectedDuration} jam</span>
               </div>
-            ) : (
-              pendingRentals.map((session) => {
-                // Ambil customer dari hasil query database
-                const customer = customers.find((c) => c.id === session.customerId);
-                // Ambil console dari state hasil fetch database
-                const console = consoles.find((c) => c.id === session.consoleId) || { name: '-' };
-                // Ambil rateProfile dari session.applied_rate_profile (jsonb Supabase)
-                const rateProfile = session.appliedRateProfile || { hourly_rate: 0 };
-
-                // Durasi
-                let durationText = '';
-                if (session.startTime) {
-                  const start = new Date(session.startTime);
-                  const now = new Date();
-                  const diffMs = now.getTime() - start.getTime();
-                  const hours = Math.floor(diffMs / (1000 * 60 * 60));
-                  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-                  durationText = `${hours}h ${minutes}m`;
-                }
-
-                // Harga rental
-                let currentCost = 0;
-                if (session.startTime && rateProfile && typeof rateProfile.hourlyRate === 'number') {
-                  const start = new Date(session.startTime);
-                  const now = new Date();
-                  const minutesElapsed = Math.floor((now.getTime() - start.getTime()) / (1000 * 60));
-                  const hoursElapsed = Math.ceil(minutesElapsed / 60);
-                  currentCost = hoursElapsed * rateProfile.hourlyRate;
-                }
-
-                return (
-                  <div
-                    key={session.id}
-                    onClick={() => addRentalToCart(session)}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Gamepad2 className="h-5 w-5 text-blue-600" />
-                        <span className="font-semibold text-gray-900">{console && console.name ? console.name : '-'}</span>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        session.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                      }`}>
-                        {session.paymentStatus === 'pending' ? 'PENDING' : 'ACTIVE'}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2 mb-3">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <User className="h-4 w-4" />
-                        <span>{customer && customer.name ? customer.name : '-'}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Clock className="h-4 w-4" />
-                        <span>Durasi: {durationText}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-green-600">
-                        Rp {currentCost ? currentCost.toLocaleString('id-ID') : '0'}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        Rp {rateProfile && typeof rateProfile.hourlyRate === 'number' ? rateProfile.hourlyRate.toLocaleString('id-ID') : '0'}/jam
-                      </span>
-                    </div>
-
-                    <div className="mt-3 text-xs text-gray-500">
-                      Mulai: {session.startTime ? new Date(session.startTime).toLocaleString('id-ID') : '-'}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+              <div className="flex justify-between">
+                <span className="text-gray-600">Tarif per jam:</span>
+                <span className="font-medium">Rp {selectedRateProfile.hourlyRate.toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between font-bold text-lg border-t border-gray-200 pt-2">
+                <span>Total:</span>
+                <span className="text-blue-600">Rp {calculateRentalAmount().toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+            
+            <button
+              onClick={handlePayAndStart}
+              className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <CreditCard className="h-5 w-5" />
+              Bayar dan Mulai Rental
+            </button>
           </div>
         )}
       </div>
+    </div>
+  );
 
-      {/* Cart Sidebar */}
-      <div className="w-96 bg-white shadow-xl border-l border-gray-200 flex flex-col">
-        {/* Cart Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-              <Receipt className="h-5 w-5" />
-              Pembayaran
-            </h2>
-            {cart.length > 0 && (
-              <button
-                onClick={clearCart}
-                className="text-red-600 hover:text-red-700 text-sm font-medium"
-              >
-                Clear All
-              </button>
-            )}
+  const renderPOSTab = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Product Selection */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Package className="h-5 w-5 text-green-600" />
+          Pilih Produk
+        </h2>
+        
+        {/* Search and Filter */}
+        <div className="space-y-4 mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <input
+              type="text"
+              placeholder="Cari produk..."
+              value={searchProduct}
+              onChange={(e) => setSearchProduct(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
-
-          {/* Customer Selection */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Customer (Opsional)</label>
-            <select
-              value={selectedCustomer}
-              onChange={(e) => setSelectedCustomer(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              disabled={loadingCustomers}
-            >
-              <option value="">Pilih Customer</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>{customer.name}</option>
-              ))}
-            </select>
-            {loadingCustomers && <div className="text-xs text-gray-400 mt-1">Memuat data customer...</div>}
-          </div>
+          
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">Semua Kategori</option>
+            <option value="snack">Snack</option>
+            <option value="beverage">Minuman</option>
+            <option value="food">Makanan</option>
+            <option value="other">Lainnya</option>
+          </select>
         </div>
 
-        {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {cart.length === 0 ? (
-            <div className="text-center text-gray-500 mt-8">
-              <Receipt className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-              <p>Belum ada item</p>
-              <p className="text-sm">Pilih produk atau rental untuk memulai</p>
+        {/* Products Grid */}
+        <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto">
+          {filteredProducts.map((product) => (
+            <button
+              key={product.id}
+              onClick={() => handleAddToCart(product)}
+              className="p-3 border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors text-left"
+            >
+              <div className="space-y-1">
+                <p className="font-medium text-gray-900 text-sm">{product.name}</p>
+                <p className="text-blue-600 font-semibold">Rp {product.price.toLocaleString('id-ID')}</p>
+                <p className="text-xs text-gray-500">Stok: {product.stock}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Shopping Cart */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <ShoppingCart className="h-5 w-5 text-purple-600" />
+          Keranjang Belanja
+        </h2>
+
+        {/* Customer for POS */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Customer (Opsional)</label>
+          {selectedCustomer ? (
+            <div className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded-lg">
+              <span className="text-sm font-medium">{selectedCustomer.name}</span>
+              <button
+                onClick={() => setSelectedCustomer(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-3 w-3" />
+              </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {cart.map((item) => (
-                <div key={item.id} className={`rounded-lg p-4 ${
-                  item.type === 'rental' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
-                }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {item.type === 'rental' ? (
-                        <Gamepad2 className="h-4 w-4 text-blue-600" />
-                      ) : (
-                        <ShoppingCart className="h-4 w-4 text-gray-600" />
-                      )}
-                      <h4 className="font-medium text-gray-900">{item.name}</h4>
-                    </div>
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {item.description && (
-                    <p className="text-xs text-gray-600 mb-2">{item.description}</p>
-                  )}
-                  
-                  <div className="flex items-center justify-between">
-                    {item.type === 'product' ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <span className="w-8 text-center font-medium">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-blue-600 font-medium">Rental Payment</span>
-                    )}
-                    
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">
-                        Rp {item.price.toLocaleString('id-ID')} {item.type === 'product' && `x ${item.quantity}`}
-                      </p>
-                      <p className="font-semibold text-gray-900">
-                        Rp {item.total.toLocaleString('id-ID')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <button
+              onClick={() => setShowCustomerModal(true)}
+              className="w-full p-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 text-sm text-gray-600"
+            >
+              + Pilih Customer
+            </button>
           )}
         </div>
 
-        {/* Cart Summary & Payment */}
-        {cart.length > 0 && (
-          <div className="border-t border-gray-200 p-6">
-            {/* Summary */}
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Produk ({cart.filter(i => i.type === 'product').length}):</span>
-                <span>Rp {cart.filter(i => i.type === 'product').reduce((sum, i) => sum + i.total, 0).toLocaleString('id-ID')}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Rental ({cart.filter(i => i.type === 'rental').length}):</span>
-                <span>Rp {cart.filter(i => i.type === 'rental').reduce((sum, i) => sum + i.total, 0).toLocaleString('id-ID')}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal:</span>
-                <span className="font-medium">Rp {subtotal.toLocaleString('id-ID')}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Pajak:</span>
-                <span className="font-medium">Rp {tax.toLocaleString('id-ID')}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-3">
-                <span>Total:</span>
-                <span>Rp {total.toLocaleString('id-ID')}</span>
-              </div>
+        {/* Cart Items */}
+        <div className="space-y-3 mb-6 max-h-64 overflow-y-auto">
+          {cart.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <ShoppingCart className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+              <p>Keranjang kosong</p>
             </div>
-
-            {!showPayment ? (
-              <button
-                onClick={() => setShowPayment(true)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <Calculator className="h-5 w-5" />
-                Proses Pembayaran
-              </button>
-            ) : (
-              <div className="space-y-4">
-                {/* Payment Method */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Metode Pembayaran</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { value: 'cash', label: 'Cash', icon: DollarSign },
-                      { value: 'card', label: 'Card', icon: CreditCard },
-                      { value: 'transfer', label: 'Transfer', icon: CreditCard }
-                    ].map((method) => {
-                      const Icon = method.icon;
-                      return (
-                        <button
-                          key={method.value}
-                          onClick={() => setPaymentMethod(method.value as any)}
-                          className={`p-2 rounded-lg border text-sm font-medium transition-colors flex flex-col items-center gap-1 ${
-                            paymentMethod === method.value
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                          }`}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {method.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+          ) : (
+            cart.map((item) => (
+              <div key={item.productId} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900">{item.productName}</p>
+                  <p className="text-sm text-gray-600">Rp {item.price.toLocaleString('id-ID')}</p>
                 </div>
-
-                {/* Payment Amount */}
-                {paymentMethod === 'cash' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-gray-700">Jumlah Bayar</label>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={toggleManualInput}
-                          className={`text-xs px-2 py-1 rounded font-medium transition-colors flex items-center gap-1 ${
-                            isManualInput 
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                        >
-                          <Edit3 className="h-3 w-3" />
-                          {isManualInput ? 'Manual' : 'Quick'}
-                        </button>
-                        <button
-                          onClick={clearPaymentAmount}
-                          className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
-                        >
-                          <X className="h-3 w-3" />
-                          Clear
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Payment Amount Display */}
-                    <div className="mb-3 p-3 bg-gray-100 rounded-lg text-center">
-                      <div className="text-2xl font-bold text-gray-900">
-                        Rp {actualPaymentAmount.toLocaleString('id-ID')}
-                      </div>
-                      {actualPaymentAmount > 0 && (
-                        <div className="text-sm mt-1">
-                          <span className={`font-medium ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            Kembalian: Rp {change.toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Manual Input or Quick Buttons */}
-                    {isManualInput ? (
-                      <div className="mb-3">
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
-                          <p className="text-xs text-yellow-800 font-medium">
-                            📝 Mode Input Manual
-                          </p>
-                          <p className="text-xs text-yellow-700 mt-1">
-                            Masukkan jumlah pembayaran secara manual. Sistem akan menerima input nominal yang Anda masukkan, terlepas dari total tagihan yang terkalkulasi otomatis. Pastikan jumlah yang Anda masukkan sudah benar sebelum melanjutkan ke proses pembayaran.
-                          </p>
-                        </div>
-                        <input
-                          type="number"
-                          value={manualAmount}
-                          onChange={(e) => setManualAmount(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-mono"
-                          placeholder="0"
-                          min="0"
-                        />
-                        <p className="text-xs text-gray-500 mt-1 text-center">
-                          Masukkan nominal pembayaran (dalam Rupiah)
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Money Denomination Buttons */}
-                        <div className="grid grid-cols-3 gap-2 mb-3">
-                          {denominations.map((denom) => (
-                            <button
-                              key={denom.value}
-                              onClick={() => addDenomination(denom.value)}
-                              className="p-3 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg font-medium transition-colors text-sm"
-                            >
-                              {denom.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Exact Amount Button */}
-                        <button
-                          onClick={setExactAmount}
-                          className="w-full p-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg font-medium transition-colors text-sm mb-3"
-                        >
-                          LUNAS (Rp {total.toLocaleString('id-ID')})
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setShowPayment(false)}
-                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors"
+                    onClick={() => handleUpdateCartQuantity(item.productId, item.quantity - 1)}
+                    className="w-6 h-6 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center"
                   >
-                    Batal
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <span className="w-8 text-center font-medium">{item.quantity}</span>
+                  <button
+                    onClick={() => handleUpdateCartQuantity(item.productId, item.quantity + 1)}
+                    className="w-6 h-6 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center"
+                  >
+                    <Plus className="h-3 w-3" />
                   </button>
                   <button
-                    onClick={handleCheckout}
-                    disabled={paymentMethod === 'cash' && change < 0}
-                    className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    onClick={() => handleRemoveFromCart(item.productId)}
+                    className="ml-2 text-red-500 hover:text-red-700"
                   >
-                    <Receipt className="h-4 w-4" />
-                    Bayar
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
               </div>
-            )}
+            ))
+          )}
+        </div>
+
+        {/* Cart Total */}
+        {cart.length > 0 && (
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-lg font-semibold text-gray-900">Total:</span>
+              <span className="text-xl font-bold text-green-600">
+                Rp {cartTotal.toLocaleString('id-ID')}
+              </span>
+            </div>
+            
+            <button
+              onClick={handleProcessSale}
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <Receipt className="h-5 w-5" />
+              Proses Pembayaran
+            </button>
           </div>
         )}
       </div>
+    </div>
+  );
 
-      {/* Payment Success Modal */}
-      {showPaymentModal && lastTransaction && (
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Kasir POS</h1>
+        <p className="text-gray-600">Sistem Point of Sale untuk rental dan penjualan produk</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-8">
+        <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg">
+          {[
+            { id: 'prepaid', label: 'Bayar di Muka', icon: CreditCard },
+            { id: 'payasyougo', label: 'Pay As You Go', icon: Clock },
+            { id: 'pos', label: 'Penjualan Produk', icon: ShoppingCart }
+          ].map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex-1 py-3 px-4 rounded-md font-medium transition-colors flex items-center justify-center gap-2 ${
+                  activeTab === tab.id
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'prepaid' && renderPrepaidTab()}
+      {activeTab === 'payasyougo' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="text-center py-12">
+            <Clock className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Pay As You Go</h3>
+            <p className="text-gray-600 mb-4">
+              Fitur ini digunakan untuk mengakhiri rental yang sedang berlangsung.
+            </p>
+            <p className="text-sm text-gray-500">
+              Silakan gunakan menu "Active Rentals" untuk mengelola rental yang sedang berjalan.
+            </p>
+          </div>
+        </div>
+      )}
+      {activeTab === 'pos' && renderPOSTab()}
+
+      {/* Customer Selection Modal */}
+      {showCustomerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[80vh] overflow-hidden">
             <div className="p-6">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Pilih Customer</h2>
+              
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  placeholder="Cari nama atau nomor..."
+                  value={searchCustomer}
+                  onChange={(e) => setSearchCustomer(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {filteredCustomers.map((customer) => (
+                  <button
+                    key={customer.id}
+                    onClick={() => handleSelectCustomer(customer)}
+                    className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                  >
+                    <p className="font-medium text-gray-900">{customer.name}</p>
+                    <p className="text-sm text-gray-600">{customer.phone}</p>
+                  </button>
+                ))}
+              </div>
+              
+              <button
+                onClick={() => setShowCustomerModal(false)}
+                className="w-full mt-4 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Console Selection Modal */}
+      {showConsoleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[80vh] overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Pilih Console</h2>
+              
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  placeholder="Cari console..."
+                  value={searchConsole}
+                  onChange={(e) => setSearchConsole(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {filteredConsoles.map((console) => {
+                  const rateProfile = mockRateProfiles.find(rp => rp.id === console.rateProfileId);
+                  return (
+                    <button
+                      key={console.id}
+                      onClick={() => handleSelectConsole(console)}
+                      className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors"
+                    >
+                      <p className="font-medium text-gray-900">{console.name}</p>
+                      <p className="text-sm text-gray-600">
+                        Rp {rateProfile?.hourlyRate.toLocaleString('id-ID') || '0'}/jam
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+              
+              <button
+                onClick={() => setShowConsoleModal(false)}
+                className="w-full mt-4 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Voucher Modal */}
+      {showVoucherModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Gunakan Voucher</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kode Voucher</label>
+                  <input
+                    type="text"
+                    value={voucherCode}
+                    onChange={(e) => {
+                      setVoucherCode(e.target.value);
+                      const voucher = mockVouchers.find(v => v.voucherCode === e.target.value && v.status === 'active');
+                      setSelectedVoucher(voucher || null);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Masukkan kode voucher"
+                  />
+                </div>
+
+                {selectedVoucher && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <h3 className="font-medium text-purple-900 mb-2">{selectedVoucher.name}</h3>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-purple-700">Sisa jam:</span>
+                        <span className="font-medium">{selectedVoucher.remainingHours} jam</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-purple-700">Customer:</span>
+                        <span className="font-medium">{selectedVoucher.customerName || 'Umum'}</span>
+                      </div>
+                    </div>
                   </div>
+                )}
+
+                {selectedVoucher && (
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Pembayaran Berhasil!</h2>
-                    <p className="text-gray-600">Receipt: {lastTransaction.id}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Jam yang Digunakan</label>
+                    <input
+                      type="number"
+                      value={voucherHours}
+                      onChange={(e) => setVoucherHours(Number(e.target.value))}
+                      max={selectedVoucher.remainingHours}
+                      min="1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
-                </div>
+                )}
+              </div>
+              
+              <div className="flex gap-3 mt-6">
                 <button
-                  onClick={closePaymentModal}
-                  className="text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowVoucherModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
-                  <X className="h-6 w-6" />
+                  Batal
                 </button>
-              </div>
-
-              {/* Transaction Summary */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-green-900 mb-2">
-                    Rp {lastTransaction.total.toLocaleString('id-ID')}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-green-700">Metode Pembayaran:</span>
-                      <div className="font-medium text-green-900 capitalize">
-                        {lastTransaction.paymentMethod}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-green-700">Waktu Transaksi:</span>
-                      <div className="font-medium text-green-900">
-                        {lastTransaction.timestamp}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-green-700">Jumlah Bayar:</span>
-                      <div className="font-medium text-green-900">
-                        Rp {lastTransaction.paymentAmount.toLocaleString('id-ID')}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-green-700">Kembalian:</span>
-                      <div className="font-medium text-green-900">
-                        Rp {lastTransaction.change.toLocaleString('id-ID')}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Customer Info */}
-              {lastTransaction.customer && (
-                <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                  <h3 className="font-medium text-gray-900 mb-2">Informasi Customer</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Nama:</span>
-                      <div className="font-medium">{lastTransaction.customer.name}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Telepon:</span>
-                      <div className="font-medium">{lastTransaction.customer.phone}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Items Detail */}
-              <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-3">Detail Pembelian</h3>
-                <div className="space-y-3">
-                  {lastTransaction.items.map((item: any, index: number) => (
-                    <div key={index} className="flex justify-between items-start p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          {item.type === 'rental' ? (
-                            <Gamepad2 className="h-4 w-4 text-blue-600" />
-                          ) : (
-                            <ShoppingCart className="h-4 w-4 text-gray-600" />
-                          )}
-                          <span className="font-medium">{item.name}</span>
-                          {item.type === 'product' && (
-                            <span className="text-gray-600">x {item.quantity}</span>
-                          )}
-                        </div>
-                        {item.description && (
-                          <p className="text-xs text-gray-600 ml-6">{item.description}</p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <div className="font-medium">Rp {item.total.toLocaleString('id-ID')}</div>
-                        {item.type === 'product' && (
-                          <div className="text-xs text-gray-600">
-                            @Rp {item.price.toLocaleString('id-ID')}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Payment Breakdown */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <h3 className="font-medium text-gray-900 mb-3">Rincian Pembayaran</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Subtotal:</span>
-                    <span>Rp {lastTransaction.subtotal.toLocaleString('id-ID')}</span>
-                  </div>
-                  {lastTransaction.tax > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Pajak:</span>
-                      <span>Rp {lastTransaction.tax.toLocaleString('id-ID')}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-medium border-t border-gray-200 pt-2">
-                    <span>Total:</span>
-                    <span>Rp {lastTransaction.total.toLocaleString('id-ID')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Bayar ({lastTransaction.paymentMethod}):</span>
-                    <span>Rp {lastTransaction.paymentAmount.toLocaleString('id-ID')}</span>
-                  </div>
-                  {lastTransaction.change > 0 && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Kembalian:</span>
-                      <span className="font-medium">Rp {lastTransaction.change.toLocaleString('id-ID')}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={handlePrintReceipt}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Printer className="h-5 w-5" />
-                    Cetak Nota
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowWhatsAppModal(true)}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                  >
-                    <MessageCircle className="h-5 w-5" />
-                    Kirim via WhatsApp
-                  </button>
-                </div>
-                
-                <button
-                  onClick={closePaymentModal}
-                  className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-3 rounded-lg font-medium transition-colors"
+                <button 
+                  onClick={handleApplyVoucher}
+                  disabled={!selectedVoucher || voucherHours <= 0}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  Tutup & Lanjutkan
+                  Gunakan Voucher
                 </button>
               </div>
             </div>
@@ -1105,65 +879,32 @@ Selamat bermain dan nikmati waktu Anda ☕
         </div>
       )}
 
-      {/* WhatsApp Send Modal */}
-      {showWhatsAppModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <MessageCircle className="h-5 w-5 text-green-600" />
-                  Kirim Nota via WhatsApp
-                </h2>
-                <button
-                  onClick={() => setShowWhatsAppModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nomor WhatsApp Customer
-                </label>
-                <input
-                  type="tel"
-                  value={whatsappNumber}
-                  onChange={(e) => setWhatsappNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="+62 8xx-xxxx-xxxx"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Format: +62xxx, 62xxx, atau 0xxx
-                </p>
-              </div>
-
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                <p className="text-sm text-green-800">
-                  Nota akan dikirim dalam format pesan WhatsApp yang berisi detail lengkap transaksi.
-                </p>
-              </div>
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowWhatsAppModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={handleSendWhatsApp}
-                  disabled={!whatsappNumber}
-                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  Kirim
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Payment Modules */}
+      {paymentType === 'prepaid' && paymentData && (
+        <PrepaidPaymentModule
+          isOpen={isPaymentOpen}
+          onClose={closePayment}
+          onConfirm={handlePaymentConfirm}
+          totalAmount={paymentData.totalAmount}
+          customerName={paymentData.customerName}
+          consoleName={paymentData.consoleName}
+          duration={paymentData.duration}
+          rateDetails={paymentData.rateDetails}
+        />
+      )}
+      
+      {paymentType === 'payasyougo' && paymentData && (
+        <PayAsYouGoPaymentModule
+          isOpen={isPaymentOpen}
+          onClose={closePayment}
+          onConfirm={handlePaymentConfirm}
+          totalAmount={paymentData.totalAmount}
+          customerName={paymentData.customerName}
+          consoleName={paymentData.consoleName}
+          duration={paymentData.duration}
+          items={paymentData.items}
+          breakdown={paymentData.breakdown}
+        />
       )}
     </div>
   );
