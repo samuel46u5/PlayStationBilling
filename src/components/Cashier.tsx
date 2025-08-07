@@ -5,9 +5,7 @@ import { mockCustomers, mockConsoles, mockProducts, mockRateProfiles, mockVouche
 import { Customer, Console, Product, RateProfile, Voucher } from '../types';
 import Swal from 'sweetalert2';
 import PrepaidPaymentModule from './PrepaidPaymentModule';
-import PayAsYouGoPaymentModule from './PayAsYouGoPaymentModule';
 import { PaymentData } from './PaymentModule';
-import { usePaymentModule } from '../hooks/usePaymentModule';
 
 const Cashier: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'prepaid' | 'payasyougo' | 'pos'>('prepaid');
@@ -36,51 +34,10 @@ const Cashier: React.FC = () => {
   const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherHours, setVoucherHours] = useState<number>(0);
+  
+  // Payment states - hanya untuk prepaid
+  const [showPrepaidPayment, setShowPrepaidPayment] = useState(false);
 
-  // Payment Module Integration
-  const {
-    isPaymentOpen,
-    paymentType,
-    paymentData,
-    openPrepaidPayment,
-    openPayAsYouGoPayment,
-    closePayment,
-    handlePaymentConfirm
-  } = usePaymentModule({
-    onPaymentSuccess: async (payment: PaymentData) => {
-      try {
-        if (paymentType === 'prepaid') {
-          await handleStartPrepaidRental(payment);
-        } else {
-          await handleCompletePOSSale(payment);
-        }
-        
-        Swal.fire({
-          icon: 'success',
-          title: 'Pembayaran Berhasil!',
-          text: paymentType === 'prepaid' 
-            ? 'Rental telah dimulai' 
-            : 'Transaksi berhasil diproses',
-          timer: 2000,
-          timerProgressBar: true
-        });
-      } catch (error) {
-        console.error('Payment processing error:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Gagal Memproses Pembayaran',
-          text: 'Terjadi kesalahan saat memproses pembayaran'
-        });
-      }
-    },
-    onPaymentError: (error: Error) => {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error Pembayaran',
-        text: error.message
-      });
-    }
-  });
 
   const filteredCustomers = mockCustomers.filter(customer =>
     customer.name.toLowerCase().includes(searchCustomer.toLowerCase()) ||
@@ -155,29 +112,17 @@ const Cashier: React.FC = () => {
     setCart(cart.filter(item => item.productId !== productId));
   };
 
-  // Updated handler for prepaid rental - now opens payment module
+  // Handler untuk prepaid rental - buka payment module
   const handlePayAndStart = () => {
     if (!selectedCustomer || !selectedConsole || !selectedRateProfile) {
       Swal.fire('Error', 'Silakan pilih customer, console, dan pastikan rate profile tersedia', 'warning');
       return;
     }
 
-    const totalAmount = calculateRentalAmount();
-    
-    openPrepaidPayment({
-      totalAmount,
-      customerName: selectedCustomer.name,
-      consoleName: selectedConsole.name,
-      duration: selectedDuration,
-      rateDetails: {
-        baseRate: selectedRateProfile.hourlyRate,
-        peakHourRate: selectedRateProfile.peakHourRate,
-        weekendMultiplier: selectedRateProfile.weekendMultiplier
-      }
-    });
+    setShowPrepaidPayment(true);
   };
 
-  // Handler for processing prepaid rental after payment confirmation
+  // Handler untuk memproses rental setelah pembayaran dikonfirmasi
   const handleStartPrepaidRental = async (paymentData: PaymentData) => {
     if (!selectedCustomer || !selectedConsole || !selectedRateProfile) return;
 
@@ -236,41 +181,43 @@ const Cashier: React.FC = () => {
       setSelectedConsole(null);
       setSelectedDuration(2);
       setSelectedRateProfile(null);
+      setShowPrepaidPayment(false);
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Pembayaran Berhasil!',
+        text: 'Rental telah dimulai',
+        timer: 2000,
+        timerProgressBar: true
+      });
 
     } catch (error: any) {
       console.error('Rental creation error:', error);
-      throw new Error('Gagal memulai rental: ' + error.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal Memproses Pembayaran',
+        text: 'Gagal memulai rental: ' + error.message
+      });
     }
   };
 
-  // Updated handler for POS sale - now opens payment module
+  // Handler untuk POS sale - tetap menggunakan cara lama
   const handleProcessSale = () => {
     if (cart.length === 0) {
       Swal.fire('Error', 'Keranjang kosong', 'warning');
       return;
     }
 
-    openPayAsYouGoPayment({
-      totalAmount: cartTotal,
-      customerName: selectedCustomer?.name || 'Walk-in Customer',
-      consoleName: 'POS Sale',
-      duration: 0,
-      items: cart.map(item => ({
-        name: item.productName,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.total
-      })),
-      breakdown: {
-        subtotal: cartTotal,
-        tax: 0,
-        discount: 0,
-        lateFee: 0
-      }
-    });
+    // Tetap menggunakan confirm dialog untuk POS
+    if (confirm(`Konfirmasi penjualan dengan total Rp ${cartTotal.toLocaleString('id-ID')}?`)) {
+      handleCompletePOSSale({
+        method: 'cash',
+        amount: cartTotal
+      });
+    }
   };
 
-  // Handler for processing POS sale after payment confirmation
+  // Handler untuk memproses POS sale
   const handleCompletePOSSale = async (paymentData: PaymentData) => {
     try {
       // Create sale record
@@ -326,10 +273,22 @@ const Cashier: React.FC = () => {
       // Reset cart and customer
       setCart([]);
       setSelectedCustomer(null);
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Penjualan Berhasil!',
+        text: 'Transaksi berhasil diproses',
+        timer: 2000,
+        timerProgressBar: true
+      });
 
     } catch (error: any) {
       console.error('Sale processing error:', error);
-      throw new Error('Gagal memproses penjualan: ' + error.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal Memproses Penjualan',
+        text: error.message
+      });
     }
   };
 
@@ -879,33 +838,21 @@ const Cashier: React.FC = () => {
         </div>
       )}
 
-      {/* Payment Modules */}
-      {paymentType === 'prepaid' && paymentData && (
-        <PrepaidPaymentModule
-          isOpen={isPaymentOpen}
-          onClose={closePayment}
-          onConfirm={handlePaymentConfirm}
-          totalAmount={paymentData.totalAmount}
-          customerName={paymentData.customerName}
-          consoleName={paymentData.consoleName}
-          duration={paymentData.duration}
-          rateDetails={paymentData.rateDetails}
-        />
-      )}
-      
-      {paymentType === 'payasyougo' && paymentData && (
-        <PayAsYouGoPaymentModule
-          isOpen={isPaymentOpen}
-          onClose={closePayment}
-          onConfirm={handlePaymentConfirm}
-          totalAmount={paymentData.totalAmount}
-          customerName={paymentData.customerName}
-          consoleName={paymentData.consoleName}
-          duration={paymentData.duration}
-          items={paymentData.items}
-          breakdown={paymentData.breakdown}
-        />
-      )}
+      {/* Payment Module - hanya untuk prepaid */}
+      <PrepaidPaymentModule
+        isOpen={showPrepaidPayment}
+        onClose={() => setShowPrepaidPayment(false)}
+        onConfirm={handleStartPrepaidRental}
+        totalAmount={calculateRentalAmount()}
+        customerName={selectedCustomer?.name || ''}
+        consoleName={selectedConsole?.name || ''}
+        duration={selectedDuration}
+        rateDetails={selectedRateProfile ? {
+          baseRate: selectedRateProfile.hourlyRate,
+          peakHourRate: selectedRateProfile.peakHourRate,
+          weekendMultiplier: selectedRateProfile.weekendMultiplier
+        } : undefined}
+      />
     </div>
   );
 };

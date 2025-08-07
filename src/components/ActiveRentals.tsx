@@ -4,9 +4,6 @@ import { supabase } from '../lib/supabase';
 import { mockCustomers, mockConsoles, mockProducts, mockRateProfiles } from '../data/mockData';
 import { RentalSession, Customer, Console, Product } from '../types';
 import { deleteSaleItem } from '../lib/deleteSaleItem';
-import PayAsYouGoPaymentModule from './PayAsYouGoPaymentModule';
-import { PaymentData } from './PaymentModule';
-import { usePaymentModule } from '../hooks/usePaymentModule';
 import Swal from 'sweetalert2';
 
 const ActiveRentals: React.FC = () => {
@@ -19,44 +16,6 @@ const ActiveRentals: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Payment Module Integration
-  const {
-    isPaymentOpen,
-    paymentData,
-    openPayAsYouGoPayment,
-    closePayment,
-    handlePaymentConfirm
-  } = usePaymentModule({
-    onPaymentSuccess: async (payment: PaymentData) => {
-      try {
-        if (selectedRental) {
-          await handleCompleteRental(selectedRental, payment);
-        }
-        
-        Swal.fire({
-          icon: 'success',
-          title: 'Pembayaran Berhasil!',
-          text: 'Rental telah diselesaikan',
-          timer: 2000,
-          timerProgressBar: true
-        });
-      } catch (error) {
-        console.error('Payment processing error:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Gagal Memproses Pembayaran',
-          text: 'Terjadi kesalahan saat menyelesaikan rental'
-        });
-      }
-    },
-    onPaymentError: (error: Error) => {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error Pembayaran',
-        text: error.message
-      });
-    }
-  });
 
   // Fetch active rentals from database
   const fetchActiveRentals = async () => {
@@ -149,89 +108,36 @@ const ActiveRentals: React.FC = () => {
     return Math.ceil(currentHours) * rateProfile.hourlyRate;
   };
 
-  const getAdditionalItems = async (rentalId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('rental_session_products')
-        .select('*')
-        .eq('session_id', rentalId);
-
-      if (error) throw error;
-
-      return (data || []).map((item: any) => ({
-        id: item.id,
-        productId: item.product_id,
-        productName: item.product_name,
-        price: Number(item.price),
-        quantity: item.quantity,
-        total: Number(item.total),
-        status: item.status
-      }));
-    } catch (error) {
-      console.error('Error fetching additional items:', error);
-      return [];
-    }
-  };
-
-  // Updated handler for ending rental - now opens payment module
+  // Handler untuk mengakhiri rental - tetap menggunakan cara lama
   const handleEndRental = async (rental: RentalSession) => {
-    try {
-      const currentHours = getCurrentDuration(rental.startTime);
-      const currentAmount = calculateCurrentAmount(rental);
-      const additionalItems = await getAdditionalItems(rental.id);
-      const additionalItemsTotal = additionalItems.reduce((sum, item) => sum + item.total, 0);
-      
-      // Calculate late fee if applicable
-      const plannedDuration = rental.duration / 60; // Convert minutes to hours
-      const lateFee = currentHours > plannedDuration ? (currentHours - plannedDuration) * 5000 : 0;
-      
-      const totalAmount = currentAmount + additionalItemsTotal + lateFee;
-      
-      const customer = rental.customer || mockCustomers.find(c => c.id === rental.customerId);
-      const console = rental.console || mockConsoles.find(c => c.id === rental.consoleId);
+    const customer = rental.customer || mockCustomers.find(c => c.id === rental.customerId);
+    const console = rental.console || mockConsoles.find(c => c.id === rental.consoleId);
+    const currentHours = getCurrentDuration(rental.startTime);
+    const currentAmount = calculateCurrentAmount(rental);
+    
+    const result = await Swal.fire({
+      title: 'Akhiri Rental?',
+      html: `
+        <div class="text-left">
+          <p><strong>Customer:</strong> ${customer?.name}</p>
+          <p><strong>Console:</strong> ${console?.name}</p>
+          <p><strong>Durasi:</strong> ${currentHours.toFixed(1)} jam</p>
+          <p><strong>Total:</strong> Rp ${currentAmount.toLocaleString('id-ID')}</p>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, akhiri',
+      cancelButtonText: 'Batal'
+    });
 
-      setSelectedRental(rental);
-      
-      openPayAsYouGoPayment({
-        totalAmount,
-        customerName: customer?.name || 'Unknown Customer',
-        consoleName: console?.name || 'Unknown Console',
-        duration: Math.ceil(currentHours),
-        items: additionalItems.map(item => ({
-          name: item.productName,
-          quantity: item.quantity,
-          price: item.price,
-          total: item.total
-        })),
-        breakdown: {
-          subtotal: currentAmount + additionalItemsTotal,
-          tax: 0,
-          discount: 0,
-          lateFee
-        }
-      });
-    } catch (error: any) {
-      console.error('Error preparing rental end:', error);
-      Swal.fire('Error', 'Gagal mempersiapkan pembayaran: ' + error.message, 'error');
-    }
-  };
-
-  // Handler for completing rental after payment confirmation
-  const handleCompleteRental = async (rental: RentalSession, paymentData: PaymentData) => {
-    if (!rental) return;
+    if (!result.isConfirmed) return;
 
     try {
       const endTime = new Date().toISOString();
-      const currentHours = getCurrentDuration(rental.startTime);
-      const currentAmount = calculateCurrentAmount(rental);
-      const additionalItems = await getAdditionalItems(rental.id);
-      const additionalItemsTotal = additionalItems.reduce((sum, item) => sum + item.total, 0);
-      
-      // Calculate late fee
       const plannedDuration = rental.duration / 60;
       const lateFee = currentHours > plannedDuration ? (currentHours - plannedDuration) * 5000 : 0;
-      
-      const finalAmount = currentAmount + additionalItemsTotal + lateFee;
+      const finalAmount = currentAmount + lateFee;
 
       // Update rental session
       const { error: rentalError } = await supabase
@@ -240,7 +146,7 @@ const ActiveRentals: React.FC = () => {
           end_time: endTime,
           duration_minutes: Math.ceil(currentHours * 60),
           total_amount: finalAmount,
-          paid_amount: paymentData.amount,
+          paid_amount: finalAmount,
           late_fee: lateFee,
           status: 'completed',
           payment_status: 'paid'
@@ -258,13 +164,12 @@ const ActiveRentals: React.FC = () => {
       // Create payment record
       const paymentRecord = {
         customer_id: rental.customerId,
-        customer_name: rental.customer?.name || 'Unknown',
-        amount: paymentData.amount,
-        payment_method: paymentData.method,
+        customer_name: customer?.name || 'Unknown',
+        amount: finalAmount,
+        payment_method: 'cash',
         reference_id: rental.id,
         reference_type: 'rental',
-        status: 'completed',
-        notes: paymentData.notes
+        status: 'completed'
       };
 
       await supabase
@@ -273,11 +178,22 @@ const ActiveRentals: React.FC = () => {
 
       // Refresh rentals list
       await fetchActiveRentals();
-      setSelectedRental(null);
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Rental Selesai!',
+        text: 'Rental berhasil diselesaikan',
+        timer: 2000,
+        timerProgressBar: true
+      });
 
     } catch (error: any) {
       console.error('Rental completion error:', error);
-      throw new Error('Gagal menyelesaikan rental: ' + error.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal Menyelesaikan Rental',
+        text: error.message
+      });
     }
   };
 
@@ -639,20 +555,21 @@ const ActiveRentals: React.FC = () => {
         </div>
       )}
 
-      {/* Payment Module */}
-      {paymentData && (
-        <PayAsYouGoPaymentModule
-          isOpen={isPaymentOpen}
-          onClose={closePayment}
-          onConfirm={handlePaymentConfirm}
-          totalAmount={paymentData.totalAmount}
-          customerName={paymentData.customerName}
-          consoleName={paymentData.consoleName}
-          duration={paymentData.duration}
-          items={paymentData.items}
-          breakdown={paymentData.breakdown}
-        />
-      )}
+      {/* Payment Module - hanya untuk prepaid */}
+      <PrepaidPaymentModule
+        isOpen={showPrepaidPayment}
+        onClose={() => setShowPrepaidPayment(false)}
+        onConfirm={handleStartPrepaidRental}
+        totalAmount={calculateRentalAmount()}
+        customerName={selectedCustomer?.name || ''}
+        consoleName={selectedConsole?.name || ''}
+        duration={selectedDuration}
+        rateDetails={selectedRateProfile ? {
+          baseRate: selectedRateProfile.hourlyRate,
+          peakHourRate: selectedRateProfile.peakHourRate,
+          weekendMultiplier: selectedRateProfile.weekendMultiplier
+        } : undefined}
+      />
     </div>
   );
 };
