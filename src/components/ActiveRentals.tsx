@@ -115,6 +115,7 @@ const ActiveRentals: React.FC = () => {
   const [rateProfiles, setRateProfiles] = useState<RateProfile[]>([]);
   const [activeSessions, setActiveSessions] = useState<RentalSession[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [showProductModal, setShowProductModal] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -656,6 +657,295 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
+  // Tambahkan fungsi untuk generate receipt data
+  // const generateReceiptData = (
+  //   session: RentalSession,
+  //   productsTotal: number,
+  //   paymentAmount: number
+  // ) => {
+  //   const customer = session.customers;
+  //   const receiptId = `RENTAL-${Date.now()}`;
+  //   const timestamp = new Date().toLocaleString("id-ID");
+  //   const totalCost = calculateCurrentCost(session);
+  //   const total = totalCost + productsTotal;
+  //   const change = paymentAmount - total;
+
+  //   // Generate items array
+  //   const items: any[] = [];
+
+  //   // Add rental item
+  //   items.push({
+  //     name: `Rental ${session.consoles?.name || "Console"}`,
+  //     type: "rental",
+  //     quantity: 1,
+  //     total: totalCost,
+  //     description: `Durasi: ${formatElapsedHMS(session.start_time)} | Lokasi: ${
+  //       session.consoles?.location || "N/A"
+  //     }`,
+  //   });
+
+  //   // Add products if any
+  //   if (productsTotal > 0) {
+  //     // Get products from billingProducts
+  //     const sessionProducts = billingProducts.filter(
+  //       (bp) => bp.session_id === session.id
+  //     );
+  //     sessionProducts.forEach((product) => {
+  //       items.push({
+  //         name: product.product_name,
+  //         type: "product",
+  //         quantity: product.quantity,
+  //         total: product.total || product.price * product.quantity,
+  //         description: `Harga: Rp ${product.price.toLocaleString("id-ID")}`,
+  //       });
+  //     });
+  //   }
+
+  //   return {
+  //     id: receiptId,
+  //     timestamp,
+  //     customer,
+  //     items,
+  //     subtotal: totalCost,
+  //     tax: 0,
+  //     total,
+  //     paymentMethod,
+  //     paymentAmount,
+  //     change,
+  //     cashier: "Kasir 1", // This would come from logged in user
+  //     sessionId: session.id,
+  //   };
+  // };
+
+  // // Tambahkan fungsi untuk print receipt
+  // const handlePrintReceipt = () => {
+  //   if (!lastTransaction) return;
+
+  //   // Create printable receipt
+  //   const printWindow = window.open("", "_blank");
+  //   if (printWindow) {
+  //     printWindow.document.write(`
+  //     <html>
+  //       <head>
+  //         <title>Receipt - ${lastTransaction.id}</title>
+  //         <style>
+  //           body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; }
+  //           .receipt { width: 300px; margin: 0 auto; }
+  //           .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+  //           .item { display: flex; justify-content: space-between; margin: 5px 0; }
+  //           .total { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
+  //           .footer { text-align: center; margin-top: 20px; font-size: 10px; }
+  //         </style>
+  //       </head>
+  //       <body>
+  //         <div class="receipt">
+  //           <div class="header">
+  //             <h2>GAMING & BILLIARD CENTER</h2>
+  //             <p>PlayStation Rental + Mini Cafe</p>
+  //             <p>Receipt: ${lastTransaction.id}</p>
+  //             <p>${lastTransaction.timestamp}</p>
+  //             ${
+  //               lastTransaction.customer
+  //                 ? `<p>Customer: ${lastTransaction.customer.name}</p>`
+  //                 : ""
+  //             }
+  //             <p>Kasir: ${lastTransaction.cashier}</p>
+  //           </div>
+
+  //           <div class="items">
+  //             ${lastTransaction.items
+  //               .map(
+  //                 (item: any) => `
+  //               <div class="item">
+  //                 <span>${item.name} ${
+  //                   item.type === "product" ? `x${item.quantity}` : ""
+  //                 }</span>
+  //                 <span>Rp ${item.total.toLocaleString("id-ID")}</span>
+  //               </div>
+  //               ${
+  //                 item.description
+  //                   ? `<div style="font-size: 10px; color: #666; margin-left: 10px;">${item.description}</div>`
+  //                   : ""
+  //               }
+  //             `
+  //               )
+  //               .join("")}
+  //           </div>
+
+  //           <div class="total">
+  //             <div class="item">
+  //               <span>Subtotal:</span>
+  //               <span>Rp ${lastTransaction.subtotal.toLocaleString(
+  //                 "id-ID"
+  //               )}</span>
+  //             </div>
+  //             ${
+  //               lastTransaction.tax > 0
+  //                 ? `
+  //               <div class="item">
+  //                 <span>Pajak:</span>
+  //                 <span>Rp ${lastTransaction.tax.toLocaleString("id-ID")}</span>
+  //               </div>
+  //             `
+  //                 : ""
+  //             }
+  //             <div class="item" style="font-weight: bold; font-size: 14px;">
+  //               <span>TOTAL:</span>
+  //               <span>Rp ${lastTransaction.total.toLocaleString("id-ID")}</span>
+  //             </div>
+  //             <div class="item">
+  //               <span>Bayar (${lastTransaction.paymentMethod.toUpperCase()}):</span>
+  //               <span>Rp ${lastTransaction.paymentAmount.toLocaleString(
+  //                 "id-ID"
+  //               )}</span>
+  //             </div>
+  //             ${
+  //               lastTransaction.change > 0
+  //                 ? `
+  //               <div class="item">
+  //                 <span>Kembalian:</span>
+  //                 <span>Rp ${lastTransaction.change.toLocaleString(
+  //                   "id-ID"
+  //                 )}</span>
+  //               </div>
+  //             `
+  //                 : ""
+  //             }
+  //           </div>
+
+  //           <div class="footer">
+  //             <p>Terima kasih atas kunjungan Anda!</p>
+  //             <p>Selamat bermain dan nikmati waktu Anda</p>
+  //             <p>---</p>
+  //             <p>Simpan struk ini sebagai bukti pembayaran</p>
+  //           </div>
+  //         </div>
+  //       </body>
+  //     </html>
+  //   `);
+  //     printWindow.document.close();
+  //     // printWindow.print();
+  //   }
+  // };
+
+  // di ActiveRentals.tsx
+  const printReceipt = (tx: {
+    id: string;
+    timestamp: string;
+    customer?: { name: string };
+    items: Array<{
+      name: string;
+      type: "rental" | "product";
+      quantity?: number;
+      total: number;
+      description?: string;
+    }>;
+    subtotal: number;
+    tax: number;
+    total: number;
+    paymentMethod: string;
+    paymentAmount: number;
+    change: number;
+    cashier: string;
+  }) => {
+    const win = window.open("", "_blank");
+    if (!win) return;
+
+    const html = `
+  <html>
+    <head>
+      <title>Receipt - ${tx.id}</title>
+      <style>
+        body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; }
+        .receipt { width: 300px; margin: 0 auto; }
+        .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+        .item { display: flex; justify-content: space-between; margin: 5px 0; }
+        .total { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
+        .footer { text-align: center; margin-top: 20px; font-size: 10px; }
+      </style>
+    </head>
+    <body>
+      <div class="receipt">
+        <div class="header">
+          <h2>GAMING & BILLIARD CENTER</h2>
+          <p>PlayStation Rental + Mini Cafe</p>
+          <p>Receipt: ${tx.id}</p>
+          <p>${tx.timestamp}</p>
+          ${tx.customer ? `<p>Customer: ${tx.customer.name}</p>` : ""}
+          <p>Kasir: ${tx.cashier}</p>
+        </div>
+        <div class="items">
+          ${tx.items
+            .map(
+              (i) => `
+            <div class="item">
+              <span>${i.name} ${
+                i.type === "product" ? `x${i.quantity ?? 1}` : ""
+              }</span>
+              <span>Rp ${i.total.toLocaleString("id-ID")}</span>
+            </div>
+            ${
+              i.description
+                ? `<div style="font-size:10px;color:#666;margin-left:10px;">${i.description}</div>`
+                : ""
+            }
+          `
+            )
+            .join("")}
+        </div>
+        <div class="total">
+          ${
+            tx.tax > 0
+              ? `<div class="item"><span>Pajak:</span><span>Rp ${tx.tax.toLocaleString(
+                  "id-ID"
+                )}</span></div>`
+              : ""
+          }
+          <div class="item" style="font-weight:bold;font-size:14px;"><span>TOTAL:</span><span>Rp ${tx.total.toLocaleString(
+            "id-ID"
+          )}</span></div>
+          <div class="item"><span>Bayar (${tx.paymentMethod.toUpperCase()}):</span><span>Rp ${tx.paymentAmount.toLocaleString(
+      "id-ID"
+    )}</span></div>
+          ${
+            tx.change > 0
+              ? `<div class="item"><span>Kembalian:</span><span>Rp ${tx.change.toLocaleString(
+                  "id-ID"
+                )}</span></div>`
+              : ""
+          }
+        </div>
+        <div class="footer">
+          <p>Terima kasih atas kunjungan Anda!</p>
+          <p>Selamat bermain dan nikmati waktu Anda</p>
+          <p>---</p>
+          <p>Simpan struk ini sebagai bukti pembayaran</p>
+        </div>
+      </div>
+    </body>
+  </html>`;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+
+    // Pastikan konten sudah siap sebelum print
+    const doPrint = () => {
+      try {
+        win.print();
+      } finally {
+        /* opsional: win.close(); */
+      }
+    };
+    // Beberapa browser perlu delay kecil
+    if ("onload" in win) {
+      win.onload = () => setTimeout(doPrint, 100);
+    } else {
+      setTimeout(doPrint, 200);
+    }
+  };
+
   // Fungsi proses pembayaran kasir
   const handleProcessPayment = async () => {
     if (!showPaymentModal) return;
@@ -711,13 +1001,67 @@ const ActiveRentals: React.FC = () => {
         .update({ status: "available" })
         .eq("id", session.console_id);
 
+      // Ambil detail produk langsung dari DB agar akurat
+      const { data: productRows } = await supabase
+        .from("rental_session_products")
+        .select("product_name, quantity, price, total, status")
+        .eq("session_id", session.id)
+        .in("status", ["pending", "completed"]);
+
+      const items = [
+        {
+          name: `Rental ${session.consoles?.name || "Console"}`,
+          type: "rental" as const,
+          total: totalCost,
+          description: `Durasi: ${formatElapsedHMS(session.start_time)}${
+            session.consoles?.location
+              ? ` | Lokasi: ${session.consoles.location}`
+              : ""
+          }`,
+        },
+        ...(productRows?.map((p) => ({
+          name: p.product_name,
+          type: "product" as const,
+          quantity: p.quantity,
+          total: p.total ?? p.price * p.quantity,
+          description: `Harga: Rp ${p.price.toLocaleString("id-ID")}`,
+        })) ?? []),
+      ];
+
+      const receiptData = {
+        id: `RENTAL-${Date.now()}`,
+        timestamp: new Date().toLocaleString("id-ID"),
+        customer: session.customers,
+        items,
+        subtotal: totalCost,
+        tax: 0,
+        total: totalCost + (productsTotal ?? 0),
+        paymentMethod,
+        paymentAmount,
+        change: paymentAmount - (totalCost + (productsTotal ?? 0)),
+        cashier: "Kasir 1",
+      };
+
       setShowPaymentModal(null);
       await loadData();
-      Swal.fire(
-        "Berhasil",
-        "Pembayaran berhasil, rental telah diakhiri",
-        "success"
-      );
+      // Swal.fire(
+      //   "Berhasil",
+      //   "Pembayaran berhasil, rental telah diakhiri",
+      //   "success"
+      // );
+      // Show success message with print option
+      const result = await Swal.fire({
+        title: "Berhasil",
+        text: "Pembayaran berhasil, rental telah diakhiri",
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonText: "Print Receipt",
+        cancelButtonText: "Tutup",
+      });
+
+      if (result.isConfirmed) {
+        printReceipt(receiptData);
+      }
     } catch (error) {
       console.error("Error processing payment:", error);
       Swal.fire("Error", "Gagal memproses pembayaran", "error");
@@ -827,7 +1171,7 @@ const ActiveRentals: React.FC = () => {
   }: {
     open: boolean;
     onClose: () => void;
-    onConfirm: (paymentMethod: "cash" | "qris") => void;
+    onConfirm: (paymentMethod: "cash" | "qris", paymentAmount: number) => void;
     duration: string;
     hourlyRate: number;
     totalAmount: number;
@@ -988,7 +1332,7 @@ const ActiveRentals: React.FC = () => {
                 Batal
               </button>
               <button
-                onClick={() => onConfirm(paymentMethod)}
+                onClick={() => onConfirm(paymentMethod, paymentAmount)}
                 className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
                   paymentAmount < totalAmount
                     ? "opacity-50 cursor-not-allowed"
@@ -1211,60 +1555,60 @@ const ActiveRentals: React.FC = () => {
     }
 
     // Simpan ke database sebagai pending jika sedang menambahkan produk pada sesi rental aktif
-    if (showProductModal) {
-      const sessionId = showProductModal;
-      const cartItem = existingItem
-        ? {
-            ...existingItem,
-            quantity: newQuantity,
-            total: newQuantity * product.price,
-          }
-        : {
-            productId: product.id,
-            productName: product.name,
-            price: product.price,
-            quantity: 1,
-            total: product.price,
-          };
+    // if (showProductModal) {
+    //   const sessionId = showProductModal;
+    //   const cartItem = existingItem
+    //     ? {
+    //         ...existingItem,
+    //         quantity: newQuantity,
+    //         total: newQuantity * product.price,
+    //       }
+    //     : {
+    //         productId: product.id,
+    //         productName: product.name,
+    //         price: product.price,
+    //         quantity: 1,
+    //         total: product.price,
+    //       };
 
-      // Cek apakah sudah ada data untuk session_id dan product_id
-      supabase
-        .from("rental_session_products")
-        .select("id")
-        .eq("session_id", sessionId)
-        .eq("product_id", cartItem.productId)
-        .single()
-        .then(async ({ data, error }) => {
-          if (error && error.code !== "PGRST116") {
-            // Error selain not found
-            console.error("Error checking pending product:", error);
-            Swal.fire("Error", "Gagal cek produk pending", "error");
-            return;
-          }
-          if (data) {
-            // Sudah ada, update quantity dan total
-            const { id } = data;
-            const { quantity, total } = cartItem;
-            const { price, product_name } = cartItem;
-            const { productId } = cartItem;
-            await supabase
-              .from("rental_session_products")
-              .update({ quantity, total, price, product_name })
-              .eq("id", id);
-          } else {
-            // Belum ada, insert baru
-            await supabase.from("rental_session_products").insert({
-              session_id: sessionId,
-              product_id: cartItem.productId,
-              product_name: cartItem.productName,
-              price: cartItem.price,
-              quantity: cartItem.quantity,
-              total: cartItem.total,
-              status: "pending",
-            });
-          }
-        });
-    }
+    //   // Cek apakah sudah ada data untuk session_id dan product_id
+    //   supabase
+    //     .from("rental_session_products")
+    //     .select("id")
+    //     .eq("session_id", sessionId)
+    //     .eq("product_id", cartItem.productId)
+    //     .single()
+    //     .then(async ({ data, error }) => {
+    //       if (error && error.code !== "PGRST116") {
+    //         // Error selain not found
+    //         console.error("Error checking pending product:", error);
+    //         Swal.fire("Error", "Gagal cek produk pending", "error");
+    //         return;
+    //       }
+    //       if (data) {
+    //         // Sudah ada, update quantity dan total
+    //         const { id } = data;
+    //         const { quantity, total } = cartItem;
+    //         const { price, product_name } = cartItem;
+    //         const { productId } = cartItem;
+    //         await supabase
+    //           .from("rental_session_products")
+    //           .update({ quantity, total, price, product_name })
+    //           .eq("id", id);
+    //       } else {
+    //         // Belum ada, insert baru
+    //         await supabase.from("rental_session_products").insert({
+    //           session_id: sessionId,
+    //           product_id: cartItem.productId,
+    //           product_name: cartItem.productName,
+    //           price: cartItem.price,
+    //           quantity: cartItem.quantity,
+    //           total: cartItem.total,
+    //           status: "pending",
+    //         });
+    //       }
+    //     });
+    // }
   };
 
   const updateQuantity = (productId: string, newQuantity: number) => {
@@ -1313,10 +1657,28 @@ const ActiveRentals: React.FC = () => {
 
   // Handler konfirmasi pembayaran prepaid
   const handleConfirmPrepaidPayment = async (
-    paymentMethod: "cash" | "qris"
+    paymentMethod: "cash" | "qris",
+    paymentAmount: number
   ) => {
     if (!showPrepaidPaymentModal) return;
+
+    if (customerType === "non-member" && !nonMemberName?.trim()) {
+      Swal.fire("Error", "Nama customer harus diisi", "error");
+      return;
+    }
+
+    if (!selectedCustomerId && customerType === "member") {
+      Swal.fire("Error", "Customer harus dipilih", "error");
+      return;
+    }
+
+    if (paymentAmount < showPrepaidPaymentModal.totalAmount) {
+      Swal.fire("Error", "Nominal pembayaran kurang dari total", "warning");
+      return;
+    }
+
     setPrepaidPaymentLoading(true);
+    let rentalSessionId: string | null = null;
     try {
       const {
         console: latestConsole,
@@ -1326,6 +1688,8 @@ const ActiveRentals: React.FC = () => {
         rentalDurationMinutes,
       } = showPrepaidPaymentModal;
       let customerId = selectedCustomerId;
+      let customerName = "";
+
       if (customerType === "non-member") {
         const customerData: any = {
           name: nonMemberName,
@@ -1342,9 +1706,17 @@ const ActiveRentals: React.FC = () => {
           .single();
         if (insertError) throw insertError;
         customerId = insertedCustomer.id;
+        customerName = nonMemberName;
+      } else {
+        const { data: customerData } = await supabase
+          .from("customers")
+          .select("name")
+          .eq("id", customerId)
+          .single();
+        customerName = customerData?.name || "";
       }
       // Create new rental session
-      const { error: rentalError } = await supabase
+      const { data: rentalSession, error: rentalError } = await supabase
         .from("rental_sessions")
         .insert({
           customer_id: customerId,
@@ -1352,19 +1724,71 @@ const ActiveRentals: React.FC = () => {
           status: "active",
           payment_status: "paid",
           total_amount: totalAmount,
-          paid_amount: totalAmount,
+          paid_amount: paymentAmount,
           start_time: new Date().toISOString(),
           duration_minutes: duration,
           payment_method: paymentMethod,
         });
       if (rentalError) throw rentalError;
+      rentalSessionId = rentalSession?.id;
 
       // Update console status
       const { error: consoleError } = await supabase
         .from("consoles")
         .update({ status: "rented" })
         .eq("id", latestConsole.id);
-      if (consoleError) throw consoleError;
+      if (consoleError) {
+        await supabase
+          .from("rental_sessions")
+          .delete()
+          .eq("id", rentalSessionId);
+        throw consoleError;
+      }
+
+      // Print receipt untuk pembayaran prepaid
+      const receiptData = {
+        id: `RENTAL-${Date.now()}`,
+        timestamp: new Date().toLocaleString("id-ID"),
+        customer: { name: customerName },
+        items: [
+          {
+            name: `Rental ${latestConsole.name}`,
+            type: "rental" as const,
+            total: totalAmount,
+            description: `Durasi: ${rentalDurationHours} jam ${
+              rentalDurationMinutes > 0 ? `${rentalDurationMinutes} menit` : ""
+            } (Prepaid)`,
+          },
+        ],
+        subtotal: totalAmount,
+        tax: 0,
+        total: totalAmount,
+        paymentMethod: paymentMethod.toUpperCase(),
+        paymentAmount: paymentAmount,
+        change: paymentAmount - totalAmount,
+        cashier: "System", // Ambil dari user yang login
+      };
+
+      const result = await Swal.fire({
+        title: "Berhasil",
+        text: "Sesi rental berhasil dimulai",
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonText: "Print Receipt",
+        cancelButtonText: "Tutup",
+      });
+
+      if (result.isConfirmed) {
+        printReceipt(receiptData);
+      }
+
+      if (latestConsole.power_tv_command) {
+        fetch(latestConsole.power_tv_command).catch(() => {});
+      }
+      if (latestConsole.relay_command_on) {
+        fetch(latestConsole.relay_command_on).catch(() => {});
+      }
+
       setShowPrepaidPaymentModal(null);
       setShowStartRentalModal(null);
       setSelectedCustomerId("");
@@ -1374,17 +1798,21 @@ const ActiveRentals: React.FC = () => {
       setRentalDurationMinutes(0);
       setNonMemberName("");
       setNonMemberPhone("");
-      if (latestConsole.power_tv_command) {
-        fetch(latestConsole.power_tv_command).catch(() => {});
-      }
-      if (latestConsole.relay_command_on) {
-        fetch(latestConsole.relay_command_on).catch(() => {});
-      }
-      await loadData();
 
-      Swal.fire("Berhasil", "Sesi rental berhasil dimulai", "success");
+      await loadData();
     } catch (error) {
       console.error("Error starting prepaid rental:", error);
+
+      if (rentalSessionId) {
+        try {
+          await supabase
+            .from("rental_sessions")
+            .delete()
+            .eq("id", rentalSessionId);
+        } catch (rollbackError) {
+          console.error("Rollback failed:", rollbackError);
+        }
+      }
       Swal.fire("Error", "Gagal memulai sesi rental", "error");
     } finally {
       setPrepaidPaymentLoading(false);

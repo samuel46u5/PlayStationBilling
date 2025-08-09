@@ -38,7 +38,7 @@ const useCountdown = (
     // Initial update
     updateTime();
 
-    if (!isPrepaid || (isPrepaid && endTimeMs && time > 0)) {
+    if (!isPrepaid || (isPrepaid && endTimeMs)) {
       // Set interval for both Pay As You Go and Prepaid (if time is remaining)
       intervalId = setInterval(updateTime, 1000);
     }
@@ -46,7 +46,7 @@ const useCountdown = (
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [sessionId, startTimeMs, endTimeMs, isPrepaid, onComplete]);
+  }, [sessionId, startTimeMs, endTimeMs, isPrepaid]);
 
   return time;
 };
