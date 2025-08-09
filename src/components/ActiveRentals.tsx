@@ -5,6 +5,7 @@ import { Power } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
+import Countdown from "./Countdown";
 
 interface SaleItem {
   product_id: string;
@@ -225,23 +226,23 @@ const ActiveRentals: React.FC = () => {
   }, [showStartRentalModal, consoles]);
   const [nonMemberName, setNonMemberName] = useState<string>("");
   const [nonMemberPhone, setNonMemberPhone] = useState<string>("");
-  const [countdownTimers, setCountdownTimers] = useState<
-    Record<string, number>
-  >({});
+  // const [countdownTimers, setCountdownTimers] = useState<
+  //   Record<string, number>
+  // >({});
   // Toggle view mode: 'simple' | 'detail' | 'list'
   const [viewMode, setViewMode] = useState<"simple" | "detail" | "list">(
     "simple"
   );
   // Tambahan: countdown detik
-  const [countdownSeconds, setCountdownSeconds] = useState<
-    Record<string, number>
-  >({});
-  const [elapsedTimers, setElapsedTimers] = useState<Record<string, number>>(
-    {}
-  );
-  const [countdownIntervals, setCountdownIntervals] = useState<
-    Record<string, NodeJS.Timeout>
-  >({});
+  // const [countdownSeconds, setCountdownSeconds] = useState<
+  //   Record<string, number>
+  // >({});
+  // const [elapsedTimers, setElapsedTimers] = useState<Record<string, number>>(
+  //   {}
+  // );
+  // const [countdownIntervals, setCountdownIntervals] = useState<
+  //   Record<string, NodeJS.Timeout>
+  // >({});
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historySessions, setHistorySessions] = useState<RentalSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -328,98 +329,98 @@ const ActiveRentals: React.FC = () => {
   // }, []);
 
   // Set up countdown timers for prepaid sessions
-  useEffect(() => {
-    // Clear previous intervals
-    Object.values(countdownIntervals).forEach((interval) =>
-      clearInterval(interval)
-    );
-    setCountdownIntervals({});
+  // useEffect(() => {
+  //   // Clear previous intervals
+  //   Object.values(countdownIntervals).forEach((interval) =>
+  //     clearInterval(interval)
+  //   );
+  //   setCountdownIntervals({});
 
-    const newElapsedTimers: Record<string, number> = {};
-    const newCountdownTimers: Record<string, number> = {};
-    const newCountdownSeconds: Record<string, number> = {};
-    const newIntervals: Record<string, NodeJS.Timeout> = {};
+  //   const newElapsedTimers: Record<string, number> = {};
+  //   const newCountdownTimers: Record<string, number> = {};
+  //   const newCountdownSeconds: Record<string, number> = {};
+  //   const newIntervals: Record<string, NodeJS.Timeout> = {};
 
-    activeSessions.forEach((session) => {
-      const startTime = new Date(session.start_time).getTime();
-      const now = new Date().getTime();
-      const elapsedMs = now - startTime;
-      const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
+  //   activeSessions.forEach((session) => {
+  //     const startTime = new Date(session.start_time).getTime();
+  //     const now = new Date().getTime();
+  //     const elapsedMs = now - startTime;
+  //     const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
 
-      // For all sessions, track elapsed time
-      newElapsedTimers[session.id] = elapsedMinutes;
+  //     // For all sessions, track elapsed time
+  //     newElapsedTimers[session.id] = elapsedMinutes;
 
-      // Untuk prepaid (BAYAR DIMUKA), cek apakah waktu sudah habis
-      if (session.duration_minutes) {
-        const durationMs = session.duration_minutes * 60 * 1000;
-        const endTime = startTime + durationMs;
-        const remainingMs = Math.max(0, endTime - now);
-        const remainingMinutes = Math.floor(remainingMs / (1000 * 60));
-        newCountdownTimers[session.id] = remainingMinutes;
-        newCountdownSeconds[session.id] = Math.floor(remainingMs / 1000);
+  //     // Untuk prepaid (BAYAR DIMUKA), cek apakah waktu sudah habis
+  //     if (session.duration_minutes) {
+  //       const durationMs = session.duration_minutes * 60 * 1000;
+  //       const endTime = startTime + durationMs;
+  //       const remainingMs = Math.max(0, endTime - now);
+  //       const remainingMinutes = Math.floor(remainingMs / (1000 * 60));
+  //       newCountdownTimers[session.id] = remainingMinutes;
+  //       newCountdownSeconds[session.id] = Math.floor(remainingMs / 1000);
 
-        // Otomatis end rental jika prepaid dan waktu habis
-        if (
-          remainingMs <= 0 &&
-          session.status === "active" &&
-          session.payment_status === "paid"
-        ) {
-          // End rental otomatis tanpa interaksi user
-          handleEndSession(session.id);
-        } else if (remainingMs > 0) {
-          // Set up interval to update countdown per second
-          const interval = setInterval(() => {
-            setCountdownSeconds((prev) => {
-              const current =
-                prev[session.id] ?? Math.floor((endTime - Date.now()) / 1000);
-              if (current <= 1) {
-                clearInterval(newIntervals[session.id]);
-                delete newIntervals[session.id];
-                // Otomatis end rental jika prepaid dan waktu habis
-                if (
-                  session.duration_minutes &&
-                  session.status === "active" &&
-                  session.payment_status === "paid"
-                ) {
-                  handleEndSession(session.id);
-                }
-                return { ...prev, [session.id]: 0 };
-              }
-              return { ...prev, [session.id]: current - 1 };
-            });
-          }, 1000); // Update every second
-          newIntervals[session.id] = interval;
-        }
-      }
-    });
+  //       // Otomatis end rental jika prepaid dan waktu habis
+  //       if (
+  //         remainingMs <= 0 &&
+  //         session.status === "active" &&
+  //         session.payment_status === "paid"
+  //       ) {
+  //         // End rental otomatis tanpa interaksi user
+  //         handleEndSession(session.id);
+  //       } else if (remainingMs > 0) {
+  //         // Set up interval to update countdown per second
+  //         const interval = setInterval(() => {
+  //           setCountdownSeconds((prev) => {
+  //             const current =
+  //               prev[session.id] ?? Math.floor((endTime - Date.now()) / 1000);
+  //             if (current <= 1) {
+  //               clearInterval(newIntervals[session.id]);
+  //               delete newIntervals[session.id];
+  //               // Otomatis end rental jika prepaid dan waktu habis
+  //               if (
+  //                 session.duration_minutes &&
+  //                 session.status === "active" &&
+  //                 session.payment_status === "paid"
+  //               ) {
+  //                 handleEndSession(session.id);
+  //               }
+  //               return { ...prev, [session.id]: 0 };
+  //             }
+  //             return { ...prev, [session.id]: current - 1 };
+  //           });
+  //         }, 1000); // Update every second
+  //         newIntervals[session.id] = interval;
+  //       }
+  //     }
+  //   });
 
-    setElapsedTimers(newElapsedTimers);
-    setCountdownTimers(newCountdownTimers);
-    setCountdownSeconds(newCountdownSeconds);
-    setCountdownIntervals(newIntervals);
+  //   setElapsedTimers(newElapsedTimers);
+  //   setCountdownTimers(newCountdownTimers);
+  //   setCountdownSeconds(newCountdownSeconds);
+  //   setCountdownIntervals(newIntervals);
 
-    // Set up interval to update elapsed time for all sessions
-    const elapsedInterval = setInterval(() => {
-      setElapsedTimers((prev) => {
-        const newTimers = { ...prev };
-        activeSessions.forEach((session) => {
-          const startTime = new Date(session.start_time).getTime();
-          const now = new Date().getTime();
-          const elapsedMs = now - startTime;
-          const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
-          newTimers[session.id] = elapsedMinutes;
-        });
-        return newTimers;
-      });
-    }, 60000); // Update every minute
+  //   // Set up interval to update elapsed time for all sessions
+  //   const elapsedInterval = setInterval(() => {
+  //     setElapsedTimers((prev) => {
+  //       const newTimers = { ...prev };
+  //       activeSessions.forEach((session) => {
+  //         const startTime = new Date(session.start_time).getTime();
+  //         const now = new Date().getTime();
+  //         const elapsedMs = now - startTime;
+  //         const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
+  //         newTimers[session.id] = elapsedMinutes;
+  //       });
+  //       return newTimers;
+  //     });
+  //   }, 60000); // Update every minute
 
-    return () => {
-      clearInterval(elapsedInterval);
-      Object.values(newIntervals).forEach((interval) =>
-        clearInterval(interval)
-      );
-    };
-  }, [activeSessions]);
+  //   return () => {
+  //     clearInterval(elapsedInterval);
+  //     Object.values(newIntervals).forEach((interval) =>
+  //       clearInterval(interval)
+  //     );
+  //   };
+  // }, [activeSessions]);
 
   const loadData = async () => {
     setLoading(true);
@@ -527,14 +528,14 @@ const ActiveRentals: React.FC = () => {
   };
 
   // Format countdown in HH:MM:SS for Live Timer Display
-  const formatCountdownHMS = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-    // Pad with zero
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    return `Sisa Waktu : ${pad(hours)}:${pad(mins)}:${pad(secs)}`;
-  };
+  // const formatCountdownHMS = (totalSeconds: number) => {
+  //   const hours = Math.floor(totalSeconds / 3600);
+  //   const mins = Math.floor((totalSeconds % 3600) / 60);
+  //   const secs = totalSeconds % 60;
+  //   // Pad with zero
+  //   const pad = (n: number) => n.toString().padStart(2, "0");
+  //   return `Sisa Waktu : ${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+  // };
 
   // Format elapsed time in HH:MM:SS for PAY AS YOU GO
   const formatElapsedHMS = (startTime: string) => {
@@ -571,6 +572,11 @@ const ActiveRentals: React.FC = () => {
       const perMinuteRate = hourlyRate / 60;
       return hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
     }
+  };
+
+  const handleSessionTimeout = (sessionId: string) => {
+    // End rental otomatis tanpa interaksi user
+    handleEndSession(sessionId);
   };
 
   const handleEndSession = async (sessionId: string) => {
@@ -835,7 +841,7 @@ const ActiveRentals: React.FC = () => {
       if (open) {
         setPaymentAmount(totalAmount);
       }
-    }, [open, totalAmount]);
+    }, [open]);
     // Kembalian
     const change = paymentAmount - totalAmount;
     if (!open) return null;
@@ -1167,6 +1173,144 @@ const ActiveRentals: React.FC = () => {
       Swal.fire("Error", "Gagal memulai sesi rental", "error");
     }
   };
+
+  // Product cart functions
+  const addToCart = (product: Product) => {
+    const existingItem = cart.find((item) => item.productId === product.id);
+    let newQuantity = 1;
+    if (existingItem) {
+      if (existingItem.quantity >= product.stock) {
+        Swal.fire(
+          "Stok Tidak Cukup",
+          `Stok ${product.name} hanya tersisa ${product.stock}`,
+          "warning"
+        );
+        return;
+      }
+      newQuantity = existingItem.quantity + 1;
+      setCart(
+        cart.map((item) =>
+          item.productId === product.id
+            ? {
+                ...item,
+                quantity: newQuantity,
+                total: newQuantity * item.price,
+              }
+            : item
+        )
+      );
+    } else {
+      const newItem: CartItem = {
+        productId: product.id,
+        productName: product.name,
+        price: product.price,
+        quantity: 1,
+        total: product.price,
+      };
+      setCart([...cart, newItem]);
+    }
+
+    // Simpan ke database sebagai pending jika sedang menambahkan produk pada sesi rental aktif
+    if (showProductModal) {
+      const sessionId = showProductModal;
+      const cartItem = existingItem
+        ? {
+            ...existingItem,
+            quantity: newQuantity,
+            total: newQuantity * product.price,
+          }
+        : {
+            productId: product.id,
+            productName: product.name,
+            price: product.price,
+            quantity: 1,
+            total: product.price,
+          };
+
+      // Cek apakah sudah ada data untuk session_id dan product_id
+      supabase
+        .from("rental_session_products")
+        .select("id")
+        .eq("session_id", sessionId)
+        .eq("product_id", cartItem.productId)
+        .single()
+        .then(async ({ data, error }) => {
+          if (error && error.code !== "PGRST116") {
+            // Error selain not found
+            console.error("Error checking pending product:", error);
+            Swal.fire("Error", "Gagal cek produk pending", "error");
+            return;
+          }
+          if (data) {
+            // Sudah ada, update quantity dan total
+            const { id } = data;
+            const { quantity, total } = cartItem;
+            const { price, product_name } = cartItem;
+            const { productId } = cartItem;
+            await supabase
+              .from("rental_session_products")
+              .update({ quantity, total, price, product_name })
+              .eq("id", id);
+          } else {
+            // Belum ada, insert baru
+            await supabase.from("rental_session_products").insert({
+              session_id: sessionId,
+              product_id: cartItem.productId,
+              product_name: cartItem.productName,
+              price: cartItem.price,
+              quantity: cartItem.quantity,
+              total: cartItem.total,
+              status: "pending",
+            });
+          }
+        });
+    }
+  };
+
+  const updateQuantity = (productId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+
+    const product = products.find((p) => p.id === productId);
+    if (product && newQuantity > product.stock) {
+      Swal.fire(
+        "Stok Tidak Cukup",
+        `Stok ${product.name} hanya tersisa ${product.stock}`,
+        "warning"
+      );
+      return;
+    }
+
+    setCart(
+      cart.map((item) =>
+        item.productId === productId
+          ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
+          : item
+      )
+    );
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(cart.filter((item) => item.productId !== productId));
+  };
+
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  const handleCheckoutProducts = async (sessionId: string) => {
+    if (cart.length === 0) {
+      Swal.fire(
+        "Keranjang Kosong",
+        "Silakan pilih produk terlebih dahulu",
+        "warning"
+      );
+      return;
+    }
+  };
+
   // Handler konfirmasi pembayaran prepaid
   const handleConfirmPrepaidPayment = async (
     paymentMethod: "cash" | "qris"
@@ -1244,6 +1388,32 @@ const ActiveRentals: React.FC = () => {
       Swal.fire("Error", "Gagal memulai sesi rental", "error");
     } finally {
       setPrepaidPaymentLoading(false);
+    }
+  };
+
+  // Filter products
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch = product.name
+      .toLowerCase()
+      .includes(searchProduct.toLowerCase());
+    const matchesCategory =
+      selectedCategory === "all" || product.category === selectedCategory;
+    return matchesSearch && matchesCategory && product.stock > 0;
+  });
+
+  const categories = [...new Set(products.map((p) => p.category))];
+  const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "beverage":
+        return "bg-blue-100 text-blue-800";
+      case "food":
+        return "bg-orange-100 text-orange-800";
+      case "snack":
+        return "bg-green-100 text-green-800";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
 
@@ -1688,11 +1858,22 @@ const ActiveRentals: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-1 text-[11px]">
                           <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
-                          {activeSession.duration_minutes
-                            ? formatCountdownHMS(
-                                countdownSeconds[activeSession.id] ?? 0
-                              )
-                            : formatElapsedHMS(activeSession.start_time)}
+                          <Countdown
+                            sessionId={activeSession.id}
+                            startTimeMs={new Date(
+                              activeSession.start_time
+                            ).getTime()}
+                            endTimeMs={
+                              activeSession.duration_minutes
+                                ? new Date(activeSession.start_time).getTime() +
+                                  activeSession.duration_minutes * 60 * 1000
+                                : null
+                            }
+                            isPrepaid={!!activeSession.duration_minutes}
+                            onComplete={() =>
+                              handleSessionTimeout(activeSession.id)
+                            }
+                          />
                         </div>
                         <div className="flex items-center gap-1 text-[11px]">
                           <span>
@@ -2066,17 +2247,62 @@ const ActiveRentals: React.FC = () => {
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
                                   <span className="font-bold text-purple-700">
-                                    {formatCountdown(
+                                    {/* {formatCountdown(
                                       countdownTimers[activeSession.id] || 0
                                     )}
-                                    tersisa
+                                    tersisa */}
+                                    <Countdown
+                                      sessionId={activeSession.id}
+                                      startTimeMs={new Date(
+                                        activeSession.start_time
+                                      ).getTime()}
+                                      endTimeMs={
+                                        activeSession.duration_minutes
+                                          ? new Date(
+                                              activeSession.start_time
+                                            ).getTime() +
+                                            activeSession.duration_minutes *
+                                              60 *
+                                              1000
+                                          : null
+                                      }
+                                      isPrepaid={
+                                        !!activeSession.duration_minutes
+                                      }
+                                      onComplete={() =>
+                                        handleSessionTimeout(activeSession.id)
+                                      }
+                                    />
+                                    <span className="ml-1">tersisa</span>
                                   </span>
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3 text-green-600 animate-pulse" />
                                   <span className="font-bold text-green-700">
-                                    {formatElapsedHMS(activeSession.start_time)}
+                                    {/* {formatElapsedHMS(activeSession.start_time)} */}
+                                    <Countdown
+                                      sessionId={activeSession.id}
+                                      startTimeMs={new Date(
+                                        activeSession.start_time
+                                      ).getTime()}
+                                      endTimeMs={
+                                        activeSession.duration_minutes
+                                          ? new Date(
+                                              activeSession.start_time
+                                            ).getTime() +
+                                            activeSession.duration_minutes *
+                                              60 *
+                                              1000
+                                          : null
+                                      }
+                                      isPrepaid={
+                                        !!activeSession.duration_minutes
+                                      }
+                                      onComplete={() =>
+                                        handleSessionTimeout(activeSession.id)
+                                      }
+                                    />
                                   </span>
                                 </span>
                               )}
@@ -2118,13 +2344,36 @@ const ActiveRentals: React.FC = () => {
                         </div>
 
                         {/* Live Timer Display */}
-                        <div className="mt-2 pt-2 border-t border-blue-200">
+                        {/* <div className="mt-2 pt-2 border-t border-blue-200">
                           <div className="text-center font-mono text-lg font-bold text-blue-700">
                             {activeSession.duration_minutes
                               ? formatCountdownHMS(
                                   countdownSeconds[activeSession.id] ?? 0
                                 )
                               : formatElapsedHMS(activeSession.start_time)}
+                          </div>
+                        </div> */}
+
+                        <div className="mt-2 pt-2 border-t border-blue-200">
+                          <div className="text-center font-mono text-lg font-bold text-blue-700">
+                            <Countdown
+                              sessionId={activeSession.id}
+                              startTimeMs={new Date(
+                                activeSession.start_time
+                              ).getTime()}
+                              endTimeMs={
+                                activeSession.duration_minutes
+                                  ? new Date(
+                                      activeSession.start_time
+                                    ).getTime() +
+                                    activeSession.duration_minutes * 60 * 1000
+                                  : null
+                              }
+                              isPrepaid={!!activeSession.duration_minutes}
+                              onComplete={() =>
+                                handleSessionTimeout(activeSession.id)
+                              }
+                            />
                           </div>
                         </div>
                       </div>
