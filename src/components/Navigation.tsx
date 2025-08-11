@@ -87,6 +87,23 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
           })}
         </ul>
       </div>
+
+      {/* User Profile Section */}
+      <div className="mt-6 pt-6 border-t border-slate-700">
+        <div className="flex items-center gap-3 px-4 py-2 mb-2">
+          <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
+            <User className="h-5 w-5 text-slate-300" />
+          </div>
+          <div className="overflow-hidden">
+            <p className="font-medium text-sm text-white truncate">
+              {user?.full_name}
+            </p>
+            <p className="text-xs text-slate-400 truncate">
+              {user?.roles?.name}
+            </p>
+          </div>
+        </div>
+      </div>
       {user && (
         <button
           onClick={logout}
@@ -96,19 +113,6 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
           <span className="font-medium text-sm">Logout</span>
         </button>
       )}
-
-      {/* User Profile Section */}
-      <div className="mt-6 pt-6 border-t border-slate-700">
-        <div className="flex items-center gap-3 px-4 py-2 mb-2">
-          <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
-            <User className="h-5 w-5 text-slate-300" />
-          </div>
-          <div className="overflow-hidden">
-            <p className="font-medium text-sm text-white truncate">Demo User</p>
-            <p className="text-xs text-slate-400 truncate">Administrator</p>
-          </div>
-        </div>
-      </div>
     </nav>
   );
 };

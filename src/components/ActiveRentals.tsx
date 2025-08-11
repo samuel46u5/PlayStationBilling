@@ -262,7 +262,9 @@ const ActiveRentals: React.FC = () => {
   const [productsTotalMap, setProductsTotalMap] = useState<
     Record<string, number>
   >({});
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris" | "card">(
+    "cash"
+  );
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
 
@@ -580,6 +582,64 @@ const ActiveRentals: React.FC = () => {
     handleEndSession(sessionId);
   };
 
+  // Letakkan helper ini di file yang sama (di luar komponen), ganti versi lama jika sudah ada
+  async function finalizeProductsAndStock(sessionId: string) {
+    try {
+      // Ambil item produk PENDING pada sesi ini
+      const { data: pendingItems, error: itemsErr } = await supabase
+        .from("rental_session_products")
+        .select("product_id, quantity, status")
+        .eq("session_id", sessionId)
+        .eq("status", "pending");
+
+      if (itemsErr) throw itemsErr;
+      if (!pendingItems || pendingItems.length === 0) return;
+
+      // Tandai item pending → completed
+      const { error: updErr } = await supabase
+        .from("rental_session_products")
+        .update({
+          status: "completed",
+        })
+        .eq("session_id", sessionId)
+        .eq("status", "pending");
+
+      if (updErr) throw updErr;
+
+      // Kelompokkan qty per product_id hanya dari item yang barusan completed
+      const qtyByProduct: Record<string, number> = {};
+      for (const it of pendingItems) {
+        const q = Number(it.quantity) || 0;
+        qtyByProduct[it.product_id] = (qtyByProduct[it.product_id] || 0) + q;
+      }
+
+      const productIds = Object.keys(qtyByProduct);
+      if (productIds.length === 0) return;
+
+      // Ambil stok saat ini
+      const { data: products, error: prodErr } = await supabase
+        .from("products")
+        .select("id, stock")
+        .in("id", productIds);
+
+      if (prodErr) throw prodErr;
+
+      // Kurangi stok sesuai qty yang barusan diselesaikan
+      for (const p of products || []) {
+        const used = qtyByProduct[p.id] || 0;
+        const current = Number(p.stock) || 0;
+        const newStock = Math.max(0, current - used);
+        const { error: updStockErr } = await supabase
+          .from("products")
+          .update({ stock: newStock })
+          .eq("id", p.id);
+        if (updStockErr) throw updStockErr;
+      }
+    } catch (e) {
+      console.error("finalizeProductsAndStock error:", e);
+    }
+  }
+
   const handleEndSession = async (sessionId: string) => {
     try {
       const session = activeSessions.find((s) => s.id === sessionId);
@@ -614,6 +674,8 @@ const ActiveRentals: React.FC = () => {
           .from("consoles")
           .update({ status: "available" })
           .eq("id", session.console_id);
+
+        await finalizeProductsAndStock(session.id);
 
         await loadData();
         Swal.fire(
@@ -992,6 +1054,8 @@ const ActiveRentals: React.FC = () => {
           end_time: new Date().toISOString(),
           total_amount: total,
           status: "completed",
+          payment_status: "paid",
+          paid_amount: paymentAmount,
         })
         .eq("id", session.id);
 
@@ -1000,6 +1064,8 @@ const ActiveRentals: React.FC = () => {
         .from("consoles")
         .update({ status: "available" })
         .eq("id", session.console_id);
+
+      await finalizeProductsAndStock(session.id);
 
       // Ambil detail produk langsung dari DB agar akurat
       const { data: productRows } = await supabase
@@ -1061,6 +1127,8 @@ const ActiveRentals: React.FC = () => {
 
       if (result.isConfirmed) {
         printReceipt(receiptData);
+      } else {
+        await loadData();
       }
     } catch (error) {
       console.error("Error processing payment:", error);
@@ -1780,6 +1848,8 @@ const ActiveRentals: React.FC = () => {
 
       if (result.isConfirmed) {
         printReceipt(receiptData);
+      } else {
+        await loadData();
       }
 
       if (latestConsole.power_tv_command) {
@@ -1895,6 +1965,15 @@ const ActiveRentals: React.FC = () => {
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             style={{ minWidth: 180 }}
           />
+
+          {/* Add Product */}
+          <button
+            onClick={() => setShowProductModal(true)}
+            className={`w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+          >
+            <ShoppingCart className="h-5 w-5" />
+            Add Products
+          </button>
         </div>
 
         {/* Filter Buttons, View Mode Toggle & History Button */}
@@ -3693,62 +3772,171 @@ const ActiveRentals: React.FC = () => {
                           (s) => s.id === showProductModal
                         );
                         if (
-                          session &&
-                          !session.duration_minutes &&
-                          session.payment_status !== "paid"
+                          !session ||
+                          (!session?.duration_minutes &&
+                            session?.payment_status !== "paid")
                         ) {
                           return (
                             <button
                               onClick={async () => {
                                 try {
                                   for (const item of cart) {
-                                    const existing = billingProducts.find(
-                                      (bp) => bp.product_id === item.productId
-                                    );
-                                    if (existing) {
-                                      // Update quantity jika sudah ada
-                                      await supabase
-                                        .from("rental_session_products")
-                                        .update({
-                                          quantity:
-                                            existing.quantity + item.quantity,
-                                          total:
-                                            (existing.quantity +
-                                              item.quantity) *
-                                            item.price,
-                                        })
-                                        .eq("session_id", session.id)
-                                        .eq("product_id", item.productId)
-                                        .eq("status", "pending");
+                                    if (session) {
+                                      const existing = billingProducts.find(
+                                        (bp) => bp.product_id === item.productId
+                                      );
+                                      if (existing) {
+                                        // Update quantity jika sudah ada
+                                        await supabase
+                                          .from("rental_session_products")
+                                          .update({
+                                            quantity:
+                                              existing.quantity + item.quantity,
+                                            total:
+                                              (existing.quantity +
+                                                item.quantity) *
+                                              item.price,
+                                          })
+                                          .eq("session_id", session.id)
+                                          .eq("product_id", item.productId)
+                                          .eq("status", "pending");
+                                      } else {
+                                        // Insert baru jika belum ada
+                                        await supabase
+                                          .from("rental_session_products")
+                                          .insert({
+                                            session_id: session.id,
+                                            product_id: item.productId,
+                                            product_name: item.productName,
+                                            quantity: item.quantity,
+                                            price: item.price,
+                                            total: item.price * item.quantity,
+                                            status: "pending",
+                                          });
+                                      }
                                     } else {
-                                      // Insert baru jika belum ada
                                       await supabase
                                         .from("rental_session_products")
                                         .insert({
-                                          session_id: session.id,
+                                          session_id: null,
                                           product_id: item.productId,
                                           product_name: item.productName,
                                           quantity: item.quantity,
                                           price: item.price,
                                           total: item.price * item.quantity,
-                                          status: "pending",
+                                          status: "completed",
                                         });
+
+                                      // Ambil stok saat ini dari tabel products
+                                      const {
+                                        data: productData,
+                                        error: getProductError,
+                                      } = await supabase
+                                        .from("products")
+                                        .select("stock")
+                                        .eq("id", item.productId)
+                                        .single();
+
+                                      if (!getProductError && productData) {
+                                        const currentStock =
+                                          Number(productData.stock) || 0;
+                                        const used = item.quantity;
+                                        const newStock = Math.max(
+                                          0,
+                                          currentStock - used
+                                        );
+
+                                        const { error: updStockErr } =
+                                          await supabase
+                                            .from("products")
+                                            .update({ stock: newStock })
+                                            .eq("id", item.productId);
+
+                                        const receiptData = {
+                                          id: `RETAIL-${Date.now()}`,
+                                          timestamp: new Date().toLocaleString(
+                                            "id-ID"
+                                          ),
+                                          customer: { name: "Umum" },
+                                          items: cart.map((item) => ({
+                                            name: item.productName,
+                                            type: "product" as const,
+                                            quantity: item.quantity,
+                                            total: item.price * item.quantity,
+                                          })),
+                                          subtotal: cart.reduce(
+                                            (sum, item) =>
+                                              sum + item.price * item.quantity,
+                                            0
+                                          ),
+                                          tax: 0,
+                                          total: cart.reduce(
+                                            (sum, item) =>
+                                              sum + item.price * item.quantity,
+                                            0
+                                          ),
+                                          paymentMethod,
+                                          paymentAmount,
+                                          change:
+                                            paymentAmount -
+                                            cart.reduce(
+                                              (sum, item) =>
+                                                sum +
+                                                item.price * item.quantity,
+                                              0
+                                            ),
+                                          cashier: "Kasir 1",
+                                        };
+                                        setShowProductModal(null);
+                                        await loadData();
+
+                                        const result = await Swal.fire({
+                                          title: "Berhasil",
+                                          text: "Pembayaran berhasil",
+                                          icon: "success",
+                                          showCancelButton: true,
+                                          confirmButtonText: "Print Receipt",
+                                          cancelButtonText: "Tutup",
+                                        });
+
+                                        if (result.isConfirmed) {
+                                          printReceipt(receiptData);
+                                        } else {
+                                          await loadData();
+                                        }
+
+                                        if (updStockErr) {
+                                          console.error(
+                                            "Gagal mengupdate stok:",
+                                            updStockErr.message
+                                          );
+                                        }
+                                      } else {
+                                        console.error(
+                                          "Gagal mengambil data produk:",
+                                          getProductError?.message
+                                        );
+                                      }
                                     }
                                   }
                                   clearCart();
                                   await loadData();
+
                                   // Refresh billingProducts
-                                  const { data: billingData } = await supabase
-                                    .from("rental_session_products")
-                                    .select("*")
-                                    .eq("session_id", session.id)
-                                    .eq("status", "pending");
-                                  setBillingProducts(billingData || []);
-                                  Swal.fire(
-                                    "Berhasil",
-                                    "Produk berhasil ditambahkan ke billing.",
-                                    "success"
-                                  );
+                                  if (session) {
+                                    const { data: billingData } = await supabase
+                                      .from("rental_session_products")
+                                      .select("*")
+                                      .eq("session_id", session.id)
+                                      .eq("status", "pending");
+                                    setBillingProducts(billingData || []);
+
+                                    Swal.fire(
+                                      "Berhasil",
+                                      "Produk berhasil ditambahkan ke billing.",
+                                      "success"
+                                    );
+                                  }
                                 } catch (err) {
                                   Swal.fire(
                                     "Gagal",
@@ -3760,7 +3948,7 @@ const ActiveRentals: React.FC = () => {
                               className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
                             >
                               <ShoppingCart className="h-5 w-5" />
-                              Tambahkan ke Billing
+                              {session ? "Tambahkan ke Billing" : "Bayar"}
                             </button>
                           );
                         }

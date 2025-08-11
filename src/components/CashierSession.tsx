@@ -316,7 +316,6 @@ const CashierSessionComponent: React.FC = () => {
   );
   const todayTotalRevenue = todayTotalSales + todayTotalRentals;
 
-  // Payment method breakdown for today
   // const todayCashSales = todaySales
   //   .filter((s) => s.paymentMethod === "cash")
   //   .reduce((sum, s) => sum + s.total, 0);
@@ -459,7 +458,7 @@ const CashierSessionComponent: React.FC = () => {
               <p className="text-xs text-gray-500 mt-1">
                 Expected: Rp{" "}
                 {/* {calculateExpectedCash(currentSession).toLocaleString("id-ID")} */}
-                ${expectedCash.toLocaleString("id-ID")}
+                {expectedCash.toLocaleString("id-ID")}
               </p>
             </div>
 
@@ -807,7 +806,7 @@ const CashierSessionComponent: React.FC = () => {
                         {/* {calculateExpectedCash(currentSession).toLocaleString(
                           "id-ID"
                         )} */}
-                        ${expectedCash.toLocaleString("id-ID")}
+                        {expectedCash.toLocaleString("id-ID")}
                       </span>
                     </div>
                   </div>
