@@ -8,6 +8,7 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
   const navItems = [
+    { id: 'agus', label: 'agus', icon: Cog },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'cashier', label: 'Kasir POS', icon: CreditCard },
     { id: 'cashier-session', label: 'Pembukuan Kasir', icon: Wallet },
@@ -26,7 +27,8 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     { id: 'maintenance', label: 'Hardware Maintenance', icon: Tool },
     { id: 'users', label: 'User Management', icon: Shield },
     { id: 'settings', label: 'Pengaturan', icon: Cog },
-    { id: 'login', label: 'Login', icon: LogIn }
+    { id: 'login', label: 'Login', icon: LogIn },
+
   ];
 
   return (
@@ -35,8 +37,8 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
         <div className="flex items-center gap-3 mb-2">
           <Gamepad2 className="h-8 w-8 text-blue-400" />
           <div>
-            <h1 className="text-xl font-bold">Gaming & Billiard</h1>
-            <p className="text-slate-400 text-xs">Rental + Mini Cafe POS</p>
+            <h1 className="text-xl font-bold">X-Zone </h1>
+            <p className="text-slate-400 text-xs">Play Station Rental</p>
           </div>
         </div>
       </div>

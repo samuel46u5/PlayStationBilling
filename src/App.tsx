@@ -19,6 +19,7 @@ import VoucherManagement from './components/VoucherManagement';
 import Settings from './components/Settings';
 import MaintenanceManagement from './components/MaintenanceManagement';
 import RateProfilePage from './components/RateProfilePage';
+import FormAgus from './components/FormAgus';
 
 const App: React.FC = () => {
   return (
@@ -70,8 +71,8 @@ const AppLayout: React.FC = () => {
       case 'rate-profile':
       case 'rate-profiles':
         return <RateProfilePage />;
-      default:
-        return <Dashboard />;
+      case 'agus':
+        return <FormAgus />;
     }
   };
 
