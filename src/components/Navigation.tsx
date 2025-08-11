@@ -1,5 +1,27 @@
-import React from 'react';
-import { LayoutDashboard, Users, Gamepad2, Settings as SettingsIcon, DollarSign, ShoppingCart, Package, Calculator, CreditCard, Shield, Calendar, Wrench, Ticket, Cog, Wallet, LogIn, User, PenTool as Tool, TrendingUp } from 'lucide-react';
+import React from "react";
+import {
+  LayoutDashboard,
+  Users,
+  Gamepad2,
+  Settings as SettingsIcon,
+  DollarSign,
+  ShoppingCart,
+  Package,
+  Calculator,
+  CreditCard,
+  Shield,
+  Calendar,
+  Wrench,
+  Ticket,
+  Cog,
+  Wallet,
+  LogIn,
+  LogOut,
+  User,
+  PenTool as Tool,
+  TrendingUp,
+} from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
 
 interface NavigationProps {
   activeTab: string;
@@ -8,26 +30,27 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'cashier', label: 'Kasir POS', icon: CreditCard },
-    { id: 'cashier-session', label: 'Pembukuan Kasir', icon: Wallet },
-    { id: 'rentals', label: 'Active Rentals', icon: Gamepad2 },
-    { id: 'bookings', label: 'Scheduled Bookings', icon: Calendar },
-    { id: 'customers', label: 'Customers', icon: Users },
-    { id: 'products', label: 'Products', icon: Package },
-    { id: 'sales', label: 'Sales Report', icon: ShoppingCart },
-    { id: 'payments', label: 'Payments', icon: DollarSign },
-    { id: 'bookkeeping', label: 'Bookkeeping', icon: Calculator },
-    { id: 'vouchers', label: 'Voucher Management', icon: Ticket },
-    { id: 'consoles', label: 'Consoles', icon: SettingsIcon },
-    { id: 'equipment', label: 'Equipment Management', icon: Wrench },
-    { id: 'rates', label: 'Tarif', icon: TrendingUp },
-    { id: 'rate-profiles', label: 'Profil tarif', icon: TrendingUp },
-    { id: 'maintenance', label: 'Hardware Maintenance', icon: Tool },
-    { id: 'users', label: 'User Management', icon: Shield },
-    { id: 'settings', label: 'Pengaturan', icon: Cog },
-    { id: 'login', label: 'Login', icon: LogIn }
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "cashier", label: "Kasir POS", icon: CreditCard },
+    { id: "cashier-session", label: "Pembukuan Kasir", icon: Wallet },
+    { id: "rentals", label: "Active Rentals", icon: Gamepad2 },
+    { id: "bookings", label: "Scheduled Bookings", icon: Calendar },
+    { id: "customers", label: "Customers", icon: Users },
+    { id: "products", label: "Products", icon: Package },
+    { id: "sales", label: "Sales Report", icon: ShoppingCart },
+    { id: "payments", label: "Payments", icon: DollarSign },
+    { id: "bookkeeping", label: "Bookkeeping", icon: Calculator },
+    { id: "vouchers", label: "Voucher Management", icon: Ticket },
+    { id: "consoles", label: "Consoles", icon: SettingsIcon },
+    { id: "equipment", label: "Equipment Management", icon: Wrench },
+    { id: "rates", label: "Tarif", icon: TrendingUp },
+    { id: "rate-profiles", label: "Profil tarif", icon: TrendingUp },
+    { id: "maintenance", label: "Hardware Maintenance", icon: Tool },
+    { id: "users", label: "User Management", icon: Shield },
+    { id: "settings", label: "Pengaturan", icon: Cog },
+    // { id: 'login', label: 'Login', icon: LogIn }
   ];
+  const { user, logout } = useAuth();
 
   return (
     <nav className="bg-slate-800 text-white w-64 min-h-screen p-6 flex flex-col">
@@ -40,7 +63,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
           </div>
         </div>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto">
         <ul className="space-y-2">
           {navItems.map((item) => {
@@ -51,8 +74,8 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
                   onClick={() => onTabChange(item.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
                     activeTab === item.id
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                      ? "bg-blue-600 text-white shadow-lg"
+                      : "text-slate-300 hover:bg-slate-700 hover:text-white"
                   }`}
                 >
                   <Icon className="h-5 w-5" />
@@ -64,7 +87,16 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
           })}
         </ul>
       </div>
-      
+      {user && (
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-red-400 hover:bg-slate-700 hover:text-red-500"
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="font-medium text-sm">Logout</span>
+        </button>
+      )}
+
       {/* User Profile Section */}
       <div className="mt-6 pt-6 border-t border-slate-700">
         <div className="flex items-center gap-3 px-4 py-2 mb-2">

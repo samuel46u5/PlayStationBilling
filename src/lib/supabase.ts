@@ -320,7 +320,7 @@ export const db = {
       
       return db.insert('cashier_sessions', {
         ...sessionData,
-        cashier_id: user.id
+        cashier_id: user.id,
       });
     },
 
