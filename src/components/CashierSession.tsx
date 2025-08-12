@@ -94,31 +94,30 @@ const CashierSessionComponent: React.FC = () => {
 
   useEffect(() => {
     (async () => {
-      if (!user || !currentSession?.id) {
+      if (!user || !currentSession?.id || !currentSession.startTime) {
         setTodayTransactions([]);
         setTodaySales([]);
         setTodayRentals([]);
         return;
       }
 
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(start.getDate() + 1);
+      // const start = new Date();
+      // start.setHours(0, 0, 0, 0);
+      // const end = new Date(start);
+      // end.setDate(start.getDate() + 1);
 
-      const [trxRes, salesRes, rentalsRes] = await Promise.all([
+      const start = new Date(currentSession.startTime);
+      const end = currentSession.endTime
+        ? new Date(currentSession.endTime)
+        : new Date();
+
+      const [trxRes, rentalsRes] = await Promise.all([
         supabase
           .from("cashier_transactions")
           .select("*")
           .eq("session_id", currentSession.id)
           .gte("timestamp", start.toISOString())
           .lt("timestamp", end.toISOString()),
-        supabase
-          .from("sales")
-          .select("*")
-          .eq("cashier_id", user.id)
-          .gte("sale_date", start.toISOString())
-          .lt("sale_date", end.toISOString()),
         supabase
           .from("rental_sessions")
           .select("*")
@@ -128,18 +127,18 @@ const CashierSessionComponent: React.FC = () => {
       ]);
 
       if (trxRes.error) throw trxRes.error;
-      if (salesRes.error) throw salesRes.error;
       if (rentalsRes.error) throw rentalsRes.error;
 
       setTodayTransactions(trxRes.data || []);
-      setTodaySales(salesRes.data || []);
+      setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
       setTodayRentals(rentalsRes.data || []);
     })();
-  }, [user, currentSession?.id]);
-
-  // if (!currentSession) {
-  //   return <div>Tidak ada sesi kasir aktif untuk user ini.</div>;
-  // }
+  }, [
+    user,
+    currentSession?.id,
+    currentSession?.startTime,
+    currentSession?.endTime,
+  ]);
 
   // Calculate session duration
   const getSessionDuration = (session: CashierSession) => {
@@ -309,9 +308,12 @@ const CashierSessionComponent: React.FC = () => {
   };
 
   // Calculate today's totals
-  const todayTotalSales = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+  const todayTotalSales = todaySales.reduce(
+    (sum, sale) => sum + (Number(sale.amount) || 0),
+    0
+  );
   const todayTotalRentals = todayRentals.reduce(
-    (sum, rental) => sum + Number(rental.total_amount),
+    (sum, rental) => sum + (Number(rental.total_amount) || 0),
     0
   );
   const todayTotalRevenue = todayTotalSales + todayTotalRentals;
@@ -327,13 +329,13 @@ const CashierSessionComponent: React.FC = () => {
   //   .reduce((sum, s) => sum + s.total, 0);
   const todayCashSales = (todaySales || [])
     .filter((s: any) => s.payment_method === "cash")
-    .reduce((sum, s: any) => sum + (Number(s.total) || 0), 0);
+    .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0);
   const todayCardSales = (todaySales || [])
     .filter((s: any) => s.payment_method === "card")
-    .reduce((sum, s: any) => sum + (Number(s.total) || 0), 0);
+    .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0);
   const todayTransferSales = (todaySales || [])
     .filter((s: any) => s.payment_method === "transfer")
-    .reduce((sum, s: any) => sum + (Number(s.total) || 0), 0);
+    .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -630,14 +632,14 @@ const CashierSessionComponent: React.FC = () => {
                           <div className="flex items-center gap-3 mt-1">
                             <span
                               className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                                transaction.paymentMethod === "cash"
+                                transaction.payment_method === "cash"
                                   ? "bg-green-100 text-green-800"
-                                  : transaction.paymentMethod === "card"
+                                  : transaction.payment_method === "card"
                                   ? "bg-blue-100 text-blue-800"
                                   : "bg-purple-100 text-purple-800"
                               }`}
                             >
-                              {transaction.paymentMethod.toUpperCase()}
+                              {transaction.payment_method}
                             </span>
                             <div className="flex items-center gap-1 text-sm text-gray-600">
                               <Clock className="h-4 w-4" />
@@ -649,7 +651,7 @@ const CashierSessionComponent: React.FC = () => {
                               })}
                             </div>
                             <span className="text-sm text-gray-500">
-                              Ref: {transaction.referenceId}
+                              Ref: {transaction.reference_id}
                             </span>
                           </div>
                         </div>
