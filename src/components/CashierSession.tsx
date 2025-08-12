@@ -101,11 +101,6 @@ const CashierSessionComponent: React.FC = () => {
         return;
       }
 
-      // const start = new Date();
-      // start.setHours(0, 0, 0, 0);
-      // const end = new Date(start);
-      // end.setDate(start.getDate() + 1);
-
       const start = new Date(currentSession.startTime);
       const end = currentSession.endTime
         ? new Date(currentSession.endTime)
@@ -117,7 +112,8 @@ const CashierSessionComponent: React.FC = () => {
           .select("*")
           .eq("session_id", currentSession.id)
           .gte("timestamp", start.toISOString())
-          .lt("timestamp", end.toISOString()),
+          .lt("timestamp", end.toISOString())
+          .order("timestamp", { ascending: false }),
         supabase
           .from("rental_sessions")
           .select("*")
@@ -165,17 +161,35 @@ const CashierSessionComponent: React.FC = () => {
   //   return session.openingCash + cashSales - estimatedChange;
   // };
 
+  // const expectedCash = useMemo(() => {
+  //   if (!currentSession) return 0;
+  //   const cashNet = (todaySales || [])
+  //     .filter((s: any) => s.payment_method === "cash")
+  //     .reduce((sum: number, s: any) => {
+  //       const paid = Number(s.payment_amount) || 0;
+  //       const change = Number(s.change_amount) || 0;
+  //       return sum + (paid - change);
+  //     }, 0);
+  //   return currentSession.openingCash + cashNet;
+  // }, [currentSession, todaySales]);
+
   const expectedCash = useMemo(() => {
     if (!currentSession) return 0;
-    const cashNet = (todaySales || [])
+
+    const retailCashNet = (todaySales || [])
       .filter((s: any) => s.payment_method === "cash")
       .reduce((sum: number, s: any) => {
-        const paid = Number(s.payment_amount) || 0;
+        const paid = Number(s.payment_amount ?? s.amount) || 0;
         const change = Number(s.change_amount) || 0;
         return sum + (paid - change);
       }, 0);
-    return currentSession.openingCash + cashNet;
-  }, [currentSession, todaySales]);
+
+    const rentalCash = (todayRentals || [])
+      .filter((r: any) => r.payment_method === "cash")
+      .reduce((sum: number, r: any) => sum + (Number(r.total_amount) || 0), 0);
+
+    return currentSession.openingCash + retailCashNet + rentalCash;
+  }, [currentSession, todaySales, todayRentals]);
 
   // Get today's transactions for current session
   // const getTodayTransactions = () => {
@@ -318,24 +332,29 @@ const CashierSessionComponent: React.FC = () => {
   );
   const todayTotalRevenue = todayTotalSales + todayTotalRentals;
 
-  // const todayCashSales = todaySales
-  //   .filter((s) => s.paymentMethod === "cash")
-  //   .reduce((sum, s) => sum + s.total, 0);
-  // const todayCardSales = todaySales
-  //   .filter((s) => s.paymentMethod === "card")
-  //   .reduce((sum, s) => sum + s.total, 0);
-  // const todayTransferSales = todaySales
-  //   .filter((s) => s.paymentMethod === "transfer")
-  //   .reduce((sum, s) => sum + s.total, 0);
-  const todayCashSales = (todaySales || [])
-    .filter((s: any) => s.payment_method === "cash")
-    .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0);
-  const todayCardSales = (todaySales || [])
-    .filter((s: any) => s.payment_method === "card")
-    .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0);
-  const todayTransferSales = (todaySales || [])
-    .filter((s: any) => s.payment_method === "transfer")
-    .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0);
+  const todayCashSales =
+    (todaySales || [])
+      .filter((s: any) => s.payment_method === "cash")
+      .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
+    (todayRentals || [])
+      .filter((r: any) => r.payment_method === "cash")
+      .reduce((sum, r: any) => sum + (Number(r.total_amount) || 0), 0);
+
+  const todayCardSales =
+    (todaySales || [])
+      .filter((s: any) => s.payment_method === "card")
+      .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
+    (todayRentals || [])
+      .filter((r: any) => r.payment_method === "card")
+      .reduce((sum, r: any) => sum + (Number(r.total_amount) || 0), 0);
+
+  const todayTransferSales =
+    (todaySales || [])
+      .filter((s: any) => s.payment_method === "transfer")
+      .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
+    (todayRentals || [])
+      .filter((r: any) => r.payment_method === "transfer")
+      .reduce((sum, r: any) => sum + (Number(r.total_amount) || 0), 0);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -498,7 +517,10 @@ const CashierSessionComponent: React.FC = () => {
                   Rp {todayCashSales.toLocaleString("id-ID")}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {todaySales.filter((s) => s.payment_method === "cash").length}{" "}
+                  {todaySales.filter((s) => s.payment_method === "cash")
+                    .length +
+                    todayRentals.filter((r) => r.payment_method === "cash")
+                      .length}{" "}
                   transaksi hari ini
                 </p>
                 <div className="w-full bg-gray-200 rounded-full h-2">
@@ -506,8 +528,8 @@ const CashierSessionComponent: React.FC = () => {
                     className="bg-green-600 h-2 rounded-full transition-all duration-300"
                     style={{
                       width: `${
-                        todayTotalSales > 0
-                          ? (todayCashSales / todayTotalSales) * 100
+                        todayTotalRevenue > 0
+                          ? (todayCashSales / todayTotalRevenue) * 100
                           : 0
                       }%`,
                     }}
@@ -530,7 +552,10 @@ const CashierSessionComponent: React.FC = () => {
                   Rp {todayCardSales.toLocaleString("id-ID")}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {todaySales.filter((s) => s.payment_method === "card").length}{" "}
+                  {todaySales.filter((s) => s.payment_method === "card")
+                    .length +
+                    todayRentals.filter((r) => r.payment_method === "card")
+                      .length}{" "}
                   transaksi hari ini
                 </p>
                 <div className="w-full bg-gray-200 rounded-full h-2">
@@ -538,8 +563,8 @@ const CashierSessionComponent: React.FC = () => {
                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                     style={{
                       width: `${
-                        todayTotalSales > 0
-                          ? (todayCardSales / todayTotalSales) * 100
+                        todayTotalRevenue > 0
+                          ? (todayCardSales / todayTotalRevenue) * 100
                           : 0
                       }%`,
                     }}
@@ -562,10 +587,10 @@ const CashierSessionComponent: React.FC = () => {
                   Rp {todayTransferSales.toLocaleString("id-ID")}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {
-                    todaySales.filter((s) => s.payment_method === "transfer")
-                      .length
-                  }{" "}
+                  {todaySales.filter((s) => s.payment_method === "transfer")
+                    .length +
+                    todayRentals.filter((r) => r.payment_method === "transfer")
+                      .length}{" "}
                   transaksi hari ini
                 </p>
                 <div className="w-full bg-gray-200 rounded-full h-2">
@@ -573,8 +598,8 @@ const CashierSessionComponent: React.FC = () => {
                     className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                     style={{
                       width: `${
-                        todayTotalSales > 0
-                          ? (todayTransferSales / todayTotalSales) * 100
+                        todayTotalRevenue > 0
+                          ? (todayTransferSales / todayTotalRevenue) * 100
                           : 0
                       }%`,
                     }}
@@ -639,7 +664,7 @@ const CashierSessionComponent: React.FC = () => {
                                   : "bg-purple-100 text-purple-800"
                               }`}
                             >
-                              {transaction.payment_method}
+                              {transaction.payment_method.toUpperCase()}
                             </span>
                             <div className="flex items-center gap-1 text-sm text-gray-600">
                               <Clock className="h-4 w-4" />

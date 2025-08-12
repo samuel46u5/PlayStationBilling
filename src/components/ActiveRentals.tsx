@@ -774,177 +774,6 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
-  // Tambahkan fungsi untuk generate receipt data
-  // const generateReceiptData = (
-  //   session: RentalSession,
-  //   productsTotal: number,
-  //   paymentAmount: number
-  // ) => {
-  //   const customer = session.customers;
-  //   const receiptId = `RENTAL-${Date.now()}`;
-  //   const timestamp = new Date().toLocaleString("id-ID");
-  //   const totalCost = calculateCurrentCost(session);
-  //   const total = totalCost + productsTotal;
-  //   const change = paymentAmount - total;
-
-  //   // Generate items array
-  //   const items: any[] = [];
-
-  //   // Add rental item
-  //   items.push({
-  //     name: `Rental ${session.consoles?.name || "Console"}`,
-  //     type: "rental",
-  //     quantity: 1,
-  //     total: totalCost,
-  //     description: `Durasi: ${formatElapsedHMS(session.start_time)} | Lokasi: ${
-  //       session.consoles?.location || "N/A"
-  //     }`,
-  //   });
-
-  //   // Add products if any
-  //   if (productsTotal > 0) {
-  //     // Get products from billingProducts
-  //     const sessionProducts = billingProducts.filter(
-  //       (bp) => bp.session_id === session.id
-  //     );
-  //     sessionProducts.forEach((product) => {
-  //       items.push({
-  //         name: product.product_name,
-  //         type: "product",
-  //         quantity: product.quantity,
-  //         total: product.total || product.price * product.quantity,
-  //         description: `Harga: Rp ${product.price.toLocaleString("id-ID")}`,
-  //       });
-  //     });
-  //   }
-
-  //   return {
-  //     id: receiptId,
-  //     timestamp,
-  //     customer,
-  //     items,
-  //     subtotal: totalCost,
-  //     tax: 0,
-  //     total,
-  //     paymentMethod,
-  //     paymentAmount,
-  //     change,
-  //     cashier: "Kasir 1", // This would come from logged in user
-  //     sessionId: session.id,
-  //   };
-  // };
-
-  // // Tambahkan fungsi untuk print receipt
-  // const handlePrintReceipt = () => {
-  //   if (!lastTransaction) return;
-
-  //   // Create printable receipt
-  //   const printWindow = window.open("", "_blank");
-  //   if (printWindow) {
-  //     printWindow.document.write(`
-  //     <html>
-  //       <head>
-  //         <title>Receipt - ${lastTransaction.id}</title>
-  //         <style>
-  //           body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; }
-  //           .receipt { width: 300px; margin: 0 auto; }
-  //           .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
-  //           .item { display: flex; justify-content: space-between; margin: 5px 0; }
-  //           .total { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
-  //           .footer { text-align: center; margin-top: 20px; font-size: 10px; }
-  //         </style>
-  //       </head>
-  //       <body>
-  //         <div class="receipt">
-  //           <div class="header">
-  //             <h2>GAMING & BILLIARD CENTER</h2>
-  //             <p>PlayStation Rental + Mini Cafe</p>
-  //             <p>Receipt: ${lastTransaction.id}</p>
-  //             <p>${lastTransaction.timestamp}</p>
-  //             ${
-  //               lastTransaction.customer
-  //                 ? `<p>Customer: ${lastTransaction.customer.name}</p>`
-  //                 : ""
-  //             }
-  //             <p>Kasir: ${lastTransaction.cashier}</p>
-  //           </div>
-
-  //           <div class="items">
-  //             ${lastTransaction.items
-  //               .map(
-  //                 (item: any) => `
-  //               <div class="item">
-  //                 <span>${item.name} ${
-  //                   item.type === "product" ? `x${item.quantity}` : ""
-  //                 }</span>
-  //                 <span>Rp ${item.total.toLocaleString("id-ID")}</span>
-  //               </div>
-  //               ${
-  //                 item.description
-  //                   ? `<div style="font-size: 10px; color: #666; margin-left: 10px;">${item.description}</div>`
-  //                   : ""
-  //               }
-  //             `
-  //               )
-  //               .join("")}
-  //           </div>
-
-  //           <div class="total">
-  //             <div class="item">
-  //               <span>Subtotal:</span>
-  //               <span>Rp ${lastTransaction.subtotal.toLocaleString(
-  //                 "id-ID"
-  //               )}</span>
-  //             </div>
-  //             ${
-  //               lastTransaction.tax > 0
-  //                 ? `
-  //               <div class="item">
-  //                 <span>Pajak:</span>
-  //                 <span>Rp ${lastTransaction.tax.toLocaleString("id-ID")}</span>
-  //               </div>
-  //             `
-  //                 : ""
-  //             }
-  //             <div class="item" style="font-weight: bold; font-size: 14px;">
-  //               <span>TOTAL:</span>
-  //               <span>Rp ${lastTransaction.total.toLocaleString("id-ID")}</span>
-  //             </div>
-  //             <div class="item">
-  //               <span>Bayar (${lastTransaction.paymentMethod.toUpperCase()}):</span>
-  //               <span>Rp ${lastTransaction.paymentAmount.toLocaleString(
-  //                 "id-ID"
-  //               )}</span>
-  //             </div>
-  //             ${
-  //               lastTransaction.change > 0
-  //                 ? `
-  //               <div class="item">
-  //                 <span>Kembalian:</span>
-  //                 <span>Rp ${lastTransaction.change.toLocaleString(
-  //                   "id-ID"
-  //                 )}</span>
-  //               </div>
-  //             `
-  //                 : ""
-  //             }
-  //           </div>
-
-  //           <div class="footer">
-  //             <p>Terima kasih atas kunjungan Anda!</p>
-  //             <p>Selamat bermain dan nikmati waktu Anda</p>
-  //             <p>---</p>
-  //             <p>Simpan struk ini sebagai bukti pembayaran</p>
-  //           </div>
-  //         </div>
-  //       </body>
-  //     </html>
-  //   `);
-  //     printWindow.document.close();
-  //     // printWindow.print();
-  //   }
-  // };
-
   async function logCashierTransaction(params: {
     type: "sale" | "rental" | "voucher" | "refund";
     amount: number;
@@ -1211,21 +1040,6 @@ const ActiveRentals: React.FC = () => {
         }
       }
 
-      // Catat transaksi pembayaran ke sales/payments
-      // await supabase.from("sales").insert({
-      //   customer_id: session.customer_id,
-      //   subtotal: totalCost,
-      //   tax: 0,
-      //   discount: 0,
-      //   total: total,
-      //   payment_method: paymentMethod,
-      //   payment_amount: paymentAmount,
-      //   change_amount: paymentAmount - total,
-      //   sale_date: new Date().toISOString(),
-      //   cashier_id: null,
-      //   session_id: null,
-      // });
-
       // Update rental session
       await supabase
         .from("rental_sessions")
@@ -1234,6 +1048,7 @@ const ActiveRentals: React.FC = () => {
           total_amount: total,
           status: "completed",
           payment_status: "paid",
+          payment_method: paymentMethod,
           paid_amount: paymentAmount,
         })
         .eq("id", session.id);
@@ -1292,7 +1107,7 @@ const ActiveRentals: React.FC = () => {
         amount: total,
         paymentMethod,
         referenceId: receiptData.id,
-        description: "Rental payment (${session.id})",
+        description: `Rental payment (${session.customers?.name})`,
       });
 
       setShowPaymentModal(null);
