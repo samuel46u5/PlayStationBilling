@@ -31,12 +31,11 @@ import {
   ShoppingCart,
   Minus,
   X,
-  Calculator,
-  CreditCard,
   UserPlus,
   Users,
   MapPin,
   Wrench,
+  ArrowRightLeft,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
@@ -100,6 +99,8 @@ interface CartItem {
   quantity: number;
   total: number;
 }
+
+type MoveModalState = { sessionId: string; fromConsoleId: string } | null;
 
 const ActiveRentals: React.FC = () => {
   // Untuk interface pembayaran mirip Cashier
@@ -269,6 +270,9 @@ const ActiveRentals: React.FC = () => {
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
   const [isCashierActive, setIsCashierActive] = useState<boolean>(true);
+  const [showMoveModal, setShowMoveModal] = useState<MoveModalState>(null);
+  const [moveTargetConsoleId, setMoveTargetConsoleId] = useState<string>("");
+  const [isMovingSession, setIsMovingSession] = useState<boolean>(false);
   useEffect(() => {
     (async () => {
       try {
@@ -636,6 +640,29 @@ const ActiveRentals: React.FC = () => {
     handleEndSession(sessionId);
   };
 
+  const RealtimeCost: React.FC<{
+    session: RentalSession;
+    productsTotal?: number;
+    refreshMs?: number;
+  }> = ({ session, productsTotal, refreshMs = 60000 }) => {
+    const [tick, setTick] = useState(0);
+    const isPrepaid = !!session.duration_minutes;
+
+    useEffect(() => {
+      if (isPrepaid) return;
+      const id = setInterval(() => setTick((t) => t + 1), refreshMs);
+      return () => clearInterval(id);
+    }, [isPrepaid, refreshMs, session.id]);
+
+    return (
+      <>
+        {(calculateCurrentCost(session) + (productsTotal || 0)).toLocaleString(
+          "id-ID"
+        )}
+      </>
+    );
+  };
+
   // Letakkan helper ini di file yang sama (di luar komponen), ganti versi lama jika sudah ada
   async function finalizeProductsAndStock(sessionId: string) {
     try {
@@ -695,7 +722,6 @@ const ActiveRentals: React.FC = () => {
   }
 
   const handleEndSession = async (sessionId: string) => {
-    if (!ensureCashierActive()) return;
     try {
       const session = activeSessions.find((s) => s.id === sessionId);
       if (!session) return;
@@ -711,10 +737,7 @@ const ActiveRentals: React.FC = () => {
         if (consoleObj?.power_tv_command) {
           fetch(consoleObj.power_tv_command).catch(() => {});
         }
-      }
 
-      // Jika prepaid (bayar dimuka), langsung update status tanpa modal pembayaran
-      if (session.duration_minutes && session.payment_status === "paid") {
         // Update rental session
         await supabase
           .from("rental_sessions")
@@ -740,6 +763,8 @@ const ActiveRentals: React.FC = () => {
         );
         return;
       }
+
+      if (!ensureCashierActive()) return;
 
       // Untuk pay-as-you-go, buka modal pembayaran seperti biasa
       // Hitung total biaya rental
@@ -774,12 +799,133 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
+  const handleConfirmMoveSession = async () => {
+    if (!ensureCashierActive()) return;
+    if (!showMoveModal || !moveTargetConsoleId) {
+      Swal.fire("Info", "Pilih unit tujuan terlebih dahulu", "info");
+      return;
+    }
+    setIsMovingSession(true);
+    const fromId = showMoveModal.fromConsoleId;
+    const targetId = moveTargetConsoleId;
+    try {
+      const session = activeSessions.find(
+        (s) => s.id === showMoveModal.sessionId
+      );
+      const fromConsole = consoles.find((c) => c.id === fromId);
+      const targetConsole = consoles.find((c) => c.id === targetId);
+
+      if (!session || !fromConsole || !targetConsole) {
+        throw new Error("Data sesi atau konsol tidak ditemukan");
+      }
+      if (targetConsole.status !== "available") {
+        Swal.fire("Gagal", "Unit tujuan tidak tersedia.", "error");
+        return;
+      }
+
+      // Double-check di DB target tidak punya sesi aktif
+      const { data: existsActive, error: checkErr } = await supabase
+        .from("rental_sessions")
+        .select("id")
+        .eq("console_id", targetId)
+        .eq("status", "active")
+        .limit(1);
+      if (checkErr) throw checkErr;
+      if (Array.isArray(existsActive) && existsActive.length > 0) {
+        Swal.fire("Gagal", "Unit tujuan sedang dipakai.", "error");
+        return;
+      }
+
+      // Kunci target (set rented bila masih available)
+      const { error: tgtErr } = await supabase
+        .from("consoles")
+        .update({ status: "rented" })
+        .eq("id", targetId)
+        .eq("status", "available");
+      if (tgtErr) throw tgtErr;
+
+      // Pindahkan sesi ke target
+      const { error: moveErr } = await supabase
+        .from("rental_sessions")
+        .update({ console_id: targetId })
+        .eq("id", session.id);
+      if (moveErr) {
+        await supabase
+          .from("consoles")
+          .update({ status: "available" })
+          .eq("id", targetId);
+        throw moveErr;
+      }
+
+      // Set source available
+      const { error: srcErr } = await supabase
+        .from("consoles")
+        .update({ status: "available" })
+        .eq("id", fromId);
+      if (srcErr) {
+        // rollback penuh
+        await supabase
+          .from("rental_sessions")
+          .update({ console_id: fromId })
+          .eq("id", session.id);
+        await supabase
+          .from("consoles")
+          .update({ status: "available" })
+          .eq("id", targetId);
+        await supabase
+          .from("consoles")
+          .update({ status: "rented" })
+          .eq("id", fromId);
+        throw srcErr;
+      }
+
+      // Perintah device
+      try {
+        if (fromConsole.relay_command_off)
+          fetch(fromConsole.relay_command_off).catch(() => {});
+        if (fromConsole.power_tv_command)
+          fetch(fromConsole.power_tv_command).catch(() => {});
+        if (targetConsole.power_tv_command)
+          fetch(targetConsole.power_tv_command).catch(() => {});
+        if (targetConsole.relay_command_on)
+          fetch(targetConsole.relay_command_on).catch(() => {});
+      } catch {}
+
+      // Log cashier
+      await logCashierTransaction({
+        type: "rental",
+        amount: 0,
+        paymentMethod,
+        referenceId: `MOVE_RENTAL-${Date.now()}`,
+        description: `Pindah unit ${fromConsole.name} -> ${targetConsole.name} (${session.customers?.name})`,
+        details: {
+          action: "move_session",
+          session_id: session.id,
+          from_console: fromConsole,
+          to_console: targetConsole,
+          prepaid: !!session.duration_minutes,
+        },
+      });
+
+      setShowMoveModal(null);
+      setMoveTargetConsoleId("");
+      await loadData();
+      Swal.fire("Berhasil", "Sesi berhasil dipindah ke unit baru.", "success");
+    } catch (err) {
+      console.error("handleConfirmMoveSession error:", err);
+      Swal.fire("Error", "Gagal memindahkan sesi", "error");
+    } finally {
+      setIsMovingSession(false);
+    }
+  };
+
   async function logCashierTransaction(params: {
-    type: "sale" | "rental" | "voucher" | "refund";
+    type: "sale" | "rental";
     amount: number;
     paymentMethod: "cash" | "qris" | "card" | "transfer";
     referenceId: string;
     description: string;
+    details?: any;
   }) {
     try {
       const { data } = await supabase.auth.getUser();
@@ -810,6 +956,7 @@ const ActiveRentals: React.FC = () => {
         reference_id: params.referenceId,
         description: params.description,
         cashier_id: cashierId,
+        details: params.details ?? null,
       });
     } catch (err) {
       console.error("logCashierTransaction error:", err);
@@ -1002,12 +1149,24 @@ const ActiveRentals: React.FC = () => {
           cashier: "Kasir 1",
         };
 
+        const details = {
+          items: receiptData.items,
+          breakdown: { rental_cost: 0, products_total: total },
+          customer: receiptData.customer,
+          payment: {
+            method: paymentMethod,
+            amount: paymentAmount,
+            change: paymentAmount - total,
+          },
+        };
+
         await logCashierTransaction({
           type: "sale",
           amount: total,
           paymentMethod,
-          referenceId: receiptData.id, // ganti product bisa?
+          referenceId: receiptData.id,
           description: "Retail purchase",
+          details,
         });
 
         setShowPaymentModal(null);
@@ -1102,12 +1261,32 @@ const ActiveRentals: React.FC = () => {
         cashier: "Kasir 1",
       };
 
+      const details = {
+        items: receiptData.items,
+        breakdown: {
+          rental_cost: totalCost,
+          products_total: productsTotal ?? 0,
+        },
+        customer: receiptData.customer,
+        rental: {
+          session_id: session.id,
+          console: session.consoles?.name,
+          duration_minutes: session.duration_minutes ?? null,
+        },
+        payment: {
+          method: paymentMethod,
+          amount: paymentAmount,
+          change: receiptData.change,
+        },
+      };
+
       await logCashierTransaction({
         type: "rental",
         amount: total,
         paymentMethod,
         referenceId: receiptData.id,
         description: `Rental payment (${session.customers?.name})`,
+        details,
       });
 
       setShowPaymentModal(null);
@@ -1841,12 +2020,30 @@ const ActiveRentals: React.FC = () => {
         cashier: "System", // Ambil dari user yang login
       };
 
+      const details = {
+        items: receiptData.items,
+        breakdown: { rental_cost: totalAmount, products_total: 0 },
+        customer: receiptData.customer,
+        rental: {
+          session_id: rentalSessionId,
+          console: latestConsole.name,
+          prepaid: true,
+          duration_minutes: duration,
+        },
+        payment: {
+          method: paymentMethod,
+          amount: paymentAmount,
+          change: receiptData.change,
+        },
+      };
+
       await logCashierTransaction({
         type: "rental",
         amount: totalAmount,
         paymentMethod,
         referenceId: receiptData.id,
         description: `Prepaid rental (${latestConsole.name})`,
+        details,
       });
 
       const result = await Swal.fire({
@@ -2400,9 +2597,10 @@ const ActiveRentals: React.FC = () => {
                         <div className="flex items-center gap-1 text-[11px]">
                           <span>
                             Rp{" "}
-                            {calculateCurrentCost(activeSession).toLocaleString(
+                            {/* {calculateCurrentCost(activeSession).toLocaleString(
                               "id-ID"
-                            )}
+                            )} */}
+                            <RealtimeCost session={activeSession} />
                           </span>
                           <span
                             className={`ml-auto font-bold text-[10px] px-2 py-0.5 rounded-full ${
@@ -2434,13 +2632,29 @@ const ActiveRentals: React.FC = () => {
                           <Play className="h-4 w-4" />
                         </button>
                       ) : console.status === "rented" && activeSession ? (
-                        <button
-                          onClick={() => handleEndSession(activeSession.id)}
-                          className="flex-1 bg-red-600 hover:bg-red-700 text-white py-1 rounded flex items-center justify-center text-xs"
-                          title="End Rental"
-                        >
-                          <Square className="h-4 w-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleEndSession(activeSession.id)}
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-1 rounded flex items-center justify-center text-xs"
+                            title="End Rental"
+                          >
+                            <Square className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (!ensureCashierActive()) return;
+                              setShowMoveModal({
+                                sessionId: activeSession.id,
+                                fromConsoleId: console.id,
+                              });
+                            }}
+                            className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                            title="Pindah Unit"
+                          >
+                            <ArrowRightLeft className="h-4 w-4" />
+                          </button>
+                        </>
                       ) : (
                         <button
                           disabled
@@ -2611,14 +2825,30 @@ const ActiveRentals: React.FC = () => {
                         </span>
 
                         {/* End Session Button */}
-                        <button
-                          onClick={() => handleEndSession(activeSession.id)}
-                          className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
-                          title="Akhiri Sesi"
-                        >
-                          <Square className="h-5 w-5" />
-                          Akhiri Sesi
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEndSession(activeSession.id)}
+                            className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                            title="Akhiri Sesi"
+                          >
+                            <Square className="h-5 w-5" />
+                            Akhiri Sesi
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!ensureCashierActive()) return;
+                              setShowMoveModal({
+                                sessionId: activeSession.id,
+                                fromConsoleId: console.id,
+                              });
+                            }}
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                            title="Pindah Unit"
+                          >
+                            <ArrowRightLeft className="h-5 w-5" />
+                            Pindah
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <button
@@ -2695,10 +2925,16 @@ const ActiveRentals: React.FC = () => {
                           </div>
                           <div className="text-lg font-bold">
                             Rp{" "}
-                            {(
+                            {/* {(
                               calculateCurrentCost(activeSession) +
                               (productsTotalMap[activeSession.id] || 0)
-                            ).toLocaleString("id-ID")}
+                            ).toLocaleString("id-ID")} */}
+                            <RealtimeCost
+                              session={activeSession}
+                              productsTotal={
+                                productsTotalMap[activeSession.id] || 0
+                              }
+                            />
                           </div>
                         </div>
                       )}
@@ -2841,9 +3077,10 @@ const ActiveRentals: React.FC = () => {
                             <span className="text-blue-600">Biaya:</span>
                             <p className="font-medium">
                               Rp{" "}
-                              {calculateCurrentCost(
+                              {/* {calculateCurrentCost(
                                 activeSession
-                              ).toLocaleString("id-ID")}
+                              ).toLocaleString("id-ID")} */}
+                              <RealtimeCost session={activeSession} />
                             </p>
                             <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
@@ -2921,13 +3158,29 @@ const ActiveRentals: React.FC = () => {
                         Start Rental
                       </button>
                     ) : console.status === "rented" && activeSession ? (
-                      <button
-                        onClick={() => handleEndSession(activeSession.id)}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
-                      >
-                        <Square className="h-5 w-5" />
-                        End Rental
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleEndSession(activeSession.id)}
+                          className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                        >
+                          <Square className="h-5 w-5" />
+                          End Rental
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!ensureCashierActive()) return;
+                            setShowMoveModal({
+                              sessionId: activeSession.id,
+                              fromConsoleId: console.id,
+                            });
+                          }}
+                          className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                          title="Pindah Unit"
+                        >
+                          <ArrowRightLeft className="h-4 w-4" />
+                          Pindah Unit
+                        </button>
+                      </>
                     ) : (
                       <button
                         disabled
@@ -2981,6 +3234,108 @@ const ActiveRentals: React.FC = () => {
           <p className="text-gray-600">
             Add consoles to start managing rentals
           </p>
+        </div>
+      )}
+
+      {/* Modal Pindah Unit */}
+      {showMoveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Pindah Unit</h2>
+                <button
+                  onClick={() => setShowMoveModal(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                  title="Tutup"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              {(() => {
+                const session = activeSessions.find(
+                  (s) => s.id === showMoveModal.sessionId
+                );
+                const from = consoles.find(
+                  (c) => c.id === showMoveModal.fromConsoleId
+                );
+                const targets = consoles.filter(
+                  (c) =>
+                    c.status === "available" &&
+                    c.id !== showMoveModal.fromConsoleId
+                );
+                return (
+                  <>
+                    <div className="mb-4 text-sm text-gray-700 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Customer:</span>
+                        <span className="font-medium">
+                          {session?.customers?.name ?? "-"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Dari Unit:</span>
+                        <span className="font-medium">
+                          {from?.name}{" "}
+                          {from?.location ? `(${from.location})` : ""}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Jenis:</span>
+                        <span className="font-medium">
+                          {session?.duration_minutes
+                            ? "Bayar Dimuka"
+                            : "Pay As You Go"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Pindah ke Unit
+                      </label>
+                      <select
+                        value={moveTargetConsoleId}
+                        onChange={(e) => setMoveTargetConsoleId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">-- Pilih Unit Tersedia --</option>
+                        {targets.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.location ? `- ${c.location}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {targets.length === 0 && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Tidak ada unit yang tersedia saat ini.
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-3 mt-6">
+                      <button
+                        onClick={() => setShowMoveModal(null)}
+                        className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                        disabled={isMovingSession}
+                      >
+                        Batal
+                      </button>
+                      <button
+                        onClick={handleConfirmMoveSession}
+                        className={`flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
+                          !moveTargetConsoleId || isMovingSession
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
+                        disabled={!moveTargetConsoleId || isMovingSession}
+                      >
+                        Pindah
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
         </div>
       )}
 

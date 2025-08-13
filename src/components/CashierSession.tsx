@@ -55,7 +55,7 @@ const CashierSessionComponent: React.FC = () => {
   );
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
-  const [openingCash, setOpeningCash] = useState<number>(500000);
+  const [openingCash, setOpeningCash] = useState<number>(0);
   const [closingCash, setClosingCash] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -63,6 +63,7 @@ const CashierSessionComponent: React.FC = () => {
   const [todayTransactions, setTodayTransactions] = useState<any[]>([]);
   const [todaySales, setTodaySales] = useState<any[]>([]);
   const [todayRentals, setTodayRentals] = useState<any[]>([]);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
   // Get current user (in real app, this would come from auth context)
   const { user } = useAuth();
@@ -106,7 +107,7 @@ const CashierSessionComponent: React.FC = () => {
         ? new Date(currentSession.endTime)
         : new Date();
 
-      const [trxRes, rentalsRes] = await Promise.all([
+      const [trxRes] = await Promise.all([
         supabase
           .from("cashier_transactions")
           .select("*")
@@ -114,20 +115,13 @@ const CashierSessionComponent: React.FC = () => {
           .gte("timestamp", start.toISOString())
           .lt("timestamp", end.toISOString())
           .order("timestamp", { ascending: false }),
-        supabase
-          .from("rental_sessions")
-          .select("*")
-          .eq("payment_status", "paid")
-          .gte("start_time", start.toISOString())
-          .lt("start_time", end.toISOString()),
       ]);
 
       if (trxRes.error) throw trxRes.error;
-      if (rentalsRes.error) throw rentalsRes.error;
 
       setTodayTransactions(trxRes.data || []);
       setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
-      setTodayRentals(rentalsRes.data || []);
+      setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
     })();
   }, [
     user,
@@ -145,33 +139,6 @@ const CashierSessionComponent: React.FC = () => {
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m`;
   };
-
-  // Calculate expected cash for current session
-  // const calculateExpectedCash = (session: CashierSession) => {
-  //   const transactions = mockCashierTransactions.filter(
-  //     (t) => t.sessionId === session.id
-  //   );
-  //   const cashSales = transactions
-  //     .filter((t) => t.paymentMethod === "cash")
-  //     .reduce((sum, t) => sum + t.amount, 0);
-
-  //   // Expected = Opening + Cash Sales - Change Given
-  //   // For simplicity, assuming 10% of cash sales as average change
-  //   const estimatedChange = cashSales * 0.1;
-  //   return session.openingCash + cashSales - estimatedChange;
-  // };
-
-  // const expectedCash = useMemo(() => {
-  //   if (!currentSession) return 0;
-  //   const cashNet = (todaySales || [])
-  //     .filter((s: any) => s.payment_method === "cash")
-  //     .reduce((sum: number, s: any) => {
-  //       const paid = Number(s.payment_amount) || 0;
-  //       const change = Number(s.change_amount) || 0;
-  //       return sum + (paid - change);
-  //     }, 0);
-  //   return currentSession.openingCash + cashNet;
-  // }, [currentSession, todaySales]);
 
   const expectedCash = useMemo(() => {
     if (!currentSession) return 0;
@@ -191,41 +158,11 @@ const CashierSessionComponent: React.FC = () => {
     return currentSession.openingCash + retailCashNet + rentalCash;
   }, [currentSession, todaySales, todayRentals]);
 
-  // Get today's transactions for current session
-  // const getTodayTransactions = () => {
-  //   if (!currentSession) return [];
-
-  //   const today = new Date().toDateString();
-  //   return mockCashierTransactions.filter((transaction) => {
-  //     const transactionDate = new Date(transaction.timestamp).toDateString();
-  //     return (
-  //       transaction.sessionId === currentSession.id && transactionDate === today
-  //     );
-  //   });
-  // };
-
-  // Get today's sales for current session
-  // const getTodaySales = () => {
-  //   if (!currentSession) return [];
-
-  //   const today = new Date().toDateString();
-  //   return mockSales.filter((sale) => {
-  //     const saleDate = new Date(sale.saleDate).toDateString();
-  //     return sale.cashierId === currentSession.cashierId && saleDate === today;
-  //   });
-  // };
-
-  // Get today's rental payments for current session
-  // const getTodayRentalPayments = () => {
-  //   if (!currentSession) return [];
-
-  //   const today = new Date().toDateString();
-  //   return mockRentalSessions.filter((rental) => {
-  //     if (!rental.startTime) return false;
-  //     const rentalDate = new Date(rental.startTime).toDateString();
-  //     return rentalDate === today && rental.paymentStatus === "paid";
-  //   });
-  // };
+  const getTransactionItems = (t: any) => {
+    const d = t?.details ?? t?.metadata ?? {};
+    const items = t?.items ?? d?.items ?? d?.line_items ?? [];
+    return Array.isArray(items) ? items : [];
+  };
 
   const handleOpenSession = async () => {
     if (openingCash <= 0) {
@@ -327,9 +264,10 @@ const CashierSessionComponent: React.FC = () => {
     0
   );
   const todayTotalRentals = todayRentals.reduce(
-    (sum, rental) => sum + (Number(rental.total_amount) || 0),
+    (sum, rental) => sum + (Number(rental.amount) || 0),
     0
   );
+
   const todayTotalRevenue = todayTotalSales + todayTotalRentals;
 
   const todayCashSales =
@@ -338,7 +276,7 @@ const CashierSessionComponent: React.FC = () => {
       .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "cash")
-      .reduce((sum, r: any) => sum + (Number(r.total_amount) || 0), 0);
+      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0);
 
   const todayCardSales =
     (todaySales || [])
@@ -346,7 +284,7 @@ const CashierSessionComponent: React.FC = () => {
       .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "card")
-      .reduce((sum, r: any) => sum + (Number(r.total_amount) || 0), 0);
+      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0);
 
   const todayTransferSales =
     (todaySales || [])
@@ -354,7 +292,7 @@ const CashierSessionComponent: React.FC = () => {
       .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "transfer")
-      .reduce((sum, r: any) => sum + (Number(r.total_amount) || 0), 0);
+      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -678,6 +616,28 @@ const CashierSessionComponent: React.FC = () => {
                             <span className="text-sm text-gray-500">
                               Ref: {transaction.reference_id}
                             </span>
+
+                            {!transaction.details.action && (
+                              <button
+                                onClick={() =>
+                                  setSelectedItem((prev) =>
+                                    prev === String(transaction.id)
+                                      ? null
+                                      : String(transaction.id)
+                                  )
+                                }
+                                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                title={
+                                  selectedItem === String(transaction.id)
+                                    ? "Sembunyikan detail"
+                                    : "Lihat detail"
+                                }
+                              >
+                                {selectedItem === String(transaction.id)
+                                  ? "Tutup"
+                                  : "Detail"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -691,6 +651,43 @@ const CashierSessionComponent: React.FC = () => {
                         </p>
                       </div>
                     </div>
+
+                    {selectedItem === String(transaction.id) &&
+                      getTransactionItems(transaction).length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <h4 className="font-medium text-gray-900 mb-3">
+                            Detail
+                          </h4>
+                          <div className="space-y-2">
+                            {getTransactionItems(transaction).map(
+                              (it: any, idx: number) => {
+                                const name =
+                                  it.name ??
+                                  it.product_name ??
+                                  it.title ??
+                                  "Item";
+                                const qty = Number(it.qty ?? it.quantity ?? 1);
+                                const unit = Number(it.price ?? 0);
+                                const total =
+                                  Number(it.total ?? unit * qty) || 0;
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="flex justify-between items-center text-sm"
+                                  >
+                                    <span className="text-gray-700">
+                                      {name} x {qty}
+                                    </span>
+                                    <span className="font-medium text-gray-900">
+                                      Rp {total.toLocaleString("id-ID")}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                            )}
+                          </div>
+                        </div>
+                      )}
                   </div>
                 ))
               )}
