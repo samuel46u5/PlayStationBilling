@@ -386,6 +386,43 @@ export const db = {
       }
       return po;
     }
+  },
+
+  // System settings (single row: id = 'default')
+  settings: {
+    async get() {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('id', 'default')
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
+    },
+
+    async upsert(payload: any) {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .upsert(
+          {
+            id: 'default',
+            general: payload.general,
+            printer: payload.printer,
+            api: payload.api,
+            whatsapp_crm: payload.whatsapp_crm,
+            notifications: payload.notifications,
+            security: payload.security,
+            backup: payload.backup,
+            system: payload.system,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'id' }
+        )
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
   }
 };
 

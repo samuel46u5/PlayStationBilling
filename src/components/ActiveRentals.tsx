@@ -6,6 +6,7 @@ import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
 import Countdown from "./Countdown";
+import { printReceipt } from "../utils/receipt";
 
 interface SaleItem {
   product_id: string;
@@ -964,122 +965,122 @@ const ActiveRentals: React.FC = () => {
   }
 
   // di ActiveRentals.tsx
-  const printReceipt = (tx: {
-    id: string;
-    timestamp: string;
-    customer?: { name: string };
-    items: Array<{
-      name: string;
-      type: "rental" | "product";
-      quantity?: number;
-      total: number;
-      description?: string;
-    }>;
-    subtotal: number;
-    tax: number;
-    total: number;
-    paymentMethod: string;
-    paymentAmount: number;
-    change: number;
-    cashier: string;
-  }) => {
-    const win = window.open("", "_blank");
-    if (!win) return;
+  // const printReceipt = (tx: {
+  //   id: string;
+  //   timestamp: string;
+  //   customer?: { name: string };
+  //   items: Array<{
+  //     name: string;
+  //     type: "rental" | "product";
+  //     quantity?: number;
+  //     total: number;
+  //     description?: string;
+  //   }>;
+  //   subtotal: number;
+  //   tax: number;
+  //   total: number;
+  //   paymentMethod: string;
+  //   paymentAmount: number;
+  //   change: number;
+  //   cashier: string;
+  // }) => {
+  //   const win = window.open("", "_blank");
+  //   if (!win) return;
 
-    const html = `
-  <html>
-    <head>
-      <title>Receipt - ${tx.id}</title>
-      <style>
-        body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; }
-        .receipt { width: 300px; margin: 0 auto; }
-        .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
-        .item { display: flex; justify-content: space-between; margin: 5px 0; }
-        .total { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
-        .footer { text-align: center; margin-top: 20px; font-size: 10px; }
-      </style>
-    </head>
-    <body>
-      <div class="receipt">
-        <div class="header">
-          <h2>GAMING & BILLIARD CENTER</h2>
-          <p>PlayStation Rental + Mini Cafe</p>
-          <p>Receipt: ${tx.id}</p>
-          <p>${tx.timestamp}</p>
-          ${tx.customer ? `<p>Customer: ${tx.customer.name}</p>` : ""}
-          <p>Kasir: ${tx.cashier}</p>
-        </div>
-        <div class="items">
-          ${tx.items
-            .map(
-              (i) => `
-            <div class="item">
-              <span>${i.name} ${
-                i.type === "product" ? `x${i.quantity ?? 1}` : ""
-              }</span>
-              <span>Rp ${i.total.toLocaleString("id-ID")}</span>
-            </div>
-            ${
-              i.description
-                ? `<div style="font-size:10px;color:#666;margin-left:10px;">${i.description}</div>`
-                : ""
-            }
-          `
-            )
-            .join("")}
-        </div>
-        <div class="total">
-          ${
-            tx.tax > 0
-              ? `<div class="item"><span>Pajak:</span><span>Rp ${tx.tax.toLocaleString(
-                  "id-ID"
-                )}</span></div>`
-              : ""
-          }
-          <div class="item" style="font-weight:bold;font-size:14px;"><span>TOTAL:</span><span>Rp ${tx.total.toLocaleString(
-            "id-ID"
-          )}</span></div>
-          <div class="item"><span>Bayar (${tx.paymentMethod.toUpperCase()}):</span><span>Rp ${tx.paymentAmount.toLocaleString(
-      "id-ID"
-    )}</span></div>
-          ${
-            tx.change > 0
-              ? `<div class="item"><span>Kembalian:</span><span>Rp ${tx.change.toLocaleString(
-                  "id-ID"
-                )}</span></div>`
-              : ""
-          }
-        </div>
-        <div class="footer">
-          <p>Terima kasih atas kunjungan Anda!</p>
-          <p>Selamat bermain dan nikmati waktu Anda</p>
-          <p>---</p>
-          <p>Simpan struk ini sebagai bukti pembayaran</p>
-        </div>
-      </div>
-    </body>
-  </html>`;
+  //   const html = `
+  // <html>
+  //   <head>
+  //     <title>Receipt - ${tx.id}</title>
+  //     <style>
+  //       body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; }
+  //       .receipt { width: 300px; margin: 0 auto; }
+  //       .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+  //       .item { display: flex; justify-content: space-between; margin: 5px 0; }
+  //       .total { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
+  //       .footer { text-align: center; margin-top: 20px; font-size: 10px; }
+  //     </style>
+  //   </head>
+  //   <body>
+  //     <div class="receipt">
+  //       <div class="header">
+  //         <h2>GAMING & BILLIARD CENTER</h2>
+  //         <p>PlayStation Rental + Mini Cafe</p>
+  //         <p>Receipt: ${tx.id}</p>
+  //         <p>${tx.timestamp}</p>
+  //         ${tx.customer ? `<p>Customer: ${tx.customer.name}</p>` : ""}
+  //         <p>Kasir: ${tx.cashier}</p>
+  //       </div>
+  //       <div class="items">
+  //         ${tx.items
+  //           .map(
+  //             (i) => `
+  //           <div class="item">
+  //             <span>${i.name} ${
+  //               i.type === "product" ? `x${i.quantity ?? 1}` : ""
+  //             }</span>
+  //             <span>Rp ${i.total.toLocaleString("id-ID")}</span>
+  //           </div>
+  //           ${
+  //             i.description
+  //               ? `<div style="font-size:10px;color:#666;margin-left:10px;">${i.description}</div>`
+  //               : ""
+  //           }
+  //         `
+  //           )
+  //           .join("")}
+  //       </div>
+  //       <div class="total">
+  //         ${
+  //           tx.tax > 0
+  //             ? `<div class="item"><span>Pajak:</span><span>Rp ${tx.tax.toLocaleString(
+  //                 "id-ID"
+  //               )}</span></div>`
+  //             : ""
+  //         }
+  //         <div class="item" style="font-weight:bold;font-size:14px;"><span>TOTAL:</span><span>Rp ${tx.total.toLocaleString(
+  //           "id-ID"
+  //         )}</span></div>
+  //         <div class="item"><span>Bayar (${tx.paymentMethod.toUpperCase()}):</span><span>Rp ${tx.paymentAmount.toLocaleString(
+  //     "id-ID"
+  //   )}</span></div>
+  //         ${
+  //           tx.change > 0
+  //             ? `<div class="item"><span>Kembalian:</span><span>Rp ${tx.change.toLocaleString(
+  //                 "id-ID"
+  //               )}</span></div>`
+  //             : ""
+  //         }
+  //       </div>
+  //       <div class="footer">
+  //         <p>Terima kasih atas kunjungan Anda!</p>
+  //         <p>Selamat bermain dan nikmati waktu Anda</p>
+  //         <p>---</p>
+  //         <p>Simpan struk ini sebagai bukti pembayaran</p>
+  //       </div>
+  //     </div>
+  //   </body>
+  // </html>`;
 
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
+  //   win.document.open();
+  //   win.document.write(html);
+  //   win.document.close();
+  //   win.focus();
 
-    // Pastikan konten sudah siap sebelum print
-    const doPrint = () => {
-      try {
-        win.print();
-      } finally {
-        /* opsional: win.close(); */
-      }
-    };
-    // Beberapa browser perlu delay kecil
-    if ("onload" in win) {
-      win.onload = () => setTimeout(doPrint, 100);
-    } else {
-      setTimeout(doPrint, 200);
-    }
-  };
+  //   // Pastikan konten sudah siap sebelum print
+  //   const doPrint = () => {
+  //     try {
+  //       win.print();
+  //     } finally {
+  //       /* opsional: win.close(); */
+  //     }
+  //   };
+  //   // Beberapa browser perlu delay kecil
+  //   if ("onload" in win) {
+  //     win.onload = () => setTimeout(doPrint, 100);
+  //   } else {
+  //     setTimeout(doPrint, 200);
+  //   }
+  // };
 
   // Fungsi proses pembayaran kasir
   const handleProcessPayment = async () => {
@@ -2596,11 +2597,7 @@ const ActiveRentals: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-1 text-[11px]">
                           <span>
-                            Rp{" "}
-                            {/* {calculateCurrentCost(activeSession).toLocaleString(
-                              "id-ID"
-                            )} */}
-                            <RealtimeCost session={activeSession} />
+                            Rp <RealtimeCost session={activeSession} />
                           </span>
                           <span
                             className={`ml-auto font-bold text-[10px] px-2 py-0.5 rounded-full ${
@@ -2726,11 +2723,16 @@ const ActiveRentals: React.FC = () => {
                           }
                         }}
                         className={`flex-1 ${
-                          console.status === "rented"
+                          console.status === "rented" &&
+                          !activeSession?.duration_minutes
                             ? "bg-orange-500 hover:bg-orange-600"
                             : "bg-gray-400 cursor-not-allowed"
                         } text-white py-1 rounded flex items-center justify-center text-xs`}
-                        disabled={console.status !== "rented"}
+                        disabled={
+                          !activeSession ||
+                          console.status !== "rented" ||
+                          !!activeSession.duration_minutes
+                        }
                         title="Add Products"
                       >
                         <ShoppingCart className="h-4 w-4" />
@@ -4215,117 +4217,7 @@ const ActiveRentals: React.FC = () => {
                                           total: item.price * item.quantity,
                                           status: "pending",
                                         });
-                                    } // } else {
-                                    //   // await supabase
-                                    //   //   .from("rental_session_products")
-                                    //   //   .insert({
-                                    //   //     session_id: null,
-                                    //   //     product_id: item.productId,
-                                    //   //     product_name: item.productName,
-                                    //   //     quantity: item.quantity,
-                                    //   //     price: item.price,
-                                    //   //     total: item.price * item.quantity,
-                                    //   //     status: "completed",
-                                    //   //   });
-
-                                    //   // // Ambil stok saat ini dari tabel products
-                                    //   // const {
-                                    //   //   data: productData,
-                                    //   //   error: getProductError,
-                                    //   // } = await supabase
-                                    //   //   .from("products")
-                                    //   //   .select("stock")
-                                    //   //   .eq("id", item.productId)
-                                    //   //   .single();
-
-                                    //   // if (!getProductError && productData) {
-                                    //   //   const currentStock =
-                                    //   //     Number(productData.stock) || 0;
-                                    //   //   const used = item.quantity;
-                                    //   //   const newStock = Math.max(
-                                    //   //     0,
-                                    //   //     currentStock - used
-                                    //   //   );
-
-                                    //   //   const { error: updStockErr } =
-                                    //   //     await supabase
-                                    //   //       .from("products")
-                                    //   //       .update({ stock: newStock })
-                                    //   //       .eq("id", item.productId);
-
-                                    //   //   const receiptData = {
-                                    //   //     id: `RETAIL-${Date.now()}`,
-                                    //   //     timestamp: new Date().toLocaleString(
-                                    //   //       "id-ID"
-                                    //   //     ),
-                                    //   //     customer: { name: "Umum" },
-                                    //   //     items: cart.map((item) => ({
-                                    //   //       name: item.productName,
-                                    //   //       type: "product" as const,
-                                    //   //       quantity: item.quantity,
-                                    //   //       total: item.price * item.quantity,
-                                    //   //     })),
-                                    //   //     subtotal: cart.reduce(
-                                    //   //       (sum, item) =>
-                                    //   //         sum + item.price * item.quantity,
-                                    //   //       0
-                                    //   //     ),
-                                    //   //     tax: 0,
-                                    //   //     total: cart.reduce(
-                                    //   //       (sum, item) =>
-                                    //   //         sum + item.price * item.quantity,
-                                    //   //       0
-                                    //   //     ),
-                                    //   //     paymentMethod,
-                                    //   //     paymentAmount,
-                                    //   //     change:
-                                    //   //       paymentAmount -
-                                    //   //       cart.reduce(
-                                    //   //         (sum, item) =>
-                                    //   //           sum +
-                                    //   //           item.price * item.quantity,
-                                    //   //         0
-                                    //   //       ),
-                                    //   //     cashier: "Kasir 1",
-                                    //   //   };
-                                    //   setShowProductModal(null);
-
-                                    //   let productsTotal =
-                                    //     item.price * item.quantity;
-                                    //   setShowPaymentModal({
-                                    //     session: null,
-                                    //     productsTotal,
-                                    //   });
-                                    //   await loadData();
-
-                                    //   //   const result = await Swal.fire({
-                                    //   //     title: "Berhasil",
-                                    //   //     text: "Pembayaran berhasil",
-                                    //   //     icon: "success",
-                                    //   //     showCancelButton: true,
-                                    //   //     confirmButtonText: "Print Receipt",
-                                    //   //     cancelButtonText: "Tutup",
-                                    //   //   });
-
-                                    //   //   if (result.isConfirmed) {
-                                    //   //     printReceipt(receiptData);
-                                    //   //   } else {
-                                    //   //     await loadData();
-                                    //   //   }
-
-                                    //   //   if (updStockErr) {
-                                    //   //     console.error(
-                                    //   //       "Gagal mengupdate stok:",
-                                    //   //       updStockErr.message
-                                    //   //     );
-                                    //   //   }
-                                    //   // } else {
-                                    //   //   console.error(
-                                    //   //     "Gagal mengambil data produk:",
-                                    //   //     getProductError?.message
-                                    //   //   );
-                                    //   // }
-                                    // }
+                                    }
                                   }
                                   clearCart();
                                   await loadData();

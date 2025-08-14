@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { db, supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
+import { NumericFormat } from "react-number-format";
 
 import {
   DollarSign,
@@ -23,6 +24,7 @@ import {
   Plus,
 } from "lucide-react";
 import { CashierSession, CashierTransaction, CashFlow } from "../types";
+import { printReceipt } from "../utils/receipt";
 
 function mapDbSession(row: any): CashierSession {
   if (!row) return null as any;
@@ -200,7 +202,7 @@ const CashierSessionComponent: React.FC = () => {
     return { income: income + openingCash, expense };
   }, [todayTransactions, currentSession]);
 
-  const currentBalance = useMemo(() => {
+  const expectedCash = useMemo(() => {
     if (!currentSession) return 0;
 
     const income =
@@ -213,29 +215,6 @@ const CashierSessionComponent: React.FC = () => {
     );
 
     return currentSession.openingCash + income - expenses;
-  }, [currentSession, todaySales, todayRentals, todayExpenses]);
-
-  const expectedCash = useMemo(() => {
-    if (!currentSession) return 0;
-
-    const retailCashNet = (todaySales || [])
-      .filter((s: any) => s.payment_method === "cash")
-      .reduce((sum: number, s: any) => {
-        const paid = Number(s.payment_amount ?? s.amount) || 0;
-        const change = Number(s.change_amount) || 0;
-        return sum + (paid - change);
-      }, 0);
-
-    const rentalCash = (todayRentals || [])
-      .filter((r: any) => r.payment_method === "cash")
-      .reduce((sum: number, r: any) => sum + (Number(r.total_amount) || 0), 0);
-
-    const expenses = todayExpenses.reduce(
-      (sum, e) => sum + (Number(e.amount) || 0),
-      0
-    );
-
-    return currentSession.openingCash + retailCashNet + rentalCash - expenses;
   }, [currentSession, todaySales, todayRentals, todayExpenses]);
 
   const handleAddExpense = async () => {
@@ -368,7 +347,43 @@ const CashierSessionComponent: React.FC = () => {
       updated_at: new Date().toISOString(),
     });
 
-    Swal.fire({
+    const receiptData = {
+      id: `SESSION-${currentSession.id}`,
+      timestamp: new Date().toLocaleString("id-ID"),
+      customer: { name: currentSession.cashierName },
+      items: [
+        {
+          name: "Saldo Awal",
+          type: "rental" as const,
+          total: currentSession.openingCash,
+          description: "Modal dari bos",
+        },
+        {
+          name: "Total Penjualan",
+          type: "rental" as const,
+          total: todayTotalRevenue,
+          description: `Cafe: Rp ${todayTotalSales.toLocaleString(
+            "id-ID"
+          )} | Rental: Rp ${todayTotalRentals.toLocaleString("id-ID")}`,
+        },
+        {
+          name: "Total Pengeluaran",
+          type: "rental" as const,
+          total: todayTotalExpenses,
+          description: `${todayExpenses.length} transaksi pengeluaran`,
+        },
+      ],
+      subtotal:
+        currentSession.openingCash + todayTotalRevenue - todayTotalExpenses,
+      tax: 0,
+      total: expectedCash,
+      paymentMethod: "cash",
+      paymentAmount: closingCash,
+      change: Math.abs(closingCash - expectedCash),
+      cashier: currentSession.cashierName,
+    };
+
+    const result = await Swal.fire({
       icon: "info",
       title: "Sesi kasir berhasil ditutup!",
       html: `
@@ -382,7 +397,14 @@ const CashierSessionComponent: React.FC = () => {
         variance >= 0 ? "(Lebih)" : "(Kurang)"
       }
       `,
+      showCancelButton: true,
+      confirmButtonText: "Print Receipt",
+      cancelButtonText: "Tutup",
     });
+
+    if (result.isConfirmed) {
+      printReceipt(receiptData);
+    }
 
     setCurrentSession(null);
     setShowCloseModal(false);
@@ -556,7 +578,7 @@ const CashierSessionComponent: React.FC = () => {
                 <Calculator className="h-6 w-6 text-blue-600" />
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                Rp {currentBalance.toLocaleString("id-ID")}
+                Rp {expectedCash.toLocaleString("id-ID")}
               </h3>
               <p className="text-gray-600 text-sm">Saldo Saat Ini</p>
               <p className="text-xs text-gray-500 mt-1">
@@ -923,7 +945,7 @@ const CashierSessionComponent: React.FC = () => {
                                 </span>
                               )}
 
-                            {!transaction.details ||
+                            {!transaction?.details ||
                               (!transaction.details?.action && (
                                 <button
                                   onClick={() =>
@@ -1040,12 +1062,25 @@ const CashierSessionComponent: React.FC = () => {
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
                       Rp
                     </span>
-                    <input
+                    {/* <input
                       type="number"
                       value={expenseAmount}
                       onChange={(e) => setExpenseAmount(Number(e.target.value))}
                       className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-lg font-mono"
                       placeholder="10000"
+                      min="0"
+                    /> */}
+                    <NumericFormat
+                      value={expenseAmount}
+                      allowLeadingZeros={false}
+                      onValueChange={(values) => {
+                        const { floatValue } = values;
+                        setExpenseAmount(floatValue || 0);
+                      }}
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-lg font-mono"
+                      placeholder="0"
                       min="0"
                     />
                   </div>
@@ -1129,12 +1164,17 @@ const CashierSessionComponent: React.FC = () => {
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
                       Rp
                     </span>
-                    <input
-                      type="number"
+                    <NumericFormat
                       value={openingCash}
-                      onChange={(e) => setOpeningCash(Number(e.target.value))}
+                      allowLeadingZeros={false}
+                      onValueChange={(values) => {
+                        const { floatValue } = values;
+                        setOpeningCash(floatValue || 0);
+                      }}
+                      thousandSeparator="."
+                      decimalSeparator=","
                       className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-mono"
-                      placeholder="500000"
+                      placeholder="0"
                       min="0"
                     />
                   </div>
@@ -1205,7 +1245,7 @@ const CashierSessionComponent: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Saldo Awal:</span>
                       <span className="font-medium">
-                        Rp {currentSession.openingCash}
+                        Rp {currentSession.openingCash.toLocaleString("id-ID")}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1214,10 +1254,16 @@ const CashierSessionComponent: React.FC = () => {
                         Rp {todayTotalRevenue.toLocaleString("id-ID")}
                       </span>
                     </div>
-                    <div className="flex justify-between">
+                    {/* <div className="flex justify-between">
                       <span className="text-gray-600">Penjualan Tunai:</span>
                       <span className="font-medium">
                         Rp {todayCashSales.toLocaleString("id-ID")}
+                      </span>
+                    </div> */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Pengeluaran:</span>
+                      <span className="font-medium">
+                        Rp {todayTotalExpenses.toLocaleString("id-ID")}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1227,13 +1273,13 @@ const CashierSessionComponent: React.FC = () => {
                       </span>
                     </div>
                     <div className="flex justify-between border-t border-gray-300 pt-2">
-                      <span className="text-gray-600">Expected Cash:</span>
-                      <span className="font-bold text-blue-600">
-                        Rp{" "}
-                        {/* {calculateExpectedCash(currentSession).toLocaleString(
-                          "id-ID"
-                        )} */}
-                        {expectedCash.toLocaleString("id-ID")}
+                      <span className="text-gray-600">Saldo saat ini:</span>
+                      <span
+                        className={`font-bold ${
+                          expectedCash >= 0 ? "text-green-600" : "text-red-600"
+                        } `}
+                      >
+                        Rp {expectedCash.toLocaleString("id-ID")}
                       </span>
                     </div>
                   </div>
@@ -1247,10 +1293,15 @@ const CashierSessionComponent: React.FC = () => {
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
                       Rp
                     </span>
-                    <input
-                      type="number"
+                    <NumericFormat
                       value={closingCash}
-                      onChange={(e) => setClosingCash(Number(e.target.value))}
+                      allowLeadingZeros={false}
+                      onValueChange={(values) => {
+                        const { floatValue } = values;
+                        setClosingCash(floatValue || 0);
+                      }}
+                      thousandSeparator="."
+                      decimalSeparator=","
                       className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-lg font-mono"
                       placeholder="0"
                       min="0"
