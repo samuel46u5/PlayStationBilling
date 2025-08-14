@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { db, supabase } from "../lib/supabase";
+import Swal from "sweetalert2";
 
 import {
   DollarSign,
@@ -17,12 +18,9 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   FileText,
-  Printer,
-  Eye,
-  EyeOff,
   Calendar,
   ShoppingCart,
-  Minus,
+  Plus,
 } from "lucide-react";
 import { CashierSession, CashierTransaction, CashFlow } from "../types";
 
@@ -284,14 +282,18 @@ const CashierSessionComponent: React.FC = () => {
       setExpenseAmount(0);
       setExpenseDescription("");
 
-      alert(
-        `Pengeluaran berhasil ditambahkan!\nJumlah: Rp ${expenseAmount.toLocaleString(
-          "id-ID"
-        )}`
-      );
+      Swal.fire({
+        icon: "success",
+        title: "Pengeluaran berhasil ditambahkan!",
+        text: `Jumlah: Rp ${expenseAmount.toLocaleString("id-ID")}`,
+      });
     } catch (error) {
       console.error("Error adding expense:", error);
-      alert("Gagal menambahkan pengeluaran");
+      Swal.fire({
+        icon: "error",
+        title: "Gagal!",
+        text: "Gagal menambahkan pengeluaran",
+      });
     }
   };
 
@@ -339,11 +341,11 @@ const CashierSessionComponent: React.FC = () => {
     setShowOpenModal(false);
     setNotes("");
 
-    alert(
-      `Sesi kasir berhasil dibuka!\nSaldo awal: Rp ${openingCash.toLocaleString(
-        "id-ID"
-      )}`
-    );
+    Swal.fire({
+      icon: "success",
+      title: "Sesi kasir berhasil dibuka!",
+      text: `Saldo awal: Rp ${openingCash.toLocaleString("id-ID")}`,
+    });
   };
 
   const handleCloseSession = async () => {
@@ -366,28 +368,21 @@ const CashierSessionComponent: React.FC = () => {
       updated_at: new Date().toISOString(),
     });
 
-    // alert(
-    //   `Sesi kasir berhasil ditutup!\n\nRingkasan:\n- Saldo Awal: Rp ${currentSession.openingCash.toLocaleString(
-    //     "id-ID"
-    //   )}\n- Setoran: Rp ${closingCash.toLocaleString(
-    //     "id-ID"
-    //   )}\n- Expected: Rp ${expectedCash.toLocaleString(
-    //     "id-ID"
-    //   )}\n- Selisih: Rp ${Math.abs(variance).toLocaleString("id-ID")} ${
-    //     variance >= 0 ? "(Lebih)" : "(Kurang)"
-    //   }`
-    // );
-    alert(
-      `Sesi kasir berhasil ditutup!\n\nRingkasan:\n- Saldo Awal: Rp ${
-        currentSession.openingCash
-      }\n- Setoran: Rp ${closingCash.toLocaleString(
-        "id-ID"
-      )}\n- Expected: Rp ${expectedCash.toLocaleString(
-        "id-ID"
-      )}\n- Selisih: Rp ${Math.abs(variance).toLocaleString("id-ID")} ${
+    Swal.fire({
+      icon: "info",
+      title: "Sesi kasir berhasil ditutup!",
+      html: `
+        <strong>Ringkasan:</strong><br><br>
+        - Saldo Awal: Rp ${currentSession.openingCash.toLocaleString(
+          "id-ID"
+        )}<br>
+        - Setoran: Rp ${closingCash.toLocaleString("id-ID")}<br>
+        - Expected: Rp ${expectedCash.toLocaleString("id-ID")}<br>
+        - Selisih: Rp ${Math.abs(variance).toLocaleString("id-ID")} ${
         variance >= 0 ? "(Lebih)" : "(Kurang)"
-      }`
-    );
+      }
+      `,
+    });
 
     setCurrentSession(null);
     setShowCloseModal(false);
@@ -462,9 +457,9 @@ const CashierSessionComponent: React.FC = () => {
               <>
                 <button
                   onClick={() => setShowExpenseModal(true)}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
                 >
-                  <Minus className="h-5 w-5" />
+                  <Plus className="h-5 w-5" />
                   Tambah Pengeluaran
                 </button>
                 <button
