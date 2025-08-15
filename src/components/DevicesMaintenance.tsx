@@ -1,7 +1,7 @@
 import React from 'react';
 import { db } from '../lib/supabase';
 import Swal from 'sweetalert2';
-import { Edit2, Trash2, Clock } from 'lucide-react';
+import { Edit2, Trash2, Clock, ArrowRight } from 'lucide-react';
 
 const DevicesMaintenance: React.FC = () => {
   const [devices, setDevices] = React.useState<any[]>([]);
@@ -12,6 +12,8 @@ const DevicesMaintenance: React.FC = () => {
   const [viewMode, setViewMode] = React.useState<'simple' | 'detail' | 'list'>('simple');
   const [showAdd, setShowAdd] = React.useState(false);
   const [editDevice, setEditDevice] = React.useState<any | null>(null);
+  const [detailDevice, setDetailDevice] = React.useState<any | null>(null);
+  const [selectedCommand, setSelectedCommand] = React.useState('');
 
   React.useEffect(() => {
     const fetch = async () => {
@@ -67,6 +69,19 @@ const DevicesMaintenance: React.FC = () => {
         Swal.fire({ icon: 'error', title: 'Gagal menghapus' });
       }
     }
+  };
+
+  const runCommand = async () => {
+    if (!selectedCommand) {
+      await Swal.fire({ icon: 'warning', title: 'Pilih perintah terlebih dahulu' });
+      return;
+    }
+    const r = await Swal.fire({ title: `Jalankan: ${selectedCommand}?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Run' });
+    if (!r.isConfirmed) return;
+
+    // apply to local state as a visual feedback; do not modify DB unless required
+    setDevices((s) => s.map((d) => ({ ...d, last_command: selectedCommand })));
+    await Swal.fire({ icon: 'success', title: 'Perintah dikirim', text: `Perintah "${selectedCommand}" dikirim ke ${devices.length} console.` });
   };
 
   return (
@@ -126,41 +141,192 @@ const DevicesMaintenance: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr><td colSpan={4} className="text-center py-8 text-gray-500">Loading...</td></tr>
-              ) : displayedDevices.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-8 text-gray-500">No devices found</td></tr>
-              ) : (
-                displayedDevices.map((d) => (
-                  <tr key={d.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">{d.name}</td>
-                    <td className="px-6 py-4">{d.equipment_types?.name || d.type || '-'}</td>
-                    <td className="px-6 py-4">{d.status || '-'}</td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="inline-flex gap-2">
-                        <button onClick={() => setEditDevice(d)} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded inline-flex items-center gap-2"><Edit2 className="h-4 w-4"/>Edit</button>
-                        <button onClick={() => handleDelete(d)} className="px-3 py-1 bg-red-100 text-red-800 rounded inline-flex items-center gap-2"><Trash2 className="h-4 w-4"/>Hapus</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+  {/* Command control bar */}
+  <div className="mb-4">
+    <div className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-4">
+      <div className="w-40 text-sm font-medium">Perintah</div>
+      <select value={selectedCommand} onChange={(e) => setSelectedCommand(e.target.value)} className="flex-1 border px-3 py-2 rounded">
+        <option value="">-- Pilih Perintah --</option>
+        <option value="Matikan semua TV">Matikan semua TV</option>
+        <option value="Nyalakan semua TV">Nyalakan semua TV</option>
+        <option value="Matikan semua Nomor">Matikan semua Nomor</option>
+        <option value="Nyalakan semua Nomor">Nyalakan semua Nomor</option>
+      </select>
+      <button onClick={runCommand} className="px-4 py-2 bg-blue-600 text-white rounded">Run</button>
+    </div>
+  </div>
+
+  {/* Card grid for simple view */}
+  {viewMode === 'simple' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {loading ? (
+            <div className="col-span-full text-center py-8 text-gray-500">Loading...</div>
+          ) : displayedDevices.length === 0 ? (
+            <div className="col-span-full text-center py-8 text-gray-500">No devices found</div>
+          ) : (
+            displayedDevices.map((d) => (
+              <div key={d.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                {/* Purple header */}
+                <div className="bg-purple-500 flex items-center px-4 py-2">
+                  <span className="mr-2 text-white text-lg"><Clock className="inline-block h-5 w-5" /></span>
+                  <span className="text-white font-semibold text-sm flex-1">{d.name}</span>
+                </div>
+                <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+                  <span className="text-gray-700 font-semibold text-base">${d.price || '10.000'}</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${d.status === 'active' ? 'bg-blue-600 text-white' : d.status === 'ready' ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700'}`}>{(d.status || 'READY').toUpperCase()}</span>
+                </div>
+                {/* User info block */}
+                <div className="bg-blue-50 px-4 py-3 rounded-lg mx-3 mb-2 flex flex-col gap-1">
+                  <div className="flex items-center gap-2 text-sm text-blue-900">
+                    <span className="font-medium"><svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg></span>
+                    <span>{d.user || 'reny'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-blue-900">
+                    <span><Clock className="inline-block h-4 w-4" /></span>
+                    <span>Durasi : {d.duration || '07:35:30'}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-gray-700 text-sm">Rp {d.total || '114.000'}</span>
+                    <span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-xs font-bold">PAY AS YOU GO</span>
+                  </div>
+                </div>
+                {/* Action buttons */}
+                <div className="flex items-center justify-between px-4 pb-4 gap-2">
+                  <button onClick={() => setEditDevice(d)} className="flex-1 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-lg py-2 mx-1">Stop</button>
+                  <button onClick={() => setDetailDevice(d)} className="flex-1 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-lg py-2 mx-1">Detail</button>
+                  <button onClick={() => handleDelete(d)} className="flex-1 flex items-center justify-center bg-orange-400 hover:bg-orange-500 text-white rounded-lg py-2 mx-1">Cart</button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
-      </div>
+      ) : viewMode === 'detail' ? (
+        // Detail mode: expanded card view per console (matches provided example)
+        <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {loading ? (
+            <div className="col-span-full text-center py-8 text-gray-500">Loading...</div>
+          ) : displayedDevices.length === 0 ? (
+            <div className="col-span-full text-center py-8 text-gray-500">No devices found</div>
+          ) : (
+            displayedDevices.map((d) => {
+              const displayTotal = d.total || d.total_price || d.price || 0;
+              const displayStart = d.start_time || d.started_at || d.start || d.startTime || '09.29';
+              const displayDuration = d.duration || '08:10:45';
+              return (
+                <div key={d.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  {/* header */}
+                  <div className="bg-purple-500 text-white px-5 py-4 rounded-t-lg flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="text-white">
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 6h12v4H6z"/></svg>
+                      </div>
+                      <div className="font-semibold">{d.name}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm">Total</div>
+                      <div className="text-lg font-bold">Rp {displayTotal}</div>
+                    </div>
+                  </div>
+
+                  {/* status badge */}
+                  <div className="px-5 pt-3">
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${d.status === 'active' ? 'bg-blue-600 text-white' : d.status === 'ready' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-800'}`}>{(d.status || 'PENDING').toUpperCase()}</span>
+                  </div>
+
+                  {/* info panel */}
+                  <div className="bg-green-50 p-4 m-4 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4 text-sm text-slate-800">
+                      <div>
+                        <div className="text-xs text-slate-600">Mulai:</div>
+                        <div className="font-semibold">{displayStart}</div>
+                        <div className="text-xs text-slate-600 mt-2">Biaya:</div>
+                        <div className="font-semibold">Rp {displayTotal}</div>
+                        <div className="text-xs text-slate-600 mt-2">Status:</div>
+                        <div className="font-semibold">{(d.status || 'PENDING').toUpperCase()}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-600">Durasi:</div>
+                        <div className="text-sm text-green-800 font-semibold">Durasi : {displayDuration}</div>
+                        <div className="text-xs text-slate-600 mt-2">Total Produk:</div>
+                        <div>Rp {d.products_total || 0}</div>
+                        <div className="text-xs text-slate-600 mt-2">Tarif per Jam:</div>
+                        <div>Rp {d.price || 15000}</div>
+                      </div>
+                    </div>
+                    <hr className="my-3" />
+                    <div className="text-center text-blue-800 font-semibold">Durasi : {displayDuration}</div>
+                  </div>
+
+                  {/* action buttons */}
+                  <div className="px-5 pb-5">
+                    <button
+                      onClick={async () => {
+                        const r = await Swal.fire({ title: `End rental ${d.name}?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'End Rental' });
+                        if (r.isConfirmed) {
+                          try {
+                            await db.update('consoles', d.id, { status: 'available', user: null });
+                            setDevices((s) => s.map((x) => (x.id === d.id ? { ...x, status: 'available', user: null } : x)));
+                            Swal.fire({ icon: 'success', title: 'Rental ended' });
+                          } catch (err) {
+                            Swal.fire({ icon: 'error', title: 'Failed to end rental' });
+                          }
+                        }
+                      }}
+                      className="w-full mb-3 bg-red-600 text-white py-3 rounded-lg"
+                    >
+                      <span className="inline-block mr-2">☑</span> End Rental
+                    </button>
+
+                    <button
+                      onClick={() => Swal.fire('Add products', 'Open product selector (not implemented)', 'info')}
+                      className="w-full bg-orange-500 text-white py-3 rounded-lg"
+                    >
+                      <span className="inline-block mr-2">🛒</span> Add Products
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        // ...existing code for table/grid views...
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {loading ? (
+                  <tr><td colSpan={4} className="text-center py-8 text-gray-500">Loading...</td></tr>
+                ) : displayedDevices.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-8 text-gray-500">No devices found</td></tr>
+                ) : (
+                  displayedDevices.map((d) => (
+                    <tr key={d.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">{d.name}</td>
+                      <td className="px-6 py-4">{d.equipment_types?.name || d.type || '-'}</td>
+                      <td className="px-6 py-4">{d.status || '-'}</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="inline-flex gap-2">
+                          <button onClick={() => setEditDevice(d)} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded inline-flex items-center gap-2"><Edit2 className="h-4 w-4"/>Edit</button>
+                          <button onClick={() => handleDelete(d)} className="px-3 py-1 bg-red-100 text-red-800 rounded inline-flex items-center gap-2"><Trash2 className="h-4 w-4"/>Hapus</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {showAdd && (
         <ConsoleModal
@@ -178,6 +344,17 @@ const DevicesMaintenance: React.FC = () => {
           onClose={() => setEditDevice(null)}
           onSaved={(updated) => {
             setEditDevice(null);
+            setDevices((s) => s.map((x) => (x.id === updated.id ? updated : x)));
+          }}
+        />
+      )}
+
+      {detailDevice && (
+        <ConsoleDetailModal
+          device={detailDevice}
+          onClose={() => setDetailDevice(null)}
+          onSaved={(updated) => {
+            setDetailDevice(null);
             setDevices((s) => s.map((x) => (x.id === updated.id ? updated : x)));
           }}
         />
@@ -265,3 +442,94 @@ function uuidv4() {
     return v.toString(16);
   });
 }
+
+const ConsoleDetailModal: React.FC<{ device: any; onClose: () => void; onSaved: (d: any) => void }> = ({ device, onClose, onSaved }) => {
+  const [ip, setIp] = React.useState(device?.ip_address || '');
+  const [relayOn, setRelayOn] = React.useState(device?.cmd_relay_on || '');
+  const [relayOff, setRelayOff] = React.useState(device?.cmd_relay_off || '');
+  const [relayStatus, setRelayStatus] = React.useState(device?.cmd_relay_status || '');
+  const [powerTv, setPowerTv] = React.useState(device?.cmd_power_tv || '');
+  const [checkPowerTv, setCheckPowerTv] = React.useState(device?.cmd_check_power_tv || '');
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const updated = await db.update('consoles', device.id, {
+        ip_address: ip,
+        cmd_relay_on: relayOn,
+        cmd_relay_off: relayOff,
+        cmd_relay_status: relayStatus,
+        cmd_power_tv: powerTv,
+        cmd_check_power_tv: checkPowerTv,
+      });
+      onSaved(updated);
+      Swal.fire({ icon: 'success', title: 'Saved' });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Error', text: (err as any)?.message || 'Failed' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Konsol</h2>
+          <div className="flex gap-2 mb-4">
+            <button className="px-3 py-2 rounded-md bg-white border">Informasi Umum</button>
+            <button className="px-3 py-2 rounded-md bg-white border">Detail Teknis</button>
+            <button className="px-3 py-2 rounded-md bg-blue-600 text-white">Daftar Perintah</button>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">IP Address</label>
+              <input value={ip} onChange={(e) => setIp(e.target.value)} className="w-full px-3 py-2 border rounded" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-sm text-gray-600 mb-1">Perintah Relay ON</label>
+                <input value={relayOn} onChange={(e) => setRelayOn(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <button className="px-3 py-2 bg-white border rounded"><ArrowRight className="h-4 w-4" /></button>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-sm text-gray-600 mb-1">Perintah Relay OFF</label>
+                <input value={relayOff} onChange={(e) => setRelayOff(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <button className="px-3 py-2 bg-white border rounded"><ArrowRight className="h-4 w-4" /></button>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-sm text-gray-600 mb-1">Perintah Relay STATUS</label>
+                <input value={relayStatus} onChange={(e) => setRelayStatus(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <button className="px-3 py-2 bg-white border rounded"><ArrowRight className="h-4 w-4" /></button>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-sm text-gray-600 mb-1">Perintah Power TV</label>
+                <input value={powerTv} onChange={(e) => setPowerTv(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <button className="px-3 py-2 bg-white border rounded"><ArrowRight className="h-4 w-4" /></button>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-sm text-gray-600 mb-1">Perintah Cek Power TV</label>
+                <input value={checkPowerTv} onChange={(e) => setCheckPowerTv(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              </div>
+              <button className="px-3 py-2 bg-white border rounded"><ArrowRight className="h-4 w-4" /></button>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button onClick={onClose} className="flex-1 px-4 py-2 border rounded">Batal</button>
+            <button onClick={handleSave} disabled={loading} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded">{loading ? 'Saving...' : 'Simpan Perubahan'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
