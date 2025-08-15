@@ -31,7 +31,7 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "cashier", label: "Kasir POS", icon: CreditCard },
+    // { id: "cashier", label: "Kasir POS", icon: CreditCard },
     { id: "cashier-session", label: "Pembukuan Kasir", icon: Wallet },
     { id: "rentals", label: "Active Rentals", icon: Gamepad2 },
     { id: "bookings", label: "Scheduled Bookings", icon: Calendar },
@@ -44,7 +44,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     { id: "consoles", label: "Consoles", icon: SettingsIcon },
     { id: "equipment", label: "Equipment Management", icon: Wrench },
     { id: "rates", label: "Tarif", icon: TrendingUp },
-    { id: "rate-profiles", label: "Profil tarif", icon: TrendingUp },
+    // { id: "rate-profiles", label: "Profil tarif", icon: TrendingUp },
     { id: "maintenance", label: "Hardware Maintenance", icon: Tool },
     { id: "users", label: "User Management", icon: Shield },
     { id: "settings", label: "Pengaturan", icon: Cog },

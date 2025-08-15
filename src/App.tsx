@@ -51,8 +51,8 @@ const AppLayout: React.FC = () => {
     switch (activeTab) {
       case "dashboard":
         return <Dashboard />;
-      case "cashier":
-        return <Cashier />;
+      // case "cashier":
+      //   return <Cashier />;
       case "cashier-session":
         return <CashierSession />;
       case "rentals":
@@ -65,8 +65,8 @@ const AppLayout: React.FC = () => {
         return <Products />;
       case "sales":
         return <Sales />;
-      case "payments":
-        return <Payments />;
+      // case "payments":
+      //   return <Payments />;
       case "bookkeeping":
         return <Bookkeeping />;
       case "consoles":
@@ -83,8 +83,8 @@ const AppLayout: React.FC = () => {
         return <Settings />;
       case "maintenance":
         return <MaintenanceManagement />;
-      case "rate-profiles":
-        return <RateProfilePage />;
+      // case "rate-profiles":
+      //   return <RateProfilePage />;
       default:
         return <Dashboard />;
     }
