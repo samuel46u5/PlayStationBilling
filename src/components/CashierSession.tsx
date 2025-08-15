@@ -18,12 +18,10 @@ import {
   Banknote,
   ArrowUpCircle,
   ArrowDownCircle,
-  FileText,
-  Calendar,
   ShoppingCart,
   Plus,
 } from "lucide-react";
-import { CashierSession, CashierTransaction, CashFlow } from "../types";
+import { CashierSession } from "../types";
 import { printReceipt } from "../utils/receipt";
 
 function mapDbSession(row: any): CashierSession {
