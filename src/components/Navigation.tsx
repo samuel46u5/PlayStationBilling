@@ -22,6 +22,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { NAV_ITEMS } from "../constants/navItem";
 
 interface NavigationProps {
   activeTab: string;
@@ -29,28 +30,57 @@ interface NavigationProps {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
-  const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    // { id: "cashier", label: "Kasir POS", icon: CreditCard },
-    { id: "cashier-session", label: "Pembukuan Kasir", icon: Wallet },
-    { id: "rentals", label: "Active Rentals", icon: Gamepad2 },
-    { id: "bookings", label: "Scheduled Bookings", icon: Calendar },
-    { id: "customers", label: "Customers", icon: Users },
-    { id: "products", label: "Products", icon: Package },
-    { id: "sales", label: "Sales Report", icon: ShoppingCart },
-    { id: "payments", label: "Payments", icon: DollarSign },
-    { id: "bookkeeping", label: "Bookkeeping", icon: Calculator },
-    { id: "vouchers", label: "Voucher Management", icon: Ticket },
-    { id: "consoles", label: "Consoles", icon: SettingsIcon },
-    { id: "equipment", label: "Equipment Management", icon: Wrench },
-    { id: "rates", label: "Tarif", icon: TrendingUp },
-    // { id: "rate-profiles", label: "Profil tarif", icon: TrendingUp },
-    { id: "maintenance", label: "Hardware Maintenance", icon: Tool },
-    { id: "users", label: "User Management", icon: Shield },
-    { id: "settings", label: "Pengaturan", icon: Cog },
-    // { id: 'login', label: 'Login', icon: LogIn }
-  ];
+  // const navItems = [
+  //   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  //   // { id: "cashier", label: "Kasir POS", icon: CreditCard },
+  //   { id: "cashier-session", label: "Pembukuan Kasir", icon: Wallet },
+  //   { id: "rentals", label: "Active Rentals", icon: Gamepad2 },
+  //   { id: "bookings", label: "Scheduled Bookings", icon: Calendar },
+  //   { id: "customers", label: "Customers", icon: Users },
+  //   { id: "products", label: "Products", icon: Package },
+  //   { id: "sales", label: "Sales Report", icon: ShoppingCart },
+  //   // { id: "payments", label: "Payments", icon: DollarSign },
+  //   { id: "bookkeeping", label: "Bookkeeping", icon: Calculator },
+  //   { id: "vouchers", label: "Voucher Management", icon: Ticket },
+  //   { id: "consoles", label: "Consoles", icon: SettingsIcon },
+  //   { id: "equipment", label: "Equipment Management", icon: Wrench },
+  //   { id: "rates", label: "Tarif", icon: TrendingUp },
+  //   // { id: "rate-profiles", label: "Profil tarif", icon: TrendingUp },
+  //   { id: "maintenance", label: "Hardware Maintenance", icon: Tool },
+  //   { id: "users", label: "User Management", icon: Shield },
+  //   { id: "settings", label: "Pengaturan", icon: Cog },
+  //   // { id: 'login', label: 'Login', icon: LogIn }
+  // ];
+
+  const iconMap: Record<string, any> = {
+    dashboard: LayoutDashboard,
+    "cashier-session": Wallet,
+    rentals: Gamepad2,
+    bookings: Calendar,
+    customers: Users,
+    products: Package,
+    sales: ShoppingCart,
+    bookkeeping: Calculator,
+    vouchers: Ticket,
+    consoles: SettingsIcon,
+    equipment: Wrench,
+    rates: TrendingUp,
+    maintenance: Tool,
+    users: Shield,
+    settings: Cog,
+  };
   const { user, logout } = useAuth();
+
+  const allowedIds = Array.isArray(user?.roles?.nav_items)
+    ? (user!.roles!.nav_items as string[])
+    : null;
+
+  const navItems = (
+    allowedIds ? NAV_ITEMS.filter((i) => allowedIds.includes(i.id)) : NAV_ITEMS
+  ).map((i) => ({
+    ...i,
+    icon: iconMap[i.id] || LayoutDashboard,
+  }));
 
   return (
     <nav className="bg-slate-800 text-white w-64 min-h-screen p-6 flex flex-col">

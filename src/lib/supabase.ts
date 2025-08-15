@@ -455,7 +455,7 @@ export const auth = {
         .from('users')
         .select(`
           *,
-          roles(name, permissions)
+          roles(name, nav_items)
         `)
         .eq('id', user.id)
         .single();

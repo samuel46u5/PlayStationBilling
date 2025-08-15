@@ -26,6 +26,7 @@ export interface RateProfile {
   id: string;
   name: string;
   description: string;
+  capital:number;
   hourlyRate: number;
   dailyRate: number;
   weeklyRate: number;
@@ -605,7 +606,7 @@ export interface Role {
   id: string;
   name: string;
   description: string;
-  permissions: Permission[];
+  nav_items: Permission[];
   isSystem: boolean;
   createdAt: string;
   updatedAt: string;
@@ -613,10 +614,11 @@ export interface Role {
 
 export interface Permission {
   id: string;
-  module: string;
-  action: string;
-  resource: string;
-  description: string;
+  // module: string;
+  // action: string;
+  // resource: string;
+  // description: string;
+  label:string
 }
 
 export interface UserSession {

@@ -15,6 +15,7 @@ import {
 import { db } from "../lib/supabase";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
+import { NAV_ITEMS } from "../constants/navItem";
 
 const UserManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -25,6 +26,7 @@ const UserManagement: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [showAddUserForm, setShowAddUserForm] = useState(false);
   const [showAddRoleForm, setShowAddRoleForm] = useState(false);
+  const [editRole, setEditRole] = useState<any | null>(null);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [editUser, setEditUser] = useState<any | null>(null); // Untuk modal edit user
 
@@ -100,6 +102,30 @@ const UserManagement: React.FC = () => {
         return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const openEditRoleModal = (role: any) => {
+    setEditRole(role);
+  };
+
+  const confirmDeleteRole = async (role: any) => {
+    const result = await Swal.fire({
+      title: `Hapus role ${role.name}?`,
+      text: "Aksi ini tidak dapat dibatalkan.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Hapus",
+      cancelButtonText: "Batal",
+    });
+    if (result.isConfirmed) {
+      try {
+        await db.delete("roles", role.id);
+        setRoles((prev) => prev.filter((r) => r.id !== role.id));
+        Swal.fire({ icon: "success", title: "Role dihapus" });
+      } catch (err) {
+        Swal.fire({ icon: "error", title: "Gagal menghapus role" });
+      }
     }
   };
 
@@ -268,7 +294,7 @@ const UserManagement: React.FC = () => {
     return users.filter((user) => {
       const matchesSearch =
         searchTerm.trim() === "" ||
-        user.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesRole =
@@ -453,10 +479,101 @@ const UserManagement: React.FC = () => {
       )}
 
       {activeTab === "roles" && (
-        <div className="text-center text-gray-500 py-8">
-          (TODO: Implement Roles tab)
+        <div className="py-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Daftar Roles
+            </h2>
+            <button
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              onClick={() => setShowAddRoleForm(true)}
+            >
+              Tambah Role
+            </button>
+          </div>
+          {roles.length === 0 ? (
+            <div className="text-center text-gray-500 py-12">
+              Belum ada role yang terdaftar.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white rounded-xl shadow-sm border border-gray-200">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Nama Role
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Deskripsi
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Jumlah Permissions
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {roles.map((role: any) => (
+                    <tr key={role.id} className="border-t">
+                      <td className="px-6 py-4 font-semibold text-gray-900">
+                        {role.name}
+                      </td>
+                      <td className="px-6 py-4 text-gray-700">
+                        {role.description || "-"}
+                      </td>
+                      <td className="px-6 py-4 text-gray-700">
+                        {/* {role.permissions ? role.permissions.length : 0} */}
+                        {Array.isArray(role.nav_items)
+                          ? role.nav_items.length
+                          : 0}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="inline-flex gap-2">
+                          <button
+                            className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded"
+                            onClick={() => openEditRoleModal(role)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="px-3 py-1 text-sm bg-red-100 text-red-800 rounded"
+                            onClick={() => confirmDeleteRole(role)}
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Edit Role Modal */}
+      {editRole && (
+        <EditRoleModal
+          role={editRole}
+          onClose={() => setEditRole(null)}
+          onSaved={async (updated: any) => {
+            setEditRole(null);
+            // update local state
+            setRoles((prev) =>
+              prev.map((r) => (r.id === updated.id ? updated : r))
+            );
+            // refresh from db
+            try {
+              const data = await db.select("roles");
+              setRoles(data || []);
+            } catch {}
+          }}
+        />
+      )}
+
       {activeTab === "sessions" && renderSessionsTab()}
       {activeTab === "logs" && renderLogsTab()}
 
@@ -505,72 +622,21 @@ const UserManagement: React.FC = () => {
 
       {/* Add Role Modal */}
       {showAddRoleForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Tambah Role Baru
-              </h2>
-
-              <form className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Role Name
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter role name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
-                    placeholder="Describe the role"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Permissions
-                  </label>
-                  <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-lg p-4">
-                    <div className="space-y-2">
-                      {(roles[0]?.permissions || []).map((permission: any) => (
-                        <label
-                          key={permission.id}
-                          className="flex items-center gap-2"
-                        >
-                          <input type="checkbox" className="rounded" />
-                          <span className="text-sm">
-                            {permission.description}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </form>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowAddRoleForm(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                  Create Role
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddRoleModal
+          onClose={() => setShowAddRoleForm(false)}
+          onCreated={async () => {
+            setShowAddRoleForm(false);
+            setLoadingRoles(true);
+            try {
+              const data = await db.select("roles");
+              setRoles(data || []);
+            } catch {
+              setRoles([]);
+            } finally {
+              setLoadingRoles(false);
+            }
+          }}
+        />
       )}
 
       {/* Summary Stats */}
@@ -1016,3 +1082,245 @@ function uuidv4() {
     return v.toString(16);
   });
 }
+
+interface EditRoleModalProps {
+  role: any;
+  onClose: () => void;
+  onSaved: (updated: any) => void;
+}
+
+const EditRoleModal: React.FC<EditRoleModalProps> = ({
+  role,
+  onClose,
+  onSaved,
+}) => {
+  const [name, setName] = React.useState(role.name || "");
+  const [description, setDescription] = React.useState(role.description || "");
+  const [permissions, setPermissions] = React.useState<string[]>(
+    Array.isArray(role.nav_items) ? role.nav_items : []
+  );
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name) {
+      return Swal.fire({ icon: "error", title: "Name wajib diisi" });
+    }
+    setLoading(true);
+    try {
+      await db.update("roles", role.id, {
+        name,
+        description,
+        nav_items: permissions,
+      });
+      const updated = {
+        ...role,
+        name,
+        description,
+        nav_items: permissions,
+      };
+      Swal.fire({ icon: "success", title: "Role diperbarui" });
+      onSaved(updated);
+    } catch (err) {
+      const message = (err && (err as any).message) || "Gagal menyimpan role";
+      Swal.fire({
+        icon: "error",
+        title: "Gagal menyimpan role",
+        text: message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Edit Role
+          </h2>
+          <form className="space-y-4" onSubmit={handleSave}>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nama Role
+              </label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Deskripsi
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg"
+              >
+                {loading ? "Menyimpan..." : "Save"}
+              </button>
+            </div>
+          </form>
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Permissions
+            </label>
+            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {NAV_ITEMS.map((perm) => (
+                <label
+                  key={perm.id}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={permissions.includes(perm.id)}
+                    onChange={(e) => {
+                      if (e.target.checked)
+                        setPermissions((s) => [...s, perm.id]);
+                      else
+                        setPermissions((s) => s.filter((id) => id !== perm.id));
+                    }}
+                  />
+                  <span>{perm.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface AddRoleModalProps {
+  onClose: () => void;
+  onCreated: (created?: any) => void;
+}
+
+const AddRoleModal: React.FC<AddRoleModalProps> = ({ onClose, onCreated }) => {
+  const [name, setName] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [permissions, setPermissions] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name) return Swal.fire({ icon: "error", title: "Name wajib diisi" });
+    setLoading(true);
+    try {
+      const id = uuidv4();
+      const created = await db.insert("roles", {
+        id,
+        name,
+        description,
+        nav_items: permissions,
+        is_system: false,
+      });
+      Swal.fire({ icon: "success", title: "Role dibuat" });
+      onCreated(created);
+    } catch (err) {
+      const message = (err && (err as any).message) || "Gagal membuat role";
+      Swal.fire({ icon: "error", title: "Gagal membuat role", text: message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Tambah Role Baru
+          </h2>
+          <form className="space-y-4" onSubmit={handleCreate}>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Role Name
+              </label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="Enter role name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="Describe the role"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Permissions
+              </label>
+              <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-lg p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {NAV_ITEMS.map((perm) => (
+                  <label
+                    key={perm.id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={permissions.includes(perm.id)}
+                      onChange={(e) => {
+                        if (e.target.checked)
+                          setPermissions((s) => [...s, perm.id]);
+                        else
+                          setPermissions((s) =>
+                            s.filter((id) => id !== perm.id)
+                          );
+                      }}
+                    />
+                    <span>{perm.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg"
+              >
+                {loading ? "Membuat..." : "Create Role"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
