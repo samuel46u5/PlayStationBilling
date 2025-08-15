@@ -18,6 +18,7 @@ import UserManagement from './components/UserManagement';
 import VoucherManagement from './components/VoucherManagement';
 import Settings from './components/Settings';
 import MaintenanceManagement from './components/MaintenanceManagement';
+import DevicesMaintenance from './components/DevicesMaintenance';
 import RateProfilePage from './components/RateProfilePage';
 import FormAgus from './components/FormAgus';
 
@@ -68,6 +69,8 @@ const AppLayout: React.FC = () => {
         return <Settings />;
       case 'maintenance':
         return <MaintenanceManagement />;
+      case 'devices-maintenance':
+        return <DevicesMaintenance />;
       case 'rate-profile':
       case 'rate-profiles':
         return <RateProfilePage />;

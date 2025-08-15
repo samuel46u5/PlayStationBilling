@@ -25,6 +25,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     { id: 'rates', label: 'Tarif', icon: TrendingUp },
     { id: 'rate-profiles', label: 'Profil tarif', icon: TrendingUp },
     { id: 'maintenance', label: 'Hardware Maintenance', icon: Tool },
+  { id: 'devices-maintenance', label: 'Devices Maintenance', icon: Wrench },
     { id: 'users', label: 'User Management', icon: Shield },
     { id: 'settings', label: 'Pengaturan', icon: Cog },
     { id: 'login', label: 'Login', icon: LogIn },
