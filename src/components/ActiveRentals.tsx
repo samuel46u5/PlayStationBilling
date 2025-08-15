@@ -26,7 +26,6 @@ import {
   Gamepad2,
   DollarSign,
   Play,
-  Pause,
   Square,
   Plus,
   ShoppingCart,
