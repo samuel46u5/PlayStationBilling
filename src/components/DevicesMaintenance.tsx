@@ -19,9 +19,21 @@ const DevicesMaintenance: React.FC = () => {
     const fetch = async () => {
       setLoading(true);
       try {
-        // fetch consoles with equipment type name
-        const data = await db.select('consoles', `*, equipment_types(name)`);
-        setDevices(data || []);
+        // use existing helper which selects consoles and relations
+        const data = await db.consoles.getAll();
+
+        // normalize command field names from DB to component fields
+        const normalized = (data || []).map((d: any) => ({
+          ...d,
+          // some parts of the app use different column names; map them
+          cmd_relay_on: d.cmd_relay_on || d.relay_command_on || d.relay_command || d.relay_on || null,
+          cmd_relay_off: d.cmd_relay_off || d.relay_command_off || d.relay_off || null,
+          cmd_relay_status: d.cmd_relay_status || d.relay_command_status || d.relay_status || null,
+          cmd_power_tv: d.cmd_power_tv || d.power_tv_command || d.power_command || null,
+          cmd_check_power_tv: d.cmd_check_power_tv || d.perintah_cek_power_tv || d.check_power_tv || null,
+        }));
+
+        setDevices(normalized);
       } catch (err) {
         setDevices([]);
       } finally {
@@ -171,23 +183,76 @@ const DevicesMaintenance: React.FC = () => {
                   <span className="mr-2 text-white text-lg"><Clock className="inline-block h-5 w-5" /></span>
                   <span className="text-white font-semibold text-sm flex-1">{d.name}</span>
                 </div>
-                <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-                  <span className="text-gray-700 font-semibold text-base">${d.price || '10.000'}</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${d.status === 'active' ? 'bg-blue-600 text-white' : d.status === 'ready' ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700'}`}>{(d.status || 'READY').toUpperCase()}</span>
-                </div>
-                {/* User info block */}
-                <div className="bg-blue-50 px-4 py-3 rounded-lg mx-3 mb-2 flex flex-col gap-1">
-                  <div className="flex items-center gap-2 text-sm text-blue-900">
-                    <span className="font-medium"><svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg></span>
-                    <span>{d.user || 'reny'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-blue-900">
-                    <span><Clock className="inline-block h-4 w-4" /></span>
-                    <span>Durasi : {d.duration || '07:35:30'}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-gray-700 text-sm">Rp {d.total || '114.000'}</span>
-                    <span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-xs font-bold">PAY AS YOU GO</span>
+                {/* Commands panel (green) - inputs with arrow buttons like the Consoles form */}
+                <div className="px-4 pt-3 pb-2">
+                  <div className="bg-green-50 px-3 py-3 rounded-lg mx-3 mb-2 text-sm text-slate-800">
+                    <div className="space-y-2">
+                      {/* Separator label RELAY - IP Address is part of Relay */}
+                      <div className="my-3 flex items-center gap-3">
+                        <div className="flex-1 h-px bg-slate-200" />
+                        <div className="text-sm font-semibold text-slate-700">RELAY</div>
+                        <div className="flex-1 h-px bg-slate-200" />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold text-slate-700">IP Address Relay</div>
+                          <input readOnly value={d.ip_address || ''} className="w-full px-3 py-2 border rounded bg-white text-sm" />
+                        </div>
+                      </div>
+
+                      <div className="">
+                        <div className="text-sm font-semibold text-slate-700">Perintah Relay ON</div>
+                        <div className="relative mt-1">
+                          <input readOnly value={d.cmd_relay_on || d.relay_command_on || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <button onClick={() => Swal.fire({ title: 'Perintah Relay ON', html: `<pre style='text-align:left'>${(d.cmd_relay_on || d.relay_command_on || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+
+                      <div className="">
+                        <div className="text-sm font-semibold text-slate-700">Perintah Relay OFF</div>
+                        <div className="relative mt-1">
+                          <input readOnly value={d.cmd_relay_off || d.relay_command_off || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <button onClick={() => Swal.fire({ title: 'Perintah Relay OFF', html: `<pre style='text-align:left'>${(d.cmd_relay_off || d.relay_command_off || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+
+                      <div className="">
+                        <div className="text-sm font-semibold text-slate-700">Perintah Relay STATUS</div>
+                        <div className="relative mt-1">
+                          <input readOnly value={d.cmd_relay_status || d.relay_command_status || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <button onClick={() => Swal.fire({ title: 'Perintah Relay STATUS', html: `<pre style='text-align:left'>${(d.cmd_relay_status || d.relay_command_status || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+
+                      {/* Separator between Relay and TV commands */}
+                      <div className="my-3 flex items-center gap-3">
+                        <div className="flex-1 h-px bg-slate-200" />
+                        <div className="text-sm font-semibold text-slate-700">TV</div>
+                        <div className="flex-1 h-px bg-slate-200" />
+                      </div>
+
+                      <div className="mt-2">
+                        <div className="text-sm font-semibold text-slate-700">IP Address TV</div>
+                        <input readOnly value={d.tv_ip || d.ip_tv || d.ip_address_tv || ''} className="w-full px-3 py-2 border rounded bg-white text-sm mt-1" />
+                      </div>
+
+                      <div className="">
+                        <div className="text-sm font-semibold text-slate-700">Perintah Power TV</div>
+                        <div className="relative mt-1">
+                          <input readOnly value={d.cmd_power_tv || d.power_tv_command || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <button onClick={() => Swal.fire({ title: 'Perintah Power TV', html: `<pre style='text-align:left'>${(d.cmd_power_tv || d.power_tv_command || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+
+                      <div className="">
+                        <div className="text-sm font-semibold text-slate-700">Perintah Cek Power TV</div>
+                        <div className="relative mt-1">
+                          <input readOnly value={d.cmd_check_power_tv || d.perintah_cek_power_tv || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <button onClick={() => Swal.fire({ title: 'Perintah Cek Power TV', html: `<pre style='text-align:left'>${(d.cmd_check_power_tv || d.perintah_cek_power_tv || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {/* Action buttons */}
