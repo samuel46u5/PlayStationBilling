@@ -1,13 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
+import { UserSession } from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceRole = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your .env file.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabaseServiceRole, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -82,13 +84,15 @@ export const db = {
   },
 
   async delete(table: string, id: string) {
-    const { error } = await supabase
+    const { data: result, error } = await supabase
       .from(table)
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select()
+      .single();
     
     if (error) throw error;
-    return true;
+    return result;
   },
 
   // Specific business logic functions
@@ -423,6 +427,88 @@ export const db = {
       if (error) throw error;
       return data;
     }
+  },
+  sessions: {
+    async getActiveSessions() {
+      const { data, error } = await supabase
+      .from('user_sessions')
+      .select('*')
+      .eq("status", "active")
+      .order('created_at', { ascending: false })
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
+    },
+    async createSession(userId: string, sessionData: {
+      ip_address?: string;
+      user_agent?: string;}): Promise<UserSession | null> {
+      const { data, error } = await supabase
+        .from('user_sessions')
+        .insert({
+          user_id: userId,
+          ip_address: sessionData.ip_address || null,
+          user_agent: sessionData.user_agent || null,
+          status: 'active'
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data || null;
+    },
+
+    async logoutSession(sessionId: string): Promise<boolean> {
+      try {
+        const { error } = await supabase
+          .from('user_sessions')
+          .update({
+            status: 'offline',
+            logout_time: new Date().toISOString(),
+          })
+          .eq('id', sessionId);
+  
+        return !error;
+      } catch (error) {
+        console.error('Error terminating session:', error);
+        return false;
+      }
+    }
+  },
+  logs: { 
+    async logActivity(logData: {
+      user_id: string;
+      action: string;
+      module: string;
+      description: string;
+      ip_address?: string;
+      metadata?: any;
+    }): Promise<boolean> {
+      try {
+        const { error } = await supabase
+          .from('activity_logs')
+          .insert({
+            user_id: logData.user_id,
+            action: logData.action,
+            module: logData.module,
+            description: logData.description,
+            ip_address: logData.ip_address || await getClientIP(),
+            metadata: logData.metadata || null,
+            timestamp: new Date().toISOString()
+          });
+  
+        return !error;
+      } catch (error) {
+        console.error('Error logging activity:', error);
+        return false;
+      }
+    },
+    async getLogs() {
+      const { data, error } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(20)
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
+    }
   }
 };
 
@@ -433,7 +519,7 @@ export const auth = {
       email,
       password
     });
-    
+
     if (error) throw error;
     return data;
   },
@@ -471,5 +557,15 @@ export const auth = {
       }
       throw new Error('Failed to get current user information');
     }
+  }
+};
+
+const getClientIP = async (): Promise<string> => {
+  try {
+    const response = await fetch("https://api.ipify.org?format=json");
+    const data = await response.json();
+    return data.ip;
+  } catch {
+    return "Unknown";
   }
 };

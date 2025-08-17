@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { auth } from "../lib/supabase";
+import { auth, db, supabase } from "../lib/supabase";
 
 export interface User {
   id: string;
@@ -61,6 +61,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     checkSession();
   }, []);
 
+  const getClientIP = async (): Promise<string> => {
+    try {
+      const response = await fetch("https://api.ipify.org?format=json");
+      const data = await response.json();
+      return data.ip;
+    } catch {
+      return "Unknown";
+    }
+  };
+
   const login = async (email: string, password: string): Promise<boolean> => {
     setError(null);
     setIsLoading(true);
@@ -71,6 +81,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (authData.user) {
         const userData = await auth.getCurrentUser();
         if (userData) {
+          // Buat session baru
+          const sessionData = {
+            ip_address: await getClientIP(),
+            user_agent: navigator.userAgent,
+          };
+          await db.sessions.createSession(userData.id, sessionData);
+          await db.logs.logActivity({
+            user_id: userData.id,
+            action: "login",
+            module: "auth",
+            description: "User logged in successfully",
+            ip_address: await getClientIP(),
+          });
+
+          await db.logs.logActivity({
+            user_id: userData.id,
+            action: "login",
+            module: "auth",
+            description: "User logged in successfully",
+            ip_address: await getClientIP(),
+          });
+
           setUser(userData);
           return true;
         }
@@ -88,6 +120,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const logout = async () => {
     try {
+      if (user) {
+        const { data: session } = await supabase
+          .from("user_sessions")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .single();
+
+        if (session) {
+          await Promise.all([
+            db.sessions.logoutSession(session.id),
+            db.logs.logActivity({
+              user_id: user.id,
+              action: "logout",
+              module: "auth",
+              description: "User logged out successfully",
+              ip_address: await getClientIP(),
+            }),
+          ]);
+        }
+      }
+
       await auth.signOut();
       setUser(null);
       setError(null);

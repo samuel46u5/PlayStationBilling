@@ -4,20 +4,17 @@ import {
   Search,
   User,
   Shield,
-  Edit,
-  Trash2,
-  Eye,
-  EyeOff,
-  Calendar,
   Clock,
   AlertCircle,
+  RefreshCcw,
 } from "lucide-react";
 import { db } from "../lib/supabase";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
 import { NAV_ITEMS } from "../constants/navItem";
+import { useAuth } from "../contexts/AuthContext";
 
-const UserManagement: React.FC = () => {
+const UserManagement = () => {
   const [activeTab, setActiveTab] = useState<
     "users" | "roles" | "sessions" | "logs"
   >("users");
@@ -39,6 +36,14 @@ const UserManagement: React.FC = () => {
   const [loadingSessions, setLoadingSessions] = useState<boolean>(true);
   const [logs, setLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState<boolean>(true);
+  const { user: currentUser } = useAuth();
+
+  if (!currentUser) {
+    return Swal.fire({
+      icon: "error",
+      title: "Anda harus login untuk menambah user!",
+    });
+  }
 
   // Fetch all data from Supabase on mount
   React.useEffect(() => {
@@ -64,32 +69,32 @@ const UserManagement: React.FC = () => {
         setLoadingRoles(false);
       }
     };
-    // const fetchSessions = async () => {
-    //   setLoadingSessions(true);
-    //   try {
-    //     const data = await db.select("sessions");
-    //     setSessions(data || []);
-    //   } catch {
-    //     setSessions([]);
-    //   } finally {
-    //     setLoadingSessions(false);
-    //   }
-    // };
-    // const fetchLogs = async () => {
-    //   setLoadingLogs(true);
-    //   try {
-    //     const data = await db.select("logs");
-    //     setLogs(data || []);
-    //   } catch {
-    //     setLogs([]);
-    //   } finally {
-    //     setLoadingLogs(false);
-    //   }
-    // };
+    const fetchSessions = async () => {
+      setLoadingSessions(true);
+      try {
+        const data = await db.sessions.getActiveSessions();
+        setSessions(data || []);
+      } catch {
+        setSessions([]);
+      } finally {
+        setLoadingSessions(false);
+      }
+    };
+    const fetchLogs = async () => {
+      setLoadingLogs(true);
+      try {
+        const data = await db.logs.getLogs();
+        setLogs(data || []);
+      } catch {
+        setLogs([]);
+      } finally {
+        setLoadingLogs(false);
+      }
+    };
     fetchUsers();
     fetchRoles();
-    // fetchSessions();
-    // fetchLogs();
+    fetchSessions();
+    fetchLogs();
   }, []);
 
   const getSessionStatusColor = (status: string) => {
@@ -120,11 +125,53 @@ const UserManagement: React.FC = () => {
     });
     if (result.isConfirmed) {
       try {
-        await db.delete("roles", role.id);
+        const dataRole = await db.delete("roles", role.id);
+        await db.logs.logActivity({
+          user_id: currentUser.id,
+          action: "delete",
+          module: "roles",
+          description: `Deleted role: ${dataRole.name}`,
+          metadata: { deleted_role: dataRole.name },
+        });
         setRoles((prev) => prev.filter((r) => r.id !== role.id));
         Swal.fire({ icon: "success", title: "Role dihapus" });
       } catch (err) {
-        Swal.fire({ icon: "error", title: "Gagal menghapus role" });
+        Swal.fire({
+          icon: "error",
+          title: "Gagal menghapus role",
+          text: "Pastikan role tidak dipakai user lain",
+        });
+      }
+    }
+  };
+
+  const confirmDeleteUser = async (user: any) => {
+    const result = await Swal.fire({
+      title: `Hapus user ${user.full_name}?`,
+      text: "Aksi ini tidak dapat dibatalkan.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Hapus",
+      cancelButtonText: "Batal",
+    });
+    if (result.isConfirmed) {
+      try {
+        const dataUser = await db.delete("users", user.id);
+        await db.logs.logActivity({
+          user_id: currentUser.id,
+          action: "delete",
+          module: "users",
+          description: `Deleted user: ${dataUser.name}`,
+          metadata: { deleted_user: dataUser.name },
+        });
+        setUsers((prev) => prev.filter((r) => r.id !== user.id));
+        Swal.fire({ icon: "success", title: "User dihapus" });
+      } catch (err) {
+        Swal.fire({
+          icon: "error",
+          title: "Gagal menghapus role",
+          text: "Pastikan role tidak dipakai user lain",
+        });
       }
     }
   };
@@ -153,9 +200,6 @@ const UserManagement: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -173,7 +217,7 @@ const UserManagement: React.FC = () => {
                 </tr>
               ) : (
                 sessions.map((session) => {
-                  const user = users.find((u) => u.id === session.userId);
+                  const user = users.find((u) => u.id === session.user_id);
                   return (
                     <tr key={session.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -183,22 +227,22 @@ const UserManagement: React.FC = () => {
                           </div>
                           <div>
                             <div className="text-sm font-medium text-gray-900">
-                              {user?.fullName}
+                              {user?.full_name}
                             </div>
                             <div className="text-sm text-gray-500">
-                              @{user?.username}
+                              @{user?.email}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {new Date(session.loginTime).toLocaleString("id-ID")}
+                          {new Date(session.login_time).toLocaleString("id-ID")}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {session.ipAddress}
+                          {session.ip_address}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -207,13 +251,8 @@ const UserManagement: React.FC = () => {
                             session.status
                           )}`}
                         >
-                          {session.status.toUpperCase()}
+                          {session.status?.toUpperCase()}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button className="text-red-600 hover:text-red-900">
-                          Terminate
-                        </button>
                       </td>
                     </tr>
                   );
@@ -228,15 +267,28 @@ const UserManagement: React.FC = () => {
 
   const renderLogsTab = () => (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Activity Logs</h2>
-        <p className="text-gray-600">
-          Monitor user activities and system events
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Activity Logs</h2>
+          <p className="text-gray-600">
+            Monitor user activities and system events
+          </p>
+        </div>
+
+        <button
+          onClick={async () => {
+            const data = await db.logs.getLogs();
+            setLogs(data || []);
+          }}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg transition"
+        >
+          <RefreshCcw className="w-4 h-4" />
+          <span> Refresh</span>
+        </button>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
           {loadingLogs ? (
             <div className="text-center text-gray-500 py-8">
               Memuat log aktivitas...
@@ -247,7 +299,7 @@ const UserManagement: React.FC = () => {
             </div>
           ) : (
             logs.map((log) => {
-              const user = users.find((u) => u.id === log.userId);
+              const user = users.find((u) => u.id === log.user_id);
               return (
                 <div
                   key={log.id}
@@ -263,9 +315,9 @@ const UserManagement: React.FC = () => {
                           {log.description}
                         </p>
                         <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                          <span>User: {user?.fullName}</span>
+                          <span>User: {user?.full_name}</span>
                           <span>Module: {log.module}</span>
-                          <span>IP: {log.ipAddress}</span>
+                          <span>IP: {log.ip_address}</span>
                         </div>
                         {log.metadata && (
                           <div className="mt-2 text-sm text-gray-500">
@@ -390,7 +442,7 @@ const UserManagement: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-h-96 overflow-y-auto overflow-x-auto mt-4">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -443,7 +495,7 @@ const UserManagement: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                            {user?.role_id || "-"}
+                            {role?.name || "-"}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -464,7 +516,10 @@ const UserManagement: React.FC = () => {
                           >
                             Edit
                           </button>
-                          <button className="text-red-600 hover:underline">
+                          <button
+                            className="text-red-600 hover:underline"
+                            onClick={() => confirmDeleteUser(user)}
+                          >
                             Hapus
                           </button>
                         </td>
@@ -706,6 +761,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const { user: currentUser } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -720,10 +776,12 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
 
     try {
       // 1. Buat user di auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      const { data: authData, error: authError } =
+        await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: false,
+        });
 
       if (authError) {
         throw new Error(`Auth error: ${authError.message}`);
@@ -731,6 +789,11 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
 
       if (!authData.user) {
         throw new Error("Failed to create auth user");
+      }
+
+      if (!currentUser) {
+        setError("Anda harus login untuk menambah user!");
+        return;
       }
 
       // 2. Insert user ke database
@@ -748,6 +811,14 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
         .select()
         .single();
 
+      await db.logs.logActivity({
+        user_id: currentUser.id,
+        action: "create",
+        module: "users",
+        description: `Created new user: ${userData.full_name}`,
+        metadata: { new_user_id: userData.id, new_user_email: userData.email },
+      });
+
       if (userError) {
         // Rollback: delete auth user if profile creation fails
         await supabase.auth.admin.deleteUser(authData.user.id);
@@ -758,8 +829,8 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
           title: "User berhasil ditambahkan",
           text: `User ${fullName} telah berhasil ditambahkan ke sistem.`,
         });
-        onUserAdded();
       }
+      onUserAdded();
     } catch (err: any) {
       setError(err.message || "Gagal menambah user.");
       console.error("User insert error:", err);
@@ -913,6 +984,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   const [status, setStatus] = React.useState(user.status || "active");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const { user: currentUser } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -921,10 +993,14 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
       setError("Semua field wajib diisi!");
       return;
     }
+    if (!currentUser) {
+      setError("Anda harus login untuk mengedit user!");
+      return;
+    }
     setLoading(true);
     try {
       // Update user di table users
-      const { error: updateError } = await supabase
+      const { data: userData, error: updateError } = await supabase
         .from("users")
         .update({
           full_name: fullName,
@@ -934,7 +1010,21 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
           role_id: roleId,
           status,
         })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select()
+        .single();
+
+      await db.logs.logActivity({
+        user_id: currentUser.id,
+        action: "update",
+        module: "users",
+        description: `Updated user: ${userData.full_name}`,
+        metadata: {
+          updated_user_id: userData.id,
+          updated_user_email: userData.email,
+        },
+      });
+
       if (updateError) {
         throw new Error(updateError.message);
       }
@@ -1100,18 +1190,35 @@ const EditRoleModal: React.FC<EditRoleModalProps> = ({
     Array.isArray(role.nav_items) ? role.nav_items : []
   );
   const [loading, setLoading] = React.useState(false);
+  const { user: currentUser } = useAuth();
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) {
       return Swal.fire({ icon: "error", title: "Name wajib diisi" });
     }
+    if (!currentUser) {
+      return Swal.fire({
+        icon: "error",
+        title: "Anda harus login untuk menambah role!",
+      });
+    }
     setLoading(true);
     try {
-      await db.update("roles", role.id, {
+      const dataRole = await db.update("roles", role.id, {
         name,
         description,
         nav_items: permissions,
+      });
+      await db.logs.logActivity({
+        user_id: currentUser.id,
+        action: "update",
+        module: "roles",
+        description: `Updated role: ${dataRole.name}`,
+        metadata: {
+          updated_role_name: dataRole.name,
+          updated_role_desc: dataRole.description,
+        },
       });
       const updated = {
         ...role,
@@ -1220,10 +1327,17 @@ const AddRoleModal: React.FC<AddRoleModalProps> = ({ onClose, onCreated }) => {
   const [description, setDescription] = React.useState("");
   const [permissions, setPermissions] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const { user: currentUser } = useAuth();
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) return Swal.fire({ icon: "error", title: "Name wajib diisi" });
+    if (!currentUser) {
+      return Swal.fire({
+        icon: "error",
+        title: "Anda harus login untuk menambah role!",
+      });
+    }
     setLoading(true);
     try {
       const id = uuidv4();
@@ -1233,6 +1347,17 @@ const AddRoleModal: React.FC<AddRoleModalProps> = ({ onClose, onCreated }) => {
         description,
         nav_items: permissions,
         is_system: false,
+      });
+
+      await db.logs.logActivity({
+        user_id: currentUser.id,
+        action: "created",
+        module: "roles",
+        description: `Created role: ${created.name}`,
+        metadata: {
+          created_role_name: created.name,
+          created_role_desc: created.description,
+        },
       });
       Swal.fire({ icon: "success", title: "Role dibuat" });
       onCreated(created);
