@@ -1,7 +1,7 @@
 import React from 'react';
 import { db } from '../lib/supabase';
 import Swal from 'sweetalert2';
-import { Edit2, Trash2, Clock, ArrowRight } from 'lucide-react';
+import { Edit2, Trash2, Clock, ArrowRight, Save } from 'lucide-react';
 
 const DevicesMaintenance: React.FC = () => {
   const [devices, setDevices] = React.useState<any[]>([]);
@@ -80,6 +80,47 @@ const DevicesMaintenance: React.FC = () => {
       } catch (err) {
         Swal.fire({ icon: 'error', title: 'Gagal menghapus' });
       }
+    }
+  };
+
+  const handleSave = async (device: any) => {
+    // Map UI/normalized fields to actual DB column names in `consoles` table.
+    const payload: any = {};
+
+    // ip_address exists in schema (inet)
+    if (device.ip_address !== undefined) payload.ip_address = device.ip_address;
+
+    // Relay commands -> DB columns: relay_command_on/off/status
+    const relayOn = device.cmd_relay_on ?? device.relay_command_on ?? device.relay_command ?? device.relay_on;
+    if (relayOn !== undefined) payload.relay_command_on = relayOn;
+
+    const relayOff = device.cmd_relay_off ?? device.relay_command_off ?? device.relay_off;
+    if (relayOff !== undefined) payload.relay_command_off = relayOff;
+
+    const relayStatus = device.cmd_relay_status ?? device.relay_command_status ?? device.relay_status;
+    if (relayStatus !== undefined) payload.relay_command_status = relayStatus;
+
+    // TV commands -> DB columns: power_tv_command, perintah_cek_power_tv
+    const powerTv = device.cmd_power_tv ?? device.power_tv_command ?? device.power_command;
+    if (powerTv !== undefined) payload.power_tv_command = powerTv;
+
+    const checkPowerTv = device.cmd_check_power_tv ?? device.perintah_cek_power_tv ?? device.check_power_tv;
+    if (checkPowerTv !== undefined) payload.perintah_cek_power_tv = checkPowerTv;
+
+    if (Object.keys(payload).length === 0) {
+      await Swal.fire({ icon: 'info', title: 'Nothing to save', text: 'No editable fields found for this console.' });
+      return;
+    }
+
+    const r = await Swal.fire({ title: `Simpan perubahan untuk ${device.name}?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Simpan' });
+    if (!r.isConfirmed) return;
+
+    try {
+      const updated = await db.update('consoles', device.id, payload);
+      setDevices((s) => s.map((x) => (x.id === updated.id ? updated : x)));
+      await Swal.fire({ icon: 'success', title: 'Saved' });
+    } catch (err) {
+      await Swal.fire({ icon: 'error', title: 'Error', text: (err as any)?.message || 'Failed to save' });
     }
   };
 
@@ -259,7 +300,7 @@ const DevicesMaintenance: React.FC = () => {
                 <div className="flex items-center justify-between px-4 pb-4 gap-2">
                   <button onClick={() => setEditDevice(d)} className="flex-1 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-lg py-2 mx-1">Stop</button>
                   <button onClick={() => setDetailDevice(d)} className="flex-1 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-lg py-2 mx-1">Detail</button>
-                  <button onClick={() => handleDelete(d)} className="flex-1 flex items-center justify-center bg-orange-400 hover:bg-orange-500 text-white rounded-lg py-2 mx-1">Cart</button>
+                  <button onClick={() => handleSave(d)} className="flex-1 flex items-center justify-center bg-green-600 hover:bg-green-700 text-white rounded-lg py-2 mx-1"><Save className="h-4 w-4 mr-2"/>Save</button>
                 </div>
               </div>
             ))
