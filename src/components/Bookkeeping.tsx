@@ -10,23 +10,22 @@ import {
   Search,
   Loader2,
   AlertCircle,
+  SquarePen,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
-// import { toast } from 'react-hot-toast';
+import Swal from "sweetalert2";
 
 const Bookkeeping: React.FC = () => {
   // State management
   const [entries, setEntries] = useState<BookkeepingEntry[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filter states
   const [selectedPeriod, setSelectedPeriod] = useState("month");
-  const [selectedType, setSelectedType] = useState("all");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
 
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -46,6 +45,15 @@ const Bookkeeping: React.FC = () => {
     notes: "",
   });
 
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editEntry, setEditEntry] = useState<BookkeepingEntry | null>(null);
+  const [activeView, setActiveView] = useState<"jurnal" | "laba_rugi">(
+    "jurnal"
+  );
+  const [activeTab, setActiveTab] = useState<"all" | "income" | "expense">(
+    "all"
+  );
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage] = useState(20);
@@ -56,7 +64,6 @@ const Bookkeeping: React.FC = () => {
     { value: "week", label: "Minggu Ini" },
     { value: "month", label: "Bulan Ini" },
     { value: "year", label: "Tahun Ini" },
-    { value: "custom", label: "Kustom" },
   ];
 
   const types = [
@@ -74,6 +81,46 @@ const Bookkeeping: React.FC = () => {
     { value: "voucher", label: "Penjualan Voucher" },
     { value: "other", label: "Lainnya" },
   ];
+
+  const fetchTransaction = async () => {
+    try {
+      setLoading(true);
+      let query = supabase
+        .from("cashier_transactions")
+        .select("*")
+        .order("timestamp", { ascending: false });
+
+      if (selectedPeriod !== "all") {
+        const now = new Date();
+        let startDate = new Date();
+        switch (selectedPeriod) {
+          case "today":
+            startDate.setHours(0, 0, 0, 0);
+            break;
+          case "week":
+            startDate.setDate(now.getDate() - 7);
+            break;
+          case "month":
+            startDate.setMonth(now.getMonth() - 1);
+            break;
+          case "year":
+            startDate.setFullYear(now.getFullYear() - 1);
+            break;
+        }
+        query = query.gte("timestamp", startDate.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Gagal mengambil data laba rugi"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch data from database
   const fetchEntries = async () => {
@@ -107,6 +154,11 @@ const Bookkeeping: React.FC = () => {
         }
 
         query = query.gte("entry_date", startDate.toISOString().split("T")[0]);
+        // const { data: transactions } = await supabase
+        //   .from("cashier_transactions")
+        //   .select("*")
+        //   .gte("entry_date", startDate.toISOString().split("T")[0])
+        //   .order("timestamp", { ascending: false });
       }
 
       const { data, error: fetchError } = await query;
@@ -128,47 +180,89 @@ const Bookkeeping: React.FC = () => {
 
   // Load data on component mount and filter changes
   useEffect(() => {
-    fetchEntries();
-  }, [selectedPeriod]);
+    if (activeView === "laba_rugi") {
+      fetchTransaction();
+    } else {
+      fetchEntries();
+    }
+  }, [selectedPeriod, activeView]);
 
-  // Filtered and paginated entries
-  const filteredEntries = useMemo(() => {
-    let filtered = entries.filter((entry) => {
-      const matchesType = selectedType === "all" || entry.type === selectedType;
-      const matchesCategory =
-        selectedCategory === "all" || entry.category === selectedCategory;
-      const matchesSearch =
-        searchQuery === "" ||
-        entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        entry.reference?.toLowerCase().includes(searchQuery.toLowerCase());
-
-      return matchesType && matchesCategory && matchesSearch;
-    });
-
-    return filtered;
-  }, [entries, selectedType, selectedCategory, searchQuery]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, activeView]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredEntries.length / entriesPerPage);
-  const paginatedEntries = filteredEntries.slice(
+  const sourceList = useMemo(
+    () => (activeView === "laba_rugi" ? transactions : entries),
+    [activeView, transactions, entries]
+  );
+
+  const filteredByTab = useMemo(() => {
+    if (activeTab === "income")
+      return sourceList.filter(
+        (e) => e.type === "income" || e.type === "sale" || e.type === "rental"
+      );
+    if (activeTab === "expense")
+      return sourceList.filter((e) => e.type === "expense");
+    return sourceList;
+  }, [sourceList, activeTab, activeView]);
+
+  const incomeCount = useMemo(
+    () =>
+      sourceList.filter(
+        (e) => e.type === "income" || e.type === "sale" || e.type === "rental"
+      ).length,
+    [activeView, sourceList]
+  );
+  const expenseCount = useMemo(
+    () => sourceList.filter((e) => e.type === "expense").length,
+    [activeView, sourceList]
+  );
+
+  const totalPages = Math.ceil(filteredByTab.length / entriesPerPage);
+  const paginatedData = filteredByTab.slice(
     (currentPage - 1) * entriesPerPage,
     currentPage * entriesPerPage
   );
 
+  //Transaction profit calculation
+  const profitSummary = useMemo(() => {
+    const incomeTypes = new Set(["sale", "rental", "income"]);
+    const totalIncome = transactions
+      .filter((t: any) => incomeTypes.has(t.type))
+      .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
+
+    const totalExpense = transactions
+      .filter((t: any) => t.type === "expense")
+      .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
+
+    const profitFromDetails = transactions.reduce(
+      (sum: number, t: any) => sum + (Number(t?.details?.profit) || 0),
+      0
+    );
+
+    const netProfit = profitFromDetails || totalIncome - totalExpense;
+    return { totalIncome, totalExpense, netProfit };
+  }, [transactions]);
+
+  // const isProfitView = activeView === "laba_rugi";
+
   // Financial calculations
   const financialSummary = useMemo(() => {
-    const totalIncome = filteredEntries
+    const totalIncome = entries
       .filter((entry) => entry.type === "income")
       .reduce((sum, entry) => sum + entry.amount, 0);
 
-    const totalExpense = filteredEntries
+    const totalExpense = entries
       .filter((entry) => entry.type === "expense")
       .reduce((sum, entry) => sum + entry.amount, 0);
 
     const netProfit = totalIncome - totalExpense;
 
     return { totalIncome, totalExpense, netProfit };
-  }, [filteredEntries]);
+  }, [entries]);
+
+  const summary = activeView === "laba_rugi" ? profitSummary : financialSummary;
 
   // Utility functions
   const getCategoryColor = (category: string) => {
@@ -223,7 +317,12 @@ const Bookkeeping: React.FC = () => {
 
       if (insertError) throw insertError;
 
-      alert("Transaksi berhasil ditambahkan!");
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: "Transaksi berhasil ditambahkan!",
+        confirmButtonColor: "#3b82f6",
+      });
       setShowAddForm(false);
 
       // Reset form
@@ -249,6 +348,58 @@ const Bookkeeping: React.FC = () => {
     }
   };
 
+  // Handle entry edit
+  const handleEditEntry = async () => {
+    if (!editEntry) return;
+
+    if (!editEntry.description.trim()) {
+      alert("Deskripsi transaksi harus diisi");
+      return;
+    }
+
+    if (editEntry.amount <= 0) {
+      alert("Jumlah transaksi harus lebih dari 0");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const { error: updateError } = await supabase
+        .from("bookkeeping_entries")
+        .update({
+          entry_date: editEntry.entry_date,
+          type: editEntry.type,
+          category: editEntry.category,
+          description: editEntry.description.trim(),
+          amount: editEntry.amount,
+          reference: editEntry.reference?.trim() || null,
+          notes: editEntry.notes?.trim() || null,
+        })
+        .eq("id", editEntry.id);
+
+      if (updateError) throw updateError;
+
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: "Transaksi berhasil diperbarui!",
+        confirmButtonColor: "#3b82f6",
+      });
+      setShowEditForm(false);
+      setEditEntry(null);
+
+      await fetchEntries();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan";
+      console.error(errorMessage);
+      setError(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Handle entry deletion
   const handleDeleteEntry = async (entryId: string) => {
     if (!confirm("Apakah Anda yakin ingin menghapus transaksi ini?")) return;
@@ -261,19 +412,16 @@ const Bookkeeping: React.FC = () => {
 
       if (deleteError) throw deleteError;
 
-      alert("Transaksi berhasil dihapus!");
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: "Transaksi berhasil dihapus!",
+        confirmButtonColor: "#3b82f6",
+      });
       await fetchEntries();
     } catch (err) {
       console.error("Gagal menghapus transaksi");
     }
-  };
-
-  // Reset filters
-  const resetFilters = () => {
-    setSelectedType("all");
-    setSelectedCategory("all");
-    setSearchQuery("");
-    setCurrentPage(1);
   };
 
   if (loading) {
@@ -296,42 +444,8 @@ const Bookkeeping: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Pembukuan</h1>
             <p className="text-gray-600">Kelola catatan keuangan bisnis</p>
           </div>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <Plus className="h-5 w-5" />
-            Tambah Transaksi
-          </button>
-        </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <p className="text-red-800">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Enhanced Filters */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
-          <div className="flex flex-wrap gap-4 items-center">
-            {/* Search */}
-            <div className="flex-1 min-w-[250px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Cari transaksi..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
+          <div className="flex gap-x-4">
             {/* Period Filter */}
             <select
               value={selectedPeriod}
@@ -344,127 +458,227 @@ const Bookkeeping: React.FC = () => {
                 </option>
               ))}
             </select>
-
-            {/* Type Filter */}
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {types.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-
-            {/* Category Filter */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {categories.map((category) => (
-                <option key={category.value} value={category.value}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
-
-            {/* Reset Filters */}
-            <button
-              onClick={resetFilters}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:border-gray-400 transition-colors"
-            >
-              Reset Filter
-            </button>
+            {activeView === "jurnal" && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus className="h-5 w-5" />
+                Tambah Transaksi
+              </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Financial Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <TrendingUp className="h-6 w-6 text-green-600" />
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <p className="text-red-800">{error}</p>
+            </div>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            Rp {financialSummary.totalIncome.toLocaleString("id-ID")}
-          </h3>
-          <p className="text-gray-600 text-sm">Total Pemasukan</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <TrendingDown className="h-6 w-6 text-red-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            Rp {financialSummary.totalExpense.toLocaleString("id-ID")}
-          </h3>
-          <p className="text-gray-600 text-sm">Total Pengeluaran</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div
-            className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${
-              financialSummary.netProfit >= 0 ? "bg-blue-100" : "bg-red-100"
-            }`}
-          >
-            <DollarSign
-              className={`h-6 w-6 ${
-                financialSummary.netProfit >= 0
-                  ? "text-blue-600"
-                  : "text-red-600"
-              }`}
-            />
-          </div>
-          <h3
-            className={`text-2xl font-bold mb-1 ${
-              financialSummary.netProfit >= 0 ? "text-blue-600" : "text-red-600"
-            }`}
-          >
-            Rp {Math.abs(financialSummary.netProfit).toLocaleString("id-ID")}
-          </h3>
-          <p className="text-gray-600 text-sm">
-            {financialSummary.netProfit >= 0 ? "Laba Bersih" : "Rugi Bersih"}
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <FileText className="h-6 w-6 text-purple-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {filteredEntries.length}
-          </h3>
-          <p className="text-gray-600 text-sm">Total Transaksi</p>
-        </div>
+        )}
       </div>
 
       {/* Transactions List */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">
-            Riwayat Transaksi
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Menampilkan {paginatedEntries.length} dari {filteredEntries.length}{" "}
-            transaksi
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {activeView === "laba_rugi"
+                  ? "Laporan Laba Rugi"
+                  : "Riwayat Transaksi"}
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Menampilkan {paginatedData.length} transaksi dari{" "}
+                {filteredByTab.length}
+              </p>
+            </div>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setActiveView("jurnal")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeView !== "laba_rugi"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Jurnal Umum
+              </button>
+              <button
+                onClick={() => setActiveView("laba_rugi")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeView === "laba_rugi"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Laba Rugi
+              </button>
+            </div>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setActiveTab("all")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "all"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Semua ({sourceList.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("income")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                  activeTab === "income"
+                    ? "bg-white text-green-600 shadow-sm"
+                    : "text-gray-600 hover:text-green-600"
+                }`}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Pemasukan ({incomeCount})
+              </button>
+              <button
+                onClick={() => setActiveTab("expense")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                  activeTab === "expense"
+                    ? "bg-white text-red-600 shadow-sm"
+                    : "text-gray-600 hover:text-red-600"
+                }`}
+              >
+                <TrendingDown className="h-4 w-4" />
+                Pengeluaran ({expenseCount})
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-green-800">
+                  Total Pemasukan:
+                </span>
+                <span className="text-lg font-bold text-green-600">
+                  Rp {summary.totalIncome.toLocaleString("id-ID")}
+                </span>
+              </div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-red-800">
+                  Total Pengeluaran:
+                </span>
+                <span className="text-lg font-bold text-red-600">
+                  Rp {summary.totalExpense.toLocaleString("id-ID")}
+                </span>
+              </div>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-blue-800">
+                  {activeView === "jurnal" ? "Profit" : "Laba Bersih"}
+                </span>
+                <span
+                  className={`text-lg font-bold ${
+                    summary.netProfit >= 0 ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  Rp {summary.netProfit.toLocaleString("id-ID")}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {paginatedEntries.length === 0 ? (
-          <div className="p-12 text-center">
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">Tidak ada transaksi ditemukan</p>
-            <p className="text-sm text-gray-500">
-              Coba ubah filter atau tambah transaksi baru
-            </p>
+        {activeView === "laba_rugi" ? (
+          <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+            {paginatedData.length === 0 ? (
+              <div className="p-12 text-center">
+                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">Tidak ada transaksi ditemukan</p>
+              </div>
+            ) : (
+              paginatedData.map((t: any) => {
+                const isIncome =
+                  t.type === "income" ||
+                  t.type === "sale" ||
+                  t.type === "rental";
+                return (
+                  <div
+                    key={t.id}
+                    className="p-6 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            isIncome ? "bg-green-100" : "bg-red-100"
+                          }`}
+                        >
+                          {isIncome ? (
+                            <TrendingUp className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-600" />
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900">
+                            {t.description}
+                          </h3>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span
+                              className={`inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800  ${
+                                t.type === "income" ||
+                                t.type === "sale" ||
+                                t.type === "rental"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {(t.type || "").toString().toUpperCase()}
+                            </span>
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <Calendar className="h-4 w-4" />
+                              {new Date(t.timestamp).toLocaleDateString(
+                                "id-ID"
+                              )}
+                            </div>
+                            {t.reference_id && (
+                              <span className="text-sm text-gray-500">
+                                Ref: {t.reference_id}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className={`text-lg font-bold ${
+                            isIncome ? "text-green-600" : "text-red-600"
+                          }`}
+                        >
+                          {isIncome ? "+" : "-"}Rp{" "}
+                          {Number(t.amount || 0).toLocaleString("id-ID")}
+                        </p>
+                        {t?.details?.profit != null && (
+                          <p className="text-xs text-gray-500">
+                            Profit: Rp{" "}
+                            {Number(t.details.profit).toLocaleString("id-ID")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         ) : (
           <>
             <div className="divide-y divide-gray-200">
-              {paginatedEntries.map((entry) => (
+              {paginatedData.map((entry) => (
                 <div
                   key={entry.id}
                   className="p-6 hover:bg-gray-50 transition-colors"
@@ -495,7 +709,9 @@ const Bookkeeping: React.FC = () => {
                           </span>
                           <div className="flex items-center gap-1 text-sm text-gray-600">
                             <Calendar className="h-4 w-4" />
-                            {new Date(entry.date).toLocaleDateString("id-ID")}
+                            {new Date(entry.entry_date).toLocaleDateString(
+                              "id-ID"
+                            )}
                           </div>
                           {entry.reference && (
                             <span className="text-sm text-gray-500">
@@ -527,6 +743,17 @@ const Bookkeeping: React.FC = () => {
                       {/* Action buttons */}
                       <div className="flex gap-2">
                         <button
+                          className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          onClick={() => {
+                            setEditEntry(entry);
+                            setShowEditForm(true);
+                          }}
+                          title="Edit transaksi"
+                        >
+                          <SquarePen className="w-4 h-4" />
+                        </button>
+
+                        <button
                           onClick={() => handleDeleteEntry(entry.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Hapus transaksi"
@@ -557,42 +784,38 @@ const Bookkeeping: React.FC = () => {
                 </div>
               ))}
             </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="px-6 py-4 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-700">
-                    Halaman {currentPage} dari {totalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.max(prev - 1, 1))
-                      }
-                      disabled={currentPage === 1}
-                      className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      Sebelumnya
-                    </button>
-                    <button
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                      }
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      Selanjutnya
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>
 
-      {/* Enhanced Add Transaction Modal */}
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="px-6 py-4 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-700">
+              Halaman {currentPage} dari {totalPages}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Sebelumnya
+              </button>
+              <button
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
+                disabled={currentPage === totalPages}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
@@ -752,6 +975,191 @@ const Bookkeeping: React.FC = () => {
                     </>
                   ) : (
                     "Simpan"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {showEditForm && editEntry && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Edit Transaksi
+              </h2>
+
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleEditEntry();
+                }}
+              >
+                {/* Tipe Transaksi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipe Transaksi <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editEntry.type}
+                    onChange={(e) =>
+                      setEditEntry({
+                        ...editEntry,
+                        type: e.target.value as any,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="income">Pemasukan</option>
+                    <option value="expense">Pengeluaran</option>
+                  </select>
+                </div>
+
+                {/* Kategori */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kategori <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editEntry.category}
+                    onChange={(e) =>
+                      setEditEntry({
+                        ...editEntry,
+                        category: e.target.value as any,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  >
+                    {categories
+                      .filter((c) => c.value !== "all")
+                      .map((category) => (
+                        <option key={category.value} value={category.value}>
+                          {category.label}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Deskripsi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Deskripsi <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editEntry.description}
+                    onChange={(e) =>
+                      setEditEntry({
+                        ...editEntry,
+                        description: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Deskripsi transaksi"
+                    required
+                  />
+                </div>
+
+                {/* Jumlah */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Jumlah <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={editEntry.amount}
+                    onChange={(e) =>
+                      setEditEntry({
+                        ...editEntry,
+                        amount: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0"
+                    min="0"
+                    step="1000"
+                    required
+                  />
+                </div>
+
+                {/* Tanggal */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tanggal
+                  </label>
+                  <input
+                    type="date"
+                    value={editEntry.entry_date}
+                    onChange={(e) =>
+                      setEditEntry({ ...editEntry, entry_date: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Referensi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Referensi (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={editEntry.reference || ""}
+                    onChange={(e) =>
+                      setEditEntry({ ...editEntry, reference: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Nomor referensi"
+                  />
+                </div>
+
+                {/* Catatan */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Catatan (Opsional)
+                  </label>
+                  <textarea
+                    value={editEntry.notes || ""}
+                    onChange={(e) =>
+                      setEditEntry({ ...editEntry, notes: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Catatan tambahan"
+                  />
+                </div>
+              </form>
+
+              {/* Tombol Aksi */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditForm(false);
+                    setEditEntry(null);
+                  }}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleEditEntry}
+                  disabled={saving}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    "Simpan Perubahan"
                   )}
                 </button>
               </div>

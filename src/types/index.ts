@@ -577,7 +577,7 @@ export interface CashFlow {
 
 export interface BookkeepingEntry {
   id: string;
-  date: string;
+  entry_date: string;
   type: 'income' | 'expense';
   category: 'rental' | 'cafe' | 'inventory' | 'operational' | 'voucher' | 'other';
   description: string;

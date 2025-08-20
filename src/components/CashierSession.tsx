@@ -57,19 +57,22 @@ const CashierSessionComponent: React.FC = () => {
   );
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [openingCash, setOpeningCash] = useState<number>(0);
   const [closingCash, setClosingCash] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const [expenseAmount, setExpenseAmount] = useState<number>(0);
-  const [expenseDescription, setExpenseDescription] = useState<string>("");
+  const [typeTransaction, setTypeTransaction] = useState<string>("income");
+  const [totalAmount, setTotalAmount] = useState<number>(0);
+  const [transactionDescription, setTransactionDescription] =
+    useState<string>("");
 
   const [todayTransactions, setTodayTransactions] = useState<any[]>([]);
   const [todaySales, setTodaySales] = useState<any[]>([]);
   const [todayRentals, setTodayRentals] = useState<any[]>([]);
   const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
+  const [todayIncome, setTodayIncome] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
   // Get current user (in real app, this would come from auth context)
@@ -107,6 +110,7 @@ const CashierSessionComponent: React.FC = () => {
         setTodaySales([]);
         setTodayRentals([]);
         setTodayExpenses([]);
+        setTodayIncome([]);
         return;
       }
 
@@ -131,6 +135,7 @@ const CashierSessionComponent: React.FC = () => {
       setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
       setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
       setTodayExpenses(trxRes.data.filter((t: any) => t.type === "expense"));
+      setTodayIncome(trxRes.data.filter((t: any) => t.type === "income"));
     })();
   }, [
     user,
@@ -150,54 +155,35 @@ const CashierSessionComponent: React.FC = () => {
   };
 
   const filteredTransactions = useMemo(() => {
-    const openingCashTransaction = currentSession
-      ? {
-          id: "opening-cash",
-          type: "income",
-          amount: currentSession.openingCash,
-          payment_method: "cash",
-          reference_id: "OPENING-CASH",
-          description: "Saldo Awal dari Bos",
-          timestamp: currentSession.startTime,
-        }
-      : null;
-
     let filtered = [];
 
     switch (activeTab) {
       case "income":
         filtered = todayTransactions.filter(
-          (t) => t.type === "sale" || t.type === "rental"
+          (t) => t.type === "sale" || t.type === "rental" || t.type === "income"
         );
-        if (openingCashTransaction) {
-          filtered = [...filtered, openingCashTransaction];
-        }
         break;
       case "expense":
         filtered = todayTransactions.filter((t) => t.type === "expense");
         break;
       default:
         filtered = todayTransactions;
-        if (openingCashTransaction) {
-          filtered = [...filtered, openingCashTransaction];
-        }
-        break;
     }
     return filtered;
   }, [todayTransactions, activeTab, currentSession]);
 
   const tabTotals = useMemo(() => {
     const income = todayTransactions
-      .filter((t) => t.type === "sale" || t.type === "rental")
+      .filter(
+        (t) => t.type === "sale" || t.type === "rental" || t.type === "income"
+      )
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
     const expense = todayTransactions
       .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-    const openingCash = currentSession?.openingCash || 0;
-
-    return { income: income + openingCash, expense };
+    return { income, expense };
   }, [todayTransactions, currentSession]);
 
   const expectedCash = useMemo(() => {
@@ -205,24 +191,25 @@ const CashierSessionComponent: React.FC = () => {
 
     const income =
       todaySales.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) +
-      todayRentals.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      todayRentals.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
+      todayIncome.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
     const expenses = todayExpenses.reduce(
       (sum, e) => sum + (Number(e.amount) || 0),
       0
     );
 
-    return currentSession.openingCash + income - expenses;
+    return income - expenses;
   }, [currentSession, todaySales, todayRentals, todayExpenses]);
 
-  const handleAddExpense = async () => {
-    if (expenseAmount <= 0) {
-      alert("Jumlah pengeluaran harus lebih dari 0");
+  const handleAddTransaction = async () => {
+    if (totalAmount <= 0) {
+      alert("Jumlah transaksi harus lebih dari 0");
       return;
     }
 
-    if (!expenseDescription.trim()) {
-      alert("Deskripsi pengeluaran harus diisi");
+    if (!transactionDescription.trim()) {
+      alert("Deskripsi transaksi harus diisi");
       return;
     }
 
@@ -231,11 +218,14 @@ const CashierSessionComponent: React.FC = () => {
     try {
       await supabase.from("cashier_transactions").insert({
         session_id: currentSession.id,
-        type: "expense",
-        amount: expenseAmount,
+        type: typeTransaction,
+        amount: totalAmount,
         payment_method: "cash",
-        reference_id: `EXP-${Date.now()}`,
-        description: expenseDescription,
+        reference_id:
+          typeTransaction === "expense"
+            ? `EXP-${Date.now()}`
+            : `INC-${Date.now()}`,
+        description: transactionDescription,
         cashier_id: user.id,
       });
 
@@ -254,22 +244,23 @@ const CashierSessionComponent: React.FC = () => {
       setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
       setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
       setTodayExpenses(trxRes.data.filter((t: any) => t.type === "expense"));
+      setTodayIncome(trxRes.data.filter((t: any) => t.type === "income"));
 
-      setShowExpenseModal(false);
-      setExpenseAmount(0);
-      setExpenseDescription("");
+      setShowAddModal(false);
+      setTotalAmount(0);
+      setTransactionDescription("");
 
       Swal.fire({
         icon: "success",
-        title: "Pengeluaran berhasil ditambahkan!",
-        text: `Jumlah: Rp ${expenseAmount.toLocaleString("id-ID")}`,
+        title: "Transaksi berhasil ditambahkan!",
+        text: `Jumlah: Rp ${totalAmount.toLocaleString("id-ID")}`,
       });
     } catch (error) {
       console.error("Error adding expense:", error);
       Swal.fire({
         icon: "error",
         title: "Gagal!",
-        text: "Gagal menambahkan pengeluaran",
+        text: "Gagal menambahkan transaksi",
       });
     }
   };
@@ -287,21 +278,6 @@ const CashierSessionComponent: React.FC = () => {
     }
 
     if (!user) return;
-    //   id: `CS${Date.now()}`,
-    //   cashierId: user?.id,
-    //   cashierName: user?.full_name || user?.username,
-    //   startTime: new Date().toISOString(),
-    //   openingCash: openingCash,
-    //   totalSales: 0,
-    //   totalCash: 0,
-    //   totalCard: 0,
-    //   totalTransfer: 0,
-    //   totalTransactions: 0,
-    //   status: "active",
-    //   notes: notes,
-    //   createdAt: new Date().toISOString(),
-    //   updatedAt: new Date().toISOString(),
-    // };
 
     const nowIso = new Date().toISOString();
     const row = await db.cashierSessions.create({
@@ -312,6 +288,16 @@ const CashierSessionComponent: React.FC = () => {
       created_at: nowIso,
       updated_at: nowIso,
       cashier_name: user?.full_name,
+    });
+
+    await supabase.from("cashier_transactions").insert({
+      session_id: row.id,
+      type: "income",
+      amount: row.opening_cash,
+      payment_method: "cash",
+      reference_id: "OPENING-CASH",
+      description: "Saldo Awal dari Bos",
+      cashier_id: row.cashier_id,
     });
 
     setCurrentSession(mapDbSession(row));
@@ -423,8 +409,13 @@ const CashierSessionComponent: React.FC = () => {
     (sum, expense) => sum + (Number(expense.amount) || 0),
     0
   );
+  const todayTotalIncome = todayIncome.reduce(
+    (sum, income) => sum + (Number(income.amount) || 0),
+    0
+  );
 
-  const todayTotalRevenue = todayTotalSales + todayTotalRentals;
+  const todayTotalRevenue =
+    todayTotalSales + todayTotalRentals + todayTotalIncome;
 
   const todayCashSales =
     (todaySales || [])
@@ -476,11 +467,11 @@ const CashierSessionComponent: React.FC = () => {
             ) : (
               <>
                 <button
-                  onClick={() => setShowExpenseModal(true)}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  onClick={() => setShowAddModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
                 >
                   <Plus className="h-5 w-5" />
-                  Tambah Pengeluaran
+                  Tambah Transaksi
                 </button>
                 <button
                   onClick={() => setShowCloseModal(true)}
@@ -554,7 +545,8 @@ const CashierSessionComponent: React.FC = () => {
               <p className="text-gray-600 text-sm">Total Revenue Hari Ini</p>
               <p className="text-xs text-gray-500 mt-1">
                 Cafe: Rp {todayTotalSales.toLocaleString("id-ID")} | Rental: Rp{" "}
-                {todayTotalRentals.toLocaleString("id-ID")}
+                {todayTotalRentals.toLocaleString("id-ID")} | Modal: Rp{" "}
+                {todayTotalIncome.toLocaleString("id-ID")}
               </p>
             </div>
 
@@ -583,33 +575,6 @@ const CashierSessionComponent: React.FC = () => {
                 Awal: Rp {currentSession.openingCash.toLocaleString("id-ID")}
               </p>
             </div>
-
-            {/* <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Receipt className="h-6 w-6 text-blue-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                {todayTransactions.length}
-              </h3>
-              <p className="text-gray-600 text-sm">Total Transaksi</p>
-              <p className="text-xs text-gray-500 mt-1">
-                Cafe: {todaySales.length} | Rental: {todayRentals.length}
-              </p>
-            </div> */}
-
-            {/* <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Banknote className="h-6 w-6 text-purple-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                Rp {currentSession.openingCash}
-              </h3>
-              <p className="text-gray-600 text-sm">Saldo Awal</p>
-              <p className="text-xs text-gray-500 mt-1">
-                Expected: Rp{" "}
-                {expectedCash.toLocaleString("id-ID")}
-              </p>
-            </div> */}
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
               <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -760,8 +725,7 @@ const CashierSessionComponent: React.FC = () => {
                         : "text-gray-600 hover:text-gray-900"
                     }`}
                   >
-                    Semua ({todayTransactions.length + (currentSession ? 1 : 0)}
-                    )
+                    Semua ({todayTransactions.length})
                   </button>
                   <button
                     onClick={() => setActiveTab("income")}
@@ -773,9 +737,14 @@ const CashierSessionComponent: React.FC = () => {
                   >
                     <TrendingUp className="h-4 w-4" />
                     Pemasukan (
-                    {todaySales.length +
-                      todayRentals.length +
-                      (currentSession ? 1 : 0)}
+                    {
+                      todayTransactions.filter(
+                        (transaction) =>
+                          transaction.type === "income" ||
+                          transaction.type === "sale" ||
+                          transaction.type === "rental"
+                      ).length
+                    }
                     )
                   </button>
                   <button
@@ -884,7 +853,7 @@ const CashierSessionComponent: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <div
                           className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            transaction.id === "opening-cash"
+                            transaction.type === "income"
                               ? "bg-emerald-100"
                               : transaction.type === "sale"
                               ? "bg-green-100"
@@ -893,7 +862,7 @@ const CashierSessionComponent: React.FC = () => {
                               : "bg-red-100"
                           }`}
                         >
-                          {transaction.id === "opening-cash" ? (
+                          {transaction.type === "income" ? (
                             <Banknote className="h-5 w-5 text-emerald-600" />
                           ) : transaction.type === "sale" ? (
                             <ShoppingCart className="h-5 w-5 text-green-600" />
@@ -910,7 +879,7 @@ const CashierSessionComponent: React.FC = () => {
                           <div className="flex items-center gap-3 mt-1">
                             <span
                               className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                                transaction.id === "opening-cash"
+                                transaction.type === "income"
                                   ? "bg-emerald-100 text-emerald-800"
                                   : transaction.payment_method === "cash"
                                   ? "bg-green-100 text-green-800"
@@ -919,8 +888,8 @@ const CashierSessionComponent: React.FC = () => {
                                   : "bg-purple-100 text-purple-800"
                               }`}
                             >
-                              {transaction.id === "opening-cash"
-                                ? "SALDO AWAL"
+                              {transaction.type === "income"
+                                ? "SALDO"
                                 : transaction.payment_method.toUpperCase()}
                             </span>
                             <div className="flex items-center gap-1 text-sm text-gray-600">
@@ -1031,100 +1000,106 @@ const CashierSessionComponent: React.FC = () => {
       )}
 
       {/* Add Expense Modal */}
-      {showExpenseModal && (
+      {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <TrendingDown className="h-5 w-5 text-red-600" />
-                Tambah Pengeluaran
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Tambah Transaksi
               </h2>
 
-              <div className="space-y-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <User className="h-4 w-4 text-red-600" />
-                    <span className="font-medium text-red-900">Kasir</span>
-                  </div>
-                  <p className="text-red-800">{user?.full_name}</p>
-                  <p className="text-sm text-red-600">
-                    {new Date().toLocaleString("id-ID")}
-                  </p>
-                </div>
-
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddTransaction();
+                }}
+              >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Jumlah Pengeluaran *
+                    Tipe Transaksi <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                      Rp
-                    </span>
-                    {/* <input
-                      type="number"
-                      value={expenseAmount}
-                      onChange={(e) => setExpenseAmount(Number(e.target.value))}
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-lg font-mono"
-                      placeholder="10000"
-                      min="0"
-                    /> */}
-                    <NumericFormat
-                      value={expenseAmount}
-                      allowLeadingZeros={false}
-                      onValueChange={(values) => {
-                        const { floatValue } = values;
-                        setExpenseAmount(floatValue || 0);
-                      }}
-                      thousandSeparator="."
-                      decimalSeparator=","
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-lg font-mono"
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Masukkan jumlah uang yang dikeluarkan
-                  </p>
+                  <select
+                    value={typeTransaction}
+                    onChange={(e) => setTypeTransaction(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="income">Pemasukan</option>
+                    <option value="expense">Pengeluaran</option>
+                  </select>
                 </div>
+
+                {/* <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kategori <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={newEntry.category}
+                    onChange={(e) =>
+                      setNewEntry({
+                        ...newEntry,
+                        category: e.target.value as any,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  >
+                    {categories
+                      .filter((c) => c.value !== "all")
+                      .map((category) => (
+                        <option key={category.value} value={category.value}>
+                          {category.label}
+                        </option>
+                      ))}
+                  </select>
+                </div> */}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Deskripsi Pengeluaran *
+                    Deskripsi <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={expenseDescription}
-                    onChange={(e) => setExpenseDescription(e.target.value)}
+                    value={transactionDescription}
+                    onChange={(e) => setTransactionDescription(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     placeholder="Contoh: Beli air galon, Beli snack, dll"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Jelaskan untuk apa pengeluaran ini
-                  </p>
                 </div>
 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <p className="text-sm text-yellow-800">
-                    <strong>Penting:</strong> Pastikan jumlah dan deskripsi
-                    pengeluaran sudah benar. Data ini akan mempengaruhi
-                    perhitungan saldo kasir.
-                  </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Jumlah <span className="text-red-500">*</span>
+                  </label>
+                  <NumericFormat
+                    value={totalAmount}
+                    allowLeadingZeros={false}
+                    onValueChange={(values) => {
+                      const { floatValue } = values;
+                      setTotalAmount(floatValue || 0);
+                    }}
+                    thousandSeparator="."
+                    decimalSeparator=","
+                    className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-lg font-mono"
+                    placeholder="0"
+                    min="0"
+                  />
                 </div>
-              </div>
+              </form>
 
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowExpenseModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
-                  onClick={handleAddExpense}
-                  disabled={expenseAmount <= 0 || !expenseDescription.trim()}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  onClick={handleAddTransaction}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  Tambah Pengeluaran
+                  Simpan
                 </button>
               </div>
             </div>
@@ -1252,12 +1227,6 @@ const CashierSessionComponent: React.FC = () => {
                         Rp {todayTotalRevenue.toLocaleString("id-ID")}
                       </span>
                     </div>
-                    {/* <div className="flex justify-between">
-                      <span className="text-gray-600">Penjualan Tunai:</span>
-                      <span className="font-medium">
-                        Rp {todayCashSales.toLocaleString("id-ID")}
-                      </span>
-                    </div> */}
                     <div className="flex justify-between">
                       <span className="text-gray-600">Total Pengeluaran:</span>
                       <span className="font-medium">

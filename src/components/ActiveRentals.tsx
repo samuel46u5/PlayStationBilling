@@ -80,6 +80,9 @@ interface RentalSession {
   consoles?: {
     name: string;
     location: string;
+    rate_profiles?: {
+      capital?: number;
+    };
   };
 }
 
@@ -90,14 +93,17 @@ interface Product {
   price: number;
   stock: number;
   is_active: boolean;
+  cost?: number;
 }
 
 interface CartItem {
   productId: string;
   productName: string;
+  cost?: number;
   price: number;
   quantity: number;
   total: number;
+  profit?: number;
 }
 
 type MoveModalState = { sessionId: string; fromConsoleId: string } | null;
@@ -508,7 +514,7 @@ const ActiveRentals: React.FC = () => {
           `
           *,
           customers(name, phone),
-          consoles(name, location)
+          consoles(name, location, rate_profiles(capital))
         `
         )
         .eq("status", "active");
@@ -571,21 +577,6 @@ const ActiveRentals: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDuration = (startTime: string) => {
-    const start = new Date(startTime);
-    const now = new Date();
-    const diffMs = now.getTime() - start.getTime();
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
-  };
-
-  const formatCountdown = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
   };
 
   // Format countdown in HH:MM:SS for Live Timer Display
@@ -1137,7 +1128,10 @@ const ActiveRentals: React.FC = () => {
             name: i.productName,
             type: "product" as const,
             quantity: i.quantity,
+            price: i.price,
+            cost: i.cost,
             total: i.price * i.quantity,
+            profit: Number((i.price - i.cost) * i.quantity),
             description: `Harga: Rp ${i.price.toLocaleString("id-ID")}`,
           })),
           subtotal: productsTotal ?? 0,
@@ -1223,7 +1217,7 @@ const ActiveRentals: React.FC = () => {
       // Ambil detail produk langsung dari DB agar akurat
       const { data: productRows } = await supabase
         .from("rental_session_products")
-        .select("product_name, quantity, price, total, status")
+        .select(`product_name, quantity, price, total, status, products(cost)`)
         .eq("session_id", session.id)
         .in("status", ["pending", "completed"]);
 
@@ -1231,7 +1225,9 @@ const ActiveRentals: React.FC = () => {
         {
           name: `Rental ${session.consoles?.name || "Console"}`,
           type: "rental" as const,
+          capital: session?.consoles?.rate_profiles?.capital ?? 0,
           total: totalCost,
+          profit: totalCost - (session?.consoles?.rate_profiles?.capital ?? 0),
           description: `Durasi: ${formatElapsedHMS(session.start_time)}${
             session.consoles?.location
               ? ` | Lokasi: ${session.consoles.location}`
@@ -1242,7 +1238,10 @@ const ActiveRentals: React.FC = () => {
           name: p.product_name,
           type: "product" as const,
           quantity: p.quantity,
+          price: p.price,
+          cost: p.products?.cost ?? 0,
           total: p.total ?? p.price * p.quantity,
+          profit: (p.price - (p.products?.cost ?? 0)) * p.quantity,
           description: `Harga: Rp ${p.price.toLocaleString("id-ID")}`,
         })) ?? []),
       ];
@@ -1645,7 +1644,7 @@ const ActiveRentals: React.FC = () => {
       // Ambil data console terbaru dari database
       const { data: latestConsole, error: latestConsoleError } = await supabase
         .from("consoles")
-        .select("*")
+        .select(`*, rate_profiles(capital)`)
         .eq("id", consoleId)
         .single();
       if (latestConsoleError || !latestConsole) {
@@ -1789,6 +1788,8 @@ const ActiveRentals: React.FC = () => {
                 ...item,
                 quantity: newQuantity,
                 total: newQuantity * item.price,
+                profit:
+                  ((product.price ?? 0) - (product.cost ?? 0)) * newQuantity,
               }
             : item
         )
@@ -1800,6 +1801,8 @@ const ActiveRentals: React.FC = () => {
         price: product.price,
         quantity: 1,
         total: product.price,
+        cost: product.cost,
+        profit: ((product.price ?? 0) - (product.cost ?? 0)) * 1,
       };
       setCart([...cart, newItem]);
     }
@@ -1861,48 +1864,8 @@ const ActiveRentals: React.FC = () => {
     // }
   };
 
-  const updateQuantity = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-
-    const product = products.find((p) => p.id === productId);
-    if (product && newQuantity > product.stock) {
-      Swal.fire(
-        "Stok Tidak Cukup",
-        `Stok ${product.name} hanya tersisa ${product.stock}`,
-        "warning"
-      );
-      return;
-    }
-
-    setCart(
-      cart.map((item) =>
-        item.productId === productId
-          ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
-          : item
-      )
-    );
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter((item) => item.productId !== productId));
-  };
-
   const clearCart = () => {
     setCart([]);
-  };
-
-  const handleCheckoutProducts = async (sessionId: string) => {
-    if (cart.length === 0) {
-      Swal.fire(
-        "Keranjang Kosong",
-        "Silakan pilih produk terlebih dahulu",
-        "warning"
-      );
-      return;
-    }
   };
 
   // Handler konfirmasi pembayaran prepaid
@@ -2005,7 +1968,9 @@ const ActiveRentals: React.FC = () => {
           {
             name: `Rental ${latestConsole.name}`,
             type: "rental" as const,
+            capital: latestConsole?.rate_profiles?.capital ?? 0,
             total: totalAmount,
+            profit: totalAmount - (latestConsole?.rate_profiles?.capital ?? 0),
             description: `Durasi: ${rentalDurationHours} jam ${
               rentalDurationMinutes > 0 ? `${rentalDurationMinutes} menit` : ""
             } (Prepaid)`,
