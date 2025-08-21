@@ -47,7 +47,7 @@ const Consoles: React.FC = () => {
       setLoading(true);
       try {
         const [consolesData, eqTypes] = await Promise.all([
-          db.select("consoles"),
+          db.select("consoles", "*", { is_active: true }),
           db.select("equipment_types", "id,name,category", { is_active: true }),
         ]);
         setConsoles(consolesData as any[]);
@@ -161,7 +161,7 @@ const Consoles: React.FC = () => {
       };
 
       await db.insert("consoles", insertData);
-      const data = await db.select("consoles");
+      const data = await db.select("consoles", "*", { is_active: true });
       setConsoles(data);
       Swal.fire("Berhasil", "Konsol berhasil ditambahkan!", "success");
       setShowAddForm(false);
@@ -215,7 +215,7 @@ const Consoles: React.FC = () => {
         notes: safe(editConsoleData.notes),
       };
       await db.update("consoles", consoleId, updateData);
-      const data = await db.select("consoles");
+      const data = await db.select("consoles", "*", { is_active: true });
       setConsoles(data);
       Swal.fire("Berhasil", "Konsol berhasil diperbarui!", "success");
       setShowEditForm(null);
@@ -227,6 +227,28 @@ const Consoles: React.FC = () => {
   };
 
   // Delete Console
+  // const handleDeleteConsole = async (consoleId: string) => {
+  //   const result = await Swal.fire({
+  //     title: "Hapus Konsol?",
+  //     text: "Apakah Anda yakin ingin menghapus konsol ini?",
+  //     icon: "warning",
+  //     showCancelButton: true,
+  //     confirmButtonText: "Ya, hapus!",
+  //     cancelButtonText: "Batal",
+  //   });
+  //   if (!result.isConfirmed) return;
+  //   setLoading(true);
+  //   try {
+  //     await db.delete("consoles", consoleId);
+  //     const data = await db.select("consoles");
+  //     setConsoles(data);
+  //     Swal.fire("Berhasil", "Konsol berhasil dihapus!", "success");
+  //   } catch (err: any) {
+  //     Swal.fire("Gagal", err.message || "Gagal menghapus konsol", "error");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const handleDeleteConsole = async (consoleId: string) => {
     const result = await Swal.fire({
       title: "Hapus Konsol?",
@@ -237,14 +259,64 @@ const Consoles: React.FC = () => {
       cancelButtonText: "Batal",
     });
     if (!result.isConfirmed) return;
+
     setLoading(true);
     try {
+      // Cek relasi rental_sessions terlebih dahulu
+      const sessions = await db.select("rental_sessions", "id,status", {
+        console_id: consoleId,
+      });
+      if (sessions && sessions.length > 0) {
+        const r = await Swal.fire({
+          icon: "info",
+          title: "Tidak bisa dihapus",
+          html: `Konsol ini memiliki ${sessions.length} data sesi yang terhubung. Anda bisa mengarsipkan konsol agar tidak tampil di daftar.`,
+          showCancelButton: true,
+          confirmButtonText: "Arsipkan Konsol",
+          cancelButtonText: "Batal",
+        });
+        if (r.isConfirmed) {
+          await db.update("consoles", consoleId, { is_active: false });
+          const data = await db.select("consoles", "*", { is_active: true });
+          setConsoles(data);
+          Swal.fire(
+            "Diarsipkan",
+            "Konsol berhasil dinonaktifkan (arsip).",
+            "success"
+          );
+        }
+        return;
+      }
+
+      // Tidak ada relasi → boleh hapus
       await db.delete("consoles", consoleId);
-      const data = await db.select("consoles");
+      const data = await db.select("consoles", "*", { is_active: true });
       setConsoles(data);
       Swal.fire("Berhasil", "Konsol berhasil dihapus!", "success");
     } catch (err: any) {
-      Swal.fire("Gagal", err.message || "Gagal menghapus konsol", "error");
+      // Guard tambahan jika balasan error FK muncul karena race condition
+      if (err?.code === "23503") {
+        const r = await Swal.fire({
+          icon: "info",
+          title: "Tidak bisa dihapus",
+          text: "Konsol memiliki data sesi yang terhubung. Arsipkan saja?",
+          showCancelButton: true,
+          confirmButtonText: "Arsipkan Konsol",
+          cancelButtonText: "Batal",
+        });
+        if (r.isConfirmed) {
+          await db.update("consoles", consoleId, { is_active: false });
+          const data = await db.select("consoles", "*", { is_active: true });
+          setConsoles(data);
+          Swal.fire(
+            "Diarsipkan",
+            "Konsol berhasil dinonaktifkan (arsip).",
+            "success"
+          );
+        }
+      } else {
+        Swal.fire("Gagal", err.message || "Gagal menghapus konsol", "error");
+      }
     } finally {
       setLoading(false);
     }
