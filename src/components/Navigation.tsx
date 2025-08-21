@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { NAV_ITEMS } from "../constants/navItem";
+import { db } from "../lib/supabase";
 
 interface NavigationProps {
   activeTab: string;
@@ -71,6 +72,24 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
   };
   const { user, logout } = useAuth();
 
+  const [brand, setBrand] = React.useState({
+    name: "Gaming & Billiard",
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const row = await db.settings.get();
+        const general = (row?.general as any) || {};
+        setBrand({
+          name: general.businessName,
+        });
+      } catch (e) {
+        console.error("Gagal memuat system settings:", e);
+      }
+    })();
+  }, []);
+
   const allowedIds = Array.isArray(user?.roles?.nav_items)
     ? (user!.roles!.nav_items as string[])
     : null;
@@ -88,7 +107,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
         <div className="flex items-center gap-3 mb-2">
           <Gamepad2 className="h-8 w-8 text-blue-400" />
           <div>
-            <h1 className="text-xl font-bold">Gaming & Billiard</h1>
+            <h1 className="text-xl font-bold">{brand.name}</h1>
             <p className="text-slate-400 text-xs">Rental + Mini Cafe POS</p>
           </div>
         </div>

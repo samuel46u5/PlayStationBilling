@@ -11,10 +11,20 @@ import {
   Loader2,
   AlertCircle,
   SquarePen,
+  Coffee,
+  Gamepad,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
 import Swal from "sweetalert2";
+
+type Summary = {
+  totalRental?: number;
+  totalCafe?: number;
+  totalIncome?: number;
+  totalExpense?: number;
+  netProfit: number;
+};
 
 const Bookkeeping: React.FC = () => {
   // State management
@@ -50,9 +60,9 @@ const Bookkeeping: React.FC = () => {
   const [activeView, setActiveView] = useState<"jurnal" | "laba_rugi">(
     "jurnal"
   );
-  const [activeTab, setActiveTab] = useState<"all" | "income" | "expense">(
-    "all"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "all" | "income" | "expense" | "rental" | "sale"
+  >("all");
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -88,6 +98,7 @@ const Bookkeeping: React.FC = () => {
       let query = supabase
         .from("cashier_transactions")
         .select("*")
+        .or("type.eq.sale,type.eq.rental")
         .order("timestamp", { ascending: false });
 
       if (selectedPeriod !== "all") {
@@ -111,6 +122,7 @@ const Bookkeeping: React.FC = () => {
       }
 
       const { data, error } = await query;
+
       if (error) throw error;
       setTransactions(data || []);
     } catch (err) {
@@ -154,11 +166,6 @@ const Bookkeeping: React.FC = () => {
         }
 
         query = query.gte("entry_date", startDate.toISOString().split("T")[0]);
-        // const { data: transactions } = await supabase
-        //   .from("cashier_transactions")
-        //   .select("*")
-        //   .gte("entry_date", startDate.toISOString().split("T")[0])
-        //   .order("timestamp", { ascending: false });
       }
 
       const { data, error: fetchError } = await query;
@@ -198,12 +205,16 @@ const Bookkeeping: React.FC = () => {
   );
 
   const filteredByTab = useMemo(() => {
-    if (activeTab === "income")
+    if (activeView === "jurnal" && activeTab === "income")
       return sourceList.filter(
         (e) => e.type === "income" || e.type === "sale" || e.type === "rental"
       );
-    if (activeTab === "expense")
+    if (activeView === "jurnal" && activeTab === "expense")
       return sourceList.filter((e) => e.type === "expense");
+    if (activeView === "laba_rugi" && activeTab === "rental")
+      return sourceList.filter((e) => e.type === "rental");
+    if (activeView === "laba_rugi" && activeTab === "sale")
+      return sourceList.filter((e) => e.type === "sale");
     return sourceList;
   }, [sourceList, activeTab, activeView]);
 
@@ -218,7 +229,14 @@ const Bookkeeping: React.FC = () => {
     () => sourceList.filter((e) => e.type === "expense").length,
     [activeView, sourceList]
   );
-
+  const rentalCount = useMemo(
+    () => sourceList.filter((e) => e.type === "rental").length,
+    [activeView, sourceList]
+  );
+  const saleCount = useMemo(
+    () => sourceList.filter((e) => e.type === "sale").length,
+    [activeView, sourceList]
+  );
   const totalPages = Math.ceil(filteredByTab.length / entriesPerPage);
   const paginatedData = filteredByTab.slice(
     (currentPage - 1) * entriesPerPage,
@@ -226,29 +244,34 @@ const Bookkeeping: React.FC = () => {
   );
 
   //Transaction profit calculation
-  const profitSummary = useMemo(() => {
-    const incomeTypes = new Set(["sale", "rental", "income"]);
-    const totalIncome = transactions
-      .filter((t: any) => incomeTypes.has(t.type))
-      .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
+  const profitSummary: Summary = useMemo(() => {
+    // const incomeTypes = new Set(["sale", "rental", "income"]);
+    const totalRental = transactions
+      .filter((t: any) => t.type === "rental")
+      .reduce((sum: number, t: any) => {
+        const itemProfits = (t.details?.items || []).reduce(
+          (itemSum: number, item: any) => itemSum + (Number(item.profit) || 0),
+          0
+        );
+        return sum + itemProfits;
+      }, 0);
 
-    const totalExpense = transactions
-      .filter((t: any) => t.type === "expense")
-      .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
+    const totalCafe = transactions
+      .filter((t: any) => t.type === "sale")
+      .reduce((sum: number, t: any) => {
+        const itemProfits = (t.details?.items || []).reduce(
+          (itemSum: number, item: any) => itemSum + (Number(item.profit) || 0),
+          0
+        );
+        return sum + itemProfits;
+      }, 0);
 
-    const profitFromDetails = transactions.reduce(
-      (sum: number, t: any) => sum + (Number(t?.details?.profit) || 0),
-      0
-    );
-
-    const netProfit = profitFromDetails || totalIncome - totalExpense;
-    return { totalIncome, totalExpense, netProfit };
+    const netProfit = totalRental + totalCafe;
+    return { totalRental, totalCafe, netProfit };
   }, [transactions]);
 
-  // const isProfitView = activeView === "laba_rugi";
-
   // Financial calculations
-  const financialSummary = useMemo(() => {
+  const financialSummary: Summary = useMemo(() => {
     const totalIncome = entries
       .filter((entry) => entry.type === "income")
       .reduce((sum, entry) => sum + entry.amount, 0);
@@ -479,6 +502,31 @@ const Bookkeeping: React.FC = () => {
             </div>
           </div>
         )}
+
+        <div className="mt-4">
+          <div className="grid grid-cols-2 bg-gray-100 rounded-lg p-1 shadow-sm">
+            <button
+              onClick={() => setActiveView("jurnal")}
+              className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeView !== "laba_rugi"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Jurnal Umum
+            </button>
+            <button
+              onClick={() => setActiveView("laba_rugi")}
+              className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeView === "laba_rugi"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Laba Rugi
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Transactions List */}
@@ -496,7 +544,7 @@ const Bookkeeping: React.FC = () => {
                 {filteredByTab.length}
               </p>
             </div>
-            <div className="flex bg-gray-100 rounded-lg p-1">
+            {/* <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setActiveView("jurnal")}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -517,7 +565,7 @@ const Bookkeeping: React.FC = () => {
               >
                 Laba Rugi
               </button>
-            </div>
+            </div> */}
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab("all")}
@@ -530,26 +578,40 @@ const Bookkeeping: React.FC = () => {
                 Semua ({sourceList.length})
               </button>
               <button
-                onClick={() => setActiveTab("income")}
+                onClick={() =>
+                  setActiveTab(activeView === "jurnal" ? "income" : "rental")
+                }
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                  activeTab === "income"
+                  activeTab === "income" || activeTab === "rental"
                     ? "bg-white text-green-600 shadow-sm"
                     : "text-gray-600 hover:text-green-600"
                 }`}
               >
-                <TrendingUp className="h-4 w-4" />
-                Pemasukan ({incomeCount})
+                {activeView === "jurnal" ? (
+                  <TrendingUp className="h-4 w-4" />
+                ) : (
+                  <Gamepad className="h-4 w-4" />
+                )}
+                {activeView === "jurnal" ? "Pemasukan" : "Rental"} (
+                {activeView === "jurnal" ? incomeCount : rentalCount})
               </button>
               <button
-                onClick={() => setActiveTab("expense")}
+                onClick={() =>
+                  setActiveTab(activeView === "jurnal" ? "expense" : "sale")
+                }
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                  activeTab === "expense"
+                  activeTab === "expense" || activeTab === "sale"
                     ? "bg-white text-red-600 shadow-sm"
                     : "text-gray-600 hover:text-red-600"
                 }`}
               >
-                <TrendingDown className="h-4 w-4" />
-                Pengeluaran ({expenseCount})
+                {activeView === "jurnal" ? (
+                  <TrendingDown className="h-4 w-4" />
+                ) : (
+                  <Coffee className="h-4 w-4" />
+                )}
+                {activeView === "jurnal" ? "Pengeluaran" : "Cafe"} (
+                {activeView === "jurnal" ? expenseCount : saleCount})
               </button>
             </div>
           </div>
@@ -558,27 +620,33 @@ const Bookkeeping: React.FC = () => {
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-green-800">
-                  Total Pemasukan:
+                  {activeView === "jurnal" ? "Total Pemasukan" : "Total Rental"}
                 </span>
                 <span className="text-lg font-bold text-green-600">
-                  Rp {summary.totalIncome.toLocaleString("id-ID")}
+                  Rp{" "}
+                  {activeView === "jurnal"
+                    ? summary.totalIncome?.toLocaleString("id-ID")
+                    : summary.totalRental?.toLocaleString("id-ID")}
                 </span>
               </div>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-red-800">
-                  Total Pengeluaran:
+                  {activeView === "jurnal" ? "Total Pengeluaran" : "Total Cafe"}
                 </span>
                 <span className="text-lg font-bold text-red-600">
-                  Rp {summary.totalExpense.toLocaleString("id-ID")}
+                  Rp{" "}
+                  {activeView === "jurnal"
+                    ? summary.totalExpense?.toLocaleString("id-ID")
+                    : summary.totalCafe?.toLocaleString("id-ID")}
                 </span>
               </div>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-blue-800">
-                  {activeView === "jurnal" ? "Profit" : "Laba Bersih"}
+                  {activeView === "jurnal" ? "Profit" : "Laba Bruto"}
                 </span>
                 <span
                   className={`text-lg font-bold ${
@@ -601,10 +669,6 @@ const Bookkeeping: React.FC = () => {
               </div>
             ) : (
               paginatedData.map((t: any) => {
-                const isIncome =
-                  t.type === "income" ||
-                  t.type === "sale" ||
-                  t.type === "rental";
                 return (
                   <div
                     key={t.id}
@@ -614,13 +678,13 @@ const Bookkeeping: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <div
                           className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            isIncome ? "bg-green-100" : "bg-red-100"
+                            t.type === "rental" ? "bg-green-100" : "bg-red-100"
                           }`}
                         >
-                          {isIncome ? (
-                            <TrendingUp className="h-4 w-4 text-green-600" />
+                          {t.type === "rental" ? (
+                            <Gamepad className="h-4 w-4 text-green-600" />
                           ) : (
-                            <TrendingDown className="h-4 w-4 text-red-600" />
+                            <Coffee className="h-4 w-4 text-red-600" />
                           )}
                         </div>
                         <div>
@@ -630,8 +694,6 @@ const Bookkeeping: React.FC = () => {
                           <div className="flex items-center gap-3 mt-1">
                             <span
                               className={`inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800  ${
-                                t.type === "income" ||
-                                t.type === "sale" ||
                                 t.type === "rental"
                                   ? "bg-green-100 text-green-800"
                                   : "bg-red-100 text-red-800"
@@ -654,20 +716,19 @@ const Bookkeeping: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p
-                          className={`text-lg font-bold ${
-                            isIncome ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
-                          {isIncome ? "+" : "-"}Rp{" "}
-                          {Number(t.amount || 0).toLocaleString("id-ID")}
+                        <p className="text-lg font-bold text-green-600">
+                          +{" "}
+                          {(t.details?.items || [])
+                            .reduce(
+                              (sum: number, item: any) =>
+                                sum + (Number(item.profit) || 0),
+                              0
+                            )
+                            .toLocaleString("id-ID")}
                         </p>
-                        {t?.details?.profit != null && (
-                          <p className="text-xs text-gray-500">
-                            Profit: Rp{" "}
-                            {Number(t.details.profit).toLocaleString("id-ID")}
-                          </p>
-                        )}
+                        <p className="text-sm text-gray-600 capitalize">
+                          Profit
+                        </p>
                       </div>
                     </div>
                   </div>

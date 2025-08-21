@@ -1,129 +1,190 @@
-import React, { useState, useEffect } from 'react';
-import { Gamepad2, Plus, Settings, Wrench, Clock, LayoutGrid, List as ListIcon } from 'lucide-react';
-import { mockRateProfiles, mockEquipmentTypes } from '../data/mockData';
-import { db } from '../lib/supabase';
-import Swal from 'sweetalert2';
+import React, { useState, useEffect } from "react";
+import {
+  Gamepad2,
+  Plus,
+  Settings,
+  Wrench,
+  Clock,
+  LayoutGrid,
+  List as ListIcon,
+} from "lucide-react";
+import { db } from "../lib/supabase";
+import Swal from "sweetalert2";
 
 const Consoles: React.FC = () => {
   const [consoles, setConsoles] = useState<any[]>([]);
   const [selectedConsole, setSelectedConsole] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
-  const [newConsole, setNewConsole] = useState({
-    name: '',
-    type: 'PS5' as 'PS4' | 'PS5',
-    hourlyRate: 0,
-    dailyRate: 0,
-    weeklyRate: 0
+  const [equipmentTypes, setEquipmentTypes] = useState<any[]>([]);
+  const [addForm, setAddForm] = useState({
+    name: "",
+    equipment_type_id: "",
+    status: "available" as "available" | "rented" | "maintenance",
+    location: "",
+    serial_number: "",
+    is_active: true,
+    purchase_date: "",
+    warranty_expiry: "",
+    ip_address: "",
+    relay_command_on: "",
+    relay_command_off: "",
+    relay_command_status: "",
+    power_tv_command: "",
+    perintah_cek_power_tv: "",
+    notes: "",
   });
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
-  const [editTab, setEditTab] = useState<'umum' | 'teknis' | 'perintah'>('umum');
-  const [addTab, setAddTab] = useState<'umum' | 'teknis'>('umum');
+  const [viewMode, setViewMode] = useState<"card" | "list">("card");
+  const [editTab, setEditTab] = useState<"umum" | "teknis" | "perintah">(
+    "umum"
+  );
+  const [addTab, setAddTab] = useState<"umum" | "teknis">("umum");
   const [editConsoleData, setEditConsoleData] = useState<any>(null);
 
   useEffect(() => {
-    // Fetch consoles from Supabase
-    const fetchConsoles = async () => {
+    const fetchInitial = async () => {
       setLoading(true);
       try {
-        const data = await db.select('consoles');
-        setConsoles(data);
+        const [consolesData, eqTypes] = await Promise.all([
+          db.select("consoles"),
+          db.select("equipment_types", "id,name,category", { is_active: true }),
+        ]);
+        setConsoles(consolesData as any[]);
+        setEquipmentTypes(eqTypes as any[]);
       } catch (err) {
-        alert('Failed to fetch consoles');
+        alert("Failed to fetch consoles");
       } finally {
         setLoading(false);
       }
     };
-    fetchConsoles();
+    fetchInitial();
   }, []);
 
   useEffect(() => {
+    if (equipmentTypes.length && !addForm.equipment_type_id) {
+      setAddForm((p) => ({ ...p, equipment_type_id: equipmentTypes[0].id }));
+    }
+  }, [equipmentTypes]);
+
+  useEffect(() => {
     if (showEditForm) {
-      setEditTab('umum');
-      const editing = consoles.find(c => c.id === showEditForm);
+      setEditTab("umum");
+      const editing = consoles.find((c) => c.id === showEditForm);
       setEditConsoleData(editing ? { ...editing } : null);
     }
   }, [showEditForm, consoles]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'available': return 'bg-green-100 text-green-800';
-      case 'rented': return 'bg-blue-100 text-blue-800';
-      case 'maintenance': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case "available":
+        return "bg-green-100 text-green-800";
+      case "rented":
+        return "bg-blue-100 text-blue-800";
+      case "maintenance":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'available': return <Clock className="h-4 w-4" />;
-      case 'rented': return <Gamepad2 className="h-4 w-4" />;
-      case 'maintenance': return <Wrench className="h-4 w-4" />;
-      default: return <Settings className="h-4 w-4" />;
+      case "available":
+        return <Clock className="h-4 w-4" />;
+      case "rented":
+        return <Gamepad2 className="h-4 w-4" />;
+      case "maintenance":
+        return <Wrench className="h-4 w-4" />;
+      default:
+        return <Settings className="h-4 w-4" />;
     }
   };
 
   const handleAddConsole = async () => {
     setLoading(true);
     try {
-      // Ambil semua field dari form (dua tab)
-      const name = (document.getElementById('add-name') as HTMLInputElement)?.value;
-      const equipmentTypeId = (document.getElementById('add-equipment-type') as HTMLSelectElement)?.value;
-      const status = (document.getElementById('add-status') as HTMLSelectElement)?.value;
-      const location = (document.getElementById('add-location') as HTMLInputElement)?.value;
-      const serialNumber = (document.getElementById('add-serial') as HTMLInputElement)?.value;
-      const isActive = (document.getElementById('add-active') as HTMLInputElement)?.checked;
-      const purchaseDate = (document.getElementById('add-purchase-date') as HTMLInputElement)?.value;
-      const warrantyExpiry = (document.getElementById('add-warranty') as HTMLInputElement)?.value;
-      let ipAddress = (document.getElementById('add-ip') as HTMLInputElement)?.value;
-      const relayCommandOn = (document.getElementById('add-relay-on') as HTMLInputElement)?.value;
-      const relayCommandOff = (document.getElementById('add-relay-off') as HTMLInputElement)?.value;
-      const relayCommandStatus = (document.getElementById('add-relay-status') as HTMLInputElement)?.value;
-          const powerTvCommand = (document.getElementById('add-power-tv') as HTMLInputElement)?.value;
-          const perintahCekPowerTv = (document.getElementById('add-cek-power-tv') as HTMLInputElement)?.value;
-      const notes = (document.getElementById('add-notes') as HTMLTextAreaElement)?.value;
-      // Field opsional: null jika kosong
-      const safe = (v: string | undefined) => v && v.trim() !== '' ? v : null;
-      if (!name) {
-        Swal.fire('Gagal', 'Nama konsol diperlukan', 'error');
+      const safe = (v: string | undefined) =>
+        v && v.trim() !== "" ? v.trim() : null;
+
+      if (!addForm.name.trim()) {
+        Swal.fire("Gagal", "Nama konsol diperlukan", "error");
         setLoading(false);
         return;
       }
+      if (!addForm.equipment_type_id) {
+        Swal.fire("Gagal", "Tipe konsol diperlukan", "error");
+        setLoading(false);
+        return;
+      }
+      const allowedStatus = ["available", "rented", "maintenance"];
+      if (!allowedStatus.includes(addForm.status)) {
+        Swal.fire("Gagal", "Status tidak valid", "error");
+        setLoading(false);
+        return;
+      }
+
+      const purchaseDateSafe = safe(addForm.purchase_date);
+      const warrantyExpirySafe = safe(addForm.warranty_expiry);
+      if (purchaseDateSafe && warrantyExpirySafe) {
+        const p = new Date(purchaseDateSafe);
+        const w = new Date(warrantyExpirySafe);
+        if (!isNaN(p.getTime()) && !isNaN(w.getTime()) && w < p) {
+          Swal.fire(
+            "Gagal",
+            "Tanggal garansi tidak boleh lebih awal dari tanggal pembelian",
+            "error"
+          );
+          setLoading(false);
+          return;
+        }
+      }
+
       const newId = `CNSL-${Date.now()}`;
       const insertData = {
         id: newId,
-        name,
-        equipment_type_id: equipmentTypeId,
-        status,
-        location: safe(location),
-        serial_number: safe(serialNumber),
-        is_active: !!isActive,
-        purchase_date: safe(purchaseDate),
-        warranty_expiry: safe(warrantyExpiry),
-        ip_address: safe(ipAddress),
-        relay_command_on: safe(relayCommandOn),
-        relay_command_off: safe(relayCommandOff),
-        relay_command_status: safe(relayCommandStatus),
-            power_tv_command: safe(powerTvCommand),
-            perintah_cek_power_tv: safe(perintahCekPowerTv),
-        notes: safe(notes)
+        name: addForm.name.trim(),
+        equipment_type_id: addForm.equipment_type_id,
+        status: addForm.status,
+        location: safe(addForm.location),
+        serial_number: safe(addForm.serial_number),
+        is_active: !!addForm.is_active,
+        purchase_date: purchaseDateSafe,
+        warranty_expiry: warrantyExpirySafe,
+        ip_address: safe(addForm.ip_address),
+        relay_command_on: safe(addForm.relay_command_on),
+        relay_command_off: safe(addForm.relay_command_off),
+        relay_command_status: safe(addForm.relay_command_status),
+        power_tv_command: safe(addForm.power_tv_command),
+        perintah_cek_power_tv: safe(addForm.perintah_cek_power_tv),
+        notes: safe(addForm.notes),
       };
-      await db.insert('consoles', insertData);
-      // Refresh list
-      const data = await db.select('consoles');
+
+      await db.insert("consoles", insertData);
+      const data = await db.select("consoles");
       setConsoles(data);
-      Swal.fire('Berhasil', 'Konsol berhasil ditambahkan!', 'success');
+      Swal.fire("Berhasil", "Konsol berhasil ditambahkan!", "success");
       setShowAddForm(false);
-      setNewConsole({
-        name: '',
-        type: 'PS5',
-        hourlyRate: 0,
-        dailyRate: 0,
-        weeklyRate: 0
+      setAddTab("umum");
+      setAddForm({
+        name: "",
+        equipment_type_id: "",
+        status: "available",
+        location: "",
+        serial_number: "",
+        is_active: true,
+        purchase_date: "",
+        warranty_expiry: "",
+        ip_address: "",
+        relay_command_on: "",
+        relay_command_off: "",
+        relay_command_status: "",
+        power_tv_command: "",
+        perintah_cek_power_tv: "",
+        notes: "",
       });
     } catch (err: any) {
-      Swal.fire('Gagal', err.message || 'Gagal menambahkan konsol', 'error');
+      Swal.fire("Gagal", err.message || "Gagal menambahkan konsol", "error");
     } finally {
       setLoading(false);
     }
@@ -135,7 +196,7 @@ const Consoles: React.FC = () => {
     setLoading(true);
     try {
       // Field opsional: null jika kosong
-      const safe = (v: string | undefined) => v && v.trim() !== '' ? v : null;
+      const safe = (v: string | undefined) => (v && v.trim() !== "" ? v : null);
       const updateData = {
         name: editConsoleData.name,
         equipment_type_id: editConsoleData.equipment_type_id,
@@ -151,15 +212,15 @@ const Consoles: React.FC = () => {
         relay_command_status: safe(editConsoleData.relay_command_status),
         power_tv_command: safe(editConsoleData.power_tv_command),
         perintah_cek_power_tv: safe(editConsoleData.perintah_cek_power_tv),
-        notes: safe(editConsoleData.notes)
+        notes: safe(editConsoleData.notes),
       };
-      await db.update('consoles', consoleId, updateData);
-      const data = await db.select('consoles');
+      await db.update("consoles", consoleId, updateData);
+      const data = await db.select("consoles");
       setConsoles(data);
-      Swal.fire('Berhasil', 'Konsol berhasil diperbarui!', 'success');
+      Swal.fire("Berhasil", "Konsol berhasil diperbarui!", "success");
       setShowEditForm(null);
     } catch (err: any) {
-      Swal.fire('Gagal', err.message || 'Gagal memperbarui konsol', 'error');
+      Swal.fire("Gagal", err.message || "Gagal memperbarui konsol", "error");
     } finally {
       setLoading(false);
     }
@@ -168,22 +229,22 @@ const Consoles: React.FC = () => {
   // Delete Console
   const handleDeleteConsole = async (consoleId: string) => {
     const result = await Swal.fire({
-      title: 'Hapus Konsol?',
-      text: 'Apakah Anda yakin ingin menghapus konsol ini?',
-      icon: 'warning',
+      title: "Hapus Konsol?",
+      text: "Apakah Anda yakin ingin menghapus konsol ini?",
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonText: 'Ya, hapus!',
-      cancelButtonText: 'Batal',
+      confirmButtonText: "Ya, hapus!",
+      cancelButtonText: "Batal",
     });
     if (!result.isConfirmed) return;
     setLoading(true);
     try {
-      await db.delete('consoles', consoleId);
-      const data = await db.select('consoles');
+      await db.delete("consoles", consoleId);
+      const data = await db.select("consoles");
       setConsoles(data);
-      Swal.fire('Berhasil', 'Konsol berhasil dihapus!', 'success');
+      Swal.fire("Berhasil", "Konsol berhasil dihapus!", "success");
     } catch (err: any) {
-      Swal.fire('Gagal', err.message || 'Gagal menghapus konsol', 'error');
+      Swal.fire("Gagal", err.message || "Gagal menghapus konsol", "error");
     } finally {
       setLoading(false);
     }
@@ -191,13 +252,13 @@ const Consoles: React.FC = () => {
 
   // Set Maintenance
   const handleSetMaintenance = async (consoleId: string) => {
-    setEditConsoleData((prev: any) => ({ ...prev, status: 'maintenance' }));
+    setEditConsoleData((prev: any) => ({ ...prev, status: "maintenance" }));
     setTimeout(() => handleEditConsole(consoleId), 0);
   };
 
   // Set Available
   const handleSetAvailable = async (consoleId: string) => {
-    setEditConsoleData((prev: any) => ({ ...prev, status: 'available' }));
+    setEditConsoleData((prev: any) => ({ ...prev, status: "available" }));
     setTimeout(() => handleEditConsole(consoleId), 0);
   };
 
@@ -211,7 +272,7 @@ const Consoles: React.FC = () => {
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
             {/* Jumlah Konsol Tersedia */}
-            {consoles.filter(c => c.status === 'available').length}
+            {consoles.filter((c) => c.status === "available").length}
           </h3>
           <p className="text-gray-600 text-sm">Konsol Tersedia</p>
         </div>
@@ -221,7 +282,7 @@ const Consoles: React.FC = () => {
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
             {/* Jumlah Konsol Disewa */}
-            {consoles.filter(c => c.status === 'rented').length}
+            {consoles.filter((c) => c.status === "rented").length}
           </h3>
           <p className="text-gray-600 text-sm">Sedang Disewa</p>
         </div>
@@ -231,7 +292,7 @@ const Consoles: React.FC = () => {
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
             {/* Jumlah Konsol Maintenance */}
-            {consoles.filter(c => c.status === 'maintenance').length}
+            {consoles.filter((c) => c.status === "maintenance").length}
           </h3>
           <p className="text-gray-600 text-sm">Dalam Pemeliharaan</p>
         </div>
@@ -241,7 +302,13 @@ const Consoles: React.FC = () => {
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-1">
             {/* Tingkat Pemanfaatan */}
-            {consoles.length > 0 ? `${Math.round((consoles.filter(c => c.status === 'rented').length / consoles.length) * 100)}%` : '0%'}
+            {consoles.length > 0
+              ? `${Math.round(
+                  (consoles.filter((c) => c.status === "rented").length /
+                    consoles.length) *
+                    100
+                )}%`
+              : "0%"}
           </h3>
           <p className="text-gray-600 text-sm">Tingkat Pemanfaatan</p>
         </div>
@@ -251,25 +318,43 @@ const Consoles: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Manajemen Konsol</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Manajemen Konsol
+            </h1>
             <p className="text-gray-600">Kelola konsol PlayStation Anda</p>
           </div>
           <div className="flex gap-2 items-center">
             <button
-              onClick={() => setViewMode('card')}
-              className={`p-2 rounded-lg border ${viewMode === 'card' ? 'bg-blue-100 border-blue-400' : 'bg-white border-gray-300'} transition-colors`}
+              onClick={() => setViewMode("card")}
+              className={`p-2 rounded-lg border ${
+                viewMode === "card"
+                  ? "bg-blue-100 border-blue-400"
+                  : "bg-white border-gray-300"
+              } transition-colors`}
               title="Tampilan Kartu"
             >
-              <LayoutGrid className={`h-5 w-5 ${viewMode === 'card' ? 'text-blue-600' : 'text-gray-400'}`} />
+              <LayoutGrid
+                className={`h-5 w-5 ${
+                  viewMode === "card" ? "text-blue-600" : "text-gray-400"
+                }`}
+              />
             </button>
             <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg border ${viewMode === 'list' ? 'bg-blue-100 border-blue-400' : 'bg-white border-gray-300'} transition-colors`}
+              onClick={() => setViewMode("list")}
+              className={`p-2 rounded-lg border ${
+                viewMode === "list"
+                  ? "bg-blue-100 border-blue-400"
+                  : "bg-white border-gray-300"
+              } transition-colors`}
               title="Tampilan Daftar"
             >
-              <ListIcon className={`h-5 w-5 ${viewMode === 'list' ? 'text-blue-600' : 'text-gray-400'}`} />
+              <ListIcon
+                className={`h-5 w-5 ${
+                  viewMode === "list" ? "text-blue-600" : "text-gray-400"
+                }`}
+              />
             </button>
-            <button 
+            <button
               onClick={() => setShowAddForm(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
             >
@@ -281,7 +366,7 @@ const Consoles: React.FC = () => {
       </div>
 
       {/* Tampilan List */}
-      {viewMode === 'list' && (
+      {viewMode === "list" && (
         <div className="overflow-x-auto mb-8">
           <table className="min-w-full bg-white rounded-xl shadow-sm border border-gray-200">
             <thead>
@@ -300,17 +385,21 @@ const Consoles: React.FC = () => {
                   <td className="px-4 py-2 font-medium">{console.name}</td>
                   <td className="px-4 py-2">{console.equipment_type_id}</td>
                   <td className="px-4 py-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-                      console.status === 'available' ? 'bg-green-100 text-green-700' :
-                      console.status === 'rented' ? 'bg-orange-100 text-orange-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                        console.status === "available"
+                          ? "bg-green-100 text-green-700"
+                          : console.status === "rented"
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
                       {getStatusIcon(console.status)}
                       {console.status}
                     </span>
                   </td>
-                  <td className="px-4 py-2">{console.location || '-'}</td>
-                  <td className="px-4 py-2">{console.serial_number || '-'}</td>
+                  <td className="px-4 py-2">{console.location || "-"}</td>
+                  <td className="px-4 py-2">{console.serial_number || "-"}</td>
                   <td className="px-4 py-2 flex gap-2">
                     <button
                       onClick={() => setShowEditForm(console.id)}
@@ -324,8 +413,19 @@ const Consoles: React.FC = () => {
                       className="p-2 border border-red-300 hover:border-red-500 text-red-600 rounded-lg transition-colors"
                       title="Hapus Konsol"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V19a2 2 0 002 2h8a2 2 0 002-2V7.5M4 7.5h16M10 11v6M14 11v6M9 7.5V5a2 2 0 012-2h2a2 2 0 012 2v2.5" />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1.5}
+                        stroke="currentColor"
+                        className="h-4 w-4"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6 7.5V19a2 2 0 002 2h8a2 2 0 002-2V7.5M4 7.5h16M10 11v6M14 11v6M9 7.5V5a2 2 0 012-2h2a2 2 0 012 2v2.5"
+                        />
                       </svg>
                     </button>
                   </td>
@@ -337,12 +437,21 @@ const Consoles: React.FC = () => {
       )}
 
       {/* Tampilan Card (Grid) */}
-      {viewMode === 'card' && (
+      {viewMode === "card" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {consoles.map((console) => (
-            <div key={console.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+            <div
+              key={console.id}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+            >
               {/* Header */}
-              <div className={`p-4 ${console.equipmentTypeId === 'ET002' ? 'bg-gradient-to-r from-blue-600 to-blue-700' : 'bg-gradient-to-r from-purple-600 to-purple-700'} text-white`}>
+              <div
+                className={`p-4 ${
+                  console.equipment_type_id === "ET002"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-700"
+                    : "bg-gradient-to-r from-purple-600 to-purple-700"
+                } text-white`}
+              >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
@@ -350,17 +459,23 @@ const Consoles: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg">{console.name}</h3>
-                      <span className="text-sm opacity-90">{console.location}</span>
+                      <span className="text-sm opacity-90">
+                        {console.location}
+                      </span>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
-                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                    console.status === 'available' ? 'bg-green-500 text-white' :
-                    console.status === 'rented' ? 'bg-orange-500 text-white' :
-                    'bg-red-500 text-white'
-                  }`}>
+                  <span
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                      console.status === "available"
+                        ? "bg-green-500 text-white"
+                        : console.status === "rented"
+                        ? "bg-orange-500 text-white"
+                        : "bg-red-500 text-white"
+                    }`}
+                  >
                     {getStatusIcon(console.status)}
                     {console.status.toUpperCase()}
                   </span>
@@ -378,27 +493,39 @@ const Consoles: React.FC = () => {
                     </h4>
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Serial Number</span>
+                        <span className="text-sm text-gray-600">
+                          Serial Number
+                        </span>
                         <span className="font-medium text-gray-900">
-                          {console.serial_number || 'N/A'}
+                          {console.serial_number || "N/A"}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Location</span>
                         <span className="font-medium text-gray-900">
-                          {console.location || 'N/A'}
+                          {console.location || "N/A"}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Purchase Date</span>
+                        <span className="text-sm text-gray-600">
+                          Purchase Date
+                        </span>
                         <span className="font-medium text-gray-900">
-                          {console.purchase_date ? new Date(console.purchase_date).toLocaleDateString('id-ID') : 'N/A'}
+                          {console.purchase_date
+                            ? new Date(
+                                console.purchase_date
+                              ).toLocaleDateString("id-ID")
+                            : "N/A"}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Warranty</span>
                         <span className="font-medium text-gray-900">
-                          {console.warranty_expiry ? new Date(console.warranty_expiry).toLocaleDateString('id-ID') : 'N/A'}
+                          {console.warranty_expiry
+                            ? new Date(
+                                console.warranty_expiry
+                              ).toLocaleDateString("id-ID")
+                            : "N/A"}
                         </span>
                       </div>
                     </div>
@@ -407,13 +534,17 @@ const Consoles: React.FC = () => {
                   {/* Actions */}
                   <div className="pt-4 border-t border-gray-100">
                     <div className="flex gap-2">
-                      <button 
-                        onClick={() => setSelectedConsole(selectedConsole === console.id ? null : console.id)}
+                      <button
+                        onClick={() =>
+                          setSelectedConsole(
+                            selectedConsole === console.id ? null : console.id
+                          )
+                        }
                         className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                       >
                         Lihat Detail
                       </button>
-                      <button 
+                      <button
                         onClick={() => setShowEditForm(console.id)}
                         className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors"
                       >
@@ -425,8 +556,19 @@ const Consoles: React.FC = () => {
                         title="Hapus Console"
                       >
                         {/* Ikon keranjang sampah */}
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5V19a2 2 0 002 2h8a2 2 0 002-2V7.5M4 7.5h16M10 11v6M14 11v6M9 7.5V5a2 2 0 012-2h2a2 2 0 012 2v2.5" />
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          className="h-4 w-4"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6 7.5V19a2 2 0 002 2h8a2 2 0 002-2V7.5M4 7.5h16M10 11v6M14 11v6M9 7.5V5a2 2 0 012-2h2a2 2 0 012 2v2.5"
+                          />
                         </svg>
                       </button>
                     </div>
@@ -435,7 +577,9 @@ const Consoles: React.FC = () => {
                   {/* Extended Details */}
                   {selectedConsole === console.id && (
                     <div className="pt-4 border-t border-gray-100">
-                      <h4 className="font-semibold text-gray-900 mb-3">Informasi Konsol</h4>
+                      <h4 className="font-semibold text-gray-900 mb-3">
+                        Informasi Konsol
+                      </h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-gray-600">Console ID:</span>
@@ -443,29 +587,44 @@ const Consoles: React.FC = () => {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Equipment Type:</span>
-                          <span className="font-medium">{console.equipment_type_id}</span>
+                          <span className="font-medium">
+                            {console.equipment_type_id}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Current Status:</span>
-                          <span className={`font-medium ${
-                            console.status === 'available' ? 'text-green-600' :
-                            console.status === 'rented' ? 'text-blue-600' : 'text-red-600'
-                          }`}>
+                          <span
+                            className={`font-medium ${
+                              console.status === "available"
+                                ? "text-green-600"
+                                : console.status === "rented"
+                                ? "text-blue-600"
+                                : "text-red-600"
+                            }`}
+                          >
                             {console.status}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Total Revenue Today:</span>
-                          <span className="font-medium text-green-600">Rp 150,000</span>
+                          <span className="text-gray-600">
+                            Total Revenue Today:
+                          </span>
+                          <span className="font-medium text-green-600">
+                            Rp 150,000
+                          </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Hours Played Today:</span>
+                          <span className="text-gray-600">
+                            Hours Played Today:
+                          </span>
                           <span className="font-medium">8.5 hours</span>
                         </div>
                         {console.ip_address && (
                           <div className="flex justify-between">
                             <span className="text-gray-600">IP Address:</span>
-                            <span className="font-medium">{console.ip_address}</span>
+                            <span className="font-medium">
+                              {console.ip_address}
+                            </span>
                           </div>
                         )}
                         {console.notes && (
@@ -475,10 +634,10 @@ const Consoles: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      
-                      {console.status === 'available' && (
+
+                      {console.status === "available" && (
                         <div className="mt-4 space-y-2">
-                          <button 
+                          <button
                             onClick={() => handleSetMaintenance(console.id)}
                             className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                           >
@@ -486,16 +645,16 @@ const Consoles: React.FC = () => {
                           </button>
                         </div>
                       )}
-                      
-                      {console.status === 'rented' && (
+
+                      {console.status === "rented" && (
                         <div className="mt-4">
                           {/* Hapus tombol Akhiri Sesi Saat Ini */}
                         </div>
                       )}
-                      
-                      {console.status === 'maintenance' && (
+
+                      {console.status === "maintenance" && (
                         <div className="mt-4">
-                          <button 
+                          <button
                             onClick={() => handleSetAvailable(console.id)}
                             className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                           >
@@ -517,53 +676,87 @@ const Consoles: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
             <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Tambah Konsol Baru</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Tambah Konsol Baru
+              </h2>
               <div className="flex gap-2 mb-6">
                 <button
                   type="button"
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${addTab === 'umum' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                  onClick={() => setAddTab('umum')}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${
+                    addTab === "umum"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300"
+                  }`}
+                  onClick={() => setAddTab("umum")}
                 >
                   Informasi Umum
                 </button>
                 <button
                   type="button"
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${addTab === 'teknis' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                  onClick={() => setAddTab('teknis')}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${
+                    addTab === "teknis"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300"
+                  }`}
+                  onClick={() => setAddTab("teknis")}
                 >
                   Detail Teknis
                 </button>
               </div>
               <form className="space-y-4">
-                {addTab === 'umum' && (
+                {addTab === "umum" && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nama Konsol *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nama Konsol *
+                      </label>
                       <input
                         id="add-name"
                         type="text"
-                        defaultValue={newConsole.name}
+                        value={addForm.name}
+                        onChange={(e) =>
+                          setAddForm((p) => ({ ...p, name: e.target.value }))
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="mis. PlayStation 5 - Station 1"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Konsol</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tipe Konsol
+                      </label>
                       <select
                         id="add-equipment-type"
-                        defaultValue={newConsole.type === 'PS5' ? 'ET002' : 'ET001'}
+                        value={addForm.equipment_type_id}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            equipment_type_id: e.target.value,
+                          }))
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
-                        {mockEquipmentTypes.map(type => (
-                          <option key={type.id} value={type.id}>{type.name}</option>
+                        {equipmentTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Status
+                      </label>
                       <select
                         id="add-status"
                         defaultValue="available"
+                        value={addForm.status}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            status: e.target.value as any,
+                          }))
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="available">Tersedia</option>
@@ -572,18 +765,36 @@ const Consoles: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Lokasi
+                      </label>
                       <input
                         id="add-location"
                         type="text"
+                        value={addForm.location}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            location: e.target.value,
+                          }))
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Serial Number
+                      </label>
                       <input
                         id="add-serial"
                         type="text"
+                        value={addForm.serial_number}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            serial_number: e.target.value,
+                          }))
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -591,85 +802,186 @@ const Consoles: React.FC = () => {
                       <input
                         id="add-active"
                         type="checkbox"
+                        checked={!!addForm.is_active}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            is_active: e.target.checked,
+                          }))
+                        }
                         defaultChecked={true}
                         className="h-4 w-4 text-blue-600 border-gray-300 rounded"
                       />
-                      <label htmlFor="add-active" className="text-sm text-gray-700">Aktif</label>
+                      <label
+                        htmlFor="add-active"
+                        className="text-sm text-gray-700"
+                      >
+                        Aktif
+                      </label>
                     </div>
                   </>
                 )}
-                {addTab === 'teknis' && (
+                {addTab === "teknis" && (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
-                      <input
-                        id="add-purchase-date"
-                        type="date"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Tanggal Pembelian
+                        </label>
+                        <input
+                          id="add-purchase-date"
+                          type="date"
+                          value={addForm.purchase_date}
+                          onChange={(e) =>
+                            setAddForm((p) => ({
+                              ...p,
+                              purchase_date: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Garansi s/d
+                        </label>
+                        <input
+                          id="add-warranty"
+                          type="date"
+                          value={addForm.warranty_expiry}
+                          onChange={(e) =>
+                            setAddForm((p) => ({
+                              ...p,
+                              warranty_expiry: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
                     </div>
+
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Garansi s/d</label>
-                      <input
-                        id="add-warranty"
-                        type="date"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        IP Address
+                      </label>
                       <input
                         id="add-ip"
                         type="text"
+                        value={addForm.ip_address}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            ip_address: e.target.value,
+                          }))
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay ON</label>
-                    <input
-                      id="add-relay-on"
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay OFF</label>
-                    <input
-                      id="add-relay-off"
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Relay STATUS</label>
-                    <input
-                      id="add-relay-status"
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Power TV</label>
-                    <input
-                      id="add-power-tv"
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Perintah Cek Power TV</label>
-                    <input
-                      id="add-cek-power-tv"
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Perintah Relay ON
+                        </label>
+                        <input
+                          id="add-relay-on"
+                          type="text"
+                          value={addForm.relay_command_on}
+                          onChange={(e) =>
+                            setAddForm((p) => ({
+                              ...p,
+                              relay_command_on: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Perintah Relay OFF
+                        </label>
+                        <input
+                          id="add-relay-off"
+                          type="text"
+                          value={addForm.relay_command_off}
+                          onChange={(e) =>
+                            setAddForm((p) => ({
+                              ...p,
+                              relay_command_off: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Perintah Relay STATUS
+                      </label>
+                      <input
+                        id="add-relay-status"
+                        type="text"
+                        value={addForm.relay_command_status}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            relay_command_status: e.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Perintah Power TV
+                        </label>
+                        <input
+                          id="add-power-tv"
+                          type="text"
+                          value={addForm.power_tv_command}
+                          onChange={(e) =>
+                            setAddForm((p) => ({
+                              ...p,
+                              power_tv_command: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Perintah Cek Power TV
+                        </label>
+                        <input
+                          id="add-cek-power-tv"
+                          type="text"
+                          value={addForm.perintah_cek_power_tv}
+                          onChange={(e) =>
+                            setAddForm((p) => ({
+                              ...p,
+                              perintah_cek_power_tv: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Catatan
+                      </label>
                       <textarea
                         id="add-notes"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         rows={3}
+                        value={addForm.notes}
+                        onChange={(e) =>
+                          setAddForm((p) => ({ ...p, notes: e.target.value }))
+                        }
                         placeholder="Catatan tambahan tentang konsol ini"
                       />
                     </div>
@@ -696,191 +1008,302 @@ const Consoles: React.FC = () => {
       )}
 
       {/* Edit Console Modal */}
-      {showEditForm && editConsoleData && (() => {
-        return (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-              <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Konsol</h2>
-                <div className="flex gap-2 mb-6">
-                  <button
-                    type="button"
-                    className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${editTab === 'umum' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                    onClick={() => setEditTab('umum')}
-                  >
-                    Informasi Umum
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${editTab === 'teknis' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                    onClick={() => setEditTab('teknis')}
-                  >
-                    Detail Teknis
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${editTab === 'perintah' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                    onClick={() => setEditTab('perintah')}
-                  >
-                    Daftar Perintah
-                  </button>
-                </div>
-                <form className="space-y-4">
-                  {editTab === 'umum' && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nama Konsol *</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.name}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, name: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="mis. PlayStation 5 - Station 1"
+      {showEditForm &&
+        editConsoleData &&
+        (() => {
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+                <div className="p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                    Edit Konsol
+                  </h2>
+                  <div className="flex gap-2 mb-6">
+                    <button
+                      type="button"
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${
+                        editTab === "umum"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
+                      onClick={() => setEditTab("umum")}
+                    >
+                      Informasi Umum
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${
+                        editTab === "teknis"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
+                      onClick={() => setEditTab("teknis")}
+                    >
+                      Detail Teknis
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium border transition-colors ${
+                        editTab === "perintah"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
+                      onClick={() => setEditTab("perintah")}
+                    >
+                      Daftar Perintah
+                    </button>
+                  </div>
+                  <form className="space-y-4">
+                    {editTab === "umum" && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Nama Konsol *
+                          </label>
+                          <input
+                            type="text"
+                            value={editConsoleData.name}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                name: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="mis. PlayStation 5 - Station 1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Tipe Konsol
+                          </label>
+                          <select
+                            value={editConsoleData.equipment_type_id}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                equipment_type_id: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            {equipmentTypes.map((type) => (
+                              <option key={type.id} value={type.id}>
+                                {type.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Status
+                          </label>
+                          <select
+                            value={editConsoleData.status}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                status: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="available">Tersedia</option>
+                            <option value="rented">Disewa</option>
+                            <option value="maintenance">Pemeliharaan</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Lokasi
+                          </label>
+                          <input
+                            type="text"
+                            value={editConsoleData.location || ""}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                location: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Serial Number
+                          </label>
+                          <input
+                            type="text"
+                            value={editConsoleData.serial_number || ""}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                serial_number: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!editConsoleData.is_active}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                is_active: e.target.checked,
+                              }))
+                            }
+                            className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                          />
+                          <label className="text-sm text-gray-700">Aktif</label>
+                        </div>
+                      </>
+                    )}
+                    {editTab === "teknis" && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Tanggal Pembelian
+                          </label>
+                          <input
+                            type="date"
+                            value={editConsoleData.purchase_date || ""}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                purchase_date: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Garansi s/d
+                          </label>
+                          <input
+                            type="date"
+                            value={editConsoleData.warranty_expiry || ""}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                warranty_expiry: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Catatan
+                          </label>
+                          <textarea
+                            value={editConsoleData.notes || ""}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                notes: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            rows={3}
+                            placeholder="Catatan tambahan tentang konsol ini"
+                          />
+                        </div>
+                      </>
+                    )}
+                    {editTab === "perintah" && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            IP Address
+                          </label>
+                          <input
+                            type="text"
+                            value={editConsoleData.ip_address || ""}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                ip_address: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <RunCommandInput
+                          label="Perintah Relay ON"
+                          value={editConsoleData.relay_command_on || ""}
+                          onChange={(v) =>
+                            setEditConsoleData((prev: any) => ({
+                              ...prev,
+                              relay_command_on: v,
+                            }))
+                          }
                         />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Konsol</label>
-                        <select
-                          value={editConsoleData.equipment_type_id}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, equipment_type_id: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          {mockEquipmentTypes.map(type => (
-                            <option key={type.id} value={type.id}>{type.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select
-                          value={editConsoleData.status}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, status: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="available">Tersedia</option>
-                          <option value="rented">Disewa</option>
-                          <option value="maintenance">Pemeliharaan</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.location || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, location: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        <RunCommandInput
+                          label="Perintah Relay OFF"
+                          value={editConsoleData.relay_command_off || ""}
+                          onChange={(v) =>
+                            setEditConsoleData((prev: any) => ({
+                              ...prev,
+                              relay_command_off: v,
+                            }))
+                          }
                         />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.serial_number || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, serial_number: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        <RunCommandInput
+                          label="Perintah Relay STATUS"
+                          value={editConsoleData.relay_command_status || ""}
+                          onChange={(v) =>
+                            setEditConsoleData((prev: any) => ({
+                              ...prev,
+                              relay_command_status: v,
+                            }))
+                          }
                         />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={!!editConsoleData.is_active}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, is_active: e.target.checked }))}
-                          className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                        <RunCommandInput
+                          label="Perintah Power TV"
+                          value={editConsoleData.power_tv_command || ""}
+                          onChange={(v) =>
+                            setEditConsoleData((prev: any) => ({
+                              ...prev,
+                              power_tv_command: v,
+                            }))
+                          }
                         />
-                        <label className="text-sm text-gray-700">Aktif</label>
-                      </div>
-                    </>
-                  )}
-                  {editTab === 'teknis' && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Pembelian</label>
-                        <input
-                          type="date"
-                          value={editConsoleData.purchase_date || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, purchase_date: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        <RunCommandInput
+                          label="Perintah Cek Power TV"
+                          value={editConsoleData.perintah_cek_power_tv || ""}
+                          onChange={(v) =>
+                            setEditConsoleData((prev: any) => ({
+                              ...prev,
+                              perintah_cek_power_tv: v,
+                            }))
+                          }
                         />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Garansi s/d</label>
-                        <input
-                          type="date"
-                          value={editConsoleData.warranty_expiry || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, warranty_expiry: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
-                        <textarea
-                          value={editConsoleData.notes || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, notes: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          rows={3}
-                          placeholder="Catatan tambahan tentang konsol ini"
-                        />
-                      </div>
-                    </>
-                  )}
-                  {editTab === 'perintah' && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
-                        <input
-                          type="text"
-                          value={editConsoleData.ip_address || ''}
-                          onChange={e => setEditConsoleData((prev: any) => ({ ...prev, ip_address: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <RunCommandInput
-                        label="Perintah Relay ON"
-                        value={editConsoleData.relay_command_on || ''}
-                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, relay_command_on: v }))}
-                      />
-                      <RunCommandInput
-                        label="Perintah Relay OFF"
-                        value={editConsoleData.relay_command_off || ''}
-                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, relay_command_off: v }))}
-                      />
-                      <RunCommandInput
-                        label="Perintah Relay STATUS"
-                        value={editConsoleData.relay_command_status || ''}
-                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, relay_command_status: v }))}
-                      />
-                      <RunCommandInput
-                        label="Perintah Power TV"
-                        value={editConsoleData.power_tv_command || ''}
-                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, power_tv_command: v }))}
-                      />
-                      <RunCommandInput
-                        label="Perintah Cek Power TV"
-                        value={editConsoleData.perintah_cek_power_tv || ''}
-                        onChange={v => setEditConsoleData((prev: any) => ({ ...prev, perintah_cek_power_tv: v }))}
-                      />
-                    </>
-                  )}
-                </form>
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={() => setShowEditForm(null)}
-                    className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                  >
-                    Batal
-                  </button>
-                  <button 
-                    onClick={() => handleEditConsole(editConsoleData.id)}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                  >
-                    Simpan Perubahan
-                  </button>
+                      </>
+                    )}
+                  </form>
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={() => setShowEditForm(null)}
+                      className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={() => handleEditConsole(editConsoleData.id)}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Simpan Perubahan
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
     </div>
   );
 };
@@ -894,19 +1317,23 @@ interface RunCommandInputProps {
   onChange: (v: string) => void;
 }
 
-const RunCommandInput: React.FC<RunCommandInputProps> = ({ label, value, onChange }) => {
+const RunCommandInput: React.FC<RunCommandInputProps> = ({
+  label,
+  value,
+  onChange,
+}) => {
   const handleRun = async () => {
-    if (!value || value.trim() === '') {
-      Swal.fire('Gagal', 'Perintah kosong', 'error');
+    if (!value || value.trim() === "") {
+      Swal.fire("Gagal", "Perintah kosong", "error");
       return;
     }
     try {
       const url = value.trim();
       if (!/^https?:\/\//.test(url)) {
-        Swal.fire('Gagal', 'URL perintah tidak valid', 'error');
+        Swal.fire("Gagal", "URL perintah tidak valid", "error");
         return;
       }
-      if (label === 'Perintah Relay STATUS') {
+      if (label === "Perintah Relay STATUS") {
         try {
           // Coba fetch normal dulu
           let res = null;
@@ -915,21 +1342,33 @@ const RunCommandInput: React.FC<RunCommandInputProps> = ({ label, value, onChang
           } catch (err) {
             // Jika error (CORS), coba fetch dengan mode no-cors
             try {
-              await fetch(url, { mode: 'no-cors' });
-              Swal.fire('Gagal', 'Tidak bisa mengambil status (CORS error, response tidak bisa dibaca dari browser). Coba akses dari backend/server.', 'error');
+              await fetch(url, { mode: "no-cors" });
+              Swal.fire(
+                "Gagal",
+                "Tidak bisa mengambil status (CORS error, response tidak bisa dibaca dari browser). Coba akses dari backend/server.",
+                "error"
+              );
             } catch (err2) {
-              Swal.fire('Gagal', 'Gagal menjalankan perintah', 'error');
+              Swal.fire("Gagal", "Gagal menjalankan perintah", "error");
             }
             return;
           }
           if (res && res.ok) {
             const text = await res.text();
-            Swal.fire('Hasil', `<pre style="text-align:left;white-space:pre-wrap;">${text}</pre>`, 'info');
+            Swal.fire(
+              "Hasil",
+              `<pre style="text-align:left;white-space:pre-wrap;">${text}</pre>`,
+              "info"
+            );
           } else {
-            Swal.fire('Gagal', 'Gagal mendapatkan status', 'error');
+            Swal.fire("Gagal", "Gagal mendapatkan status", "error");
           }
         } catch (err: any) {
-          Swal.fire('Gagal', err.message || 'Gagal menjalankan perintah', 'error');
+          Swal.fire(
+            "Gagal",
+            err.message || "Gagal menjalankan perintah",
+            "error"
+          );
         }
         return;
       }
@@ -938,27 +1377,41 @@ const RunCommandInput: React.FC<RunCommandInputProps> = ({ label, value, onChang
       try {
         res = await fetch(url);
       } catch (fetchErr) {
-        Swal.fire('Berhasil', 'Perintah berhasil dikirim (CORS error diabaikan)', 'success');
+        Swal.fire(
+          "Berhasil",
+          "Perintah berhasil dikirim (CORS error diabaikan)",
+          "success"
+        );
         return;
       }
       if (res && res.ok) {
         const text = await res.text();
-        Swal.fire('Hasil', `<pre style="text-align:left;white-space:pre-wrap;">${text}</pre>`, 'info');
+        Swal.fire(
+          "Hasil",
+          `<pre style="text-align:left;white-space:pre-wrap;">${text}</pre>`,
+          "info"
+        );
       } else {
-        Swal.fire('Berhasil', 'Perintah berhasil dikirim (CORS error diabaikan)', 'success');
+        Swal.fire(
+          "Berhasil",
+          "Perintah berhasil dikirim (CORS error diabaikan)",
+          "success"
+        );
       }
     } catch (err: any) {
-      Swal.fire('Gagal', err.message || 'Gagal menjalankan perintah', 'error');
+      Swal.fire("Gagal", err.message || "Gagal menjalankan perintah", "error");
     }
   };
   return (
     <div className="mb-2">
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+      </label>
       <div className="flex items-center gap-2">
         <input
           type="text"
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <button
@@ -967,7 +1420,20 @@ const RunCommandInput: React.FC<RunCommandInputProps> = ({ label, value, onChang
           title="Run"
           onClick={handleRun}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" /></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 12h14M12 5l7 7-7 7"
+            />
+          </svg>
         </button>
       </div>
     </div>
