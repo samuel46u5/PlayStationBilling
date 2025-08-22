@@ -382,7 +382,7 @@ const Dashboard: React.FC = () => {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">
             Status Konsol
           </h2>
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-screen overflow-y-auto">
             {consoles.map((console: any) => {
               const hourlyRate = console.rate_profiles?.hourly_rate ?? 0;
               return (
