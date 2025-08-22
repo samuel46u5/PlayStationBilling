@@ -19,6 +19,7 @@ import VoucherManagement from "./components/VoucherManagement";
 import Settings from "./components/Settings";
 import MaintenanceManagement from "./components/MaintenanceManagement";
 import RateProfilePage from "./components/RateProfilePage";
+import DeviceManagement from "./components/DeviceManagement";
 import LoginPage from "./pages/LoginPage";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -85,6 +86,8 @@ const AppLayout: React.FC = () => {
         return <MaintenanceManagement />;
       // case "rate-profiles":
       //   return <RateProfilePage />;
+      case "device":
+        return <DeviceManagement />;
       default:
         return <Dashboard />;
     }
