@@ -3,6 +3,30 @@ import { db } from '../lib/supabase';
 import Swal from 'sweetalert2';
 import { Edit2, Trash2, Clock, ArrowRight, Save } from 'lucide-react';
 
+// module-scope helper: validate IPv4 and replace occurrences or hostnames in strings
+const IPV4_REGEX = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1?\d{1,2})){3})\b/;
+const replaceIpInStr = (str: any, newIp: string) => {
+  if (!str || typeof str !== 'string') return str;
+  if (!newIp || typeof newIp !== 'string') return str;
+  if (!IPV4_REGEX.test(newIp)) return str;
+
+  if (IPV4_REGEX.test(str)) {
+    const globalIpRegex = new RegExp(IPV4_REGEX.source, 'g');
+    return String(str).replace(globalIpRegex, newIp);
+  }
+  try {
+    const url = new URL(str);
+    if (url.hostname) {
+      url.hostname = newIp;
+      return url.toString();
+    }
+  } catch (e) {}
+  if (/\blocalhost\b/.test(str)) {
+    return String(str).replace(/\blocalhost\b/g, newIp);
+  }
+  return str;
+};
+
 const DevicesMaintenance: React.FC = () => {
   const [devices, setDevices] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -65,6 +89,8 @@ const DevicesMaintenance: React.FC = () => {
     });
   }, [devices, filter, searchTerm]);
 
+  
+
   const handleDelete = async (device: any) => {
     const r = await Swal.fire({
       title: `Hapus console ${device.name}?`,
@@ -106,6 +132,15 @@ const DevicesMaintenance: React.FC = () => {
 
     const checkPowerTv = device.cmd_check_power_tv ?? device.perintah_cek_power_tv ?? device.check_power_tv;
     if (checkPowerTv !== undefined) payload.perintah_cek_power_tv = checkPowerTv;
+
+    // TV IP - possible column names: tv_ip, ip_tv, ip_address_tv
+    const tvIp = device.tv_ip ?? device.ip_tv ?? device.ip_address_tv;
+    if (tvIp !== undefined) {
+      // prefer tv_ip column if exists in DB, otherwise try ip_tv
+      payload.tv_ip = tvIp;
+      payload.ip_tv = tvIp;
+      payload.ip_address_tv = tvIp;
+    }
 
     if (Object.keys(payload).length === 0) {
       await Swal.fire({ icon: 'info', title: 'Nothing to save', text: 'No editable fields found for this console.' });
@@ -238,14 +273,37 @@ const DevicesMaintenance: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <div className="flex-1">
                           <div className="text-sm font-semibold text-slate-700">IP Address Relay</div>
-                          <input readOnly value={d.ip_address || ''} className="w-full px-3 py-2 border rounded bg-white text-sm" />
+                          <input
+                            value={d.ip_address || ''}
+                            onChange={(e) => {
+                              const newIp = e.target.value;
+                              // IPv4 regex
+                              // use shared helper
+                              const replaceIpIfPresent = (str: any, newIp: string) => replaceIpInStr(str, newIp);
+                              setDevices((s) => s.map(x => {
+                                if (x.id !== d.id) return x;
+                                return {
+                                  ...x,
+                                  ip_address: newIp,
+                                  cmd_relay_on: replaceIpIfPresent(x.cmd_relay_on ?? x.relay_command_on ?? x.relay_command ?? x.relay_on, newIp),
+                                  cmd_relay_off: replaceIpIfPresent(x.cmd_relay_off ?? x.relay_command_off ?? x.relay_off, newIp),
+                                  cmd_relay_status: replaceIpIfPresent(x.cmd_relay_status ?? x.relay_command_status ?? x.relay_status, newIp),
+                                };
+                              }));
+                            }}
+                            className="w-full px-3 py-2 border rounded bg-white text-sm"
+                          />
                         </div>
                       </div>
 
                       <div className="">
                         <div className="text-sm font-semibold text-slate-700">Perintah Relay ON</div>
                         <div className="relative mt-1">
-                          <input readOnly value={d.cmd_relay_on || d.relay_command_on || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <input
+                            value={d.cmd_relay_on ?? d.relay_command_on ?? ''}
+                            onChange={(e) => setDevices((s) => s.map(x => x.id === d.id ? { ...x, cmd_relay_on: e.target.value } : x))}
+                            className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
+                          />
                           <button onClick={() => Swal.fire({ title: 'Perintah Relay ON', html: `<pre style='text-align:left'>${(d.cmd_relay_on || d.relay_command_on || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
                         </div>
                       </div>
@@ -253,7 +311,11 @@ const DevicesMaintenance: React.FC = () => {
                       <div className="">
                         <div className="text-sm font-semibold text-slate-700">Perintah Relay OFF</div>
                         <div className="relative mt-1">
-                          <input readOnly value={d.cmd_relay_off || d.relay_command_off || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <input
+                            value={d.cmd_relay_off ?? d.relay_command_off ?? ''}
+                            onChange={(e) => setDevices((s) => s.map(x => x.id === d.id ? { ...x, cmd_relay_off: e.target.value } : x))}
+                            className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
+                          />
                           <button onClick={() => Swal.fire({ title: 'Perintah Relay OFF', html: `<pre style='text-align:left'>${(d.cmd_relay_off || d.relay_command_off || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
                         </div>
                       </div>
@@ -261,7 +323,11 @@ const DevicesMaintenance: React.FC = () => {
                       <div className="">
                         <div className="text-sm font-semibold text-slate-700">Perintah Relay STATUS</div>
                         <div className="relative mt-1">
-                          <input readOnly value={d.cmd_relay_status || d.relay_command_status || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <input
+                            value={d.cmd_relay_status ?? d.relay_command_status ?? ''}
+                            onChange={(e) => setDevices((s) => s.map(x => x.id === d.id ? { ...x, cmd_relay_status: e.target.value } : x))}
+                            className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
+                          />
                           <button onClick={() => Swal.fire({ title: 'Perintah Relay STATUS', html: `<pre style='text-align:left'>${(d.cmd_relay_status || d.relay_command_status || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
                         </div>
                       </div>
@@ -275,13 +341,34 @@ const DevicesMaintenance: React.FC = () => {
 
                       <div className="mt-2">
                         <div className="text-sm font-semibold text-slate-700">IP Address TV</div>
-                        <input readOnly value={d.tv_ip || d.ip_tv || d.ip_address_tv || ''} className="w-full px-3 py-2 border rounded bg-white text-sm mt-1" />
+                        <input
+                          value={d.tv_ip ?? d.ip_tv ?? d.ip_address_tv ?? ''}
+                          onChange={(e) => {
+                            const newIp = e.target.value;
+                            setDevices((s) => s.map(x => {
+                              if (x.id !== d.id) return x;
+                              return {
+                                ...x,
+                                tv_ip: newIp,
+                                ip_tv: newIp,
+                                ip_address_tv: newIp,
+                                cmd_power_tv: replaceIpInStr(x.cmd_power_tv ?? x.power_tv_command ?? '', newIp),
+                                cmd_check_power_tv: replaceIpInStr(x.cmd_check_power_tv ?? x.perintah_cek_power_tv ?? '', newIp),
+                              };
+                            }));
+                          }}
+                          className="w-full px-3 py-2 border rounded bg-white text-sm mt-1"
+                        />
                       </div>
 
                       <div className="">
                         <div className="text-sm font-semibold text-slate-700">Perintah Power TV</div>
                         <div className="relative mt-1">
-                          <input readOnly value={d.cmd_power_tv || d.power_tv_command || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <input
+                            value={d.cmd_power_tv ?? d.power_tv_command ?? ''}
+                            onChange={(e) => setDevices((s) => s.map(x => x.id === d.id ? { ...x, cmd_power_tv: e.target.value } : x))}
+                            className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
+                          />
                           <button onClick={() => Swal.fire({ title: 'Perintah Power TV', html: `<pre style='text-align:left'>${(d.cmd_power_tv || d.power_tv_command || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
                         </div>
                       </div>
@@ -289,7 +376,11 @@ const DevicesMaintenance: React.FC = () => {
                       <div className="">
                         <div className="text-sm font-semibold text-slate-700">Perintah Cek Power TV</div>
                         <div className="relative mt-1">
-                          <input readOnly value={d.cmd_check_power_tv || d.perintah_cek_power_tv || ''} className="w-full px-3 py-2 border rounded bg-white text-sm pr-10" />
+                          <input
+                            value={d.cmd_check_power_tv ?? d.perintah_cek_power_tv ?? ''}
+                            onChange={(e) => setDevices((s) => s.map(x => x.id === d.id ? { ...x, cmd_check_power_tv: e.target.value } : x))}
+                            className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
+                          />
                           <button onClick={() => Swal.fire({ title: 'Perintah Cek Power TV', html: `<pre style='text-align:left'>${(d.cmd_check_power_tv || d.perintah_cek_power_tv || '-')}</pre>` })} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"><ArrowRight className="h-4 w-4" /></button>
                         </div>
                       </div>
@@ -588,10 +679,22 @@ const ConsoleDetailModal: React.FC<{ device: any; onClose: () => void; onSaved: 
             <button className="px-3 py-2 rounded-md bg-white border">Detail Teknis</button>
             <button className="px-3 py-2 rounded-md bg-blue-600 text-white">Daftar Perintah</button>
           </div>
-          <div className="space-y-3">
+                <div className="space-y-3">
             <div>
               <label className="block text-sm text-gray-600 mb-1">IP Address</label>
-              <input value={ip} onChange={(e) => setIp(e.target.value)} className="w-full px-3 py-2 border rounded" />
+              <input
+                value={ip}
+                onChange={(e) => {
+                  const newIp = e.target.value;
+                  // IPv4 regex
+                  const replaceIpIfPresent = (str: any) => replaceIpInStr(str, newIp);
+                  setIp(newIp);
+                  setRelayOn((prev: string) => replaceIpIfPresent(prev));
+                  setRelayOff((prev: string) => replaceIpIfPresent(prev));
+                  setRelayStatus((prev: string) => replaceIpIfPresent(prev));
+                }}
+                className="w-full px-3 py-2 border rounded"
+              />
             </div>
             <div className="flex items-center gap-2">
               <div className="flex-1">
