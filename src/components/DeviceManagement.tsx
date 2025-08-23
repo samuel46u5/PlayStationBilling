@@ -238,22 +238,47 @@ const DevicesMaintenance: React.FC = () => {
 
     switch (selectedCommand) {
       case "Matikan semua TV":
-      case "Nyalakan semua TV":
         {
           const results = await Promise.allSettled(
-            devices.map((device) =>
-              fetch(device.power_tv_command)
-                .then((res) => {
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  return { device, status: "success" };
-                })
-                .catch((err) => ({
-                  device,
-                  status: "failed",
-                  error: err.message,
-                }))
-            )
+            devices.map(async (device) => {
+              // Cek status TV terlebih dahulu
+              const statusRes = await fetch(device.perintah_cek_power_tv);
+
+              if (!statusRes.ok) {
+                throw new Error(`HTTP ${statusRes.status}`);
+              }
+
+              const statusData = await statusRes.json();
+
+              // Jika TV sudah mati, skip
+              if (statusData.status === "off") {
+                return { device, status: "already_off" };
+              }
+
+              // Jika status "off"
+              const res = await fetch(device.power_tv_command);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              return { device, status: "success" };
+            })
           );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const alreadyOff = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "already_off"
+            )
+            .map((r) => r.value.device);
 
           const failed = results
             .filter(
@@ -271,36 +296,158 @@ const DevicesMaintenance: React.FC = () => {
                 .map((_, i) => devices[i])
             );
 
-          console.log("URL Gagal:", failed);
+          // Menampilkan SweetAlert
+          Swal.fire({
+            title: "Hasil Proses",
+            html: `
+              <h4><strong>Berhasil Mati:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Sudah Mati:</strong></h4>
+              <ul>
+                ${alreadyOff
+                  .map((device) => `<li>${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Gagal Mati:</strong></h4>
+              <ul>
+                ${failed.map((device) => `<li>${device.name}</li>`).join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
+        }
+        break;
+      case "Nyalakan semua TV":
+        {
+          const results = await Promise.allSettled(
+            devices.map(async (device) => {
+              // Cek status TV terlebih dahulu
+              const statusRes = await fetch(device.perintah_cek_power_tv);
 
-          await Promise.allSettled(
-            failed.map((url) =>
-              fetch(url)
-                .then((res) => {
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  return { url, status: "success" };
-                })
-                .catch((err) => ({ url, status: "failed", error: err.message }))
-            )
+              if (!statusRes.ok) {
+                throw new Error(`HTTP ${statusRes.status}`);
+              }
+
+              const statusData = await statusRes.json();
+
+              // Jika TV sudah menyala, skip
+              if (statusData.status === "on") {
+                return { device, status: "already_on" };
+              }
+
+              // Jika status "off"
+              const res = await fetch(device.power_tv_command);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              return { device, status: "success" };
+            })
           );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const alreadyOn = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "already_on"
+            )
+            .map((r) => r.value.device);
+
+          const failed = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "failed"
+            )
+            .map((r) => r.value.device)
+            .concat(
+              results
+                .filter(
+                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                )
+                .map((_, i) => devices[i])
+            );
+
+          // Menampilkan SweetAlert
+          Swal.fire({
+            title: "Hasil Proses",
+            html: `
+              <h4><strong>Berhasil Menyala:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Sudah Menyala:</strong></h4>
+              <ul>
+                ${alreadyOn.map((device) => `<li>${device.name}</li>`).join("")}
+              </ul>
+              <h4><strong>Gagal Menyala:</strong></h4>
+              <ul>
+                ${failed.map((device) => `<li>${device.name}</li>`).join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
         }
         break;
       case "Matikan semua Nomor":
         {
           const results = await Promise.allSettled(
-            devices.map((device) =>
-              fetch(device.relay_command_off)
-                .then((res) => {
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  return { device, status: "success" };
-                })
-                .catch((err) => ({
-                  device,
-                  status: "failed",
-                  error: err.message,
-                }))
-            )
+            devices.map(async (device) => {
+              // Cek status lampu terlebih dahulu
+              const statusRes = await fetch(device.cmd_relay_status);
+
+              if (!statusRes.ok) {
+                throw new Error(`HTTP ${statusRes.status}`);
+              }
+
+              const statusData = await statusRes.json();
+
+              if (statusData.status === "off") {
+                return { device, status: "already_off" };
+              }
+
+              // Jika status "on", lakukan perintah untuk mematikan
+              const res = await fetch(device.relay_command_off);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              return { device, status: "success" };
+            })
           );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const alreadyOff = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "already_off"
+            )
+            .map((r) => r.value.device);
 
           const failed = results
             .filter(
@@ -318,36 +465,75 @@ const DevicesMaintenance: React.FC = () => {
                 .map((_, i) => devices[i])
             );
 
-          console.log("URL Gagal:", failed);
-
-          await Promise.allSettled(
-            failed.map((url) =>
-              fetch(url)
-                .then((res) => {
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  return { url, status: "success" };
-                })
-                .catch((err) => ({ url, status: "failed", error: err.message }))
-            )
-          );
+          await Swal.fire({
+            title: "Hasil Proses",
+            html: `
+              <h4><strong>Berhasil Mati:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Sudah Mati:</strong></h4>
+              <ul>
+                ${alreadyOff
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Gagal Mati:</strong></h4>
+              <ul>
+                ${failed
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
         }
         break;
       case "Nyalakan semua Nomor":
         {
           const results = await Promise.allSettled(
-            devices.map((device) =>
-              fetch(device.relay_command_on)
-                .then((res) => {
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  return { device, status: "success" };
-                })
-                .catch((err) => ({
-                  device,
-                  status: "failed",
-                  error: err.message,
-                }))
-            )
+            devices.map(async (device) => {
+              // Cek status lampu terlebih dahulu
+              const statusRes = await fetch(device.cmd_relay_status);
+
+              if (!statusRes.ok) {
+                throw new Error(`HTTP ${statusRes.status}`);
+              }
+
+              const statusData = await statusRes.json();
+
+              if (statusData.status === "on") {
+                return { device, status: "already_on" };
+              }
+
+              // Jika status "off", lakukan perintah untuk menyalakan
+              const res = await fetch(device.relay_command_on);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              return { device, status: "success" };
+            })
           );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const alreadyOn = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "already_on"
+            )
+            .map((r) => r.value.device);
 
           const failed = results
             .filter(
@@ -365,18 +551,32 @@ const DevicesMaintenance: React.FC = () => {
                 .map((_, i) => devices[i])
             );
 
-          console.log("URL Gagal:", failed);
-
-          await Promise.allSettled(
-            failed.map((url) =>
-              fetch(url)
-                .then((res) => {
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  return { url, status: "success" };
-                })
-                .catch((err) => ({ url, status: "failed", error: err.message }))
-            )
-          );
+          await Swal.fire({
+            title: "Hasil Proses",
+            html: `
+              <h4><strong>Berhasil Menyala:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Sudah Menyala:</strong></h4>
+              <ul>
+                ${alreadyOn
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Gagal Menyala:</strong></h4>
+              <ul>
+                ${failed
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
         }
         break;
       case "Set Volume":
@@ -431,7 +631,7 @@ const DevicesMaintenance: React.FC = () => {
       case "Mute Volume": {
         const results = await Promise.allSettled(
           devices.map((device) =>
-            fetch(`/tv/${device.ip_address_tv}/volume/0}?port=5555&method=adb`)
+            fetch(`/tv/${device.ip_address_tv}/volume/0?port=5555&method=adb`)
               .then((res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return { device, status: "success" };
@@ -474,11 +674,11 @@ const DevicesMaintenance: React.FC = () => {
       }
     }
 
-    await Swal.fire({
-      icon: "success",
-      title: "Perintah dikirim",
-      text: `Perintah "${selectedCommand}" dikirim ke ${devices.length} console.`,
-    });
+    // await Swal.fire({
+    //   icon: "success",
+    //   title: "Perintah dikirim",
+    //   text: `Perintah "${selectedCommand}" dikirim ke ${devices.length} console.`,
+    // });
   };
 
   return (
