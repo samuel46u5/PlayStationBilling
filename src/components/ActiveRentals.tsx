@@ -45,7 +45,7 @@ interface Console {
   name: string;
   equipment_type_id: string;
   rate_profile_id: string | null;
-  status: "available" | "rented" | "maintenance";
+  status: "available" | "rented" | "maintenance" | "paused";
   location?: string;
   serial_number?: string;
   is_active: boolean;
@@ -54,6 +54,8 @@ interface Console {
   power_tv_command?: string;
   relay_command_status?: string;
   perintah_cek_power_tv?: string;
+  pause_start_time?: string;
+  total_pause_minutes?: number;
 }
 
 interface RateProfile {
@@ -138,6 +140,9 @@ const ActiveRentals: React.FC = () => {
   const [customerType, setCustomerType] = useState<"member" | "non-member">(
     "member"
   );
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
+  const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
   const [rentalType, setRentalType] = useState<"pay-as-you-go" | "prepaid">(
     "pay-as-you-go"
   );
@@ -153,6 +158,21 @@ const ActiveRentals: React.FC = () => {
         : undefined,
     [showStartRentalModal, consoles]
   );
+
+  useEffect(() => {
+    if (customerSearchTerm.trim() === "") {
+      setFilteredCustomers(customers);
+    } else {
+      const filtered = customers.filter(
+        (customer) =>
+          customer.name
+            .toLowerCase()
+            .includes(customerSearchTerm.toLowerCase()) ||
+          customer.phone.includes(customerSearchTerm)
+      );
+      setFilteredCustomers(filtered);
+    }
+  }, [customerSearchTerm, customers]);
 
   React.useEffect(() => {
     if (showStartRentalModal && selectedConsole?.perintah_cek_power_tv) {
@@ -3353,18 +3373,27 @@ const ActiveRentals: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Pilih Member
                       </label>
-                      <select
-                        value={selectedCustomerId}
-                        onChange={(e) => setSelectedCustomerId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">-- Pilih Member --</option>
-                        {customers.map((customer) => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.name} - {customer.phone}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowCustomerModal(true)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50"
+                        >
+                          {selectedCustomerId
+                            ? customers.find((c) => c.id === selectedCustomerId)
+                                ?.name || "Pilih Member"
+                            : "Pilih Member"}
+                        </button>
+                        {selectedCustomerId && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCustomerId("")}
+                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -3839,6 +3868,137 @@ const ActiveRentals: React.FC = () => {
                 >
                   {rentalType === "prepaid" ? "Bayar" : "Mulai Rental"}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Selection Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-gray-900">
+                  Pilih Member
+                </h3>
+                <button
+                  onClick={() => setShowCustomerModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Cari member berdasarkan nama atau nomor telepon..."
+                  value={customerSearchTerm}
+                  onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                  className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg
+                    className="h-5 w-5 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-500 mt-2">
+                {filteredCustomers.length} member ditemukan
+              </p>
+            </div>
+
+            {/* Customer List */}
+            <div className="max-h-96 overflow-y-auto">
+              {filteredCustomers.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">
+                  {customerSearchTerm
+                    ? "Tidak ada member yang ditemukan"
+                    : "Belum ada member"}
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {filteredCustomers.map((customer) => (
+                    <div
+                      key={customer.id}
+                      onClick={() => {
+                        setSelectedCustomerId(customer.id);
+                        setShowCustomerModal(false);
+                        setCustomerSearchTerm("");
+                      }}
+                      className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <User className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">
+                                {customer.name}
+                              </h4>
+                              <p className="text-sm text-gray-500">
+                                {customer.phone}
+                              </p>
+                              {customer.email && (
+                                <p className="text-xs text-gray-400">
+                                  {customer.email}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-400">Member ID</div>
+                          <div className="text-sm font-mono text-gray-600">
+                            {customer.id}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomerModal(false)}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+                <div className="text-sm text-gray-500">
+                  {selectedCustomerId && (
+                    <>
+                      Member terpilih:{" "}
+                      <span className="font-medium text-gray-900">
+                        {
+                          customers.find((c) => c.id === selectedCustomerId)
+                            ?.name
+                        }
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
