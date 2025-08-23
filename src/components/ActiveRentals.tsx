@@ -1778,6 +1778,7 @@ const ActiveRentals: React.FC = () => {
       setRentalDurationHours(1);
       setRentalDurationMinutes(0);
       setNonMemberName("");
+      setSearchConsole("");
       setNonMemberPhone("");
       await loadData();
       Swal.fire("Berhasil", "Sesi rental berhasil dimulai", "success");
@@ -2053,6 +2054,7 @@ const ActiveRentals: React.FC = () => {
         fetch(latestConsole.relay_command_on).catch(() => {});
       }
 
+      setSearchConsole("");
       setShowPrepaidPaymentModal(null);
       setShowStartRentalModal(null);
       setSelectedCustomerId("");

@@ -937,14 +937,55 @@ const DevicesMaintenance: React.FC = () => {
                             className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
                           />
                           <button
-                            onClick={() =>
-                              Swal.fire({
-                                title: "Perintah Relay ON",
-                                html: `<pre style='text-align:left'>${
-                                  d.cmd_relay_on || d.relay_command_on || "-"
-                                }</pre>`,
-                              })
-                            }
+                            onClick={async () => {
+                              try {
+                                // Periksa apakah ada perintah relay yang valid
+                                const relayCommand =
+                                  d.cmd_relay_on || d.relay_command_on;
+                                if (relayCommand) {
+                                  // Lakukan fetch ke perintah relay (relay_command_on)
+                                  const response = await fetch(relayCommand);
+
+                                  // Jika fetch berhasil, tampilkan Swal.fire
+                                  if (response.ok) {
+                                    Swal.fire({
+                                      title: "Perintah Relay ON",
+                                      html: `<pre style='text-align:left'>${relayCommand}</pre>`,
+                                      icon: "success",
+                                      text: "Perintah relay berhasil dijalankan!",
+                                    });
+                                  } else {
+                                    // Jika fetch gagal, tampilkan Swal.fire dengan error
+                                    const errorText = await response.text();
+                                    Swal.fire({
+                                      title: "Gagal Menjalankan Perintah Relay",
+                                      html: `<pre style='text-align:left'>${errorText}</pre>`,
+                                      icon: "error",
+                                      text: `Error: ${response.status}`,
+                                    });
+                                  }
+                                } else {
+                                  // Jika tidak ada perintah relay yang valid
+                                  Swal.fire({
+                                    title: "Tidak Ada Perintah Relay",
+                                    html: "<pre style='text-align:left'>Perintah relay tidak tersedia.</pre>",
+                                    icon: "info",
+                                  });
+                                }
+                              } catch (error) {
+                                // Tangani error jika fetch gagal
+                                console.error(
+                                  "Error menjalankan perintah relay:",
+                                  error
+                                );
+                                Swal.fire({
+                                  title: "Gagal Menjalankan Perintah Relay",
+                                  html: "<pre style='text-align:left'>Terjadi kesalahan saat menjalankan perintah relay.</pre>",
+                                  icon: "error",
+                                  text: "Silakan coba lagi.",
+                                });
+                              }
+                            }}
                             className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"
                           >
                             <ArrowRight className="h-4 w-4" />
@@ -971,14 +1012,55 @@ const DevicesMaintenance: React.FC = () => {
                             className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
                           />
                           <button
-                            onClick={() =>
-                              Swal.fire({
-                                title: "Perintah Relay OFF",
-                                html: `<pre style='text-align:left'>${
-                                  d.cmd_relay_off || d.relay_command_off || "-"
-                                }</pre>`,
-                              })
-                            }
+                            onClick={async () => {
+                              try {
+                                // Periksa apakah ada perintah relay yang valid
+                                const relayCommand =
+                                  d.cmd_relay_off || d.relay_command_off;
+                                if (relayCommand) {
+                                  // Lakukan fetch ke perintah relay (relay_command_on)
+                                  const response = await fetch(relayCommand);
+
+                                  // Jika fetch berhasil, tampilkan Swal.fire
+                                  if (response.ok) {
+                                    Swal.fire({
+                                      title: "Perintah Relay OFF",
+                                      html: `<pre style='text-align:left'>${relayCommand}</pre>`,
+                                      icon: "success",
+                                      text: "Perintah relay berhasil dijalankan!",
+                                    });
+                                  } else {
+                                    // Jika fetch gagal, tampilkan Swal.fire dengan error
+                                    const errorText = await response.text();
+                                    Swal.fire({
+                                      title: "Gagal Menjalankan Perintah Relay",
+                                      html: `<pre style='text-align:left'>${errorText}</pre>`,
+                                      icon: "error",
+                                      text: `Error: ${response.status}`,
+                                    });
+                                  }
+                                } else {
+                                  // Jika tidak ada perintah relay yang valid
+                                  Swal.fire({
+                                    title: "Tidak Ada Perintah Relay",
+                                    html: "<pre style='text-align:left'>Perintah relay tidak tersedia.</pre>",
+                                    icon: "info",
+                                  });
+                                }
+                              } catch (error) {
+                                // Tangani error jika fetch gagal
+                                console.error(
+                                  "Error menjalankan perintah relay:",
+                                  error
+                                );
+                                Swal.fire({
+                                  title: "Gagal Menjalankan Perintah Relay",
+                                  html: "<pre style='text-align:left'>Terjadi kesalahan saat menjalankan perintah relay.</pre>",
+                                  icon: "error",
+                                  text: "Silakan coba lagi.",
+                                });
+                              }
+                            }}
                             className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"
                           >
                             <ArrowRight className="h-4 w-4" />
@@ -1007,16 +1089,55 @@ const DevicesMaintenance: React.FC = () => {
                             className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
                           />
                           <button
-                            onClick={() =>
-                              Swal.fire({
-                                title: "Perintah Relay STATUS",
-                                html: `<pre style='text-align:left'>${
-                                  d.cmd_relay_status ||
-                                  d.relay_command_status ||
-                                  "-"
-                                }</pre>`,
-                              })
-                            }
+                            onClick={async () => {
+                              try {
+                                // Periksa apakah ada perintah relay yang valid
+                                const relayCommand =
+                                  d.cmd_relay_status || d.relay_command_status;
+                                if (relayCommand) {
+                                  // Lakukan fetch ke perintah relay (relay_command_on)
+                                  const response = await fetch(relayCommand);
+
+                                  if (response.ok) {
+                                    const responseText = await response.text();
+
+                                    // Tampilkan SweetAlert
+                                    Swal.fire({
+                                      title: "Perintah Relay Status",
+                                      html: `<pre style='text-align:left'>${responseText}</pre>`,
+                                      icon: "success",
+                                      text: "Perintah relay berhasil dijalankan!",
+                                    });
+                                  } else {
+                                    const errorText = await response.text();
+
+                                    Swal.fire({
+                                      title: "Gagal Menjalankan Perintah Relay",
+                                      html: `<pre style='text-align:left'>${errorText}</pre>`,
+                                      icon: "error",
+                                      text: `Error: ${response.status} - ${errorText}`,
+                                    });
+                                  }
+                                } else {
+                                  Swal.fire({
+                                    title: "Tidak Ada Perintah Relay",
+                                    html: "<pre style='text-align:left'>Perintah relay tidak tersedia.</pre>",
+                                    icon: "info",
+                                  });
+                                }
+                              } catch (error) {
+                                console.error(
+                                  "Error menjalankan perintah relay:",
+                                  error
+                                );
+                                Swal.fire({
+                                  title: "Gagal Menjalankan Perintah Relay",
+                                  html: "<pre style='text-align:left'>Terjadi kesalahan saat menjalankan perintah relay.</pre>",
+                                  icon: "error",
+                                  text: "Silakan coba lagi.",
+                                });
+                              }
+                            }}
                             className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"
                           >
                             <ArrowRight className="h-4 w-4" />
@@ -1084,14 +1205,53 @@ const DevicesMaintenance: React.FC = () => {
                             className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
                           />
                           <button
-                            onClick={() =>
-                              Swal.fire({
-                                title: "Perintah Power TV",
-                                html: `<pre style='text-align:left'>${
-                                  d.cmd_power_tv || d.power_tv_command || "-"
-                                }</pre>`,
-                              })
-                            }
+                            onClick={async () => {
+                              try {
+                                const tvCommand =
+                                  d.cmd_power_tv || d.power_tv_command;
+                                if (tvCommand) {
+                                  const response = await fetch(tvCommand);
+
+                                  // Jika fetch berhasil
+                                  if (response.ok) {
+                                    Swal.fire({
+                                      title: "Perintah Power TV",
+                                      html: `<pre style='text-align:left'>${tvCommand}</pre>`,
+                                      icon: "success",
+                                      text: "Perintah Power TV berhasil dijalankan!",
+                                    });
+                                  } else {
+                                    // Jika fetch gagal
+                                    const errorText = await response.text();
+                                    Swal.fire({
+                                      title:
+                                        "Gagal Menjalankan Perintah Power TV",
+                                      html: `<pre style='text-align:left'>${errorText}</pre>`,
+                                      icon: "error",
+                                      text: `Error: ${response.status}`,
+                                    });
+                                  }
+                                } else {
+                                  // Jika tidak ada perintah relay yang valid
+                                  Swal.fire({
+                                    title: "Tidak Ada Perintah Valid",
+                                    html: "<pre style='text-align:left'>Perintah tidak tersedia.</pre>",
+                                    icon: "info",
+                                  });
+                                }
+                              } catch (error) {
+                                console.error(
+                                  "Error menjalankan perintah Tv:",
+                                  error
+                                );
+                                Swal.fire({
+                                  title: "Gagal Menjalankan Perintah TV",
+                                  html: "<pre style='text-align:left'>Terjadi kesalahan saat menjalankan perintah Tv.</pre>",
+                                  icon: "error",
+                                  text: "Silakan coba lagi.",
+                                });
+                              }
+                            }}
                             className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"
                           >
                             <ArrowRight className="h-4 w-4" />
@@ -1125,16 +1285,55 @@ const DevicesMaintenance: React.FC = () => {
                             className="w-full px-3 py-2 border rounded bg-white text-sm pr-10"
                           />
                           <button
-                            onClick={() =>
-                              Swal.fire({
-                                title: "Perintah Cek Power TV",
-                                html: `<pre style='text-align:left'>${
+                            onClick={async () => {
+                              try {
+                                const tvCommand =
                                   d.cmd_check_power_tv ||
-                                  d.perintah_cek_power_tv ||
-                                  "-"
-                                }</pre>`,
-                              })
-                            }
+                                  d.perintah_cek_power_tv;
+                                if (tvCommand) {
+                                  const response = await fetch(tvCommand);
+
+                                  // Jika fetch berhasil
+                                  if (response.ok) {
+                                    Swal.fire({
+                                      title: "Perintah Cek Status TV",
+                                      html: `<pre style='text-align:left'>${tvCommand}</pre>`,
+                                      icon: "success",
+                                      text: "Perintah Cek Status TV berhasil dijalankan!",
+                                    });
+                                  } else {
+                                    // Jika fetch gagal
+                                    const errorText = await response.text();
+                                    Swal.fire({
+                                      title:
+                                        "Gagal Menjalankan Perintah Cek Status TV",
+                                      html: `<pre style='text-align:left'>${errorText}</pre>`,
+                                      icon: "error",
+                                      text: `Error: ${response.status}`,
+                                    });
+                                  }
+                                } else {
+                                  // Jika tidak ada perintah
+                                  Swal.fire({
+                                    title: "Tidak Ada Perintah Valid",
+                                    html: "<pre style='text-align:left'>Perintah tidak tersedia.</pre>",
+                                    icon: "info",
+                                  });
+                                }
+                              } catch (error) {
+                                console.error(
+                                  "Error menjalankan perintah TV:",
+                                  error
+                                );
+                                Swal.fire({
+                                  title:
+                                    "Gagal Menjalankan Perintah Cek Status TV",
+                                  html: "<pre style='text-align:left'>Terjadi kesalahan saat menjalankan perintah Cek Status TV.</pre>",
+                                  icon: "error",
+                                  text: "Silakan coba lagi.",
+                                });
+                              }
+                            }}
                             className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 flex items-center justify-center bg-white border border-gray-200 rounded-md"
                           >
                             <ArrowRight className="h-4 w-4" />
