@@ -37,7 +37,7 @@ const Products: React.FC = () => {
     price: 0,
     cost: 0,
     stock: 0,
-    minStock: 0,
+    min_stock: 0,
     barcode: "",
     description: "",
   });
@@ -344,7 +344,7 @@ const Products: React.FC = () => {
     }
   };
 
-  const lowStockProducts = products.filter((p) => p.stock <= p.minStock);
+  const lowStockProducts = products.filter((p) => p.stock <= p.min_stock);
 
   const addItemToPurchase = () => {
     const newItem = {
@@ -405,7 +405,7 @@ const Products: React.FC = () => {
     }));
   };
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     if (!newProduct.name || newProduct.price <= 0) {
       Swal.fire({
         icon: "error",
@@ -416,60 +416,47 @@ const Products: React.FC = () => {
     }
 
     // Here we would normally save to database
-    // For demo, just show success message
-    Swal.fire({
-      icon: "success",
-      title: "Berhasil!",
-      text: `Produk ${newProduct.name} berhasil ditambahkan!`,
-    });
+    try {
+      const { error } = await db.products.create(newProduct);
+      if (error) {
+        // If there was an error while saving to the database
+        Swal.fire({
+          icon: "error",
+          title: "Gagal!",
+          text: `Terjadi kesalahan saat menambahkan produk: ${error.message}`,
+        });
+        return;
+      }
 
-    setShowAddForm(false);
-    setNewProduct({
-      name: "",
-      category: "beverage",
-      price: 0,
-      cost: 0,
-      stock: 0,
-      minStock: 0,
-      barcode: "",
-      description: "",
-    });
+      // If no error, show success message
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil!",
+        text: `Produk ${newProduct.name} berhasil ditambahkan!`,
+      });
+
+      setProducts(await db.products.getAll());
+
+      setNewProduct({
+        name: "",
+        category: "beverage",
+        price: 0,
+        cost: 0,
+        stock: 0,
+        min_stock: 0,
+        barcode: "",
+        description: "",
+      });
+      setShowAddForm(false);
+    } catch (err) {
+      console.error("Error saving product:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Terjadi Kesalahan!",
+        text: "Gagal menambahkan produk. Silakan coba lagi.",
+      });
+    }
   };
-
-  // const handleCreatePurchase = () => {
-  //   if (!newPurchase.supplierId || newPurchase.items.length === 0) {
-  //     Swal.fire({
-  //       icon: 'error',
-  //       title: 'Validasi Gagal',
-  //       text: 'Supplier dan item pembelian wajib diisi'
-  //     });
-  //     return;
-  //   }
-
-  //   const invalidItems = newPurchase.items.some(item => !item.productId || item.quantity <= 0);
-  //   if (invalidItems) {
-  //     Swal.fire({
-  //       icon: 'error',
-  //       title: 'Validasi Gagal',
-  //       text: 'Semua item harus memiliki produk dan quantity yang valid'
-  //     });
-  //     return;
-  //   }
-
-  //   Swal.fire({
-  //     icon: 'success',
-  //     title: 'Berhasil!',
-  //     text: `Purchase Order berhasil dibuat dengan total Rp ${purchaseTotal.toLocaleString('id-ID')}`
-  //   });
-
-  //   setShowPurchaseForm(false);
-  //   setNewPurchase({
-  //     supplierId: '',
-  //     items: [],
-  //     notes: '',
-  //     expectedDate: new Date().toISOString().split('T')[0]
-  //   });
-  // };
 
   // Ubah handleAddSupplier agar simpan ke database dan refresh list
   const handleAddSupplier = async () => {
@@ -525,10 +512,11 @@ const Products: React.FC = () => {
         price: editProduct.price,
         cost: editProduct.cost,
         stock: editProduct.stock,
-        minStock: editProduct.minStock,
+        min_stock: editProduct.min_stock,
         barcode: editProduct.barcode,
         description: editProduct.description,
       });
+
       Swal.fire({
         icon: "success",
         title: "Berhasil!",
@@ -801,7 +789,7 @@ const Products: React.FC = () => {
                       <p className="text-xs text-gray-500">Stok Tersedia</p>
                       <p
                         className={`font-semibold ${
-                          product.stock <= product.minStock
+                          product.stock <= product.min_stock
                             ? "text-red-600"
                             : "text-blue-600"
                         }`}
@@ -900,7 +888,7 @@ const Products: React.FC = () => {
                   </td>
                   <td
                     className={`px-4 py-3 font-semibold ${
-                      product.stock <= product.minStock
+                      product.stock <= product.min_stock
                         ? "text-red-600"
                         : "text-blue-600"
                     }`}
@@ -1667,11 +1655,11 @@ const Products: React.FC = () => {
                       </label>
                       <input
                         type="number"
-                        value={newProduct.minStock}
+                        value={newProduct.min_stock}
                         onChange={(e) =>
                           setNewProduct({
                             ...newProduct,
-                            minStock: Number(e.target.value),
+                            min_stock: Number(e.target.value),
                           })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -2258,11 +2246,11 @@ const Products: React.FC = () => {
                       </label>
                       <input
                         type="number"
-                        value={editProduct.minStock}
+                        value={editProduct.min_stock}
                         onChange={(e) =>
                           setEditProduct({
                             ...editProduct,
-                            minStock: Number(e.target.value),
+                            min_stock: Number(e.target.value),
                           })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
