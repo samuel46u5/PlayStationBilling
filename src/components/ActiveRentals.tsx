@@ -1,7 +1,7 @@
 // ...existing code...
 
 // ...existing code...
-import { Power } from "lucide-react";
+import { Pause, Power } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
@@ -54,8 +54,6 @@ interface Console {
   power_tv_command?: string;
   relay_command_status?: string;
   perintah_cek_power_tv?: string;
-  pause_start_time?: string;
-  total_pause_minutes?: number;
 }
 
 interface RateProfile {
@@ -72,9 +70,11 @@ interface RentalSession {
   end_time?: string;
   duration_minutes?: number;
   total_amount: number;
-  status: "active" | "completed" | "overdue";
+  status: "active" | "completed" | "paused";
   payment_status: "pending" | "partial" | "paid";
   paid_amount: number;
+  pause_start_time?: string;
+  total_pause_minutes?: number;
   customers?: {
     name: string;
     phone: string;
@@ -407,108 +407,6 @@ const ActiveRentals: React.FC = () => {
     loadData();
   }, []);
 
-  // Real-time clock for header
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     setCurrentTime(new Date());
-  //   }, 1000);
-  //   return () => clearInterval(interval);
-  // }, []);
-
-  // Set up countdown timers for prepaid sessions
-  // useEffect(() => {
-  //   // Clear previous intervals
-  //   Object.values(countdownIntervals).forEach((interval) =>
-  //     clearInterval(interval)
-  //   );
-  //   setCountdownIntervals({});
-
-  //   const newElapsedTimers: Record<string, number> = {};
-  //   const newCountdownTimers: Record<string, number> = {};
-  //   const newCountdownSeconds: Record<string, number> = {};
-  //   const newIntervals: Record<string, NodeJS.Timeout> = {};
-
-  //   activeSessions.forEach((session) => {
-  //     const startTime = new Date(session.start_time).getTime();
-  //     const now = new Date().getTime();
-  //     const elapsedMs = now - startTime;
-  //     const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
-
-  //     // For all sessions, track elapsed time
-  //     newElapsedTimers[session.id] = elapsedMinutes;
-
-  //     // Untuk prepaid (BAYAR DIMUKA), cek apakah waktu sudah habis
-  //     if (session.duration_minutes) {
-  //       const durationMs = session.duration_minutes * 60 * 1000;
-  //       const endTime = startTime + durationMs;
-  //       const remainingMs = Math.max(0, endTime - now);
-  //       const remainingMinutes = Math.floor(remainingMs / (1000 * 60));
-  //       newCountdownTimers[session.id] = remainingMinutes;
-  //       newCountdownSeconds[session.id] = Math.floor(remainingMs / 1000);
-
-  //       // Otomatis end rental jika prepaid dan waktu habis
-  //       if (
-  //         remainingMs <= 0 &&
-  //         session.status === "active" &&
-  //         session.payment_status === "paid"
-  //       ) {
-  //         // End rental otomatis tanpa interaksi user
-  //         handleEndSession(session.id);
-  //       } else if (remainingMs > 0) {
-  //         // Set up interval to update countdown per second
-  //         const interval = setInterval(() => {
-  //           setCountdownSeconds((prev) => {
-  //             const current =
-  //               prev[session.id] ?? Math.floor((endTime - Date.now()) / 1000);
-  //             if (current <= 1) {
-  //               clearInterval(newIntervals[session.id]);
-  //               delete newIntervals[session.id];
-  //               // Otomatis end rental jika prepaid dan waktu habis
-  //               if (
-  //                 session.duration_minutes &&
-  //                 session.status === "active" &&
-  //                 session.payment_status === "paid"
-  //               ) {
-  //                 handleEndSession(session.id);
-  //               }
-  //               return { ...prev, [session.id]: 0 };
-  //             }
-  //             return { ...prev, [session.id]: current - 1 };
-  //           });
-  //         }, 1000); // Update every second
-  //         newIntervals[session.id] = interval;
-  //       }
-  //     }
-  //   });
-
-  //   setElapsedTimers(newElapsedTimers);
-  //   setCountdownTimers(newCountdownTimers);
-  //   setCountdownSeconds(newCountdownSeconds);
-  //   setCountdownIntervals(newIntervals);
-
-  //   // Set up interval to update elapsed time for all sessions
-  //   const elapsedInterval = setInterval(() => {
-  //     setElapsedTimers((prev) => {
-  //       const newTimers = { ...prev };
-  //       activeSessions.forEach((session) => {
-  //         const startTime = new Date(session.start_time).getTime();
-  //         const now = new Date().getTime();
-  //         const elapsedMs = now - startTime;
-  //         const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
-  //         newTimers[session.id] = elapsedMinutes;
-  //       });
-  //       return newTimers;
-  //     });
-  //   }, 60000); // Update every minute
-
-  //   return () => {
-  //     clearInterval(elapsedInterval);
-  //     Object.values(newIntervals).forEach((interval) =>
-  //       clearInterval(interval)
-  //     );
-  //   };
-  // }, [activeSessions]);
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -537,7 +435,7 @@ const ActiveRentals: React.FC = () => {
           consoles(name, location, rate_profiles(capital))
         `
         )
-        .eq("status", "active");
+        .in("status", ["active", "paused"]);
 
       if (rentalError) throw rentalError;
 
@@ -591,6 +489,7 @@ const ActiveRentals: React.FC = () => {
       setProducts(productData || []);
       setCustomers(customerData || []);
       setProductsTotalMap(productsTotalMap);
+      console.log(rentalData);
     } catch (error) {
       console.error("Error loading data:", error);
       Swal.fire("Error", "Gagal memuat data", "error");
@@ -732,6 +631,107 @@ const ActiveRentals: React.FC = () => {
     }
   }
 
+  // Fungsi untuk pause session (saat mati lampu)
+  const handlePauseSession = async (sessionId: string) => {
+    if (!ensureCashierActive()) return;
+
+    try {
+      const session = activeSessions.find((s) => s.id === sessionId);
+      if (!session) return;
+
+      const pauseStartTime = new Date().toISOString();
+
+      await supabase
+        .from("rental_sessions")
+        .update({
+          status: "paused",
+          pause_start_time: pauseStartTime,
+        })
+        .eq("id", sessionId);
+
+      // Log pause event
+      await logCashierTransaction({
+        type: "rental",
+        amount: 0,
+        paymentMethod: "cash",
+        referenceId: `PAUSE-${Date.now()}`,
+        description: `Rental session paused: (${session.customers?.name})`,
+        details: {
+          action: "pause_session",
+          session_id: sessionId,
+          pause_start: pauseStartTime,
+          reason: "Rental session di pause",
+        },
+      });
+
+      await loadData();
+      Swal.fire("Berhasil", "Session berhasil di-pause", "success");
+    } catch (error) {
+      console.error("Error pausing session:", error);
+      Swal.fire("Error", "Gagal pause session", "error");
+    }
+  };
+
+  // Fungsi untuk resume session
+  const handleResumeSession = async (sessionId: string) => {
+    if (!ensureCashierActive()) return;
+
+    try {
+      const session = activeSessions.find((s) => s.id === sessionId);
+      if (!session) return;
+
+      const pauseEndTime = new Date().toISOString();
+
+      // Ambil data session untuk hitung total pause time
+      const { data: sessionData } = await supabase
+        .from("rental_sessions")
+        .select("pause_start_time, total_pause_minutes")
+        .eq("id", sessionId)
+        .single();
+
+      if (!sessionData) throw new Error("Session not found");
+
+      const pauseStart = new Date(sessionData.pause_start_time || "");
+      const pauseEnd = new Date(pauseEndTime);
+      const pauseDurationMs = pauseEnd.getTime() - pauseStart.getTime();
+      const pauseMinutes = Math.floor(pauseDurationMs / (1000 * 60));
+      const totalPauseMinutes =
+        (sessionData.total_pause_minutes || 0) + pauseMinutes;
+
+      // Update status di rental_sessions
+      await supabase
+        .from("rental_sessions")
+        .update({
+          status: "active", // Kembali ke status active
+          pause_start_time: null, // Reset pause start time
+          total_pause_minutes: totalPauseMinutes,
+        })
+        .eq("id", sessionId);
+
+      // Log resume event
+      await logCashierTransaction({
+        type: "rental",
+        amount: 0,
+        paymentMethod: "cash",
+        referenceId: `RESUME-${Date.now()}`,
+        description: `Rental session resumed (${session.customers?.name})`,
+        details: {
+          action: "resume_session",
+          session_id: sessionId,
+          pause_end: pauseEndTime,
+          pause_duration_minutes: pauseMinutes,
+          total_pause_minutes: totalPauseMinutes,
+        },
+      });
+
+      await loadData();
+      Swal.fire("Berhasil", "Session berhasil di-resume", "success");
+    } catch (error) {
+      console.error("Error resuming session:", error);
+      Swal.fire("Error", "Gagal resume session", "error");
+    }
+  };
+
   const handleEndSession = async (sessionId: string) => {
     try {
       const session = activeSessions.find((s) => s.id === sessionId);
@@ -743,10 +743,10 @@ const ActiveRentals: React.FC = () => {
       if (isPrepaid) {
         const consoleObj = consoles.find((c) => c.id === session.console_id);
         if (consoleObj?.relay_command_off) {
-          fetch(consoleObj.relay_command_off).catch(() => {});
+          await fetch(consoleObj.relay_command_off).catch(() => {});
         }
         if (consoleObj?.power_tv_command) {
-          fetch(consoleObj.power_tv_command).catch(() => {});
+          await fetch(consoleObj.power_tv_command).catch(() => {});
         }
 
         // Update rental session
@@ -2599,7 +2599,7 @@ const ActiveRentals: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Action Buttons (icon only, tooltip) */}
+                    {/* Action Buttons  */}
                     <div className="flex gap-1 mt-auto">
                       {console.status === "available" ? (
                         <button
@@ -2612,8 +2612,32 @@ const ActiveRentals: React.FC = () => {
                         >
                           <Play className="h-4 w-4" />
                         </button>
-                      ) : console.status === "rented" && activeSession ? (
+                      ) : activeSession ? (
                         <>
+                          {/* Tombol Pause/Resume */}
+                          {activeSession.status === "paused" ? (
+                            <button
+                              onClick={() =>
+                                handleResumeSession(activeSession.id)
+                              }
+                              className="flex-1 bg-green-500 hover:bg-green-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                              title="Resume Session (Listrik Kembali)"
+                            >
+                              <Play className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                handlePauseSession(activeSession.id)
+                              }
+                              className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                              title="Pause Session (Mati Lampu)"
+                            >
+                              <Pause className="h-4 w-4" />
+                            </button>
+                          )}
+
+                          {/* Tombol End Rental */}
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
                             className="flex-1 bg-red-600 hover:bg-red-700 text-white py-1 rounded flex items-center justify-center text-xs"
@@ -2622,6 +2646,7 @@ const ActiveRentals: React.FC = () => {
                             <Square className="h-4 w-4" />
                           </button>
 
+                          {/* Tombol Move */}
                           <button
                             onClick={() => {
                               if (!ensureCashierActive()) return;
@@ -2636,7 +2661,7 @@ const ActiveRentals: React.FC = () => {
                             <ArrowRightLeft className="h-4 w-4" />
                           </button>
                         </>
-                      ) : (
+                      ) : console.status === "maintenance" ? (
                         <button
                           disabled
                           className="flex-1 bg-gray-400 text-white py-1 rounded flex items-center justify-center text-xs cursor-not-allowed"
@@ -2644,7 +2669,8 @@ const ActiveRentals: React.FC = () => {
                         >
                           <Wrench className="h-4 w-4" />
                         </button>
-                      )}
+                      ) : null}
+
                       {/* Tombol Tes TV */}
                       <button
                         onClick={async () => {
@@ -2693,10 +2719,17 @@ const ActiveRentals: React.FC = () => {
                       >
                         <Power className="h-4 w-4" />
                       </button>
+
+                      {/* Tombol Add Products */}
                       <button
                         onClick={() => {
                           if (!ensureCashierActive()) return;
-                          if (console.status === "rented" && activeSession) {
+                          if (
+                            console.status === "rented" &&
+                            activeSession &&
+                            activeSession.status === "active" &&
+                            !activeSession?.duration_minutes
+                          ) {
                             setShowProductModal(activeSession.id);
                           } else {
                             Swal.fire(
@@ -2708,6 +2741,8 @@ const ActiveRentals: React.FC = () => {
                         }}
                         className={`flex-1 ${
                           console.status === "rented" &&
+                          activeSession &&
+                          activeSession.status === "active" &&
                           !activeSession?.duration_minutes
                             ? "bg-orange-500 hover:bg-orange-600"
                             : "bg-gray-400 cursor-not-allowed"
@@ -2715,6 +2750,7 @@ const ActiveRentals: React.FC = () => {
                         disabled={
                           !activeSession ||
                           console.status !== "rented" ||
+                          activeSession.status !== "active" ||
                           !!activeSession.duration_minutes
                         }
                         title="Add Products"
@@ -2738,7 +2774,7 @@ const ActiveRentals: React.FC = () => {
               c.name.toLowerCase().includes(searchConsole.toLowerCase())
             )
             .map((console) => {
-              const isActive = console.status === "rented";
+              // const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
                 (s) => s.console_id === console.id
               );
@@ -2795,7 +2831,7 @@ const ActiveRentals: React.FC = () => {
 
                   {/* Right: Action & Status */}
                   <div className="shrink-0">
-                    {isActive && activeSession ? (
+                    {activeSession ? (
                       <div className="flex flex-col items-end">
                         {/* Status Badge */}
                         <span
@@ -2810,8 +2846,30 @@ const ActiveRentals: React.FC = () => {
                             : "PAY AS YOU GO"}
                         </span>
 
-                        {/* End Session Button */}
+                        {/* Action Button */}
                         <div className="flex gap-2">
+                          {/* Pause/Resume */}
+                          {activeSession.status !== "paused" ? (
+                            <button
+                              onClick={() =>
+                                handlePauseSession(activeSession.id)
+                              }
+                              className="bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                              title="Pause Rental"
+                            >
+                              <Pause className="h-5 w-5" />
+                              Pause Sesi
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleEndSession(activeSession.id)}
+                              className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                              title="Resume Session"
+                            >
+                              <Play className="h-5 w-5" />
+                              Resume Sesi
+                            </button>
+                          )}
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
                             className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
@@ -2820,6 +2878,8 @@ const ActiveRentals: React.FC = () => {
                             <Square className="h-5 w-5" />
                             Akhiri Sesi
                           </button>
+
+                          {/* Pindah Sesi */}
                           <button
                             onClick={() => {
                               if (!ensureCashierActive()) return;
@@ -2911,10 +2971,6 @@ const ActiveRentals: React.FC = () => {
                           </div>
                           <div className="text-lg font-bold">
                             Rp{" "}
-                            {/* {(
-                              calculateCurrentCost(activeSession) +
-                              (productsTotalMap[activeSession.id] || 0)
-                            ).toLocaleString("id-ID")} */}
                             <RealtimeCost
                               session={activeSession}
                               productsTotal={
@@ -2928,18 +2984,23 @@ const ActiveRentals: React.FC = () => {
                     <div className="mt-2 flex justify-between items-center">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          console.status === "available"
+                          activeSession?.status === "active"
                             ? "bg-green-500 text-white"
-                            : console.status === "rented"
-                            ? "bg-blue-500 text-white"
+                            : activeSession?.status === "paused"
+                            ? "bg-yellow-500 text-white"
                             : "bg-red-500 text-white"
                         }`}
                       >
-                        {console.status === "available"
+                        {/* {console.status === "available"
                           ? "AVAILABLE"
                           : console.status === "rented"
                           ? "ACTIVE"
-                          : "MAINTENANCE"}
+                          : "MAINTENANCE"} */}
+                        {activeSession?.status === "active"
+                          ? "ACTIVE"
+                          : activeSession?.status === "paused"
+                          ? "PAUSED"
+                          : "COMPLETED"}
                       </span>
                       {console.location && (
                         <span className="text-sm opacity-80">
@@ -3145,6 +3206,26 @@ const ActiveRentals: React.FC = () => {
                       </button>
                     ) : console.status === "rented" && activeSession ? (
                       <>
+                        {/* Tombol Pause/Resume */}
+                        {activeSession.status !== "paused" ? (
+                          <button
+                            onClick={() => handlePauseSession(activeSession.id)}
+                            className="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                          >
+                            <Pause className="h-5 w-5" />
+                            Pause Sesi
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              handleResumeSession(activeSession.id)
+                            }
+                            className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                          >
+                            <Play className="h-5 w-5" />
+                            Resume Sesi
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEndSession(activeSession.id)}
                           className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
