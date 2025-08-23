@@ -159,11 +159,24 @@ const ActiveRentals: React.FC = () => {
     [showStartRentalModal, consoles]
   );
 
+  const availableCustomers = React.useMemo(() => {
+    return customers.filter((customer) => {
+      // Cek apakah customer ini punya sesi aktif (active atau paused)
+      const hasActiveSession = activeSessions.some(
+        (session) =>
+          session.customer_id === customer.id &&
+          (session.status === "active" || session.status === "paused")
+      );
+
+      return !hasActiveSession;
+    });
+  }, [customers, activeSessions]);
+
   useEffect(() => {
     if (customerSearchTerm.trim() === "") {
-      setFilteredCustomers(customers);
+      setFilteredCustomers(availableCustomers);
     } else {
-      const filtered = customers.filter(
+      const filtered = availableCustomers.filter(
         (customer) =>
           customer.name
             .toLowerCase()
@@ -742,11 +755,11 @@ const ActiveRentals: React.FC = () => {
         session.duration_minutes && session.payment_status === "paid";
       if (isPrepaid) {
         const consoleObj = consoles.find((c) => c.id === session.console_id);
-        if (consoleObj?.relay_command_off) {
-          await fetch(consoleObj.relay_command_off).catch(() => {});
-        }
         if (consoleObj?.power_tv_command) {
           await fetch(consoleObj.power_tv_command).catch(() => {});
+        }
+        if (consoleObj?.relay_command_off) {
+          await fetch(consoleObj.relay_command_off).catch(() => {});
         }
 
         // Update rental session
@@ -3960,8 +3973,8 @@ const ActiveRentals: React.FC = () => {
       {/* Customer Selection Modal */}
       {showCustomerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex">
+            <div className="flex-1 p-6 overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-semibold text-gray-900">
                   Pilih Member
@@ -4000,87 +4013,101 @@ const ActiveRentals: React.FC = () => {
                 </div>
               </div>
 
-              <p className="text-sm text-gray-500 mt-2">
-                {filteredCustomers.length} member ditemukan
-              </p>
-            </div>
+              {/* Info jumlah member available */}
+              <div className="flex items-center justify-between mt-2 mb-4">
+                <p className="text-sm text-gray-500">
+                  {filteredCustomers.length} member tersedia untuk rental
+                </p>
+                {availableCustomers.length !== customers.length && (
+                  <p className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                    {customers.length - availableCustomers.length} member sedang
+                    rental
+                  </p>
+                )}
+              </div>
 
-            {/* Customer List */}
-            <div className="max-h-96 overflow-y-auto">
-              {filteredCustomers.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
-                  {customerSearchTerm
-                    ? "Tidak ada member yang ditemukan"
-                    : "Belum ada member"}
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-200">
-                  {filteredCustomers.map((customer) => (
-                    <div
-                      key={customer.id}
-                      onClick={() => {
-                        setSelectedCustomerId(customer.id);
-                        setShowCustomerModal(false);
-                        setCustomerSearchTerm("");
-                      }}
-                      className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <User className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <h4 className="font-medium text-gray-900">
-                                {customer.name}
-                              </h4>
-                              <p className="text-sm text-gray-500">
-                                {customer.phone}
-                              </p>
-                              {customer.email && (
-                                <p className="text-xs text-gray-400">
-                                  {customer.email}
+              {/* Customer List */}
+              <div className="max-h-96 overflow-y-auto">
+                {filteredCustomers.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500">
+                    {customerSearchTerm
+                      ? "Tidak ada member yang ditemukan"
+                      : "Semua member sedang rental atau tidak ada member tersedia"}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200">
+                    {filteredCustomers.map((customer) => (
+                      <div
+                        key={customer.id}
+                        onClick={() => {
+                          setSelectedCustomerId(customer.id);
+                          setShowCustomerModal(false);
+                          setCustomerSearchTerm("");
+                        }}
+                        className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                <User className="h-5 w-5 text-green-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium text-gray-900">
+                                  {customer.name}
+                                </h4>
+                                <p className="text-sm text-gray-500">
+                                  {customer.phone}
                                 </p>
-                              )}
+                                {customer.email && (
+                                  <p className="text-xs text-gray-400">
+                                    {customer.email}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-gray-400">Member ID</div>
-                          <div className="text-sm font-mono text-gray-600">
-                            {customer.id}
+                          <div className="text-right">
+                            <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded font-medium">
+                              Available
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              Member ID
+                            </div>
+                            <div className="text-sm font-mono text-gray-600">
+                              {customer.id}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            {/* Footer */}
-            <div className="p-6 border-t border-gray-200 bg-gray-50">
-              <div className="flex justify-between items-center">
-                <button
-                  type="button"
-                  onClick={() => setShowCustomerModal(false)}
-                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Batal
-                </button>
-                <div className="text-sm text-gray-500">
-                  {selectedCustomerId && (
-                    <>
-                      Member terpilih:{" "}
-                      <span className="font-medium text-gray-900">
-                        {
-                          customers.find((c) => c.id === selectedCustomerId)
-                            ?.name
-                        }
-                      </span>
-                    </>
-                  )}
+              {/* Footer */}
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <div className="flex justify-between items-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomerModal(false)}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Batal
+                  </button>
+                  <div className="text-sm text-gray-500">
+                    {selectedCustomerId && (
+                      <>
+                        Member terpilih:{" "}
+                        <span className="font-medium text-gray-900">
+                          {
+                            customers.find((c) => c.id === selectedCustomerId)
+                              ?.name
+                          }
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
