@@ -22,6 +22,7 @@ import RateProfilePage from "./components/RateProfilePage";
 import DeviceManagement from "./components/DeviceManagement";
 import LoginPage from "./pages/LoginPage";
 import { useAuth } from "./contexts/AuthContext";
+import { TimerProvider } from "./contexts/TimerContext";
 
 const App: React.FC = () => {
   return (
@@ -94,10 +95,12 @@ const AppLayout: React.FC = () => {
   };
 
   return (
-    <div className="flex bg-gray-100 min-h-screen">
-      <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="flex-1 overflow-y-auto">{renderContent()}</main>
-    </div>
+    <TimerProvider>
+      <div className="flex bg-gray-100 min-h-screen">
+        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <main className="flex-1 overflow-y-auto">{renderContent()}</main>
+      </div>
+    </TimerProvider>
   );
 };
 

@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
 import Countdown from "./Countdown";
 import { printReceipt } from "../utils/receipt";
+import { useTimer } from "../contexts/TimerContext";
 
 interface SaleItem {
   product_id: string;
@@ -111,6 +112,13 @@ interface CartItem {
 type MoveModalState = { sessionId: string; fromConsoleId: string } | null;
 
 const ActiveRentals: React.FC = () => {
+  // Timer context untuk global timer
+  const {
+    activeSessions: globalActiveSessions,
+    refreshActiveSessions,
+    isTimerRunning,
+  } = useTimer();
+
   // Untuk interface pembayaran mirip Cashier
   const [isManualInput, setIsManualInput] = useState(false);
   // State untuk status relay dan TV
@@ -430,6 +438,13 @@ const ActiveRentals: React.FC = () => {
     loadData();
   }, []);
 
+  // Sync with global timer context
+  useEffect(() => {
+    if (globalActiveSessions.length > 0) {
+      setActiveSessions(globalActiveSessions);
+    }
+  }, [globalActiveSessions]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -448,19 +463,8 @@ const ActiveRentals: React.FC = () => {
 
       if (rateError) throw rateError;
 
-      // Fetch active rental sessions
-      const { data: rentalData, error: rentalError } = await supabase
-        .from("rental_sessions")
-        .select(
-          `
-          *,
-          customers(name, phone),
-          consoles(name, location, rate_profiles(capital))
-        `
-        )
-        .in("status", ["active", "paused"]);
-
-      if (rentalError) throw rentalError;
+      // Use global active sessions from TimerContext instead of fetching separately
+      const rentalData = globalActiveSessions;
 
       // Fetch products from database
       const { data: productData, error: productError } = await supabase
@@ -511,6 +515,9 @@ const ActiveRentals: React.FC = () => {
       setProducts(productData || []);
       setCustomers(customerData || []);
       setProductsTotalMap(productsTotalMap);
+
+      // Refresh global active sessions
+      await refreshActiveSessions();
       console.log(rentalData);
     } catch (error) {
       console.error("Error loading data:", error);
@@ -567,10 +574,7 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
-  const handleSessionTimeout = (sessionId: string) => {
-    // End rental otomatis tanpa interaksi user
-    handleEndSession(sessionId);
-  };
+  // handleSessionTimeout sudah tidak diperlukan karena ditangani oleh TimerContext
 
   const RealtimeCost: React.FC<{
     session: RentalSession;
@@ -687,6 +691,7 @@ const ActiveRentals: React.FC = () => {
       });
 
       await loadData();
+      await refreshActiveSessions(); // Refresh global sessions
       Swal.fire("Berhasil", "Session berhasil di-pause", "success");
     } catch (error) {
       console.error("Error pausing session:", error);
@@ -747,6 +752,7 @@ const ActiveRentals: React.FC = () => {
       });
 
       await loadData();
+      await refreshActiveSessions(); // Refresh global sessions
       Swal.fire("Berhasil", "Session berhasil di-resume", "success");
     } catch (error) {
       console.error("Error resuming session:", error);
@@ -943,6 +949,7 @@ const ActiveRentals: React.FC = () => {
       setShowMoveModal(null);
       setMoveTargetConsoleId("");
       await loadData();
+      await refreshActiveSessions(); // Refresh global sessions
       Swal.fire("Berhasil", "Sesi berhasil dipindah ke unit baru.", "success");
     } catch (err) {
       console.error("handleConfirmMoveSession error:", err);
@@ -1370,6 +1377,7 @@ const ActiveRentals: React.FC = () => {
 
       setShowPaymentModal(null);
       await loadData();
+      await refreshActiveSessions(); // Refresh global sessions
       // Swal.fire(
       //   "Berhasil",
       //   "Pembayaran berhasil, rental telah diakhiri",
@@ -1996,6 +2004,7 @@ const ActiveRentals: React.FC = () => {
       setSearchConsole("");
       setNonMemberPhone("");
       await loadData();
+      await refreshActiveSessions(); // Refresh global sessions
       Swal.fire("Berhasil", "Sesi rental berhasil dimulai", "success");
     } catch (error) {
       console.error("Error starting rental:", error);
@@ -2305,6 +2314,7 @@ const ActiveRentals: React.FC = () => {
       setNonMemberPhone("");
 
       await loadData();
+      await refreshActiveSessions(); // Refresh global sessions
     } catch (error) {
       console.error("Error starting prepaid rental:", error);
 
@@ -2376,12 +2386,26 @@ const ActiveRentals: React.FC = () => {
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Console Management
-        </h1>
-        <p className="text-gray-600">
-          Monitor all consoles and manage rental sessions
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Console Management
+            </h1>
+            <p className="text-gray-600">
+              Monitor all consoles and manage rental sessions
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-3 h-3 rounded-full ${
+                isTimerRunning ? "bg-green-500" : "bg-red-500"
+              }`}
+            ></div>
+            <span className="text-sm text-gray-600">
+              Timer: {isTimerRunning ? "Running" : "Stopped"}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Time Display, Filter & View Mode Toggle */}
@@ -2815,9 +2839,9 @@ const ActiveRentals: React.FC = () => {
                                 : null
                             }
                             isPrepaid={!!activeSession.duration_minutes}
-                            onComplete={() =>
-                              handleSessionTimeout(activeSession.id)
-                            }
+                            onComplete={() => {
+                              // Timer sudah ditangani oleh TimerContext
+                            }}
                           />
                         </div>
                         <div className="flex items-center gap-1 text-[11px]">
@@ -3322,9 +3346,9 @@ const ActiveRentals: React.FC = () => {
                                       isPrepaid={
                                         !!activeSession.duration_minutes
                                       }
-                                      onComplete={() =>
-                                        handleSessionTimeout(activeSession.id)
-                                      }
+                                      onComplete={() => {
+                                        // Timer sudah ditangani oleh TimerContext
+                                      }}
                                     />
                                     <span className="ml-1">tersisa</span>
                                   </span>
@@ -3352,9 +3376,9 @@ const ActiveRentals: React.FC = () => {
                                       isPrepaid={
                                         !!activeSession.duration_minutes
                                       }
-                                      onComplete={() =>
-                                        handleSessionTimeout(activeSession.id)
-                                      }
+                                      onComplete={() => {
+                                        // Timer sudah ditangani oleh TimerContext
+                                      }}
                                     />
                                   </span>
                                 </span>
@@ -3424,9 +3448,9 @@ const ActiveRentals: React.FC = () => {
                                   : null
                               }
                               isPrepaid={!!activeSession.duration_minutes}
-                              onComplete={() =>
-                                handleSessionTimeout(activeSession.id)
-                              }
+                              onComplete={() => {
+                                // Timer sudah ditangani oleh TimerContext
+                              }}
                             />
                           </div>
                         </div>
