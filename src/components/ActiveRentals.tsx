@@ -466,8 +466,7 @@ const ActiveRentals: React.FC = () => {
       const { data: productData, error: productError } = await supabase
         .from("products")
         .select("*")
-        .eq("is_active", true)
-        .gt("stock", 0);
+        .eq("is_active", true);
 
       if (productError) {
         console.error("Error fetching products:", productError);
@@ -642,7 +641,7 @@ const ActiveRentals: React.FC = () => {
       for (const p of products || []) {
         const used = qtyByProduct[p.id] || 0;
         const current = Number(p.stock) || 0;
-        const newStock = Math.max(0, current - used);
+        const newStock = current - used;
         const { error: updStockErr } = await supabase
           .from("products")
           .update({ stock: newStock })
@@ -1156,7 +1155,7 @@ const ActiveRentals: React.FC = () => {
         for (const item of cart) {
           const p = products.find((x) => x.id === item.productId);
           if (!p) continue;
-          const newStock = Math.max(0, (Number(p.stock) || 0) - item.quantity);
+          const newStock = (Number(p.stock) || 0) - item.quantity;
           await supabase
             .from("products")
             .update({ stock: newStock })
@@ -2009,14 +2008,14 @@ const ActiveRentals: React.FC = () => {
     const existingItem = cart.find((item) => item.productId === product.id);
     let newQuantity = 1;
     if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
-        Swal.fire(
-          "Stok Tidak Cukup",
-          `Stok ${product.name} hanya tersisa ${product.stock}`,
-          "warning"
-        );
-        return;
-      }
+      // if (existingItem.quantity >= product.stock) {
+      //   Swal.fire(
+      //     "Stok Tidak Cukup",
+      //     `Stok ${product.name} hanya tersisa ${product.stock}`,
+      //     "warning"
+      //   );
+      //   return;
+      // }
       newQuantity = existingItem.quantity + 1;
       setCart(
         cart.map((item) =>
@@ -2332,7 +2331,7 @@ const ActiveRentals: React.FC = () => {
       .includes(searchProduct.toLowerCase());
     const matchesCategory =
       selectedCategory === "all" || product.category === selectedCategory;
-    return matchesSearch && matchesCategory && product.stock > 0;
+    return matchesSearch && matchesCategory;
   });
 
   const categories = [...new Set(products.map((p) => p.category))];
