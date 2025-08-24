@@ -2839,9 +2839,6 @@ const ActiveRentals: React.FC = () => {
                                 : null
                             }
                             isPrepaid={!!activeSession.duration_minutes}
-                            onComplete={() => {
-                              // Timer sudah ditangani oleh TimerContext
-                            }}
                           />
                         </div>
                         <div className="flex items-center gap-1 text-[11px]">
@@ -3346,9 +3343,6 @@ const ActiveRentals: React.FC = () => {
                                       isPrepaid={
                                         !!activeSession.duration_minutes
                                       }
-                                      onComplete={() => {
-                                        // Timer sudah ditangani oleh TimerContext
-                                      }}
                                     />
                                     <span className="ml-1">tersisa</span>
                                   </span>
@@ -3376,9 +3370,6 @@ const ActiveRentals: React.FC = () => {
                                       isPrepaid={
                                         !!activeSession.duration_minutes
                                       }
-                                      onComplete={() => {
-                                        // Timer sudah ditangani oleh TimerContext
-                                      }}
                                     />
                                   </span>
                                 </span>
@@ -3448,9 +3439,6 @@ const ActiveRentals: React.FC = () => {
                                   : null
                               }
                               isPrepaid={!!activeSession.duration_minutes}
-                              onComplete={() => {
-                                // Timer sudah ditangani oleh TimerContext
-                              }}
                             />
                           </div>
                         </div>
