@@ -33,6 +33,7 @@ const Bookkeeping: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
   // Filter states
   const [selectedPeriod, setSelectedPeriod] = useState("month");
@@ -544,28 +545,6 @@ const Bookkeeping: React.FC = () => {
                 {filteredByTab.length}
               </p>
             </div>
-            {/* <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setActiveView("jurnal")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeView !== "laba_rugi"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Jurnal Umum
-              </button>
-              <button
-                onClick={() => setActiveView("laba_rugi")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeView === "laba_rugi"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Laba Rugi
-              </button>
-            </div> */}
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab("all")}
@@ -669,6 +648,7 @@ const Bookkeeping: React.FC = () => {
               </div>
             ) : (
               paginatedData.map((t: any) => {
+                const isSelected = selectedItem === String(t.id);
                 return (
                   <div
                     key={t.id}
@@ -712,6 +692,26 @@ const Bookkeeping: React.FC = () => {
                                 Ref: {t.reference_id}
                               </span>
                             )}
+
+                            {!t?.details ||
+                              (!t.details?.action && (
+                                <button
+                                  onClick={
+                                    () =>
+                                      setSelectedItem(
+                                        isSelected ? null : String(t.id)
+                                      ) // Toggle detail
+                                  }
+                                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                  title={
+                                    isSelected
+                                      ? "Sembunyikan detail"
+                                      : "Lihat detail"
+                                  }
+                                >
+                                  {isSelected ? "Tutup" : "Detail"}
+                                </button>
+                              ))}
                           </div>
                         </div>
                       </div>
@@ -731,6 +731,50 @@ const Bookkeeping: React.FC = () => {
                         </p>
                       </div>
                     </div>
+                    {isSelected && t.details?.items?.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="font-medium text-gray-900 mb-3">
+                          Detail
+                        </h4>
+                        <div className="space-y-2">
+                          {t.details.items.map((item: any, idx: number) => {
+                            const name =
+                              item.name ??
+                              item.product_name ??
+                              item.title ??
+                              "Item";
+                            const qty = Number(item.qty ?? item.quantity ?? 1);
+                            const unit = Number(item.price ?? 0);
+                            const total = Number(item.total ?? unit * qty) || 0;
+
+                            return (
+                              <div
+                                key={idx}
+                                className="flex justify-between items-center text-sm"
+                              >
+                                <span className="text-gray-700">
+                                  {name} x {qty}{" "}
+                                  {t.details.discount?.amount &&
+                                    t.details.discount.amount > 0 &&
+                                    item.type === "rental" && (
+                                      <span className="text-red-500">
+                                        (Diskon{" "}
+                                        {t.details.discount.amount.toLocaleString(
+                                          "id-ID"
+                                        )}
+                                        )
+                                      </span>
+                                    )}
+                                </span>
+                                <span className="font-medium text-gray-900">
+                                  Rp {item.profit.toLocaleString("id-ID")}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })

@@ -268,7 +268,8 @@ const CashierSessionComponent: React.FC = () => {
   const getTransactionItems = (t: any) => {
     const d = t?.details ?? t?.metadata ?? {};
     const items = t?.items ?? d?.items ?? d?.line_items ?? [];
-    return Array.isArray(items) ? items : [];
+    const discount = d?.discount ?? 0;
+    return Array.isArray(items) ? { items, discount } : { items: [], discount };
   };
 
   const handleOpenSession = async () => {
@@ -905,12 +906,12 @@ const CashierSessionComponent: React.FC = () => {
                               Ref: {transaction.reference_id}
                             </span>
 
-                            {transaction.type === "expense" &&
+                            {/* {transaction.type === "expense" &&
                               transaction.details?.category && (
                                 <span className="text-sm text-gray-500">
                                   Kategori: {transaction.details.category}
                                 </span>
-                              )}
+                              )} */}
 
                             {!transaction?.details ||
                               (!transaction.details?.action && (
@@ -956,13 +957,13 @@ const CashierSessionComponent: React.FC = () => {
                     </div>
 
                     {selectedItem === String(transaction.id) &&
-                      getTransactionItems(transaction).length > 0 && (
+                      getTransactionItems(transaction).items.length > 0 && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
                           <h4 className="font-medium text-gray-900 mb-3">
                             Detail
                           </h4>
                           <div className="space-y-2">
-                            {getTransactionItems(transaction).map(
+                            {getTransactionItems(transaction).items.map(
                               (it: any, idx: number) => {
                                 const name =
                                   it.name ??
@@ -987,6 +988,20 @@ const CashierSessionComponent: React.FC = () => {
                                   </div>
                                 );
                               }
+                            )}
+                            {getTransactionItems(transaction).discount
+                              ?.amount && (
+                              <div className="flex justify-between items-center text-sm mt-2">
+                                <span className="text-sm text-red-500">
+                                  Diskon
+                                </span>
+                                <span className="text-sm text-red-500">
+                                  - Rp{" "}
+                                  {getTransactionItems(
+                                    transaction
+                                  ).discount.amount.toLocaleString("id-ID")}
+                                </span>
+                              </div>
                             )}
                           </div>
                         </div>

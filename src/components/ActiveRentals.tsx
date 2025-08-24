@@ -308,6 +308,11 @@ const ActiveRentals: React.FC = () => {
   );
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
+  const [discountType, setDiscountType] = useState<"amount" | "percentage">(
+    "amount"
+  );
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [isCashierActive, setIsCashierActive] = useState<boolean>(true);
   const [showMoveModal, setShowMoveModal] = useState<MoveModalState>(null);
   const [moveTargetConsoleId, setMoveTargetConsoleId] = useState<string>("");
@@ -367,7 +372,12 @@ const ActiveRentals: React.FC = () => {
 
   // Reset paymentAmount ke 0 setiap kali showPaymentModal berubah (end rental)
   React.useEffect(() => {
-    if (showPaymentModal) setPaymentAmount(0);
+    if (showPaymentModal) {
+      setPaymentAmount(0);
+      setDiscountValue(0);
+      setDiscountAmount(0);
+      setDiscountType("amount");
+    }
   }, [showPaymentModal]);
 
   // Load history sessions
@@ -1111,9 +1121,10 @@ const ActiveRentals: React.FC = () => {
     if (!ensureCashierActive()) return;
     const { session, productsTotal } = showPaymentModal;
     const totalCost = session ? calculateCurrentCost(session) : 0;
-    const total = totalCost + (productsTotal ?? 0);
+    const subtotal = totalCost + (productsTotal ?? 0);
+    const finalTotal = Math.max(0, subtotal - discountAmount);
 
-    if (paymentAmount < total) {
+    if (paymentAmount < finalTotal) {
       Swal.fire("Error", "Nominal pembayaran kurang dari total", "warning");
       return;
     }
@@ -1163,33 +1174,51 @@ const ActiveRentals: React.FC = () => {
             quantity: i.quantity,
             price: i.price,
             cost: i.cost,
-            total: i.price * i.quantity,
-            profit: Number((i.price - i.cost) * i.quantity),
+            total: i.price * i.quantity, // harga sebelum diskon
+            profit:
+              Number((i.price - i.cost) * i.quantity) -
+              (discountAmount > 0 ? discountAmount : 0),
             description: `Harga: Rp ${i.price.toLocaleString("id-ID")}`,
           })),
           subtotal: productsTotal ?? 0,
           tax: 0,
-          total,
+          discount:
+            discountAmount > 0
+              ? {
+                  type: discountType,
+                  value: discountValue,
+                  amount: discountAmount,
+                }
+              : undefined,
+          total: finalTotal,
           paymentMethod,
           paymentAmount,
-          change: paymentAmount - total,
+          change: paymentAmount - finalTotal,
           cashier: "Kasir 1",
         };
 
         const details = {
           items: receiptData.items,
-          breakdown: { rental_cost: 0, products_total: total },
+          breakdown: { rental_cost: 0, products_total: finalTotal },
           customer: receiptData.customer,
+          discount:
+            discountAmount > 0
+              ? {
+                  type: discountType,
+                  value: discountValue,
+                  amount: discountAmount,
+                }
+              : undefined,
           payment: {
             method: paymentMethod,
             amount: paymentAmount,
-            change: paymentAmount - total,
+            change: paymentAmount - finalTotal,
           },
         };
 
         await logCashierTransaction({
           type: "sale",
-          amount: total,
+          amount: finalTotal,
           paymentMethod,
           referenceId: receiptData.id,
           description: "Retail purchase",
@@ -1231,7 +1260,7 @@ const ActiveRentals: React.FC = () => {
         .from("rental_sessions")
         .update({
           end_time: new Date().toISOString(),
-          total_amount: total,
+          total_amount: finalTotal,
           status: "completed",
           payment_status: "paid",
           payment_method: paymentMethod,
@@ -1260,7 +1289,10 @@ const ActiveRentals: React.FC = () => {
           type: "rental" as const,
           capital: session?.consoles?.rate_profiles?.capital ?? 0,
           total: totalCost,
-          profit: totalCost - (session?.consoles?.rate_profiles?.capital ?? 0),
+          profit:
+            totalCost -
+            (session?.consoles?.rate_profiles?.capital ?? 0) -
+            (discountAmount > 0 ? discountAmount : 0),
           description: `Durasi: ${formatElapsedHMS(session.start_time)}${
             session.consoles?.location
               ? ` | Lokasi: ${session.consoles.location}`
@@ -1286,10 +1318,18 @@ const ActiveRentals: React.FC = () => {
         items,
         subtotal: totalCost,
         tax: 0,
-        total: totalCost + (productsTotal ?? 0),
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
+        total: finalTotal,
         paymentMethod,
         paymentAmount,
-        change: paymentAmount - (totalCost + (productsTotal ?? 0)),
+        change: paymentAmount - finalTotal,
         cashier: "Kasir 1",
       };
 
@@ -1305,6 +1345,14 @@ const ActiveRentals: React.FC = () => {
           console: session.consoles?.name,
           duration_minutes: session.duration_minutes ?? null,
         },
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
         payment: {
           method: paymentMethod,
           amount: paymentAmount,
@@ -1314,7 +1362,7 @@ const ActiveRentals: React.FC = () => {
 
       await logCashierTransaction({
         type: "rental",
-        amount: total,
+        amount: finalTotal,
         paymentMethod,
         referenceId: receiptData.id,
         description: `Rental payment (${session.customers?.name})`,
@@ -1452,7 +1500,13 @@ const ActiveRentals: React.FC = () => {
   }: {
     open: boolean;
     onClose: () => void;
-    onConfirm: (paymentMethod: "cash" | "qris", paymentAmount: number) => void;
+    onConfirm: (
+      paymentMethod: "cash" | "qris",
+      paymentAmount: number,
+      discountAmount: number,
+      discountType: "amount" | "percentage",
+      discountValue: number
+    ) => void;
     duration: string;
     hourlyRate: number;
     totalAmount: number;
@@ -1461,14 +1515,23 @@ const ActiveRentals: React.FC = () => {
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
     const [isManualInput, setIsManualInput] = useState(false);
     const [paymentAmount, setPaymentAmount] = useState(totalAmount);
-    // Reset paymentAmount hanya saat modal pertama kali dibuka
+    // State lokal untuk diskon di PrepaidPaymentModal2
+    const [localDiscountType, setLocalDiscountType] = useState<
+      "amount" | "percentage"
+    >("amount");
+    const [localDiscountValue, setLocalDiscountValue] = useState<number>(0);
+    const [localDiscountAmount, setLocalDiscountAmount] = useState<number>(0);
+
+    // Reset paymentAmount dan diskon hanya saat modal pertama kali dibuka
     useEffect(() => {
       if (open) {
         setPaymentAmount(totalAmount);
+        setLocalDiscountValue(0);
+        setLocalDiscountAmount(0);
+        setLocalDiscountType("amount");
       }
     }, [open]);
-    // Kembalian
-    const change = paymentAmount - totalAmount;
+    // Kembalian akan dihitung inline di UI
     if (!open) return null;
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1476,8 +1539,19 @@ const ActiveRentals: React.FC = () => {
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
               <div className="text-xl font-bold text-gray-700">Total:</div>
-              <div className="text-2xl font-bold text-right text-blue-700">
-                Rp {totalAmount.toLocaleString("id-ID")}
+              <div className="text-right">
+                {localDiscountAmount > 0 && (
+                  <div className="text-sm text-gray-500 line-through">
+                    Rp {totalAmount.toLocaleString("id-ID")}
+                  </div>
+                )}
+                <div className="text-2xl font-bold text-blue-700">
+                  Rp{" "}
+                  {Math.max(
+                    0,
+                    totalAmount - localDiscountAmount
+                  ).toLocaleString("id-ID")}
+                </div>
               </div>
             </div>
             <div className="mb-4">
@@ -1522,6 +1596,100 @@ const ActiveRentals: React.FC = () => {
                   Rp {hourlyRate.toLocaleString("id-ID")}
                 </span>
               </div>
+            </div>
+
+            {/* DISKON SECTION untuk Prepaid */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-gray-700">Diskon</div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      localDiscountType === "amount"
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setLocalDiscountType("amount");
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    Rp
+                  </button>
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      localDiscountType === "percentage"
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setLocalDiscountType("percentage");
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    %
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                    onClick={() => {
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    × Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max={localDiscountType === "percentage" ? 100 : undefined}
+                  value={localDiscountValue}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setLocalDiscountValue(val);
+
+                    // Hitung diskon amount secara real-time untuk prepaid
+                    if (localDiscountType === "percentage") {
+                      const maxPercentage = Math.min(100, val);
+                      setLocalDiscountAmount(
+                        (totalAmount * maxPercentage) / 100
+                      );
+                    } else {
+                      setLocalDiscountAmount(Math.min(val, totalAmount));
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                  placeholder={localDiscountType === "percentage" ? "0" : "0"}
+                />
+                <span className="self-center text-gray-600 font-medium">
+                  {localDiscountType === "percentage" ? "%" : "Rp"}
+                </span>
+              </div>
+
+              {/* Display discount amount */}
+              {localDiscountAmount > 0 && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-700">Diskon:</span>
+                    <span className="font-bold text-green-800">
+                      - Rp {localDiscountAmount.toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                  {localDiscountType === "percentage" && (
+                    <div className="text-xs text-green-600 text-center">
+                      ({localDiscountValue}% dari total)
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
@@ -1575,9 +1743,18 @@ const ActiveRentals: React.FC = () => {
                   <button
                     type="button"
                     className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
-                    onClick={() => setPaymentAmount(totalAmount)}
+                    onClick={() =>
+                      setPaymentAmount(
+                        Math.max(0, totalAmount - localDiscountAmount)
+                      )
+                    }
                   >
-                    LUNAS (Rp {totalAmount.toLocaleString("id-ID")})
+                    LUNAS (Rp{" "}
+                    {Math.max(
+                      0,
+                      totalAmount - localDiscountAmount
+                    ).toLocaleString("id-ID")}
+                    )
                   </button>
                 </>
               ) : (
@@ -1601,7 +1778,15 @@ const ActiveRentals: React.FC = () => {
             <div className="mb-4">
               <div className="font-medium text-gray-700 mb-1">Kembalian</div>
               <div className="text-2xl font-mono font-bold text-green-700 text-center">
-                Rp {change > 0 ? change.toLocaleString("id-ID") : 0}
+                Rp{" "}
+                {(() => {
+                  const finalTotal = Math.max(
+                    0,
+                    totalAmount - localDiscountAmount
+                  );
+                  const change = paymentAmount - finalTotal;
+                  return change > 0 ? change.toLocaleString("id-ID") : 0;
+                })()}
               </div>
             </div>
             <div className="flex gap-3 mt-6">
@@ -1613,13 +1798,31 @@ const ActiveRentals: React.FC = () => {
                 Batal
               </button>
               <button
-                onClick={() => onConfirm(paymentMethod, paymentAmount)}
-                className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
-                  paymentAmount < totalAmount
+                onClick={() =>
+                  onConfirm(
+                    paymentMethod,
+                    paymentAmount,
+                    localDiscountAmount,
+                    localDiscountType,
+                    localDiscountValue
+                  )
+                }
+                className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${(() => {
+                  const finalTotal = Math.max(
+                    0,
+                    totalAmount - localDiscountAmount
+                  );
+                  return paymentAmount < finalTotal
                     ? "opacity-50 cursor-not-allowed"
-                    : ""
-                }`}
-                disabled={paymentAmount < totalAmount || loading}
+                    : "";
+                })()}`}
+                disabled={(() => {
+                  const finalTotal = Math.max(
+                    0,
+                    totalAmount - localDiscountAmount
+                  );
+                  return paymentAmount < finalTotal || loading;
+                })()}
               >
                 Bayar & Mulai
               </button>
@@ -1905,7 +2108,10 @@ const ActiveRentals: React.FC = () => {
   // Handler konfirmasi pembayaran prepaid
   const handleConfirmPrepaidPayment = async (
     paymentMethod: "cash" | "qris",
-    paymentAmount: number
+    paymentAmount: number,
+    discountAmount: number,
+    discountType: "amount" | "percentage",
+    discountValue: number
   ) => {
     if (!ensureCashierActive()) return;
     if (!showPrepaidPaymentModal) return;
@@ -1920,7 +2126,12 @@ const ActiveRentals: React.FC = () => {
       return;
     }
 
-    if (paymentAmount < showPrepaidPaymentModal.totalAmount) {
+    const finalTotal = Math.max(
+      0,
+      showPrepaidPaymentModal.totalAmount - discountAmount
+    );
+
+    if (paymentAmount < finalTotal) {
       Swal.fire("Error", "Nominal pembayaran kurang dari total", "warning");
       return;
     }
@@ -1971,7 +2182,7 @@ const ActiveRentals: React.FC = () => {
           console_id: latestConsole.id,
           status: "active",
           payment_status: "paid",
-          total_amount: totalAmount,
+          total_amount: finalTotal,
           paid_amount: paymentAmount,
           start_time: new Date().toISOString(),
           duration_minutes: duration,
@@ -2004,7 +2215,7 @@ const ActiveRentals: React.FC = () => {
             type: "rental" as const,
             capital: latestConsole?.rate_profiles?.capital ?? 0,
             total: totalAmount,
-            profit: totalAmount - (latestConsole?.rate_profiles?.capital ?? 0),
+            profit: finalTotal - (latestConsole?.rate_profiles?.capital ?? 0),
             description: `Durasi: ${rentalDurationHours} jam ${
               rentalDurationMinutes > 0 ? `${rentalDurationMinutes} menit` : ""
             } (Prepaid)`,
@@ -2012,16 +2223,24 @@ const ActiveRentals: React.FC = () => {
         ],
         subtotal: totalAmount,
         tax: 0,
-        total: totalAmount,
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
+        total: finalTotal,
         paymentMethod: paymentMethod.toUpperCase(),
         paymentAmount: paymentAmount,
-        change: paymentAmount - totalAmount,
+        change: paymentAmount - finalTotal,
         cashier: "System", // Ambil dari user yang login
       };
 
       const details = {
         items: receiptData.items,
-        breakdown: { rental_cost: totalAmount, products_total: 0 },
+        breakdown: { rental_cost: finalTotal, products_total: 0 },
         customer: receiptData.customer,
         rental: {
           session_id: rentalSessionId,
@@ -2029,6 +2248,14 @@ const ActiveRentals: React.FC = () => {
           prepaid: true,
           duration_minutes: duration,
         },
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
         payment: {
           method: paymentMethod,
           amount: paymentAmount,
@@ -2038,7 +2265,7 @@ const ActiveRentals: React.FC = () => {
 
       await logCashierTransaction({
         type: "rental",
-        amount: totalAmount,
+        amount: finalTotal,
         paymentMethod,
         referenceId: receiptData.id,
         description: `Prepaid rental (${latestConsole.name})`,
@@ -4505,20 +4732,32 @@ const ActiveRentals: React.FC = () => {
               {/* Header Total */}
               <div className="flex items-center justify-between mb-6">
                 <div className="text-xl font-bold text-gray-700">Total:</div>
-                <div className="text-2xl font-bold text-right text-blue-700">
-                  Rp{" "}
-                  {/* {(
-                    calculateCurrentCost(showPaymentModal.session) +
-                    (showPaymentModal.productsTotal ?? 0)
-                  ).toLocaleString("id-ID")} */}
-                  {(() => {
-                    const rentalCost = showPaymentModal.session
-                      ? calculateCurrentCost(showPaymentModal.session)
-                      : 0;
-                    const total =
-                      rentalCost + (showPaymentModal.productsTotal ?? 0);
-                    return total.toLocaleString("id-ID");
-                  })()}
+                <div className="text-right">
+                  {discountAmount > 0 && (
+                    <div className="text-sm text-gray-500 line-through">
+                      Rp{" "}
+                      {(() => {
+                        const rentalCost = showPaymentModal.session
+                          ? calculateCurrentCost(showPaymentModal.session)
+                          : 0;
+                        const total =
+                          rentalCost + (showPaymentModal.productsTotal ?? 0);
+                        return total.toLocaleString("id-ID");
+                      })()}
+                    </div>
+                  )}
+                  <div className="text-2xl font-bold text-blue-700">
+                    Rp{" "}
+                    {(() => {
+                      const rentalCost = showPaymentModal.session
+                        ? calculateCurrentCost(showPaymentModal.session)
+                        : 0;
+                      const total =
+                        rentalCost + (showPaymentModal.productsTotal ?? 0);
+                      const finalTotal = Math.max(0, total - discountAmount);
+                      return finalTotal.toLocaleString("id-ID");
+                    })()}
+                  </div>
                 </div>
               </div>
               {/* Metode Pembayaran */}
@@ -4612,6 +4851,104 @@ const ActiveRentals: React.FC = () => {
                 </div>
               )}
 
+              {/* DISKON SECTION */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-gray-700">Diskon</div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={`text-xs px-2 py-1 rounded border ${
+                        discountType === "amount"
+                          ? "bg-blue-100 border-blue-300 text-blue-700"
+                          : "bg-white border-gray-300 text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setDiscountType("amount");
+                        setDiscountValue(0);
+                        setDiscountAmount(0);
+                      }}
+                    >
+                      Rp
+                    </button>
+                    <button
+                      type="button"
+                      className={`text-xs px-2 py-1 rounded border ${
+                        discountType === "percentage"
+                          ? "bg-blue-100 border-blue-300 text-blue-700"
+                          : "bg-white border-gray-300 text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setDiscountType("percentage");
+                        setDiscountValue(0);
+                        setDiscountAmount(0);
+                      }}
+                    >
+                      %
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                      onClick={() => {
+                        setDiscountValue(0);
+                        setDiscountAmount(0);
+                      }}
+                    >
+                      × Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max={discountType === "percentage" ? 100 : undefined}
+                    value={discountValue}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setDiscountValue(val);
+
+                      // Hitung diskon amount secara real-time
+                      const rentalCost = showPaymentModal.session
+                        ? calculateCurrentCost(showPaymentModal.session)
+                        : 0;
+                      const productsTotal = showPaymentModal.productsTotal ?? 0;
+                      const subtotal = rentalCost + productsTotal;
+
+                      if (discountType === "percentage") {
+                        const maxPercentage = Math.min(100, val);
+                        setDiscountAmount((subtotal * maxPercentage) / 100);
+                      } else {
+                        setDiscountAmount(Math.min(val, subtotal));
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                    placeholder={discountType === "percentage" ? "0" : "0"}
+                  />
+                  <span className="self-center text-gray-600 font-medium">
+                    {discountType === "percentage" ? "%" : "Rp"}
+                  </span>
+                </div>
+
+                {/* Display discount amount */}
+                {discountAmount > 0 && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-green-700">Diskon:</span>
+                      <span className="font-bold text-green-800">
+                        - Rp {discountAmount.toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                    {discountType === "percentage" && (
+                      <div className="text-xs text-green-600 text-center">
+                        ({discountValue}% dari total)
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Jumlah Bayar */}
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
@@ -4672,16 +5009,13 @@ const ActiveRentals: React.FC = () => {
                       type="button"
                       className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
                       onClick={() => {
-                        // setPaymentAmount(
-                        //   calculateCurrentCost(showPaymentModal.session) +
-                        //     (showPaymentModal.productsTotal ?? 0)
-                        // )
                         const rentalCost = showPaymentModal.session
                           ? calculateCurrentCost(showPaymentModal.session)
                           : 0;
-                        setPaymentAmount(
-                          rentalCost + (showPaymentModal.productsTotal ?? 0)
-                        );
+                        const total =
+                          rentalCost + (showPaymentModal.productsTotal ?? 0);
+                        const finalTotal = Math.max(0, total - discountAmount);
+                        setPaymentAmount(finalTotal);
                       }}
                     >
                       LUNAS (Rp{" "}
@@ -4691,7 +5025,8 @@ const ActiveRentals: React.FC = () => {
                           : 0;
                         const total =
                           rentalCost + (showPaymentModal.productsTotal ?? 0);
-                        return total.toLocaleString("id-ID");
+                        const finalTotal = Math.max(0, total - discountAmount);
+                        return finalTotal.toLocaleString("id-ID");
                       })()}
                       )
                     </button>
@@ -4724,7 +5059,8 @@ const ActiveRentals: React.FC = () => {
                       : 0;
                     const total =
                       rentalCost + (showPaymentModal.productsTotal ?? 0);
-                    const change = paymentAmount - total;
+                    const finalTotal = Math.max(0, total - discountAmount);
+                    const change = paymentAmount - finalTotal;
                     return change > 0 ? change.toLocaleString("id-ID") : 0;
                   })()}
                 </div>
@@ -4744,7 +5080,8 @@ const ActiveRentals: React.FC = () => {
                       : 0;
                     const total =
                       rentalCost + (showPaymentModal.productsTotal ?? 0);
-                    return paymentAmount < total
+                    const finalTotal = Math.max(0, total - discountAmount);
+                    return paymentAmount < finalTotal
                       ? "opacity-50 cursor-not-allowed"
                       : "";
                   })()}`}
@@ -4754,7 +5091,8 @@ const ActiveRentals: React.FC = () => {
                       : 0;
                     const total =
                       rentalCost + (showPaymentModal.productsTotal ?? 0);
-                    return paymentAmount < total;
+                    const finalTotal = Math.max(0, total - discountAmount);
+                    return paymentAmount < finalTotal;
                   })()}
                 >
                   Bayar

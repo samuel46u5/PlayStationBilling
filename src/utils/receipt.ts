@@ -13,6 +13,11 @@ export interface ReceiptData {
   }>;
   subtotal: number;
   tax: number;
+  discount?: {
+    type: "amount" | "percentage";
+    value: number;
+    amount: number;
+  };
   total: number;
   paymentMethod: string;
   paymentAmount: number;
@@ -157,6 +162,15 @@ export const generateReceiptHTML = async (tx: ReceiptData) => {
                 ? `<div class="item"><span class="item-name">Pajak:</span><span class="item-price">Rp ${tx.tax.toLocaleString(
                     "id-ID"
                   )}</span></div>`
+                : ""
+            }
+            ${
+              tx.discount
+                ? `<div class="item"><span class="item-name">Subtotal:</span><span class="item-price">Rp ${(tx.total + tx.discount.amount).toLocaleString("id-ID")}</span></div>
+                <div class="item" style="color: #059669;">
+                  <span class="item-name">Diskon (${tx.discount.type === "amount" ? "Rp" : "%"}${tx.discount.value.toLocaleString("id-ID")}):</span>
+                  <span class="item-price">- Rp ${tx.discount.amount.toLocaleString("id-ID")}</span>
+                </div>`
                 : ""
             }
             <div class="item" style="font-weight:bold;font-size:13px;">
