@@ -86,15 +86,6 @@ const DevicesMaintenance: React.FC = () => {
       }
     };
     fetch();
-    console.log(devices);
-    console.log(
-      "matikan tv",
-      devices.map((device) => device.power_tv_command)
-    );
-    console.log(
-      "matikan relay",
-      devices.map((device) => device.relay_command_off)
-    );
   }, []);
 
   // clock
@@ -420,14 +411,21 @@ const DevicesMaintenance: React.FC = () => {
 
               const statusData = await statusRes.json();
 
-              if (statusData.status === "off") {
+              if (statusData.POWER === "OFF") {
                 return { device, status: "already_off" };
               }
 
               // Jika status "on", lakukan perintah untuk mematikan
               const res = await fetch(device.relay_command_off);
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
-              return { device, status: "success" };
+              
+              const resData = await res.json();
+              
+              if (resData.POWER === "OFF") {
+                return { device, status: "success" };
+              } else {
+                return { device, status: "failed", reason: resData };
+              }
             })
           );
 
@@ -506,14 +504,22 @@ const DevicesMaintenance: React.FC = () => {
 
               const statusData = await statusRes.json();
 
-              if (statusData.status === "on") {
+              if (statusData.POWER === "ON") {
                 return { device, status: "already_on" };
               }
 
               // Jika status "off", lakukan perintah untuk menyalakan
               const res = await fetch(device.relay_command_on);
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
-              return { device, status: "success" };
+
+              const resData = await res.json();
+              
+              if (resData.POWER === "ON") {
+                return { device, status: "success" };
+              } else {
+                return { device, status: "failed", reason: resData };
+              }
+
             })
           );
 
@@ -584,7 +590,7 @@ const DevicesMaintenance: React.FC = () => {
           const results = await Promise.allSettled(
             devices.map((device) =>
               fetch(
-                `/tv/${device.ip_address_tv}/volume/${volume}}?port=5555&method=adb`
+                `http://localhost:3001/tv/${device.ip_address_tv}/volume/${volume}?port=5555&method=adb`
               )
                 .then((res) => {
                   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -631,7 +637,7 @@ const DevicesMaintenance: React.FC = () => {
       case "Mute Volume": {
         const results = await Promise.allSettled(
           devices.map((device) =>
-            fetch(`/tv/${device.ip_address_tv}/volume/0?port=5555&method=adb`)
+            fetch(`http://localhost:3001/tv/${device.ip_address_tv}/volume/0?port=5555&method=adb`)
               .then((res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return { device, status: "success" };
@@ -814,6 +820,8 @@ const DevicesMaintenance: React.FC = () => {
               <div className="relative mt-1">
                 <input
                   type="text"
+                  value={volume}
+                  onChange={(e) => {e.target.value===""?setVolume(15):setVolume(Number(e.target.value))}}
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   placeholder="Masukkan volume"
                 />

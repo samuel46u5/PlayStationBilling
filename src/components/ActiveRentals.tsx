@@ -518,7 +518,6 @@ const ActiveRentals: React.FC = () => {
 
       // Refresh global active sessions
       await refreshActiveSessions();
-      console.log(rentalData);
     } catch (error) {
       console.error("Error loading data:", error);
       Swal.fire("Error", "Gagal memuat data", "error");
