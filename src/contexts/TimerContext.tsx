@@ -256,7 +256,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   // Fungsi pengecekan TV yang tidak rented
   const checkAndShutdownUnusedConsoles = useCallback(async () => {
     try {
-      // Ambil semua console yang aktif
       const { data: consoles, error } = await supabase
         .from("consoles")
         .select(
@@ -274,11 +273,20 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
           if (c.perintah_cek_power_tv) {
             try {
               const res = await fetch(c.perintah_cek_power_tv);
-              const text = await res.text();
-              tvIsOn = text.trim().toUpperCase() === "ON";
+              const tvStatusJson = await res.json();
+              const obj =
+                typeof tvStatusJson === "string"
+                  ? JSON.parse(tvStatusJson)
+                  : tvStatusJson;
+              const status =
+                typeof obj === "object" && obj !== null && "status" in obj
+                  ? obj.status
+                  : undefined;
+              if (typeof status === "string") {
+                tvIsOn = status.trim().toUpperCase() === "ON";
+              }
             } catch (err) {
               console.warn(`Gagal cek status TV untuk console ${c.id}`);
-              continue;
             }
           }
           // Jika TV menyala, matikan

@@ -71,7 +71,7 @@ interface RentalSession {
   end_time?: string;
   duration_minutes?: number;
   total_amount: number;
-  status: "active" | "completed" | "paused";
+  status: "active" | "completed" | "paused" | "cancelled";
   payment_status: "pending" | "partial" | "paid";
   paid_amount: number;
   pause_start_time?: string;
@@ -395,8 +395,8 @@ const ActiveRentals: React.FC = () => {
       // Get total count for pagination
       let countQuery = supabase
         .from("rental_sessions")
-        .select("id", { count: "exact", head: true })
-        .in("status", ["completed", "overdue"]);
+        .select("id", { count: "exact", head: true });
+      // .in("status", ["completed", "cancelled"]);
       if (startDate) {
         countQuery = countQuery.gte("end_time", startDate + "T00:00:00");
       }
@@ -414,8 +414,8 @@ const ActiveRentals: React.FC = () => {
       let query = supabase
         .from("rental_sessions")
         .select(`*, customers(name, phone), consoles(name, location)`)
-        .in("status", ["completed", "overdue"])
-        .order("end_time", { ascending: false })
+        // .in("status", ["completed", "cancelled"])
+        .order("start_time", { ascending: false })
         .range(startIdx, endIdx);
       if (startDate) {
         query = query.gte("end_time", startDate + "T00:00:00");
@@ -432,6 +432,10 @@ const ActiveRentals: React.FC = () => {
       setLoadingHistory(false);
     }
   };
+
+  useEffect(() => {
+    loadHistorySessions(historyStartDate, historyEndDate);
+  }, [currentPage, historyStartDate, historyEndDate]);
 
   // Load data on component mount
   useEffect(() => {
@@ -2382,6 +2386,92 @@ const ActiveRentals: React.FC = () => {
   }, [showPrepaidPaymentModal]);
 
   // ...existing code...
+
+  // Tambahkan state untuk modal batal transaksi
+  const [showCancelModal, setShowCancelModal] = useState<null | {
+    session: RentalSession;
+  }>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  // Fungsi pembatalan transaksi
+  const handleCancelTransaction = async (session: RentalSession) => {
+    if (!cancelReason.trim()) {
+      Swal.fire("Error", "Alasan pembatalan wajib diisi", "warning");
+      return;
+    }
+    setCancelLoading(true);
+    try {
+      // Update status dan description
+      await supabase
+        .from("rental_sessions")
+        .update({
+          status: "cancelled",
+          notes: `Dibatalkan oleh kasir pada ${new Date().toLocaleString(
+            "id-ID"
+          )}: ${cancelReason}`,
+        })
+        .eq("id", session.id);
+
+      await logCashierTransaction({
+        type: "rental",
+        amount: 0,
+        paymentMethod: "cash",
+        referenceId: `CANCELLED-${Date.now()}`,
+        description: `Dibatalkan oleh kasir pada ${new Date().toLocaleString(
+          "id-ID"
+        )}: ${cancelReason}`,
+        details: {
+          action: "cancel_session",
+          session_id: session.id,
+          reason: cancelReason,
+        },
+      });
+      // Rollback stok produk jika ada
+      const { data: products } = await supabase
+        .from("rental_session_products")
+        .select("product_id, quantity")
+        .eq("session_id", session.id);
+      if (Array.isArray(products)) {
+        for (const item of products) {
+          await supabase.rpc("increment_product_stock", {
+            product_id: item.product_id,
+            qty: item.quantity,
+          });
+        }
+      }
+      // Update status console
+      if (session.console_id) {
+        const { data: consoleData, error: consoleError } = await supabase
+          .from("consoles")
+          .update({ status: "available" })
+          .eq("id", session.console_id)
+          .select()
+          .single();
+
+        if (consoleData?.power_tv_command) {
+          fetch(consoleData.power_tv_command).catch(() => {
+            console.error("Gagal mematikan TV");
+          });
+        }
+        if (consoleData?.relay_command_on) {
+          fetch(consoleData.relay_command_on).catch(() => {
+            console.error("Gagal mematikan relay");
+          });
+        }
+      }
+
+      setShowCancelModal(null);
+      setCancelReason("");
+      await loadData();
+      Swal.fire("Berhasil", "Transaksi berhasil dibatalkan", "success");
+    } catch (err) {
+      Swal.fire("Error", "Gagal membatalkan transaksi", "error");
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
@@ -2632,7 +2722,11 @@ const ActiveRentals: React.FC = () => {
                           return (
                             <tr
                               key={session.id}
-                              className="border-b hover:bg-gray-50"
+                              className={`border-b hover:bg-gray-50 ${
+                                session.status === "cancelled"
+                                  ? "bg-red-100 text-red-700"
+                                  : ""
+                              }`}
                             >
                               <td className="px-3 py-2 border font-mono">
                                 {start.toLocaleString("id-ID", {
@@ -2673,6 +2767,17 @@ const ActiveRentals: React.FC = () => {
                               </td>
                               <td className="px-3 py-2 border">
                                 {session.status.toUpperCase()}
+                                {session.status !== "cancelled" &&
+                                  session.status !== "completed" && (
+                                    <button
+                                      className="ml-2 px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700"
+                                      onClick={() =>
+                                        setShowCancelModal({ session })
+                                      }
+                                    >
+                                      Batal
+                                    </button>
+                                  )}
                               </td>
                             </tr>
                           );
@@ -2688,7 +2793,6 @@ const ActiveRentals: React.FC = () => {
                       onClick={() => {
                         if (currentPage > 1) {
                           setCurrentPage(currentPage - 1);
-                          loadHistorySessions(historyStartDate, historyEndDate);
                         }
                       }}
                     >
@@ -2724,7 +2828,6 @@ const ActiveRentals: React.FC = () => {
                       onClick={() => {
                         if (currentPage < totalPages) {
                           setCurrentPage(currentPage + 1);
-                          loadHistorySessions(historyStartDate, historyEndDate);
                         }
                       }}
                     >
@@ -5131,6 +5234,46 @@ const ActiveRentals: React.FC = () => {
         }
         loading={prepaidPaymentLoading}
       />
+
+      {/* Modal konfirmasi batal transaksi */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4 text-red-700">
+                Batalkan Transaksi
+              </h2>
+              <p className="mb-2">Masukkan alasan pembatalan transaksi:</p>
+              <textarea
+                className="w-full border rounded p-2 mb-4"
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Alasan pembatalan..."
+                disabled={cancelLoading}
+              />
+              <div className="flex gap-2 justify-end mt-4">
+                <button
+                  className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+                  onClick={() => setShowCancelModal(null)}
+                  disabled={cancelLoading}
+                >
+                  Batal
+                </button>
+                <button
+                  className="px-4 py-2 rounded bg-red-600 text-white font-medium hover:bg-red-700"
+                  onClick={() =>
+                    handleCancelTransaction(showCancelModal.session)
+                  }
+                  disabled={cancelLoading || !cancelReason.trim()}
+                >
+                  Konfirmasi Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Panel summary stats di bawah dihapus sesuai permintaan */}
     </div>
