@@ -5,7 +5,7 @@ const useCountdown = (
   startTimeMs: number,
   endTimeMs: number | null,
   isPrepaid: boolean,
-  onComplete: () => void
+  onComplete: (() => void) | undefined
 ) => {
   const [time, setTime] = useState(0); // Time in seconds
 
@@ -31,7 +31,9 @@ const useCountdown = (
       if (isPrepaid && newTime <= 0) {
         // Prepaid: Timer is complete
         if (intervalId) clearInterval(intervalId);
-        onComplete();
+        if (typeof onComplete === "function") {
+          onComplete();
+        }
       }
     };
 

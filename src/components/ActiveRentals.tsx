@@ -447,6 +447,7 @@ const ActiveRentals: React.FC = () => {
     if (globalActiveSessions.length > 0) {
       setActiveSessions(globalActiveSessions);
     }
+    loadData();
   }, [globalActiveSessions]);
 
   const loadData = async () => {
