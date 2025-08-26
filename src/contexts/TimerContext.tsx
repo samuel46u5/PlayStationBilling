@@ -236,6 +236,102 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     await fetchActiveSessions();
   }, [fetchActiveSessions]);
 
+  // State untuk mencatat error shutdown per console
+  const [shutdownErrorCount, setShutdownErrorCount] = useState<
+    Record<string, number>
+  >({});
+
+  const showShutdownErrorNotification = useCallback((consoleId: string) => {
+    Swal.fire({
+      icon: "error",
+      title: "Gagal Mematikan TV",
+      text: `Gagal mematikan TV pada console ID: ${consoleId} lebih dari 1 kali. Mohon cek perangkat secara manual!`,
+      toast: true,
+      position: "top-end",
+      timer: 4000,
+      showConfirmButton: false,
+    });
+  }, []);
+
+  // Fungsi pengecekan TV yang tidak rented
+  const checkAndShutdownUnusedConsoles = useCallback(async () => {
+    try {
+      // Ambil semua console yang aktif
+      const { data: consoles, error } = await supabase
+        .from("consoles")
+        .select(
+          "id, status, power_tv_command, relay_command_off, perintah_cek_power_tv"
+        )
+        .eq("is_active", true);
+      if (error) {
+        console.error("Gagal fetch consoles:", error);
+        return;
+      }
+      if (!consoles) return;
+      for (const c of consoles) {
+        if (c.status !== "rented") {
+          let tvIsOn = false;
+          if (c.perintah_cek_power_tv) {
+            try {
+              const res = await fetch(c.perintah_cek_power_tv);
+              const text = await res.text();
+              tvIsOn = text.trim().toUpperCase() === "ON";
+            } catch (err) {
+              console.warn(`Gagal cek status TV untuk console ${c.id}`);
+              continue;
+            }
+          }
+          // Jika TV menyala, matikan
+          if (tvIsOn) {
+            let errorCount = shutdownErrorCount[c.id] || 0;
+            let errorHappened = false;
+            if (c.power_tv_command) {
+              try {
+                await fetch(c.power_tv_command);
+                console.log(`Perintah matikan TV dikirim ke console ${c.id}`);
+                errorCount = 0;
+              } catch (err) {
+                errorCount++;
+                errorHappened = true;
+                console.error(
+                  `Gagal mengirim perintah matikan TV ke console ${c.id}`
+                );
+              }
+            }
+            // if (c.relay_command_off) {
+            //   try {
+            //     await fetch(c.relay_command_off);
+            //     console.log(`Perintah relay OFF dikirim ke console ${c.id}`);
+            //     errorCount = 0; // reset jika berhasil
+            //   } catch (err) {
+            //     errorCount++;
+            //     errorHappened = true;
+            //     console.error(`Gagal mengirim relay OFF ke console ${c.id}`);
+            //   }
+            // }
+            // Update error count state
+            setShutdownErrorCount((prev) => ({ ...prev, [c.id]: errorCount }));
+            // Tampilkan notifikasi jika error lebih dari 1 kali
+            if (errorHappened && errorCount > 1) {
+              showShutdownErrorNotification(c.id);
+            }
+          } else {
+            // Reset error count jika TV sudah mati
+            if (shutdownErrorCount[c.id]) {
+              setShutdownErrorCount((prev) => {
+                const copy = { ...prev };
+                delete copy[c.id];
+                return copy;
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error checkAndShutdownUnusedConsoles:", err);
+    }
+  }, [shutdownErrorCount, showShutdownErrorNotification]);
+
   // Initialize timer on mount
   useEffect(() => {
     fetchActiveSessions();
@@ -247,13 +343,14 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
 
     const interval = setInterval(() => {
       checkAllSessions();
+      checkAndShutdownUnusedConsoles();
     }, 30000); // Check every 30 seconds
 
     return () => {
       clearInterval(interval);
       setIsTimerRunning(false);
     };
-  }, [checkAllSessions]);
+  }, [checkAllSessions, checkAndShutdownUnusedConsoles]);
 
   const value: TimerContextType = {
     activeSessions,
