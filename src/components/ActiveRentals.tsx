@@ -118,6 +118,7 @@ const ActiveRentals: React.FC = () => {
     activeSessions: globalActiveSessions,
     refreshActiveSessions,
     isTimerRunning,
+    triggerUnusedConsolesCheck,
   } = useTimer();
 
   // Untuk interface pembayaran mirip Cashier
@@ -456,6 +457,10 @@ const ActiveRentals: React.FC = () => {
         } untuk console ini`,
         "success"
       );
+
+      try {
+        await triggerUnusedConsolesCheck();
+      } catch {}
     } catch (error) {
       console.error("Error updating console auto shutdown:", error);
       Swal.fire(
@@ -502,6 +507,10 @@ const ActiveRentals: React.FC = () => {
         } untuk semua console`,
         "success"
       );
+      // Trigger immediate background check
+      try {
+        await triggerUnusedConsolesCheck();
+      } catch {}
     } catch (error) {
       console.error("Error updating all consoles auto shutdown:", error);
       Swal.fire(
@@ -2647,10 +2656,10 @@ const ActiveRentals: React.FC = () => {
 
               {/* Global Toggle */}
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() =>
-                    toggleAllConsolesAutoShutdown(!autoShutdownEnabled)
-                  }
+                <div
+                  // onClick={() =>
+                  //   toggleAllConsolesAutoShutdown(!autoShutdownEnabled)
+                  // }
                   disabled={isUpdatingAutoShutdown}
                   className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                     autoShutdownEnabled
@@ -2667,11 +2676,11 @@ const ActiveRentals: React.FC = () => {
                     : autoShutdownEnabled
                     ? "All Protected"
                     : "All Disabled"}
-                </button>
+                </div>
               </div>
 
               {/* Individual Console Controls */}
-              <div className="flex items-center gap-1">
+              {/* <div className="flex items-center gap-1">
                 <span className="text-xs text-gray-500">Per Console:</span>
                 <div className="flex gap-1">
                   {consoles.slice(0, 3).map((console) => (
@@ -2712,7 +2721,7 @@ const ActiveRentals: React.FC = () => {
                     </button>
                   )}
                 </div>
-              </div>
+              </div> */}
 
               {/* Manage All Button */}
               <button

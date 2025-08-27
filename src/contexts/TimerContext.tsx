@@ -39,6 +39,7 @@ interface TimerContextType {
   checkSessionTimeout: (sessionId: string) => void;
   refreshActiveSessions: () => Promise<void>;
   isTimerRunning: boolean;
+  triggerUnusedConsolesCheck: () => Promise<void>;
 }
 
 const TimerContext = createContext<TimerContextType | undefined>(undefined);
@@ -366,6 +367,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     checkSessionTimeout,
     refreshActiveSessions,
     isTimerRunning,
+    triggerUnusedConsolesCheck: checkAndShutdownUnusedConsoles,
   };
 
   return (
