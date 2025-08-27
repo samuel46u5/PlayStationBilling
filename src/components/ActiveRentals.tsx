@@ -50,6 +50,7 @@ interface Console {
   location?: string;
   serial_number?: string;
   is_active: boolean;
+  auto_shutdown_enabled?: boolean;
   relay_command_on?: string;
   relay_command_off?: string;
   power_tv_command?: string;
@@ -156,6 +157,16 @@ const ActiveRentals: React.FC = () => {
   );
   const [rentalDurationHours, setRentalDurationHours] = useState<number>(1);
   const [rentalDurationMinutes, setRentalDurationMinutes] = useState<number>(0);
+
+  // Auto shutdown protection states
+  const [autoShutdownEnabled, setAutoShutdownEnabled] = useState<boolean>(true);
+  const [consoleAutoShutdownStates, setConsoleAutoShutdownStates] = useState<{
+    [key: string]: boolean;
+  }>({});
+  const [isUpdatingAutoShutdown, setIsUpdatingAutoShutdown] =
+    useState<boolean>(false);
+  const [showAutoShutdownModal, setShowAutoShutdownModal] =
+    useState<boolean>(false);
 
   // --- TV Status JSON and selectedConsole hooks must be after all state declarations ---
   const [tvStatusJson, setTvStatusJson] = React.useState<string>("");
@@ -378,6 +389,131 @@ const ActiveRentals: React.FC = () => {
     return true;
   };
 
+  // Auto shutdown protection functions
+  const loadConsoleAutoShutdownStates = async () => {
+    try {
+      const { data: consolesData, error } = await supabase
+        .from("consoles")
+        .select("id, auto_shutdown_enabled")
+        .eq("is_active", true);
+
+      if (error) {
+        console.error("Error loading console auto shutdown states:", error);
+        return;
+      }
+
+      const states: { [key: string]: boolean } = {};
+      consolesData?.forEach((console) => {
+        states[console.id] = console.auto_shutdown_enabled ?? true;
+      });
+
+      setConsoleAutoShutdownStates(states);
+
+      // Set global auto shutdown enabled based on if any console has it enabled
+      const anyEnabled = Object.values(states).some((enabled) => enabled);
+      setAutoShutdownEnabled(anyEnabled);
+    } catch (error) {
+      console.error("Error loading console auto shutdown states:", error);
+    }
+  };
+
+  const updateConsoleAutoShutdown = async (
+    consoleId: string,
+    enabled: boolean
+  ) => {
+    setIsUpdatingAutoShutdown(true);
+    try {
+      const { error } = await supabase
+        .from("consoles")
+        .update({ auto_shutdown_enabled: enabled })
+        .eq("id", consoleId);
+
+      if (error) {
+        console.error("Error updating console auto shutdown:", error);
+        Swal.fire(
+          "Error",
+          "Gagal mengupdate status auto shutdown console",
+          "error"
+        );
+        return;
+      }
+
+      // Update local state
+      setConsoleAutoShutdownStates((prev) => ({
+        ...prev,
+        [consoleId]: enabled,
+      }));
+
+      // Update global state
+      const newStates = { ...consoleAutoShutdownStates, [consoleId]: enabled };
+      const anyEnabled = Object.values(newStates).some((state) => state);
+      setAutoShutdownEnabled(anyEnabled);
+
+      Swal.fire(
+        "Sukses",
+        `Auto shutdown ${
+          enabled ? "diaktifkan" : "dinonaktifkan"
+        } untuk console ini`,
+        "success"
+      );
+    } catch (error) {
+      console.error("Error updating console auto shutdown:", error);
+      Swal.fire(
+        "Error",
+        "Gagal mengupdate status auto shutdown console",
+        "error"
+      );
+    } finally {
+      setIsUpdatingAutoShutdown(false);
+    }
+  };
+
+  const toggleAllConsolesAutoShutdown = async (enabled: boolean) => {
+    setIsUpdatingAutoShutdown(true);
+    try {
+      const { error } = await supabase
+        .from("consoles")
+        .update({ auto_shutdown_enabled: enabled })
+        .eq("is_active", true);
+
+      if (error) {
+        console.error("Error updating all consoles auto shutdown:", error);
+        Swal.fire(
+          "Error",
+          "Gagal mengupdate status auto shutdown semua console",
+          "error"
+        );
+        return;
+      }
+
+      // Update all local states
+      const newStates: { [key: string]: boolean } = {};
+      consoles.forEach((console) => {
+        newStates[console.id] = enabled;
+      });
+
+      setConsoleAutoShutdownStates(newStates);
+      setAutoShutdownEnabled(enabled);
+
+      Swal.fire(
+        "Sukses",
+        `Auto shutdown ${
+          enabled ? "diaktifkan" : "dinonaktifkan"
+        } untuk semua console`,
+        "success"
+      );
+    } catch (error) {
+      console.error("Error updating all consoles auto shutdown:", error);
+      Swal.fire(
+        "Error",
+        "Gagal mengupdate status auto shutdown semua console",
+        "error"
+      );
+    } finally {
+      setIsUpdatingAutoShutdown(false);
+    }
+  };
+
   // Reset paymentAmount ke 0 setiap kali showPaymentModal berubah (end rental)
   React.useEffect(() => {
     if (showPaymentModal) {
@@ -520,6 +656,9 @@ const ActiveRentals: React.FC = () => {
       setProducts(productData || []);
       setCustomers(customerData || []);
       setProductsTotalMap(productsTotalMap);
+
+      // Load auto shutdown states
+      await loadConsoleAutoShutdownStates();
 
       // Refresh global active sessions
       await refreshActiveSessions();
@@ -2485,15 +2624,105 @@ const ActiveRentals: React.FC = () => {
               Monitor all consoles and manage rental sessions
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                isTimerRunning ? "bg-green-500" : "bg-red-500"
-              }`}
-            ></div>
-            <span className="text-sm text-gray-600">
-              Timer: {isTimerRunning ? "Running" : "Stopped"}
-            </span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  isTimerRunning ? "bg-green-500" : "bg-red-500"
+                }`}
+              ></div>
+              <span className="text-sm text-gray-600">
+                Timer: {isTimerRunning ? "Running" : "Stopped"}
+              </span>
+            </div>
+
+            {/* Auto Shutdown Protection Controls */}
+            <div className="flex items-center gap-3 bg-gray-50 px-3 py-2 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <Power className="h-4 w-4 text-orange-600" />
+                <span className="text-sm font-medium text-gray-700">
+                  Auto Shutdown Protection
+                </span>
+              </div>
+
+              {/* Global Toggle */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    toggleAllConsolesAutoShutdown(!autoShutdownEnabled)
+                  }
+                  disabled={isUpdatingAutoShutdown}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    autoShutdownEnabled
+                      ? "bg-green-100 text-green-700 border border-green-300 hover:bg-green-200"
+                      : "bg-red-100 text-red-700 border border-red-300 hover:bg-red-200"
+                  } ${
+                    isUpdatingAutoShutdown
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                >
+                  {isUpdatingAutoShutdown
+                    ? "Updating..."
+                    : autoShutdownEnabled
+                    ? "All Protected"
+                    : "All Disabled"}
+                </button>
+              </div>
+
+              {/* Individual Console Controls */}
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-500">Per Console:</span>
+                <div className="flex gap-1">
+                  {consoles.slice(0, 3).map((console) => (
+                    <button
+                      key={console.id}
+                      onClick={() =>
+                        updateConsoleAutoShutdown(
+                          console.id,
+                          !consoleAutoShutdownStates[console.id]
+                        )
+                      }
+                      disabled={isUpdatingAutoShutdown}
+                      className={`w-6 h-6 text-xs font-medium rounded border transition-colors ${
+                        consoleAutoShutdownStates[console.id]
+                          ? "bg-green-500 text-white border-green-500 hover:bg-green-600"
+                          : "bg-gray-200 text-gray-600 border-gray-300 hover:bg-gray-300"
+                      } ${
+                        isUpdatingAutoShutdown
+                          ? "opacity-50 cursor-not-allowed"
+                          : ""
+                      }`}
+                      title={`${console.name}: ${
+                        consoleAutoShutdownStates[console.id]
+                          ? "Protected"
+                          : "Not Protected"
+                      }`}
+                    >
+                      {console.name.charAt(0).toUpperCase()}
+                    </button>
+                  ))}
+                  {consoles.length > 3 && (
+                    <button
+                      onClick={() => setShowAutoShutdownModal(true)}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium px-1"
+                      title="Manage all consoles"
+                    >
+                      +{consoles.length - 3} more
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Manage All Button */}
+              <button
+                onClick={() => setShowAutoShutdownModal(true)}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded border border-blue-200 hover:bg-blue-50"
+                title="Manage auto shutdown for all consoles"
+              >
+                Manage All
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -5269,6 +5498,153 @@ const ActiveRentals: React.FC = () => {
                   disabled={cancelLoading || !cancelReason.trim()}
                 >
                   Konfirmasi Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto Shutdown Protection Modal */}
+      {showAutoShutdownModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Power className="h-6 w-6 text-orange-600" />
+                  <h2 className="text-xl font-semibold text-gray-800">
+                    Auto Shutdown Protection Management
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setShowAutoShutdownModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="font-medium text-blue-800 mb-2">
+                  Apa itu Auto Shutdown Protection?
+                </h3>
+                <p className="text-sm text-blue-700">
+                  Fitur ini akan secara otomatis mematikan TV dan perangkat
+                  console yang tidak sedang disewa.
+                </p>
+              </div>
+
+              {/* Global Controls */}
+              <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <h3 className="font-medium text-gray-800 mb-3">
+                  Kontrol Global
+                </h3>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => toggleAllConsolesAutoShutdown(true)}
+                    disabled={isUpdatingAutoShutdown}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      isUpdatingAutoShutdown
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-700"
+                    }`}
+                  >
+                    {isUpdatingAutoShutdown ? "Updating..." : "Aktifkan Semua"}
+                  </button>
+                  <button
+                    onClick={() => toggleAllConsolesAutoShutdown(false)}
+                    disabled={isUpdatingAutoShutdown}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      isUpdatingAutoShutdown
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-red-600 text-white hover:bg-red-700"
+                    }`}
+                  >
+                    {isUpdatingAutoShutdown
+                      ? "Updating..."
+                      : "Nonaktifkan Semua"}
+                  </button>
+                  <div className="text-sm text-gray-600">
+                    Status:{" "}
+                    <span
+                      className={`font-medium ${
+                        autoShutdownEnabled ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {autoShutdownEnabled
+                        ? "Beberapa console dilindungi"
+                        : "Semua console tidak dilindungi"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Individual Console Controls */}
+              <div className="mb-6">
+                <h3 className="font-medium text-gray-800 mb-3">
+                  Kontrol Per Console
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {consoles.map((console) => (
+                    <div
+                      key={console.id}
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-3 h-3 rounded-full ${
+                            consoleAutoShutdownStates[console.id]
+                              ? "bg-green-500"
+                              : "bg-red-500"
+                          }`}
+                        ></div>
+                        <div>
+                          <div className="font-medium text-gray-800">
+                            {console.name}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Status: {console.status} |{" "}
+                            {consoleAutoShutdownStates[console.id]
+                              ? "Dilindungi"
+                              : "Tidak dilindungi"}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() =>
+                          updateConsoleAutoShutdown(
+                            console.id,
+                            !consoleAutoShutdownStates[console.id]
+                          )
+                        }
+                        disabled={isUpdatingAutoShutdown}
+                        className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                          consoleAutoShutdownStates[console.id]
+                            ? "bg-red-100 text-red-700 border border-red-300 hover:bg-red-200"
+                            : "bg-green-100 text-green-700 border border-green-300 hover:bg-green-200"
+                        } ${
+                          isUpdatingAutoShutdown
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
+                      >
+                        {consoleAutoShutdownStates[console.id]
+                          ? "Nonaktifkan"
+                          : "Aktifkan"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  onClick={() => setShowAutoShutdownModal(false)}
+                  className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+                >
+                  Tutup
                 </button>
               </div>
             </div>

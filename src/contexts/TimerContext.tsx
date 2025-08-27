@@ -259,9 +259,10 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
       const { data: consoles, error } = await supabase
         .from("consoles")
         .select(
-          "id, status, power_tv_command, relay_command_off, perintah_cek_power_tv"
+          "id, status, power_tv_command, relay_command_off, perintah_cek_power_tv, auto_shutdown_enabled"
         )
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .eq("auto_shutdown_enabled", true);
       if (error) {
         console.error("Gagal fetch consoles:", error);
         return;
