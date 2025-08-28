@@ -354,7 +354,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     const interval = setInterval(() => {
       checkAllSessions();
       checkAndShutdownUnusedConsoles();
-    }, 30000); // Check every 30 seconds
+    }, 5000); // Check every 30 seconds
 
     return () => {
       clearInterval(interval);

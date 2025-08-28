@@ -609,6 +609,19 @@ const ActiveRentals: React.FC = () => {
       setActiveSessions(globalActiveSessions);
     }
     // loadData();
+
+    // Fetch consoles
+    const fetchConsoles = async () => {
+      const { data: consoleData, error: consoleError } = await supabase
+        .from("consoles")
+        .select("*, rate_profiles(capital)")
+        .eq("is_active", true);
+
+      setConsoles(consoleData || []);
+
+      if (consoleError) throw consoleError;}
+
+      fetchConsoles();
   }, [globalActiveSessions]);
 
   const loadData = async () => {

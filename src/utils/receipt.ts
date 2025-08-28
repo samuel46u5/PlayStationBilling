@@ -410,7 +410,7 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
 
         body {
           font-family: 'Courier New', monospace;
-          font-size: 10pt;
+          font-size: 11pt;
           white-space: pre;
           margin: 0;
           padding: 0;
@@ -445,7 +445,7 @@ export const printReceipt = async (tx: ReceiptData) => {
       try {
         win.print();
       } finally {
-        // win.close();
+        win.close();
       }
     };
 
