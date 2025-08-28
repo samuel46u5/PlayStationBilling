@@ -46,6 +46,9 @@ interface Console {
   name: string;
   equipment_type_id: string;
   rate_profile_id: string | null;
+  rate_profiles?: {
+    capital: number;
+  };
   status: "available" | "rented" | "maintenance" | "paused";
   location?: string;
   serial_number?: string;
@@ -112,6 +115,13 @@ interface CartItem {
 
 type MoveModalState = { sessionId: string; fromConsoleId: string } | null;
 
+type AddTimeModalState = {
+  session: RentalSession;
+  console: Console;
+  currentDuration: number;
+  hourlyRate: number;
+} | null;
+
 const ActiveRentals: React.FC = () => {
   // Timer context untuk global timer
   const {
@@ -156,6 +166,13 @@ const ActiveRentals: React.FC = () => {
   const [rentalType, setRentalType] = useState<"pay-as-you-go" | "prepaid">(
     "pay-as-you-go"
   );
+
+  const [showAddTimeModal, setShowAddTimeModal] =
+    useState<AddTimeModalState>(null);
+  const [addTimeLoading, setAddTimeLoading] = useState(false);
+  // const [addTimeHours, setAddTimeHours] = useState(1);
+  // const [addTimeMinutes, setAddTimeMinutes] = useState(0);
+
   const [rentalDurationHours, setRentalDurationHours] = useState<number>(1);
   const [rentalDurationMinutes, setRentalDurationMinutes] = useState<number>(0);
 
@@ -591,7 +608,7 @@ const ActiveRentals: React.FC = () => {
     if (globalActiveSessions.length > 0) {
       setActiveSessions(globalActiveSessions);
     }
-    loadData();
+    // loadData();
   }, [globalActiveSessions]);
 
   const loadData = async () => {
@@ -600,7 +617,7 @@ const ActiveRentals: React.FC = () => {
       // Fetch consoles
       const { data: consoleData, error: consoleError } = await supabase
         .from("consoles")
-        .select("*")
+        .select("*, rate_profiles(capital)")
         .eq("is_active", true);
 
       if (consoleError) throw consoleError;
@@ -1556,94 +1573,656 @@ const ActiveRentals: React.FC = () => {
   };
 
   // PrepaidPaymentModal: Modal pembayaran untuk Bayar di Muka
-  const PrepaidPaymentModal = ({
+  // const PrepaidPaymentModal = ({
+  //   open,
+  //   onClose,
+  //   onConfirm,
+  //   duration,
+  //   hourlyRate,
+  //   totalAmount,
+  //   loading,
+  // }: {
+  //   open: boolean;
+  //   onClose: () => void;
+  //   onConfirm: (paymentMethod: "cash" | "qris") => void;
+  //   duration: string;
+  //   hourlyRate: number;
+  //   totalAmount: number;
+  //   loading: boolean;
+  // }) => {
+  //   const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
+  //   if (!open) return null;
+  //   return (
+  //     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  //       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+  //         <div className="p-6">
+  //           <h2 className="text-xl font-semibold mb-4">Pembayaran </h2>
+  //           <div className="mb-4">
+  //             <p>
+  //               <strong>Durasi:</strong> {duration}
+  //             </p>
+  //             <p>
+  //               <strong>Tarif per jam:</strong> Rp{" "}
+  //               {hourlyRate.toLocaleString("id-ID")}
+  //             </p>
+  //             <p>
+  //               <strong>Total:</strong>{" "}
+  //               <span className="text-lg font-bold text-blue-700">
+  //                 Rp {totalAmount.toLocaleString("id-ID")}
+  //               </span>
+  //             </p>
+  //           </div>
+  //           <div className="mb-4">
+  //             <label className="block mb-1 font-medium">
+  //               Metode Pembayaran
+  //             </label>
+  //             <div className="flex gap-3">
+  //               <button
+  //                 className={`px-4 py-2 rounded-lg border font-medium ${
+  //                   paymentMethod === "cash"
+  //                     ? "bg-blue-600 text-white border-blue-600"
+  //                     : "bg-white text-gray-700 border-gray-300"
+  //                 }`}
+  //                 onClick={() => setPaymentMethod("cash")}
+  //                 disabled={loading}
+  //               >
+  //                 Tunai
+  //               </button>
+  //               <button
+  //                 className={`px-4 py-2 rounded-lg border font-medium ${
+  //                   paymentMethod === "qris"
+  //                     ? "bg-blue-600 text-white border-blue-600"
+  //                     : "bg-white text-gray-700 border-gray-300"
+  //                 }`}
+  //                 onClick={() => setPaymentMethod("qris")}
+  //                 disabled={loading}
+  //               >
+  //                 QRIS
+  //               </button>
+  //             </div>
+  //           </div>
+  //           <div className="flex justify-end gap-2 mt-6">
+  //             <button
+  //               className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+  //               onClick={onClose}
+  //               disabled={loading}
+  //             >
+  //               Batal
+  //             </button>
+  //             <button
+  //               className="px-4 py-2 rounded bg-blue-600 text-white font-medium hover:bg-blue-700"
+  //               onClick={() => onConfirm(paymentMethod)}
+  //               disabled={loading}
+  //             >
+  //               Bayar & Mulai
+  //             </button>
+  //           </div>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // };
+  // Modal Add Time untuk prepaid
+  const AddTimeModal = ({
     open,
     onClose,
     onConfirm,
-    duration,
+    session,
+    console,
+    currentDuration,
     hourlyRate,
-    totalAmount,
     loading,
   }: {
     open: boolean;
     onClose: () => void;
-    onConfirm: (paymentMethod: "cash" | "qris") => void;
-    duration: string;
+    onConfirm: (
+      paymentMethod: "cash" | "qris",
+      paymentAmount: number,
+      discountAmount: number,
+      discountType: "amount" | "percentage",
+      discountValue: number,
+      additionalHours: number,
+      additionalMinutes: number
+    ) => void;
+    session: RentalSession;
+    console: Console;
+    currentDuration: number;
     hourlyRate: number;
-    totalAmount: number;
     loading: boolean;
   }) => {
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
+    const [isManualInput, setIsManualInput] = useState(false);
+    const [paymentAmount, setPaymentAmount] = useState(0);
+    const [localDiscountType, setLocalDiscountType] = useState<
+      "amount" | "percentage"
+    >("amount");
+    const [localDiscountValue, setLocalDiscountValue] = useState<number>(0);
+    const [localDiscountAmount, setLocalDiscountAmount] = useState<number>(0);
+    const [additionalHours, setAdditionalHours] = useState(1);
+    const [additionalMinutes, setAdditionalMinutes] = useState(0);
+
+    // Hitung total biaya tambahan
+    const additionalDurationMinutes = additionalHours * 60 + additionalMinutes;
+    const additionalCost = (additionalDurationMinutes / 60) * hourlyRate;
+
+    // Reset state saat modal dibuka
+    useEffect(() => {
+      if (open) {
+        setPaymentAmount(hourlyRate);
+        setLocalDiscountValue(0);
+        setLocalDiscountAmount(0);
+        setLocalDiscountType("amount");
+        setAdditionalHours(1);
+        setAdditionalMinutes(0);
+      }
+    }, [open, hourlyRate]);
+
+    useEffect(() => {
+      if (open && localDiscountAmount === 0 && localDiscountValue === 0) {
+        setPaymentAmount(additionalCost);
+      }
+    }, [additionalCost, open, localDiscountAmount, localDiscountValue]);
+
     if (!open) return null;
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
           <div className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Pembayaran </h2>
-            <div className="mb-4">
-              <p>
-                <strong>Durasi:</strong> {duration}
-              </p>
-              <p>
-                <strong>Tarif per jam:</strong> Rp{" "}
-                {hourlyRate.toLocaleString("id-ID")}
-              </p>
-              <p>
-                <strong>Total:</strong>{" "}
-                <span className="text-lg font-bold text-blue-700">
-                  Rp {totalAmount.toLocaleString("id-ID")}
-                </span>
-              </p>
+            <div className="flex items-center justify-between mb-6">
+              <div className="text-xl font-bold text-gray-700">
+                Tambah Waktu
+              </div>
+              <div className="text-right">
+                {localDiscountAmount > 0 && (
+                  <div className="text-sm text-gray-500 line-through">
+                    Rp {additionalCost.toLocaleString("id-ID")}
+                  </div>
+                )}
+                <div className="text-2xl font-bold text-blue-700">
+                  Rp{" "}
+                  {Math.max(
+                    0,
+                    additionalCost - localDiscountAmount
+                  ).toLocaleString("id-ID")}
+                </div>
+              </div>
             </div>
+
+            {/* Info sesi saat ini */}
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="text-sm text-blue-800">
+                <div className="font-medium mb-1">Sesi Aktif:</div>
+                <div>Konsol: {console.name}</div>
+                <div>Customer: {session.customers?.name}</div>
+                <div>
+                  Durasi saat ini: {Math.floor(currentDuration / 60)} jam{" "}
+                  {currentDuration % 60} menit
+                </div>
+              </div>
+            </div>
+
+            {/* Pilih durasi tambahan */}
             <div className="mb-4">
-              <label className="block mb-1 font-medium">
+              <div className="font-medium text-gray-700 mb-2">
+                Durasi Tambahan
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-sm text-gray-600 mb-1">
+                    Jam
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="24"
+                    value={additionalHours}
+                    onChange={(e) =>
+                      setAdditionalHours(
+                        Math.max(0, parseInt(e.target.value) || 0)
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm text-gray-600 mb-1">
+                    Menit
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={additionalMinutes}
+                    onChange={(e) =>
+                      setAdditionalMinutes(
+                        Math.max(0, Math.min(59, parseInt(e.target.value) || 0))
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div className="mt-2 text-sm text-gray-600">
+                Total tambahan: {additionalHours} jam {additionalMinutes} menit
+              </div>
+            </div>
+
+            {/* Metode Pembayaran */}
+            <div className="mb-4">
+              <div className="mb-2 font-medium text-gray-700">
                 Metode Pembayaran
-              </label>
-              <div className="flex gap-3">
+              </div>
+              <div className="flex gap-2 mb-2">
                 <button
-                  className={`px-4 py-2 rounded-lg border font-medium ${
+                  type="button"
+                  className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${
                     paymentMethod === "cash"
                       ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
                   }`}
                   onClick={() => setPaymentMethod("cash")}
                   disabled={loading}
                 >
-                  Tunai
+                  <span className="inline-block mr-1">💵</span> Cash
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-lg border font-medium ${
+                  type="button"
+                  className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${
                     paymentMethod === "qris"
                       ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
                   }`}
                   onClick={() => setPaymentMethod("qris")}
                   disabled={loading}
                 >
-                  QRIS
+                  <span className="inline-block mr-1">🏧</span> QRIS
                 </button>
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-6">
+
+            {/* Diskon Section */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-gray-700">Diskon</div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      localDiscountType === "amount"
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setLocalDiscountType("amount");
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    Rp
+                  </button>
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      localDiscountType === "percentage"
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setLocalDiscountType("percentage");
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    %
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                    onClick={() => {
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    × Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max={localDiscountType === "percentage" ? 100 : undefined}
+                  value={localDiscountValue}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setLocalDiscountValue(val);
+
+                    if (localDiscountType === "percentage") {
+                      const maxPercentage = Math.min(100, val);
+                      setLocalDiscountAmount(
+                        (additionalCost * maxPercentage) / 100
+                      );
+                    } else {
+                      setLocalDiscountAmount(Math.min(val, additionalCost));
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                  placeholder={localDiscountType === "percentage" ? "0" : "0"}
+                />
+                <span className="self-center text-gray-600 font-medium">
+                  {localDiscountType === "percentage" ? "%" : "Rp"}
+                </span>
+              </div>
+
+              {localDiscountAmount > 0 && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-700">Diskon:</span>
+                    <span className="font-bold text-green-800">
+                      - Rp {localDiscountAmount.toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                  {localDiscountType === "percentage" && (
+                    <div className="text-xs text-green-600 text-center">
+                      ({localDiscountValue}% dari total)
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Jumlah Bayar */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-gray-700">Jumlah Bayar</div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      !isManualInput
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => setIsManualInput(false)}
+                  >
+                    Quick
+                  </button>
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      isManualInput
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => setIsManualInput(true)}
+                  >
+                    Manual
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                    onClick={() => setPaymentAmount(0)}
+                  >
+                    × Clear
+                  </button>
+                </div>
+              </div>
+              {!isManualInput ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {[1000, 5000, 10000, 20000, 50000, 100000].map((nom) => (
+                      <button
+                        key={nom}
+                        type="button"
+                        className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100"
+                        onClick={() => setPaymentAmount((prev) => prev + nom)}
+                      >
+                        {nom >= 1000 ? `${nom / 1000}K` : nom}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
+                    onClick={() =>
+                      setPaymentAmount(
+                        Math.max(0, additionalCost - localDiscountAmount)
+                      )
+                    }
+                  >
+                    LUNAS (Rp{" "}
+                    {Math.max(
+                      0,
+                      additionalCost - localDiscountAmount
+                    ).toLocaleString("id-ID")}
+                    )
+                  </button>
+                </>
+              ) : (
+                <input
+                  type="number"
+                  min={0}
+                  value={paymentAmount}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setPaymentAmount(val);
+                  }}
+                  className="w-full px-3 py-3 border rounded text-center text-2xl font-mono mb-2"
+                  placeholder="Masukkan nominal bayar"
+                />
+              )}
+              <div className="text-center text-3xl font-mono font-bold py-2 border-b border-gray-200 mb-2">
+                Rp {paymentAmount.toLocaleString("id-ID")}
+              </div>
+            </div>
+
+            {/* Kembalian */}
+            <div className="mb-4">
+              <div className="font-medium text-gray-700 mb-1">Kembalian</div>
+              <div className="text-2xl font-mono font-bold text-green-700 text-center">
+                Rp{" "}
+                {(() => {
+                  const finalTotal = Math.max(
+                    0,
+                    additionalCost - localDiscountAmount
+                  );
+                  const change = paymentAmount - finalTotal;
+                  return change > 0 ? change.toLocaleString("id-ID") : 0;
+                })()}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
               <button
-                className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
                 onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 disabled={loading}
               >
                 Batal
               </button>
               <button
-                className="px-4 py-2 rounded bg-blue-600 text-white font-medium hover:bg-blue-700"
-                onClick={() => onConfirm(paymentMethod)}
-                disabled={loading}
+                onClick={() =>
+                  onConfirm(
+                    paymentMethod,
+                    paymentAmount,
+                    localDiscountAmount,
+                    localDiscountType,
+                    localDiscountValue,
+                    additionalHours,
+                    additionalMinutes
+                  )
+                }
+                className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${(() => {
+                  const finalTotal = Math.max(
+                    0,
+                    additionalCost - localDiscountAmount
+                  );
+                  return paymentAmount < finalTotal
+                    ? "opacity-50 cursor-not-allowed"
+                    : "";
+                })()}`}
+                disabled={(() => {
+                  const finalTotal = Math.max(
+                    0,
+                    additionalCost - localDiscountAmount
+                  );
+                  return (
+                    paymentAmount < finalTotal ||
+                    loading ||
+                    (additionalHours === 0 && additionalMinutes === 0)
+                  );
+                })()}
               >
-                Bayar & Mulai
+                Tambah Waktu
               </button>
             </div>
           </div>
         </div>
       </div>
     );
+  };
+
+  // Handler konfirmasi Add Time
+  const handleConfirmAddTime = async (
+    paymentMethod: "cash" | "qris",
+    paymentAmount: number,
+    discountAmount: number,
+    discountType: "amount" | "percentage",
+    discountValue: number,
+    additionalHours: number,
+    additionalMinutes: number
+  ) => {
+    if (!ensureCashierActive()) return;
+    if (!showAddTimeModal) return;
+
+    const additionalDurationMinutes = additionalHours * 60 + additionalMinutes;
+    const additionalCost =
+      (additionalDurationMinutes / 60) * showAddTimeModal.hourlyRate;
+    const finalTotal = Math.max(0, additionalCost - discountAmount);
+
+    if (paymentAmount < finalTotal) {
+      Swal.fire("Error", "Nominal pembayaran kurang dari total", "warning");
+      return;
+    }
+
+    if (additionalDurationMinutes === 0) {
+      Swal.fire("Error", "Pilih durasi tambahan", "warning");
+      return;
+    }
+
+    setAddTimeLoading(true);
+    try {
+      const { session, console: consoleData } = showAddTimeModal;
+
+      // Update durasi sesi rental
+      const newDurationMinutes =
+        session.duration_minutes! + additionalDurationMinutes;
+      const { error: updateError } = await supabase
+        .from("rental_sessions")
+        .update({
+          duration_minutes: newDurationMinutes,
+          total_amount: session.total_amount + finalTotal,
+          paid_amount: session.paid_amount + paymentAmount,
+        })
+        .eq("id", session.id);
+
+      if (updateError) throw updateError;
+
+      // Log transaksi kasir
+      const receiptData = {
+        id: `ADD-TIME-${Date.now()}`,
+        timestamp: new Date().toLocaleString("id-ID"),
+        customer: { name: session.customers?.name || "" },
+        items: [
+          {
+            name: `Tambah Waktu ${consoleData.name}`,
+            type: "rental" as const,
+            capital: consoleData?.rate_profiles?.capital ?? 0,
+            total: additionalCost,
+            profit: finalTotal - (consoleData?.rate_profiles?.capital ?? 0),
+            description: `Durasi tambahan: ${additionalHours} jam ${
+              additionalMinutes > 0 ? `${additionalMinutes} menit` : ""
+            }`,
+          },
+        ],
+        subtotal: additionalCost,
+        tax: 0,
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
+        total: finalTotal,
+        paymentMethod: paymentMethod.toUpperCase(),
+        paymentAmount: paymentAmount,
+        change: paymentAmount - finalTotal,
+        cashier: "System",
+      };
+
+      const details = {
+        items: receiptData.items,
+        breakdown: { rental_cost: finalTotal },
+        customer: receiptData.customer,
+        rental: {
+          session_id: session.id,
+          console: consoleData.name,
+          add_time: true,
+          additional_duration_minutes: additionalDurationMinutes,
+          new_total_duration: newDurationMinutes,
+        },
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
+        payment: {
+          method: paymentMethod,
+          amount: paymentAmount,
+          change: receiptData.change,
+        },
+      };
+
+      await logCashierTransaction({
+        type: "rental",
+        amount: finalTotal,
+        paymentMethod,
+        referenceId: receiptData.id,
+        description: `Add time rental (${consoleData.name})`,
+        details,
+      });
+
+      const result = await Swal.fire({
+        title: "Berhasil",
+        text: `Waktu berhasil ditambahkan: ${additionalHours} jam ${
+          additionalMinutes > 0 ? `${additionalMinutes} menit` : ""
+        }`,
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonText: "Print Receipt",
+        cancelButtonText: "Tutup",
+      });
+
+      if (result.isConfirmed) {
+        printReceipt(receiptData);
+      }
+
+      setShowAddTimeModal(null);
+      await loadData();
+      await refreshActiveSessions();
+    } catch (error) {
+      console.error("Error adding time:", error);
+      Swal.fire("Error", "Gagal menambahkan waktu", "error");
+    } finally {
+      setAddTimeLoading(false);
+    }
   };
 
   // Modal pembayaran prepaid, UI sama dengan kasir (end rental), tapi logic tetap prepaid
@@ -3239,6 +3818,29 @@ const ActiveRentals: React.FC = () => {
                             </button>
                           )} */}
 
+                          {/* Tombol Add Time */}
+                          {activeSession?.duration_minutes && (
+                            <button
+                              onClick={() => {
+                                if (!ensureCashierActive()) return;
+                                const rateProfile = getConsoleRateProfile(
+                                  console.id
+                                );
+                                setShowAddTimeModal({
+                                  session: activeSession,
+                                  console: console,
+                                  currentDuration:
+                                    activeSession.duration_minutes,
+                                  hourlyRate: rateProfile?.hourly_rate || 0,
+                                });
+                              }}
+                              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-1 rounded flex items-center justify-center text-xs"
+                              title="Tambah Waktu"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          )}
+
                           {/* Tombol End Rental */}
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
@@ -3472,6 +4074,30 @@ const ActiveRentals: React.FC = () => {
                               Resume Sesi
                             </button>
                           )} */}
+
+                          {/* Tombol Add Time */}
+                          {activeSession?.duration_minutes && (
+                            <button
+                              onClick={() => {
+                                if (!ensureCashierActive()) return;
+                                const rateProfile = getConsoleRateProfile(
+                                  console.id
+                                );
+                                setShowAddTimeModal({
+                                  session: activeSession,
+                                  console: console,
+                                  currentDuration:
+                                    activeSession.duration_minutes,
+                                  hourlyRate: rateProfile?.hourly_rate || 0,
+                                });
+                              }}
+                              className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                              title="Tambah Waktu"
+                            >
+                              <Plus className="h-5 w-5" />
+                              Tambah Waktu
+                            </button>
+                          )}
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
                             className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
@@ -3815,6 +4441,30 @@ const ActiveRentals: React.FC = () => {
                             Resume Sesi
                           </button>
                         )} */}
+
+                        {/* Tombol Add Time */}
+                        {activeSession?.duration_minutes && (
+                          <button
+                            onClick={() => {
+                              if (!ensureCashierActive()) return;
+                              const rateProfile = getConsoleRateProfile(
+                                console.id
+                              );
+                              setShowAddTimeModal({
+                                session: activeSession,
+                                console: console,
+                                currentDuration: activeSession.duration_minutes,
+                                hourlyRate: rateProfile?.hourly_rate || 0,
+                              });
+                            }}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                            title="Tambah Waktu"
+                          >
+                            <Plus className="h-5 w-5" />
+                            Tambah Waktu
+                          </button>
+                        )}
+
                         <button
                           onClick={() => handleEndSession(activeSession.id)}
                           className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
@@ -5467,6 +6117,18 @@ const ActiveRentals: React.FC = () => {
           showPrepaidPaymentModal ? showPrepaidPaymentModal.totalAmount : 0
         }
         loading={prepaidPaymentLoading}
+      />
+
+      {/* Add Time Modal */}
+      <AddTimeModal
+        open={!!showAddTimeModal}
+        onClose={() => setShowAddTimeModal(null)}
+        onConfirm={handleConfirmAddTime}
+        session={showAddTimeModal?.session!}
+        console={showAddTimeModal?.console!}
+        currentDuration={showAddTimeModal?.currentDuration || 0}
+        hourlyRate={showAddTimeModal?.hourlyRate || 0}
+        loading={addTimeLoading}
       />
 
       {/* Modal konfirmasi batal transaksi */}
