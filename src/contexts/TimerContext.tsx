@@ -19,8 +19,8 @@ interface RentalSession {
   status: "active" | "completed" | "paused";
   payment_status: "pending" | "partial" | "paid";
   paid_amount: number;
-  pause_start_time?: string;
-  total_pause_minutes?: number;
+  // pause_start_time?: string;
+  // total_pause_minutes?: number;
   customers?: {
     name: string;
     phone: string;
@@ -72,7 +72,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
           consoles(name, location, rate_profiles(capital))
         `
         )
-        .in("status", ["active", "paused"]);
+        .in("status", ["active"]);
 
       if (error) {
         console.error("Error fetching active sessions:", error);

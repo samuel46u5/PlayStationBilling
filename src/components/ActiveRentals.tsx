@@ -75,8 +75,8 @@ interface RentalSession {
   status: "active" | "completed" | "paused" | "cancelled";
   payment_status: "pending" | "partial" | "paid";
   paid_amount: number;
-  pause_start_time?: string;
-  total_pause_minutes?: number;
+  // pause_start_time?: string;
+  // total_pause_minutes?: number;
   customers?: {
     name: string;
     phone: string;
@@ -181,11 +181,10 @@ const ActiveRentals: React.FC = () => {
 
   const availableCustomers = React.useMemo(() => {
     return customers.filter((customer) => {
-      // Cek apakah customer ini punya sesi aktif (active atau paused)
+      // Cek apakah customer ini punya sesi aktif
       const hasActiveSession = activeSessions.some(
         (session) =>
-          session.customer_id === customer.id &&
-          (session.status === "active" || session.status === "paused")
+          session.customer_id === customer.id && session.status === "active"
       );
 
       return !hasActiveSession;
@@ -810,107 +809,107 @@ const ActiveRentals: React.FC = () => {
   }
 
   // Fungsi untuk pause session (saat mati lampu)
-  const handlePauseSession = async (sessionId: string) => {
-    if (!ensureCashierActive()) return;
+  // const handlePauseSession = async (sessionId: string) => {
+  //   if (!ensureCashierActive()) return;
 
-    try {
-      const session = activeSessions.find((s) => s.id === sessionId);
-      if (!session) return;
+  //   try {
+  //     const session = activeSessions.find((s) => s.id === sessionId);
+  //     if (!session) return;
 
-      const pauseStartTime = new Date().toISOString();
+  //     const pauseStartTime = new Date().toISOString();
 
-      await supabase
-        .from("rental_sessions")
-        .update({
-          status: "paused",
-          pause_start_time: pauseStartTime,
-        })
-        .eq("id", sessionId);
+  //     await supabase
+  //       .from("rental_sessions")
+  //       .update({
+  //         status: "paused",
+  //         pause_start_time: pauseStartTime,
+  //       })
+  //       .eq("id", sessionId);
 
-      // Log pause event
-      await logCashierTransaction({
-        type: "rental",
-        amount: 0,
-        paymentMethod: "cash",
-        referenceId: `PAUSE-${Date.now()}`,
-        description: `Rental session paused: (${session.customers?.name})`,
-        details: {
-          action: "pause_session",
-          session_id: sessionId,
-          pause_start: pauseStartTime,
-          reason: "Rental session di pause",
-        },
-      });
+  //     // Log pause event
+  //     await logCashierTransaction({
+  //       type: "rental",
+  //       amount: 0,
+  //       paymentMethod: "cash",
+  //       referenceId: `PAUSE-${Date.now()}`,
+  //       description: `Rental session paused: (${session.customers?.name})`,
+  //       details: {
+  //         action: "pause_session",
+  //         session_id: sessionId,
+  //         pause_start: pauseStartTime,
+  //         reason: "Rental session di pause",
+  //       },
+  //     });
 
-      await loadData();
-      await refreshActiveSessions(); // Refresh global sessions
-      Swal.fire("Berhasil", "Session berhasil di-pause", "success");
-    } catch (error) {
-      console.error("Error pausing session:", error);
-      Swal.fire("Error", "Gagal pause session", "error");
-    }
-  };
+  //     await loadData();
+  //     await refreshActiveSessions(); // Refresh global sessions
+  //     Swal.fire("Berhasil", "Session berhasil di-pause", "success");
+  //   } catch (error) {
+  //     console.error("Error pausing session:", error);
+  //     Swal.fire("Error", "Gagal pause session", "error");
+  //   }
+  // };
 
   // Fungsi untuk resume session
-  const handleResumeSession = async (sessionId: string) => {
-    if (!ensureCashierActive()) return;
+  // const handleResumeSession = async (sessionId: string) => {
+  //   if (!ensureCashierActive()) return;
 
-    try {
-      const session = activeSessions.find((s) => s.id === sessionId);
-      if (!session) return;
+  //   try {
+  //     const session = activeSessions.find((s) => s.id === sessionId);
+  //     if (!session) return;
 
-      const pauseEndTime = new Date().toISOString();
+  //     const pauseEndTime = new Date().toISOString();
 
-      // Ambil data session untuk hitung total pause time
-      const { data: sessionData } = await supabase
-        .from("rental_sessions")
-        .select("pause_start_time, total_pause_minutes")
-        .eq("id", sessionId)
-        .single();
+  //     // Ambil data session untuk hitung total pause time
+  //     const { data: sessionData } = await supabase
+  //       .from("rental_sessions")
+  //       .select("pause_start_time, total_pause_minutes")
+  //       .eq("id", sessionId)
+  //       .single();
 
-      if (!sessionData) throw new Error("Session not found");
+  //     if (!sessionData) throw new Error("Session not found");
 
-      const pauseStart = new Date(sessionData.pause_start_time || "");
-      const pauseEnd = new Date(pauseEndTime);
-      const pauseDurationMs = pauseEnd.getTime() - pauseStart.getTime();
-      const pauseMinutes = Math.floor(pauseDurationMs / (1000 * 60));
-      const totalPauseMinutes =
-        (sessionData.total_pause_minutes || 0) + pauseMinutes;
+  //     const pauseStart = new Date(sessionData.pause_start_time || "");
+  //     const pauseEnd = new Date(pauseEndTime);
+  //     const pauseDurationMs = pauseEnd.getTime() - pauseStart.getTime();
+  //     const pauseMinutes = Math.floor(pauseDurationMs / (1000 * 60));
+  //     const totalPauseMinutes =
+  //       (sessionData.total_pause_minutes || 0) + pauseMinutes;
 
-      // Update status di rental_sessions
-      await supabase
-        .from("rental_sessions")
-        .update({
-          status: "active", // Kembali ke status active
-          pause_start_time: null, // Reset pause start time
-          total_pause_minutes: totalPauseMinutes,
-        })
-        .eq("id", sessionId);
+  //     // Update status di rental_sessions
+  //     await supabase
+  //       .from("rental_sessions")
+  //       .update({
+  //         status: "active", // Kembali ke status active
+  //         pause_start_time: null, // Reset pause start time
+  //         total_pause_minutes: totalPauseMinutes,
+  //       })
+  //       .eq("id", sessionId);
 
-      // Log resume event
-      await logCashierTransaction({
-        type: "rental",
-        amount: 0,
-        paymentMethod: "cash",
-        referenceId: `RESUME-${Date.now()}`,
-        description: `Rental session resumed (${session.customers?.name})`,
-        details: {
-          action: "resume_session",
-          session_id: sessionId,
-          pause_end: pauseEndTime,
-          pause_duration_minutes: pauseMinutes,
-          total_pause_minutes: totalPauseMinutes,
-        },
-      });
+  //     // Log resume event
+  //     await logCashierTransaction({
+  //       type: "rental",
+  //       amount: 0,
+  //       paymentMethod: "cash",
+  //       referenceId: `RESUME-${Date.now()}`,
+  //       description: `Rental session resumed (${session.customers?.name})`,
+  //       details: {
+  //         action: "resume_session",
+  //         session_id: sessionId,
+  //         pause_end: pauseEndTime,
+  //         pause_duration_minutes: pauseMinutes,
+  //         total_pause_minutes: totalPauseMinutes,
+  //       },
+  //     });
 
-      await loadData();
-      await refreshActiveSessions(); // Refresh global sessions
-      Swal.fire("Berhasil", "Session berhasil di-resume", "success");
-    } catch (error) {
-      console.error("Error resuming session:", error);
-      Swal.fire("Error", "Gagal resume session", "error");
-    }
-  };
+  //     await loadData();
+  //     await refreshActiveSessions(); // Refresh global sessions
+  //     Swal.fire("Berhasil", "Session berhasil di-resume", "success");
+  //   } catch (error) {
+  //     console.error("Error resuming session:", error);
+  //     Swal.fire("Error", "Gagal resume session", "error");
+  //   }
+  // };
 
   const handleEndSession = async (sessionId: string) => {
     try {
@@ -3218,7 +3217,7 @@ const ActiveRentals: React.FC = () => {
                       ) : activeSession ? (
                         <>
                           {/* Tombol Pause/Resume */}
-                          {activeSession.status === "paused" ? (
+                          {/* {activeSession.status === "paused" ? (
                             <button
                               onClick={() =>
                                 handleResumeSession(activeSession.id)
@@ -3238,7 +3237,7 @@ const ActiveRentals: React.FC = () => {
                             >
                               <Pause className="h-4 w-4" />
                             </button>
-                          )}
+                          )} */}
 
                           {/* Tombol End Rental */}
                           <button
@@ -3452,7 +3451,7 @@ const ActiveRentals: React.FC = () => {
                         {/* Action Button */}
                         <div className="flex gap-2">
                           {/* Pause/Resume */}
-                          {activeSession.status !== "paused" ? (
+                          {/* {activeSession.status !== "paused" ? (
                             <button
                               onClick={() =>
                                 handlePauseSession(activeSession.id)
@@ -3472,7 +3471,7 @@ const ActiveRentals: React.FC = () => {
                               <Play className="h-5 w-5" />
                               Resume Sesi
                             </button>
-                          )}
+                          )} */}
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
                             className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
@@ -3589,8 +3588,6 @@ const ActiveRentals: React.FC = () => {
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           activeSession?.status === "active"
                             ? "bg-green-500 text-white"
-                            : activeSession?.status === "paused"
-                            ? "bg-yellow-500 text-white"
                             : "bg-red-500 text-white"
                         }`}
                       >
@@ -3601,8 +3598,6 @@ const ActiveRentals: React.FC = () => {
                           : "MAINTENANCE"} */}
                         {activeSession?.status === "active"
                           ? "ACTIVE"
-                          : activeSession?.status === "paused"
-                          ? "PAUSED"
                           : "COMPLETED"}
                       </span>
                       {console.location && (
@@ -3801,7 +3796,7 @@ const ActiveRentals: React.FC = () => {
                     ) : console.status === "rented" && activeSession ? (
                       <>
                         {/* Tombol Pause/Resume */}
-                        {activeSession.status !== "paused" ? (
+                        {/* {activeSession.status !== "paused" ? (
                           <button
                             onClick={() => handlePauseSession(activeSession.id)}
                             className="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
@@ -3819,7 +3814,7 @@ const ActiveRentals: React.FC = () => {
                             <Play className="h-5 w-5" />
                             Resume Sesi
                           </button>
-                        )}
+                        )} */}
                         <button
                           onClick={() => handleEndSession(activeSession.id)}
                           className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
