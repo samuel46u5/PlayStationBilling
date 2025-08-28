@@ -123,9 +123,9 @@ const Settings: React.FC = () => {
 
     // Receipt Layout
     receiptWidth: 48, // characters
-    receiptMargin: 2,
+    fontSize: 10,
     logoEnabled: true,
-    logoSize: "small",
+    padding: 5,
     headerEnabled: true,
     footerEnabled: true,
     qrCodeEnabled: true,
@@ -1070,15 +1070,15 @@ const Settings: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Margin (karakter)
+              Font Size (pt)
             </label>
             <input
               type="number"
-              value={printerSettings.receiptMargin}
+              value={printerSettings.fontSize}
               onChange={(e) =>
                 setPrinterSettings({
                   ...printerSettings,
-                  receiptMargin: Number(e.target.value),
+                  fontSize: Number(e.target.value),
                 })
               }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1088,22 +1088,18 @@ const Settings: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ukuran Logo
+              Padding (px)
             </label>
-            <select
-              value={printerSettings.logoSize}
+            <input
+              value={printerSettings.padding}
               onChange={(e) =>
                 setPrinterSettings({
                   ...printerSettings,
-                  logoSize: e.target.value,
+                  padding: Number(e.target.value),
                 })
               }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
-            </select>
+            ></input>
           </div>
         </div>
 

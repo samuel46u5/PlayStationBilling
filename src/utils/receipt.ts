@@ -410,7 +410,7 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
 
         body {
           font-family: 'Courier New', monospace;
-          font-size: 11pt;
+          font-size: ${printerSettings.fontSize}pt;
           white-space: pre;
           margin: 0;
           padding: 0;
@@ -418,7 +418,7 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
 
         pre {
           margin: 0;
-          padding: 10px;
+          padding: ${printerSettings.padding}px;
         }
       </style>
     </head>
