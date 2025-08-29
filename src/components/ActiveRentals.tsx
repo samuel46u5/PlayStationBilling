@@ -37,6 +37,9 @@ import {
   MapPin,
   Wrench,
   ArrowRightLeft,
+  Lightbulb,
+  Volume,
+  VolumeX,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
@@ -137,6 +140,7 @@ const ActiveRentals: React.FC = () => {
   const [relayStatus, setRelayStatus] = useState<string>("OFF");
   const [tvStatus, setTvStatus] = useState<"ON" | "OFF">("OFF");
   const [consoles, setConsoles] = useState<Console[]>([]);
+  const [selectedConsoleIds, setSelectedConsoleIds] = useState<string[]>([]);
   const [consoleFilter, setConsoleFilter] = useState<
     "all" | "available" | "rented" | "maintenance"
   >("all");
@@ -185,6 +189,7 @@ const ActiveRentals: React.FC = () => {
     useState<boolean>(false);
   const [showAutoShutdownModal, setShowAutoShutdownModal] =
     useState<boolean>(false);
+  const [showToolsModal, setShowToolsModal] = useState<boolean>(false);
 
   // --- TV Status JSON and selectedConsole hooks must be after all state declarations ---
   const [tvStatusJson, setTvStatusJson] = React.useState<string>("");
@@ -3315,13 +3320,27 @@ const ActiveRentals: React.FC = () => {
               </div> */}
 
               {/* Manage All Button */}
-              <button
-                onClick={() => setShowAutoShutdownModal(true)}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded border border-blue-200 hover:bg-blue-50"
-                title="Manage auto shutdown for all consoles"
-              >
-                Manage All
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAutoShutdownModal(true)}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded border border-blue-200 hover:bg-blue-50"
+                  title="Manage auto shutdown for all consoles"
+                >
+                  Manage All
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowToolsModal(true);
+                  }}
+                  aria-label="Tools"
+                  title="Tools"
+                  className="p-2 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-600"
+                >
+                  <Wrench className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3670,6 +3689,133 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Tools Modal */}
+      {showToolsModal ? (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Tools</h2>
+                <button onClick={() => setShowToolsModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Perintah</label>
+                <div className="flex gap-2">
+                  <select className="flex-1 rounded-md border border-gray-200 bg-white text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    <option>-- Pilih Perintah --</option>
+                    <option>Matikan semua TV</option>
+                    <option>Nyalakan semua TV</option>
+                    <option>Matikan semua Nomor</option>
+                    <option>Nyalakan semua Nomor</option>
+                    <option>Set volume semua TV</option>
+                    <option>Set mute semua TV</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {}}
+                    className="px-4 py-2 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+                  >
+                    Run
+                  </button>
+                </div>
+              </div>
+
+              <div className="py-4">
+                <div className="grid grid-cols-5 gap-2 text-xs text-gray-500 font-medium mb-2">
+                  <div className="flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      aria-label="select-all"
+                      checked={
+                        consoles.length > 0 && selectedConsoleIds.length === consoles.length
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedConsoleIds(consoles.map((c) => c.id));
+                        } else {
+                          setSelectedConsoleIds([]);
+                        }
+                      }}
+                      className="form-checkbox h-4 w-4 text-indigo-600"
+                    />
+                  </div>
+                  <div>Console</div>
+                  <div className="text-center">TV</div>
+                  <div className="text-center">Lampu</div>
+                  <div className="text-right">Volume</div>
+                </div>
+                <div className="border-b border-gray-200 mb-2" />
+                <div className="max-h-64 overflow-y-auto">
+                  {consoles.length === 0 ? (
+                    <div className="text-sm text-gray-500">No consoles found.</div>
+                  ) : (
+                    <div className="space-y-2">
+                          {consoles.slice().sort((a, b) => a.name.localeCompare(b.name)).map((c) => {
+                        const tvOn = Math.random() < 0.5;
+                        const lampOn = Math.random() < 0.5;
+                        const volumeValue = Math.floor(Math.random() * 101);
+                        return (
+                        <div key={c.id} className="grid grid-cols-5 items-center gap-2 text-sm text-gray-800 border-b pb-1">
+                          <div className="col-span-1 flex items-center justify-center">
+                            <input
+                              aria-label={`select-${c.id}`}
+                              type="checkbox"
+                              checked={selectedConsoleIds.includes(c.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedConsoleIds((s) => [...s, c.id]);
+                                } else {
+                                  setSelectedConsoleIds((s) => s.filter((id) => id !== c.id));
+                                }
+                              }}
+                              className="form-checkbox h-4 w-4 text-indigo-600"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 col-span-1">
+                            <Gamepad2 className="h-4 w-4 text-gray-500" />
+                            <span className="truncate">{c.name}</span>
+                          </div>
+                          <div className="col-span-1 flex items-center justify-center">
+                            {tvOn ? (
+                              <Power className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <Power className="h-4 w-4 text-red-600" />
+                            )}
+                          </div>
+                          <div className="col-span-1 flex items-center justify-center">
+                            {lampOn ? (
+                              <Lightbulb className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <Lightbulb className="h-4 w-4 text-red-600" />
+                            )}
+                          </div>
+                          <div className="col-span-1 flex items-center justify-end gap-2">
+                            {volumeValue > 0 ? (
+                              <Volume className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <VolumeX className="h-4 w-4 text-red-600" />
+                            )}
+                            <span className="text-sm text-gray-600">/ {volumeValue}</span>
+                          </div>
+                        </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t">
+                <button onClick={() => setShowToolsModal(false)} className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Console Grid */}
       {viewMode === "simple" ? (
