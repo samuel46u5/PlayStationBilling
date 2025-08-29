@@ -40,6 +40,8 @@ import {
   Lightbulb,
   Volume,
   VolumeX,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
@@ -3693,7 +3695,7 @@ const ActiveRentals: React.FC = () => {
       {/* Tools Modal */}
       {showToolsModal ? (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[80vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Tools</h2>
@@ -3705,14 +3707,16 @@ const ActiveRentals: React.FC = () => {
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Perintah</label>
                 <div className="flex gap-2">
-                  <select className="flex-1 rounded-md border border-gray-200 bg-white text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    <select className="flex-1 rounded-md border border-gray-200 bg-white text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
                     <option>-- Pilih Perintah --</option>
-                    <option>Matikan semua TV</option>
-                    <option>Nyalakan semua TV</option>
-                    <option>Matikan semua Nomor</option>
-                    <option>Nyalakan semua Nomor</option>
-                    <option>Set volume semua TV</option>
-                    <option>Set mute semua TV</option>
+                    <option>Matikan TV</option>
+                    <option>Nyalakan TV</option>
+                    <option>Matikan Nomor</option>
+                    <option>Nyalakan Nomor</option>
+                    <option>Set volume TV</option>
+                    <option>Set mute TV</option>
+                    <option>aktifkan proteksi</option>
+                    <option>matikan proteksi</option>
                   </select>
                   <button
                     type="button"
@@ -3725,7 +3729,7 @@ const ActiveRentals: React.FC = () => {
               </div>
 
               <div className="py-4">
-                <div className="grid grid-cols-5 gap-2 text-xs text-gray-500 font-medium mb-2">
+                <div className="grid grid-cols-6 gap-2 text-xs text-gray-500 font-medium mb-2">
                   <div className="flex items-center justify-center">
                     <input
                       type="checkbox"
@@ -3747,6 +3751,7 @@ const ActiveRentals: React.FC = () => {
                   <div className="text-center">TV</div>
                   <div className="text-center">Lampu</div>
                   <div className="text-right">Volume</div>
+                  <div className="text-right">Protection</div>
                 </div>
                 <div className="border-b border-gray-200 mb-2" />
                 <div className="max-h-64 overflow-y-auto">
@@ -3759,7 +3764,7 @@ const ActiveRentals: React.FC = () => {
                         const lampOn = Math.random() < 0.5;
                         const volumeValue = Math.floor(Math.random() * 101);
                         return (
-                        <div key={c.id} className="grid grid-cols-5 items-center gap-2 text-sm text-gray-800 border-b pb-1">
+                        <div key={c.id} className="grid grid-cols-6 items-center gap-2 text-sm text-gray-800 border-b pb-1">
                           <div className="col-span-1 flex items-center justify-center">
                             <input
                               aria-label={`select-${c.id}`}
@@ -3800,6 +3805,21 @@ const ActiveRentals: React.FC = () => {
                               <VolumeX className="h-4 w-4 text-red-600" />
                             )}
                             <span className="text-sm text-gray-600">/ {volumeValue}</span>
+                          </div>
+                          <div className="col-span-1 flex items-center justify-center">
+                            {typeof c.auto_shutdown_enabled !== "undefined" ? (
+                              c.auto_shutdown_enabled ? (
+                                <Lock className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <Unlock className="h-4 w-4 text-red-600" />
+                              )
+                            ) : (
+                              Math.random() < 0.5 ? (
+                                <Lock className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <Unlock className="h-4 w-4 text-red-600" />
+                              )
+                            )}
                           </div>
                         </div>
                         );
