@@ -980,7 +980,7 @@ const CashierSessionComponent: React.FC = () => {
                                     className="flex justify-between items-center text-sm"
                                   >
                                     <span className="text-gray-700">
-                                      {name} x {qty}
+                                      {name} x @{qty}
                                     </span>
                                     <span className="font-medium text-gray-900">
                                       Rp {total.toLocaleString("id-ID")}

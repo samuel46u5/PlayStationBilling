@@ -25,6 +25,13 @@ export interface ReceiptData {
   cashier: string;
 }
 
+export interface RentalProofData {
+  customerName: string;
+  unitNumber: string;
+  startTimestamp: string;
+  mode:string
+}
+
 // export const generateReceiptHTML = async (tx: ReceiptData) => {
 //   const settings = await db.settings.get();
 //   const generalSettings = settings?.general || {};
@@ -428,6 +435,84 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   </html>`;
 };
 
+export const generateRentalProofHTML = async (data: RentalProofData) => {
+  const settings = await db.settings.get();
+  const generalSettings = settings?.general || {};
+  const printerSettings = settings?.printer || {};
+
+  const lineWidth = printerSettings.receiptWidth || 40;
+
+  const pad = (text: string, width: number, align: "left" | "right" = "left") => {
+    if (align === "right") return text.toString().padStart(width);
+    return text.toString().padEnd(width);
+  };
+
+  const center = (text: string) => {
+    const space = Math.max(0, Math.floor((lineWidth - text.length) / 2));
+    return ' '.repeat(space) + text;
+  };
+
+  const lines: string[] = [];
+
+  // HEADER
+  lines.push('='.repeat(lineWidth));
+  lines.push(center(generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"));
+  if (generalSettings.businessAddress) lines.push(center(generalSettings.businessAddress));
+  if (generalSettings.businessPhone) lines.push(center(`Telp: ${generalSettings.businessPhone}`));
+  lines.push('='.repeat(lineWidth));
+
+  // TITLE
+  lines.push(center("BUKTI RENTAL"));
+  lines.push('-'.repeat(lineWidth));
+
+  // DATA RENTAL
+  lines.push(pad(`Customer : ${data.customerName}`, lineWidth));
+  lines.push(pad(`Mode    : ${data.mode}`, lineWidth));
+  lines.push(pad(`No Unit  : ${data.unitNumber}`, lineWidth));
+  lines.push(pad(`Mulai    : ${data.startTimestamp}`, lineWidth));
+
+  lines.push('='.repeat(lineWidth));
+
+  // FOOTER
+  lines.push(center("HARAP SIMPAN BUKTI INI"));
+  lines.push(center("TERIMA KASIH"));
+
+  const proofText = lines.join("\n");
+
+  return `
+  <html>
+    <head>
+      <title>Bukti Rental</title>
+      <style>
+        @media print {
+          @page {
+            size: auto;
+            margin: 0mm;
+          }
+          body {
+            margin: 0;
+          }
+        }
+
+        body {
+          font-family: 'Courier New', monospace;
+          font-size: ${printerSettings.fontSize}pt;
+          white-space: pre;
+          margin: 0;
+          padding: 0;
+        }
+
+        pre {
+          margin: 0;
+          padding: ${printerSettings.padding}px;
+        }
+      </style>
+    </head>
+    <body>
+<pre>${proofText}</pre>
+    </body>
+  </html>`;
+};
 
 export const printReceipt = async (tx: ReceiptData) => {
   try {
@@ -457,6 +542,29 @@ export const printReceipt = async (tx: ReceiptData) => {
   } catch (error) {
     console.error("Error printing receipt:", error);
     alert("Gagal mencetak struk. Silakan coba lagi.");
+  }
+};
+
+export const printRentalProof = async(data: RentalProofData) => {
+  const html = await generateRentalProofHTML(data);
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  const doPrint = () => {
+    try {
+      win.print();
+    } finally {
+      win.close();
+    }
+  };
+
+  if ("onload" in win) {
+    win.onload = () => setTimeout(doPrint, 100);
+  } else {
+    setTimeout(doPrint, 200);
   }
 };
 
