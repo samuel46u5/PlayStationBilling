@@ -272,6 +272,68 @@ const CashierSessionComponent: React.FC = () => {
     return Array.isArray(items) ? { items, discount } : { items: [], discount };
   };
 
+  const convertTransactionToReceiptData = (transaction: any) => {
+    const items = getTransactionItems(transaction).items;
+    const discount = getTransactionItems(transaction).discount;
+    console.log(transaction);
+
+    const receiptItems = items.map((item: any) => ({
+      name: item.name || item.product_name || item.title || "Item",
+      type:
+        transaction.type === "sale"
+          ? ("product" as const)
+          : ("rental" as const),
+      quantity: Number(item.qty || item.quantity || 1),
+      total: Number(item.total || item.price || 0),
+      description: item.description || "",
+    }));
+
+    // Jika tidak ada items
+    if (receiptItems.length === 0) {
+      receiptItems.push({
+        name: transaction.description || "Transaksi",
+        type:
+          transaction.type === "sale"
+            ? ("product" as const)
+            : ("rental" as const),
+        quantity: 1,
+        total: transaction.amount,
+        description: "",
+      });
+    }
+
+    return {
+      id: `COPY ${transaction.reference_id}` || `TXN-${transaction.id}`,
+      timestamp: new Date(transaction.timestamp).toLocaleString("id-ID"),
+      customer: { name: transaction.customer_name || "Customer" },
+      items: receiptItems,
+      subtotal: transaction.amount + (discount?.amount || 0),
+      tax: 0,
+      discount: discount?.amount
+        ? {
+            type: "amount" as const,
+            value: discount.amount,
+            amount: discount.amount,
+          }
+        : undefined,
+      total: transaction.amount,
+      paymentMethod: transaction.payment_method || "cash",
+      paymentAmount: transaction.details.payment.amount,
+      change: transaction.details.payment.change,
+      cashier: currentSession?.cashierName || "Kasir",
+    };
+  };
+
+  const handlePrintReceipt = (transaction: any) => {
+    try {
+      const receiptData = convertTransactionToReceiptData(transaction);
+      printReceipt(receiptData);
+    } catch (error) {
+      console.error("Error printing receipt:", error);
+      Swal.fire("Error", "Gagal mencetak struk. Silakan coba lagi.", "error");
+    }
+  };
+
   const handleOpenSession = async () => {
     if (openingCash <= 0) {
       alert("Saldo awal harus lebih dari 0");
@@ -935,6 +997,29 @@ const CashierSessionComponent: React.FC = () => {
                                     : "Detail"}
                                 </button>
                               ))}
+
+                            {/* Tombol Print Receipt */}
+                            {transaction.reference_id &&
+                              !transaction.reference_id
+                                .toUpperCase()
+                                .includes("OPENING-CASH") &&
+                              !transaction.reference_id
+                                .toUpperCase()
+                                .includes("MOVE_RENTAL") &&
+                              !transaction.reference_id
+                                .toUpperCase()
+                                .includes("CANCELLED") && (
+                                <button
+                                  onClick={() =>
+                                    handlePrintReceipt(transaction)
+                                  }
+                                  className="text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
+                                  title="Cetak struk"
+                                >
+                                  <Receipt className="h-3 w-3" />
+                                  Print
+                                </button>
+                              )}
                           </div>
                         </div>
                       </div>
