@@ -14,9 +14,11 @@ import {
   CheckCircle,
   Clock,
   XCircle,
+  Printer,
 } from "lucide-react";
 import { List as ListIcon, LayoutGrid } from "lucide-react";
 import { db } from "../lib/supabase"; // Hanya import db
+import { printPriceList, ProductPriceList } from "../utils/receipt";
 import Swal from "sweetalert2";
 
 const Products: React.FC = () => {
@@ -93,6 +95,36 @@ const Products: React.FC = () => {
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
   const [purchaseTax, setPurchaseTax] = useState(0);
   const [purchaseTotal, setPurchaseTotal] = useState(0);
+
+  // State untuk print price list
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [selectedProductsForPrint, setSelectedProductsForPrint] = useState<
+    string[]
+  >([]);
+  const [selectAllProducts, setSelectAllProducts] = useState(false);
+
+  // Fungsi untuk print price list
+  const handlePrintPriceList = async () => {
+    if (selectedProductsForPrint.length === 0) {
+      Swal.fire({
+        icon: "warning",
+        title: "Pilih Produk",
+        text: "Silakan pilih produk yang akan dicetak",
+      });
+      return;
+    }
+
+    const selectedProducts: ProductPriceList[] = products
+      .filter((product) => selectedProductsForPrint.includes(product.id))
+      .map((product) => ({
+        id: product.id,
+        name: product.name,
+        category: product.category,
+        price: product.price,
+      }));
+
+    await printPriceList(selectedProducts);
+  };
 
   // Update totals when items change
   useEffect(() => {
@@ -677,6 +709,13 @@ const Products: React.FC = () => {
           >
             <Plus className="h-5 w-5" />
             Tambah Produk
+          </button>
+          <button
+            onClick={() => setShowPrintModal(true)}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ml-2"
+          >
+            <Printer className="h-5 w-5" />
+            Print Price List
           </button>
         </div>
       </div>
@@ -2483,6 +2522,128 @@ const Products: React.FC = () => {
                 >
                   Simpan Perubahan
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print Price List Modal */}
+      {showPrintModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Print Price List
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowPrintModal(false);
+                    setSelectedProductsForPrint([]);
+                    setSelectAllProducts(false);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                Pilih produk yang akan dicetak dalam daftar harga
+              </p>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {/* Select All Checkbox */}
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectAllProducts}
+                    onChange={(e) => {
+                      setSelectAllProducts(e.target.checked);
+                      if (e.target.checked) {
+                        setSelectedProductsForPrint(products.map((p) => p.id));
+                      } else {
+                        setSelectedProductsForPrint([]);
+                      }
+                    }}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="font-medium text-gray-900">
+                    Pilih Semua Produk ({products.length})
+                  </span>
+                </label>
+              </div>
+
+              <div className="space-y-2">
+                {products
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((product) => (
+                    <div
+                      key={product.id}
+                      className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedProductsForPrint.includes(product.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedProductsForPrint((prev) => [
+                              ...prev,
+                              product.id,
+                            ]);
+                          } else {
+                            setSelectedProductsForPrint((prev) =>
+                              prev.filter((id) => id !== product.id)
+                            );
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">
+                          {product.name}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {product.category} • Rp{" "}
+                          {product.price.toLocaleString("id-ID")}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  {selectedProductsForPrint.length} produk dipilih
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowPrintModal(false);
+                      setSelectedProductsForPrint([]);
+                      setSelectAllProducts(false);
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handlePrintPriceList}
+                    disabled={selectedProductsForPrint.length === 0}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                      selectedProductsForPrint.length === 0
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-green-600 hover:bg-green-700 text-white"
+                    }`}
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print ({selectedProductsForPrint.length})
+                  </button>
+                </div>
               </div>
             </div>
           </div>

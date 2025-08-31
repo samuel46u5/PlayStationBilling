@@ -1,7 +1,7 @@
 // ...existing code...
 
 // ...existing code...
-import { Pause, Power } from "lucide-react";
+import { Pause, Power, Printer } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
@@ -343,7 +343,9 @@ const ActiveRentals: React.FC = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historySessions, setHistorySessions] = useState<RentalSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [historyStartDate, setHistoryStartDate] = useState<string>("");
+  const [historyStartDate, setHistoryStartDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
   const [historyEndDate, setHistoryEndDate] = useState<string>("");
   // Pagination states for history
   const [currentPage, setCurrentPage] = useState(1);
@@ -578,10 +580,10 @@ const ActiveRentals: React.FC = () => {
         .select("id", { count: "exact", head: true });
       // .in("status", ["completed", "cancelled"]);
       if (startDate) {
-        countQuery = countQuery.gte("end_time", startDate + "T00:00:00");
+        countQuery = countQuery.gte("start_time", startDate + "T00:00:00");
       }
       if (endDate) {
-        countQuery = countQuery.lte("end_time", endDate + "T23:59:59");
+        countQuery = countQuery.lte("start_time", endDate + "T23:59:59");
       }
       const { count, error: countError } = await countQuery;
       if (countError) throw countError;
@@ -598,10 +600,10 @@ const ActiveRentals: React.FC = () => {
         .order("start_time", { ascending: false })
         .range(startIdx, endIdx);
       if (startDate) {
-        query = query.gte("end_time", startDate + "T00:00:00");
+        query = query.gte("start_time", startDate + "T00:00:00");
       }
       if (endDate) {
-        query = query.lte("end_time", endDate + "T23:59:59");
+        query = query.lte("start_time", endDate + "T23:59:59");
       }
       const { data, error } = await query;
       if (error) throw error;
@@ -4476,13 +4478,47 @@ const ActiveRentals: React.FC = () => {
                               }`}
                             >
                               <td className="px-3 py-2 border font-mono">
-                                {start.toLocaleString("id-ID", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "2-digit",
-                                })}
+                                <div className="flex items-center justify-between">
+                                  <span>
+                                    {start.toLocaleString("id-ID", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      year: "2-digit",
+                                    })}
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      const customer = customers.find(
+                                        (c) => c.id === session.customer_id
+                                      );
+                                      const console = consoles.find(
+                                        (c) => c.id === session.console_id
+                                      );
+                                      if (
+                                        customer &&
+                                        console &&
+                                        session.start_time
+                                      ) {
+                                        printRentalProof({
+                                          customerName: customer.name,
+                                          unitNumber: console.name,
+                                          startTimestamp: new Date(
+                                            session.start_time
+                                          ).toLocaleString("id-ID"),
+                                          mode: session.duration_minutes
+                                            ? "prepaid"
+                                            : "pay-as-you-go",
+                                        });
+                                      }
+                                    }}
+                                    className="ml-2 p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                                    title="Cetak bukti rental"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </td>
                               <td className="px-3 py-2 border font-mono">
                                 {end
