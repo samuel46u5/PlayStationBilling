@@ -205,6 +205,276 @@ const ActiveRentals: React.FC = () => {
   }>({});
   const [isRefreshingStatuses, setIsRefreshingStatuses] = useState(false);
 
+  // State untuk tracking console yang sedang dalam mode persiapan
+  const [preparationMode, setPreparationMode] = useState<{
+    [consoleId: string]: {
+      isActive: boolean;
+      timeoutId: NodeJS.Timeout | null;
+      originalAutoShutdown: boolean;
+    };
+  }>({});
+
+  // Fungsi untuk menjalankan persiapan untuk satu console
+  const handleSingleConsolePersiapan = async (console: Console) => {
+    const { value: preparationMinutes } = await Swal.fire({
+      title: "Persiapan Console",
+      html: `
+        <p>Perintah ini akan:</p>
+        <ul style="text-align: left; margin: 10px 0;">
+          <li>Menyalakan TV dan nomor untuk waktu tertentu</li>
+          <li>Mematikan semuanya secara otomatis setelah waktu habis</li>
+        </ul>
+        <p><strong>Console: ${console.name}</strong></p>
+        <div style="margin-top: 15px;">
+          <label for="preparation-minutes" style="display: block; margin-bottom: 5px; font-weight: bold;">
+            Durasi Persiapan (menit):
+          </label>
+          <input 
+            id="preparation-minutes" 
+            type="number" 
+            min="1" 
+            max="60" 
+            value="5" 
+            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+            placeholder="Masukkan durasi dalam menit"
+          />
+        </div>
+      `,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Mulai Persiapan",
+      cancelButtonText: "Batal",
+      preConfirm: () => {
+        const input = document.getElementById(
+          "preparation-minutes"
+        ) as HTMLInputElement;
+        const minutes = parseInt(input.value);
+        if (!minutes || minutes < 1 || minutes > 60) {
+          Swal.showValidationMessage("Masukkan durasi antara 1-60 menit");
+          return false;
+        }
+        return minutes;
+      },
+    });
+
+    if (!preparationMinutes) return;
+
+    // Tampilkan loading
+    const loadingAlert = Swal.fire({
+      title: `Memulai Persiapan ${preparationMinutes} Menit...`,
+      html: "Menyalakan TV dan nomor...",
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    try {
+      // Simpan nilai auto_shutdown awal
+      const originalAutoShutdown = console.auto_shutdown_enabled || false;
+
+      // Jika auto_shutdown masih true, update ke false
+      if (console.auto_shutdown_enabled) {
+        try {
+          await supabase
+            .from("consoles")
+            .update({ auto_shutdown_enabled: false })
+            .eq("id", console.id);
+
+          // Update local state juga
+          setConsoles((prev) =>
+            prev.map((c) =>
+              c.id === console.id ? { ...c, auto_shutdown_enabled: false } : c
+            )
+          );
+        } catch (error) {
+          console.error(
+            `Error updating auto_shutdown for ${console.name}:`,
+            error
+          );
+        }
+      }
+
+      // Nyalakan TV dan relay
+      const results = [];
+
+      // Nyalakan TV
+      if (console.power_tv_command) {
+        try {
+          const tvRes = await fetch(console.power_tv_command);
+          if (tvRes.ok) {
+            results.push({ type: "tv", status: "success" });
+          } else {
+            results.push({ type: "tv", status: "failed" });
+          }
+        } catch (error) {
+          results.push({ type: "tv", status: "failed" });
+        }
+      }
+
+      // Nyalakan nomor/relay
+      if (console.relay_command_on) {
+        try {
+          const relayRes = await fetch(console.relay_command_on);
+          if (relayRes.ok) {
+            results.push({ type: "relay", status: "success" });
+          } else {
+            results.push({ type: "relay", status: "failed" });
+          }
+        } catch (error) {
+          results.push({ type: "relay", status: "failed" });
+        }
+      }
+
+      // Hitung hasil
+      const successful = results.filter((r) => r.status === "success").length;
+      const total = results.length;
+
+      await Swal.fire({
+        title: "Persiapan Dimulai!",
+        html: `
+          <p>Console: <strong>${console.name}</strong></p>
+          <p>Status: ${successful}/${total} perintah berhasil</p>
+          <p>TV dan nomor akan dimatikan otomatis dalam ${preparationMinutes} menit</p>
+        `,
+        icon: "success",
+        timer: 3000,
+        timerProgressBar: true,
+      });
+
+      // Set timer untuk mematikan setelah waktu yang ditentukan
+      const timeoutId = setTimeout(async () => {
+        await handleStopPreparation(console, originalAutoShutdown);
+      }, preparationMinutes * 60 * 1000); // Konversi menit ke milidetik
+
+      // Simpan state persiapan
+      setPreparationMode((prev) => ({
+        ...prev,
+        [console.id]: {
+          isActive: true,
+          timeoutId,
+          originalAutoShutdown,
+        },
+      }));
+    } catch (error) {
+      console.error("Error during preparation:", error);
+      await Swal.fire({
+        title: "Error",
+        text: "Terjadi kesalahan saat menjalankan persiapan",
+        icon: "error",
+      });
+    }
+  };
+
+  // Fungsi untuk menghentikan persiapan
+  const handleStopPreparation = async (
+    console: Console,
+    originalAutoShutdown: boolean
+  ) => {
+    const shutdownResults = [];
+
+    // Matikan TV
+    if (console.power_tv_command) {
+      try {
+        const tvRes = await fetch(console.power_tv_command);
+        if (tvRes.ok) {
+          shutdownResults.push({ type: "tv", status: "success" });
+        } else {
+          shutdownResults.push({ type: "tv", status: "failed" });
+        }
+      } catch (error) {
+        shutdownResults.push({ type: "tv", status: "failed" });
+      }
+    }
+
+    // Matikan nomor/relay
+    if (console.relay_command_off) {
+      try {
+        const relayRes = await fetch(console.relay_command_off);
+        if (relayRes.ok) {
+          shutdownResults.push({ type: "relay", status: "success" });
+        } else {
+          shutdownResults.push({ type: "relay", status: "failed" });
+        }
+      } catch (error) {
+        shutdownResults.push({ type: "relay", status: "failed" });
+      }
+    }
+
+    // Kembalikan nilai auto_shutdown ke nilai awal
+    if (originalAutoShutdown !== console.auto_shutdown_enabled) {
+      try {
+        await supabase
+          .from("consoles")
+          .update({ auto_shutdown_enabled: originalAutoShutdown })
+          .eq("id", console.id);
+
+        // Update local state juga
+        setConsoles((prev) =>
+          prev.map((c) =>
+            c.id === console.id
+              ? { ...c, auto_shutdown_enabled: originalAutoShutdown }
+              : c
+          )
+        );
+      } catch (error) {
+        console.error(
+          `Error restoring auto_shutdown for ${console.name}:`,
+          error
+        );
+      }
+    }
+
+    const shutdownSuccessful = shutdownResults.filter(
+      (r) => r.status === "success"
+    ).length;
+    const shutdownTotal = shutdownResults.length;
+
+    await Swal.fire({
+      title: "Persiapan Selesai!",
+      html: `
+        <p>Console: <strong>${console.name}</strong></p>
+        <p>Status: ${shutdownSuccessful}/${shutdownTotal} perintah berhasil</p>
+        <p>TV dan nomor telah dimatikan</p>
+      `,
+      icon: "info",
+      timer: 3000,
+      timerProgressBar: true,
+    });
+
+    // Hapus state persiapan
+    setPreparationMode((prev) => {
+      const newState = { ...prev };
+      delete newState[console.id];
+      return newState;
+    });
+  };
+
+  // Fungsi untuk menghentikan persiapan secara manual
+  const handleStopPreparationManual = async (console: Console) => {
+    const preparation = preparationMode[console.id];
+    if (!preparation) return;
+
+    const confirmResult = await Swal.fire({
+      title: "Berhenti Persiapan",
+      text: `Apakah Anda yakin ingin menghentikan persiapan untuk console ${console.name}?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Ya, Hentikan",
+      cancelButtonText: "Batal",
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    // Clear timeout jika ada
+    if (preparation.timeoutId) {
+      clearTimeout(preparation.timeoutId);
+    }
+
+    // Hentikan persiapan
+    await handleStopPreparation(console, preparation.originalAutoShutdown);
+  };
+
   // --- TV Status JSON and selectedConsole hooks must be after all state declarations ---
   const [tvStatusJson, setTvStatusJson] = React.useState<string>("");
   const selectedConsole = React.useMemo(
@@ -5120,43 +5390,56 @@ const ActiveRentals: React.FC = () => {
                         <Power className="h-4 w-4" />
                       </button>
 
-                      {/* Tombol Add Products */}
-                      <button
-                        onClick={() => {
-                          if (!ensureCashierActive()) return;
-                          if (
-                            console.status === "rented" &&
-                            activeSession &&
-                            activeSession.status === "active" &&
-                            !activeSession?.duration_minutes
-                          ) {
-                            setShowProductModal(activeSession.id);
-                          } else {
-                            Swal.fire(
-                              "Info",
-                              "Konsol harus dalam status aktif untuk menambahkan produk",
-                              "info"
-                            );
-                          }
-                        }}
-                        className={`flex-1 ${
-                          console.status === "rented" &&
-                          activeSession &&
-                          activeSession.status === "active" &&
-                          !activeSession?.duration_minutes
-                            ? "bg-orange-500 hover:bg-orange-600"
-                            : "bg-gray-400 cursor-not-allowed"
-                        } text-white py-1 rounded flex items-center justify-center text-xs`}
-                        disabled={
-                          !activeSession ||
-                          console.status !== "rented" ||
-                          activeSession.status !== "active" ||
-                          !!activeSession.duration_minutes
-                        }
-                        title="Add Products"
-                      >
-                        <ShoppingCart className="h-4 w-4" />
-                      </button>
+                      {/* Tombol Add Products - hanya tampil jika console rented */}
+                      {activeSession &&
+                        console.status === "rented" &&
+                        !activeSession.duration_minutes && (
+                          <button
+                            onClick={() => {
+                              if (!ensureCashierActive()) return;
+                              if (
+                                console.status === "rented" &&
+                                activeSession &&
+                                activeSession.status === "active" &&
+                                !activeSession?.duration_minutes
+                              ) {
+                                setShowProductModal(activeSession.id);
+                              } else {
+                                Swal.fire(
+                                  "Info",
+                                  "Konsol harus dalam status aktif untuk menambahkan produk",
+                                  "info"
+                                );
+                              }
+                            }}
+                            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                            title="Add Products"
+                          >
+                            <ShoppingCart className="h-4 w-4" />
+                          </button>
+                        )}
+
+                      {/* Tombol Persiapan / Berhenti Persiapan */}
+                      {console.status !== "rented" &&
+                        (preparationMode[console.id]?.isActive ? (
+                          <button
+                            onClick={() => handleStopPreparationManual(console)}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                            title="Berhenti Persiapan"
+                          >
+                            <Square className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              handleSingleConsolePersiapan(console)
+                            }
+                            className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                            title="Mode Persiapan"
+                          >
+                            <Clock className="h-4 w-4" />
+                          </button>
+                        ))}
                     </div>
                   </div>
                 </div>
@@ -5322,17 +5605,32 @@ const ActiveRentals: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => {
-                          if (!ensureCashierActive()) return;
-                          setShowStartRentalModal(console.id);
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
-                        title="Mulai Rental"
-                      >
-                        <Play className="h-5 w-5" />
-                        Mulai Rental
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (!ensureCashierActive()) return;
+                            setShowStartRentalModal(console.id);
+                          }}
+                          className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                          title="Mulai Rental"
+                        >
+                          <Play className="h-5 w-5" />
+                          Mulai Rental
+                        </button>
+
+                        {/* Persiapan Button */}
+                        {console.status !== "rented" && (
+                          <button
+                            onClick={() =>
+                              handleSingleConsolePersiapan(console)
+                            }
+                            className="bg-purple-500 hover:bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                          >
+                            <Clock className="h-5 w-5" />
+                            Mode Persiapan
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -5608,16 +5906,41 @@ const ActiveRentals: React.FC = () => {
                     {/* Action Buttons */}
                     <div className="flex gap-1">
                       {console.status === "available" ? (
-                        <button
-                          onClick={() => {
-                            if (!ensureCashierActive()) return;
-                            setShowStartRentalModal(console.id);
-                          }}
-                          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
-                        >
-                          <Play className="h-5 w-5" />
-                          Start Rental
-                        </button>
+                        <>
+                          <button
+                            onClick={() => {
+                              if (!ensureCashierActive()) return;
+                              setShowStartRentalModal(console.id);
+                            }}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Play className="h-5 w-5" />
+                            Start Rental
+                          </button>
+
+                          {/* Persiapan Button / Berhenti Persiapan */}
+                          {preparationMode[console.id]?.isActive ? (
+                            <button
+                              onClick={() =>
+                                handleStopPreparationManual(console)
+                              }
+                              className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                            >
+                              <Square className="h-5 w-5" />
+                              Berhenti Persiapan
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                handleSingleConsolePersiapan(console)
+                              }
+                              className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                            >
+                              <Clock className="h-5 w-5" />
+                              Mode Persiapan
+                            </button>
+                          )}
+                        </>
                       ) : console.status === "rented" && activeSession ? (
                         <>
                           {/* Tombol Pause/Resume */}
@@ -5698,32 +6021,29 @@ const ActiveRentals: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Add Products Button */}
-                    {!activeSession?.duration_minutes && (
-                      <button
-                        onClick={() => {
-                          if (!ensureCashierActive()) return;
-                          if (console.status === "rented" && activeSession) {
-                            setShowProductModal(activeSession.id);
-                          } else {
-                            Swal.fire(
-                              "Info",
-                              "Konsol harus dalam status aktif untuk menambahkan produk",
-                              "info"
-                            );
-                          }
-                        }}
-                        className={`w-full ${
-                          console.status === "rented"
-                            ? "bg-orange-500 hover:bg-orange-600"
-                            : "bg-gray-400 cursor-not-allowed"
-                        } text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
-                        disabled={console.status !== "rented"}
-                      >
-                        <ShoppingCart className="h-5 w-5" />
-                        Add Products
-                      </button>
-                    )}
+                    {/* Add Products Button - hanya tampil jika console rented */}
+                    {activeSession &&
+                      console.status === "rented" &&
+                      !activeSession.duration_minutes && (
+                        <button
+                          onClick={() => {
+                            if (!ensureCashierActive()) return;
+                            if (console.status === "rented" && activeSession) {
+                              setShowProductModal(activeSession.id);
+                            } else {
+                              Swal.fire(
+                                "Info",
+                                "Konsol harus dalam status aktif untuk menambahkan produk",
+                                "info"
+                              );
+                            }
+                          }}
+                          className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                          <ShoppingCart className="h-5 w-5" />
+                          Add Products
+                        </button>
+                      )}
                   </div>
                 </div>
               );
