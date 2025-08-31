@@ -467,7 +467,7 @@ export const generateRentalProofHTML = async (data: RentalProofData) => {
 
   // DATA RENTAL
   lines.push(pad(`Customer : ${data.customerName}`, lineWidth));
-  lines.push(pad(`Mode    : ${data.mode}`, lineWidth));
+  lines.push(pad(`Mode     : ${data.mode}`, lineWidth));
   lines.push(pad(`No Unit  : ${data.unitNumber}`, lineWidth));
   lines.push(pad(`Mulai    : ${data.startTimestamp}`, lineWidth));
 

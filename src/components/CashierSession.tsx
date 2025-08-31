@@ -160,14 +160,31 @@ const CashierSessionComponent: React.FC = () => {
     switch (activeTab) {
       case "income":
         filtered = todayTransactions.filter(
-          (t) => t.type === "sale" || t.type === "rental" || t.type === "income"
+          (t) =>
+            // t.type === "sale" ||
+            // t.type === "rental" ||
+            // t.type === "income" ||
+            // !t.reference_id.toUpperCase().includes("CANCELLED")
+            (t.type === "sale" || t.type === "rental" || t.type === "income") &&
+            !(
+              (t.reference_id &&
+                t.reference_id.toUpperCase().includes("CANCELLED")) ||
+              t.reference_id.toUpperCase().includes("MOVE_RENTAL")
+            )
         );
         break;
       case "expense":
         filtered = todayTransactions.filter((t) => t.type === "expense");
         break;
       default:
-        filtered = todayTransactions;
+        filtered = todayTransactions.filter(
+          (t) =>
+            !(
+              (t.reference_id &&
+                t.reference_id.toUpperCase().includes("CANCELLED")) ||
+              t.reference_id.toUpperCase().includes("MOVE_RENTAL")
+            )
+        );
     }
     return filtered;
   }, [todayTransactions, activeTab, currentSession]);
@@ -788,7 +805,22 @@ const CashierSessionComponent: React.FC = () => {
                         : "text-gray-600 hover:text-gray-900"
                     }`}
                   >
-                    Semua ({todayTransactions.length})
+                    Semua (
+                    {
+                      todayTransactions.filter(
+                        (transaction) =>
+                          !(
+                            (transaction.reference_id &&
+                              transaction.reference_id
+                                .toUpperCase()
+                                .includes("CANCELLED")) ||
+                            transaction.reference_id
+                              .toUpperCase()
+                              .includes("MOVE_RENTAL")
+                          )
+                      ).length
+                    }
+                    )
                   </button>
                   <button
                     onClick={() => setActiveTab("income")}
@@ -803,9 +835,18 @@ const CashierSessionComponent: React.FC = () => {
                     {
                       todayTransactions.filter(
                         (transaction) =>
-                          transaction.type === "income" ||
-                          transaction.type === "sale" ||
-                          transaction.type === "rental"
+                          (transaction.type === "income" ||
+                            transaction.type === "sale" ||
+                            transaction.type === "rental") &&
+                          !(
+                            (transaction.reference_id &&
+                              transaction.reference_id
+                                .toUpperCase()
+                                .includes("CANCELLED")) ||
+                            transaction.reference_id
+                              .toUpperCase()
+                              .includes("MOVE_RENTAL")
+                          )
                       ).length
                     }
                     )
@@ -999,7 +1040,8 @@ const CashierSessionComponent: React.FC = () => {
                               ))}
 
                             {/* Tombol Print Receipt */}
-                            {transaction.reference_id &&
+                            {!(transaction.type === "expense") &&
+                              transaction.reference_id &&
                               !transaction.reference_id
                                 .toUpperCase()
                                 .includes("OPENING-CASH") &&

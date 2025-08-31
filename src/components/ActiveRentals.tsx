@@ -6,7 +6,7 @@ import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
 import Countdown from "./Countdown";
-import { printReceipt } from "../utils/receipt";
+import { printReceipt, printRentalProof } from "../utils/receipt";
 import { useTimer } from "../contexts/TimerContext";
 
 interface SaleItem {
@@ -64,6 +64,7 @@ interface Console {
   power_tv_command?: string;
   relay_command_status?: string;
   perintah_cek_power_tv?: string;
+  ip_address_tv?: string;
 }
 
 interface RateProfile {
@@ -192,6 +193,16 @@ const ActiveRentals: React.FC = () => {
   const [showAutoShutdownModal, setShowAutoShutdownModal] =
     useState<boolean>(false);
   const [showToolsModal, setShowToolsModal] = useState<boolean>(false);
+  const [selectedCommand, setSelectedCommand] = useState("");
+  const [volume, setVolume] = useState<number>(10);
+  const [preparationMinutes, setPreparationMinutes] = useState<number>(5);
+  const [consoleStatuses, setConsoleStatuses] = useState<{
+    [key: string]: {
+      tv: boolean;
+      lamp: boolean;
+      volume: number;
+    };
+  }>({});
 
   // --- TV Status JSON and selectedConsole hooks must be after all state declarations ---
   const [tvStatusJson, setTvStatusJson] = React.useState<string>("");
@@ -265,7 +276,7 @@ const ActiveRentals: React.FC = () => {
           .then((text) => setRelayStatus(text))
           .catch(() => setRelayStatus("-"));
       }
-    }, 3000);
+    }, 30000);
     setStatusIntervalId(interval);
     return () => clearInterval(interval);
   }, [showStartRentalModal, selectedConsole]);
@@ -626,9 +637,10 @@ const ActiveRentals: React.FC = () => {
 
       setConsoles(consoleData || []);
 
-      if (consoleError) throw consoleError;}
+      if (consoleError) throw consoleError;
+    };
 
-      fetchConsoles();
+    fetchConsoles();
   }, [globalActiveSessions]);
 
   const loadData = async () => {
@@ -739,6 +751,7 @@ const ActiveRentals: React.FC = () => {
   };
 
   const calculateCurrentCost = (session: RentalSession) => {
+    if (!session.start_time) return 0;
     const start = new Date(session.start_time);
     const now = new Date();
     let totalMinutes = 0;
@@ -1370,7 +1383,7 @@ const ActiveRentals: React.FC = () => {
             cost: i.cost,
             total: i.price * i.quantity, // harga sebelum diskon
             profit:
-              Number((i.price - i.cost) * i.quantity) -
+              Number((i.price - (i.cost ?? 0)) * i.quantity) -
               (discountAmount > 0 ? discountAmount : 0),
             description: `Harga: Rp ${i.price.toLocaleString("id-ID")}`,
           })),
@@ -1487,7 +1500,7 @@ const ActiveRentals: React.FC = () => {
             totalCost -
             (session?.consoles?.rate_profiles?.capital ?? 0) -
             (discountAmount > 0 ? discountAmount : 0),
-          description: `Durasi: ${formatElapsedHMS(session.start_time)}${
+          description: `${formatElapsedHMS(session.start_time || "")}${
             session.consoles?.location
               ? ` | Lokasi: ${session.consoles.location}`
               : ""
@@ -2744,6 +2757,23 @@ const ActiveRentals: React.FC = () => {
         .update({ status: "rented" })
         .eq("id", consoleId);
       if (consoleError) throw consoleError;
+
+      // Get customer name
+      let customerName = "";
+      if (customerType === "member" && customerId) {
+        const customer = customers.find((c) => c.id === customerId);
+        customerName = customer?.name || "Customer";
+      } else if (customerType === "non-member") {
+        customerName = nonMemberName || "Non-Member";
+      }
+
+      printRentalProof({
+        customerName: customerName,
+        unitNumber: latestConsole.name,
+        startTimestamp: new Date().toLocaleString("id-ID"),
+        mode: rentalType,
+      });
+
       setShowStartRentalModal(null);
       setSelectedCustomerId("");
       setCustomerType("member");
@@ -2861,6 +2891,760 @@ const ActiveRentals: React.FC = () => {
 
   const clearCart = () => {
     setCart([]);
+  };
+
+  const fetchConsoleStatus = async (console: any) => {
+    const status = {
+      tv: false,
+      lamp: false,
+      volume: 50,
+    };
+
+    try {
+      // Cek status TV
+      if (console.perintah_cek_power_tv) {
+        const tvRes = await fetch(console.perintah_cek_power_tv);
+        if (tvRes.ok) {
+          const tvData = await tvRes.json();
+          status.tv = tvData.status === "on";
+        }
+      }
+
+      // Cek status relay/lampu
+      if (console.relay_command_status) {
+        const relayRes = await fetch(console.relay_command_status);
+        if (relayRes.ok) {
+          const relayData = await relayRes.json();
+          status.lamp = relayData.POWER === "ON";
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching status for ${console.name}:`, error);
+    }
+
+    return status;
+  };
+
+  const refreshConsoleStatuses = async () => {
+    const newStatuses: { [key: string]: any } = {};
+
+    for (const console of consoles) {
+      newStatuses[console.id] = await fetchConsoleStatus(console);
+    }
+
+    setConsoleStatuses(newStatuses);
+  };
+
+  const runCommand = async () => {
+    if (!selectedCommand) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Pilih perintah terlebih dahulu",
+      });
+      return;
+    }
+
+    // if (selectedConsoleIds.length === 0) {
+    //   await Swal.fire({
+    //     icon: "warning",
+    //     title: "Pilih console terlebih dahulu",
+    //   });
+    //   return;
+    // }
+
+    const r = await Swal.fire({
+      title: `Jalankan: ${selectedCommand}?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Run",
+    });
+    if (!r.isConfirmed) return;
+
+    // Filter consoles yang dipilih
+    const selectedConsoles = consoles.filter((c) =>
+      selectedConsoleIds.includes(c.id)
+    );
+
+    switch (selectedCommand) {
+      case "Matikan TV":
+        {
+          const results = await Promise.allSettled(
+            selectedConsoles.map(async (device) => {
+              // Cek status TV terlebih dahulu
+              const statusRes = await fetch(device.perintah_cek_power_tv);
+
+              if (!statusRes.ok) {
+                throw new Error(`HTTP ${statusRes.status}`);
+              }
+
+              const statusData = await statusRes.json();
+
+              // Jika TV sudah mati, skip
+              if (statusData.status === "off") {
+                return { device, status: "already_off" };
+              }
+
+              // Jika status "off"
+              const res = await fetch(device.power_tv_command);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              return { device, status: "success" };
+            })
+          );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const alreadyOff = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "already_off"
+            )
+            .map((r) => r.value.device);
+
+          const failed = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "failed"
+            )
+            .map((r) => r.value.device)
+            .concat(
+              results
+                .filter(
+                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                )
+                .map((_, i) => selectedConsoles[i])
+            );
+
+          // Menampilkan SweetAlert
+          Swal.fire({
+            title: "Hasil Proses",
+            html: `
+              <h4><strong>Berhasil Mati:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Sudah Mati:</strong></h4>
+              <ul>
+                ${alreadyOff
+                  .map((device) => `<li>${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Gagal Mati:</strong></h4>
+              <ul>
+                ${failed.map((device) => `<li>${device.name}</li>`).join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
+        }
+        break;
+      case "Nyalakan TV":
+        {
+          const results = await Promise.allSettled(
+            selectedConsoles.map(async (device) => {
+              // Cek status TV terlebih dahulu
+              const statusRes = await fetch(device.perintah_cek_power_tv);
+
+              if (!statusRes.ok) {
+                throw new Error(`HTTP ${statusRes.status}`);
+              }
+
+              const statusData = await statusRes.json();
+
+              // Jika TV sudah menyala, skip
+              if (statusData.status === "on") {
+                return { device, status: "already_on" };
+              }
+
+              // Jika status "off"
+              const res = await fetch(device.power_tv_command);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              return { device, status: "success" };
+            })
+          );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const alreadyOn = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "already_on"
+            )
+            .map((r) => r.value.device);
+
+          const failed = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "failed"
+            )
+            .map((r) => r.value.device)
+            .concat(
+              results
+                .filter(
+                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                )
+                .map((_, i) => selectedConsoles[i])
+            );
+
+          // Menampilkan SweetAlert
+          Swal.fire({
+            title: "Hasil Proses",
+            html: `
+              <h4><strong>Berhasil Menyala:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Sudah Menyala:</strong></h4>
+              <ul>
+                ${alreadyOn.map((device) => `<li>${device.name}</li>`).join("")}
+              </ul>
+              <h4><strong>Gagal Menyala:</strong></h4>
+              <ul>
+                ${failed.map((device) => `<li>${device.name}</li>`).join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
+        }
+        break;
+      case "Matikan Nomor":
+        {
+          const results = await Promise.allSettled(
+            selectedConsoles.map(async (device) => {
+              // Cek status lampu terlebih dahulu
+              const statusRes = await fetch(device.relay_command_status);
+
+              if (!statusRes.ok) {
+                throw new Error(`HTTP ${statusRes.status}`);
+              }
+
+              const statusData = await statusRes.json();
+
+              if (statusData.POWER === "OFF") {
+                return { device, status: "already_off" };
+              }
+
+              // Jika status "on", lakukan perintah untuk mematikan
+              const res = await fetch(device.relay_command_off);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+              const resData = await res.json();
+
+              if (resData.POWER === "OFF") {
+                return { device, status: "success" };
+              } else {
+                return { device, status: "failed", reason: resData };
+              }
+            })
+          );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const alreadyOff = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "already_off"
+            )
+            .map((r) => r.value.device);
+
+          const failed = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "failed"
+            )
+            .map((r) => r.value.device)
+            .concat(
+              results
+                .filter(
+                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                )
+                .map((_, i) => selectedConsoles[i])
+            );
+
+          await Swal.fire({
+            title: "Hasil Proses",
+            html: `
+              <h4><strong>Berhasil Mati:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Sudah Mati:</strong></h4>
+              <ul>
+                ${alreadyOff
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Gagal Mati:</strong></h4>
+              <ul>
+                ${failed
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
+        }
+        break;
+      case "Nyalakan Nomor":
+        {
+          const results = await Promise.allSettled(
+            selectedConsoles.map(async (device) => {
+              // Cek status lampu terlebih dahulu
+              const statusRes = await fetch(device.relay_command_status);
+
+              if (!statusRes.ok) {
+                throw new Error(`HTTP ${statusRes.status}`);
+              }
+
+              const statusData = await statusRes.json();
+
+              if (statusData.POWER === "ON") {
+                return { device, status: "already_on" };
+              }
+
+              // Jika status "off", lakukan perintah untuk menyalakan
+              const res = await fetch(device.relay_command_on);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+              const resData = await res.json();
+
+              if (resData.POWER === "ON") {
+                return { device, status: "success" };
+              } else {
+                return { device, status: "failed", reason: resData };
+              }
+            })
+          );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const alreadyOn = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "already_on"
+            )
+            .map((r) => r.value.device);
+
+          const failed = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "failed"
+            )
+            .map((r) => r.value.device)
+            .concat(
+              results
+                .filter(
+                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                )
+                .map((_, i) => selectedConsoles[i])
+            );
+
+          await Swal.fire({
+            title: "Hasil Proses",
+            html: `
+              <h4><strong>Berhasil Menyala:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Sudah Menyala:</strong></h4>
+              <ul>
+                ${alreadyOn
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Gagal Menyala:</strong></h4>
+              <ul>
+                ${failed
+                  .map((device) => `<li>Unit ${device.name}</li>`)
+                  .join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
+        }
+        break;
+      case "Set volume TV":
+        {
+          const results = await Promise.allSettled(
+            selectedConsoles.map((device) =>
+              fetch(
+                `http://localhost:3001/tv/${device.ip_address_tv}/volume/${volume}?port=5555&method=adb`
+              )
+                .then((res) => {
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  return { device, status: "success" };
+                })
+                .catch((err) => ({
+                  device,
+                  status: "failed",
+                  error: err.message,
+                }))
+            )
+          );
+
+          const successful = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "success"
+            )
+            .map((r) => r.value.device);
+
+          const failed = results
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+                r.status === "fulfilled" && r.value.status === "failed"
+            )
+            .map((r) => r.value.device)
+            .concat(
+              results
+                .filter(
+                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                )
+                .map((_, i) => selectedConsoles[i])
+            );
+
+          await Swal.fire({
+            title: "Hasil Set Volume",
+            html: `
+              <h4><strong>Berhasil:</strong></h4>
+              <ul>
+                ${successful
+                  .map((device) => `<li>${device.name}</li>`)
+                  .join("")}
+              </ul>
+              <h4><strong>Gagal:</strong></h4>
+              <ul>
+                ${failed.map((device) => `<li>${device.name}</li>`).join("")}
+              </ul>
+            `,
+            icon: "info",
+            confirmButtonText: "Tutup",
+            scrollbarPadding: false,
+          });
+        }
+        break;
+      case "Set mute TV": {
+        const results = await Promise.allSettled(
+          selectedConsoles.map((device) =>
+            fetch(
+              `http://localhost:3001/tv/${device.ip_address_tv}/volume/0?port=5555&method=adb`
+            )
+              .then((res) => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return { device, status: "success" };
+              })
+              .catch((err) => ({
+                device,
+                status: "failed",
+                error: err.message,
+              }))
+          )
+        );
+
+        const successful = results
+          .filter(
+            (r): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+              r.status === "fulfilled" && r.value.status === "success"
+          )
+          .map((r) => r.value.device);
+
+        const failed = results
+          .filter(
+            (r): r is PromiseFulfilledResult<{ device: any; status: string }> =>
+              r.status === "fulfilled" && r.value.status === "failed"
+          )
+          .map((r) => r.value.device)
+          .concat(
+            results
+              .filter(
+                (r): r is PromiseRejectedResult => r.status === "rejected"
+              )
+              .map((_, i) => selectedConsoles[i])
+          );
+
+        await Swal.fire({
+          title: "Hasil Set Mute",
+          html: `
+            <h4><strong>Berhasil:</strong></h4>
+            <ul>
+              ${successful.map((device) => `<li>${device.name}</li>`).join("")}
+            </ul>
+            <h4><strong>Gagal:</strong></h4>
+            <ul>
+              ${failed.map((device) => `<li>${device.name}</li>`).join("")}
+            </ul>
+          `,
+          icon: "info",
+          confirmButtonText: "Tutup",
+          scrollbarPadding: false,
+        });
+        break;
+      }
+      case "Persiapan": {
+        const confirmResult = await Swal.fire({
+          title: `Persiapan ${preparationMinutes} Menit`,
+          html: `
+            <p>Perintah ini akan:</p>
+            <ul style="text-align: left; margin: 10px 0;">
+              <li>Menyalakan TV dan nomor untuk ${preparationMinutes} menit</li>
+              <li>Mematikan semuanya secara otomatis setelah waktu habis</li>
+            </ul>
+            <p><strong>Console yang dipilih: ${selectedConsoles.length}</strong></p>
+          `,
+          icon: "question",
+          showCancelButton: true,
+          confirmButtonText: "Mulai Persiapan",
+          cancelButtonText: "Batal",
+        });
+
+        if (!confirmResult.isConfirmed) return;
+
+        // Tampilkan loading
+        const loadingAlert = Swal.fire({
+          title: "Memulai Persiapan...",
+          html: "Menyalakan TV dan nomor...",
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          },
+        });
+
+        try {
+          const turnOnResults = await Promise.allSettled(
+            selectedConsoles.map(async (device) => {
+              const results = [];
+
+              // Nyalakan TV
+              try {
+                const tvRes = await fetch(device.power_tv_command);
+                if (tvRes.ok) {
+                  results.push({ type: "tv", status: "success" });
+                } else {
+                  results.push({ type: "tv", status: "failed" });
+                }
+              } catch (error) {
+                results.push({ type: "tv", status: "failed" });
+              }
+
+              // Nyalakan nomor/relay
+              try {
+                const relayRes = await fetch(device.relay_command_on);
+                if (relayRes.ok) {
+                  results.push({ type: "relay", status: "success" });
+                } else {
+                  results.push({ type: "relay", status: "failed" });
+                }
+              } catch (error) {
+                results.push({ type: "relay", status: "failed" });
+              }
+
+              return { device, results };
+            })
+          );
+
+          // Hitung hasil
+          const successful = turnOnResults
+            .filter(
+              (
+                r
+              ): r is PromiseFulfilledResult<{ device: any; results: any[] }> =>
+                r.status === "fulfilled"
+            )
+            .map((r) => r.value);
+
+          const failed = turnOnResults
+            .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+            .map((_, i) => selectedConsoles[i]);
+
+          // Tampilkan hasil awal
+          await Swal.fire({
+            title: "Persiapan Dimulai",
+            html: `
+              <h4><strong>Berhasil Dinyalakan:</strong></h4>
+              <ul>
+                ${successful
+                  .map((item) => `<li>${item.device.name}</li>`)
+                  .join("")}
+              </ul>
+              ${
+                failed.length > 0
+                  ? `
+              <h4><strong>Gagal:</strong></h4>
+              <ul>
+                ${failed.map((device) => `<li>${device.name}</li>`).join("")}
+              </ul>
+              `
+                  : ""
+              }
+              <p><strong>Timer: ${preparationMinutes} menit</strong></p>
+            `,
+            icon: "success",
+            timer: 3000,
+            timerProgressBar: true,
+          });
+
+          setTimeout(async () => {
+            // Tampilkan notifikasi bahwa akan mematikan
+            await Swal.fire({
+              title: "Waktu Persiapan Habis",
+              text: "Mematikan TV dan nomor...",
+              icon: "info",
+              timer: 2000,
+              timerProgressBar: true,
+            });
+
+            // Matikan semua TV dan nomor
+            const turnOffResults = await Promise.allSettled(
+              selectedConsoles.map(async (device) => {
+                const results = [];
+
+                // Matikan TV
+                try {
+                  const tvRes = await fetch(device.power_tv_command);
+                  if (tvRes.ok) {
+                    results.push({ type: "tv", status: "success" });
+                  } else {
+                    results.push({ type: "tv", status: "failed" });
+                  }
+                } catch (error) {
+                  results.push({ type: "tv", status: "failed" });
+                }
+
+                // Matikan nomor/relay
+                try {
+                  const relayRes = await fetch(device.relay_command_off);
+                  if (relayRes.ok) {
+                    results.push({ type: "relay", status: "success" });
+                  } else {
+                    results.push({ type: "relay", status: "failed" });
+                  }
+                } catch (error) {
+                  results.push({ type: "relay", status: "failed" });
+                }
+
+                return { device, results };
+              })
+            );
+
+            // Hitung hasil akhir
+            const turnOffSuccessful = turnOffResults
+              .filter(
+                (
+                  r
+                ): r is PromiseFulfilledResult<{
+                  device: any;
+                  results: any[];
+                }> => r.status === "fulfilled"
+              )
+              .map((r) => r.value);
+
+            const turnOffFailed = turnOffResults
+              .filter(
+                (r): r is PromiseRejectedResult => r.status === "rejected"
+              )
+              .map((_, i) => selectedConsoles[i]);
+
+            // Tampilkan hasil akhir
+            await Swal.fire({
+              title: "Persiapan Selesai",
+              html: `
+                <h4><strong>Berhasil Dimatikan:</strong></h4>
+                <ul>
+                  ${turnOffSuccessful
+                    .map((item) => `<li>${item.device.name}</li>`)
+                    .join("")}
+                </ul>
+                ${
+                  turnOffFailed.length > 0
+                    ? `
+                <h4><strong>Gagal Dimatikan:</strong></h4>
+                <ul>
+                  ${turnOffFailed
+                    .map((device) => `<li>${device.name}</li>`)
+                    .join("")}
+                </ul>
+                `
+                    : ""
+                }
+              `,
+              icon: "success",
+              confirmButtonText: "OK",
+            });
+          }, (preparationMinutes || 5) * 60 * 1000); // Konversi menit ke milidetik
+        } catch (error) {
+          console.error("Error during preparation:", error);
+          await Swal.fire({
+            title: "Error",
+            text: "Terjadi kesalahan saat menjalankan persiapan",
+            icon: "error",
+          });
+        }
+        break;
+      }
+    }
   };
 
   // Handler konfirmasi pembayaran prepaid
@@ -3028,6 +3812,13 @@ const ActiveRentals: React.FC = () => {
         referenceId: receiptData.id,
         description: `Prepaid rental (${latestConsole.name})`,
         details,
+      });
+
+      printRentalProof({
+        customerName: customers.find((c) => c.id === customerId)?.name || "",
+        unitNumber: latestConsole.name,
+        startTimestamp: new Date().toLocaleString("id-ID"),
+        mode: rentalType,
       });
 
       const result = await Swal.fire({
@@ -3699,28 +4490,84 @@ const ActiveRentals: React.FC = () => {
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Tools</h2>
-                <button onClick={() => setShowToolsModal(false)} className="text-gray-400 hover:text-gray-600">
-                  <X className="h-6 w-6" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={refreshConsoleStatuses}
+                    className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                    title="Refresh status console"
+                  >
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => setShowToolsModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Perintah</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Perintah
+                </label>
                 <div className="flex gap-2">
-                    <select className="flex-1 rounded-md border border-gray-200 bg-white text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                    <option>-- Pilih Perintah --</option>
-                    <option>Matikan TV</option>
-                    <option>Nyalakan TV</option>
-                    <option>Matikan Nomor</option>
-                    <option>Nyalakan Nomor</option>
-                    <option>Set volume TV</option>
-                    <option>Set mute TV</option>
-                    <option>aktifkan proteksi</option>
-                    <option>matikan proteksi</option>
+                  <select
+                    value={selectedCommand}
+                    onChange={(e) => setSelectedCommand(e.target.value)}
+                    className="flex-1 rounded-md border border-gray-200 bg-white text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">-- Pilih Perintah --</option>
+                    <option value="Matikan TV">Matikan TV</option>
+                    <option value="Nyalakan TV">Nyalakan TV</option>
+                    <option value="Matikan Nomor">Matikan Nomor</option>
+                    <option value="Nyalakan Nomor">Nyalakan Nomor</option>
+                    <option value="Set volume TV">Set volume TV</option>
+                    <option value="Set mute TV">Set mute TV</option>
+                    <option value="Persiapan">Persiapan</option>
                   </select>
+
+                  {selectedCommand === "Set volume TV" && (
+                    <>
+                      <div className="text-sm font-semibold text-slate-700 flex items-center">
+                        Volume
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={volume}
+                        onChange={(e) =>
+                          setVolume(Number(e.target.value) || 10)
+                        }
+                        className="w-20 px-3 py-2 border border-gray-200 rounded text-sm"
+                        placeholder="0-100"
+                      />
+                    </>
+                  )}
+
+                  {selectedCommand === "Persiapan" && (
+                    <>
+                      <div className="text-sm font-semibold text-slate-700 flex items-center">
+                        Menit
+                      </div>
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={preparationMinutes}
+                        onChange={(e) =>
+                          setPreparationMinutes(Number(e.target.value) || 5)
+                        }
+                        className="w-20 px-3 py-2 border border-gray-200 rounded text-sm"
+                        placeholder="1-60"
+                      />
+                    </>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => {}}
+                    onClick={runCommand}
                     className="px-4 py-2 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
                   >
                     Run
@@ -3735,7 +4582,8 @@ const ActiveRentals: React.FC = () => {
                       type="checkbox"
                       aria-label="select-all"
                       checked={
-                        consoles.length > 0 && selectedConsoleIds.length === consoles.length
+                        consoles.length > 0 &&
+                        selectedConsoleIds.length === consoles.length
                       }
                       onChange={(e) => {
                         if (e.target.checked) {
@@ -3750,87 +4598,102 @@ const ActiveRentals: React.FC = () => {
                   <div>Console</div>
                   <div className="text-center">TV</div>
                   <div className="text-center">Lampu</div>
-                  <div className="text-right">Volume</div>
-                  <div className="text-right">Protection</div>
+                  <div className="text-center">Volume</div>
+                  <div className="text-center">Protection</div>
                 </div>
                 <div className="border-b border-gray-200 mb-2" />
                 <div className="max-h-64 overflow-y-auto">
                   {consoles.length === 0 ? (
-                    <div className="text-sm text-gray-500">No consoles found.</div>
+                    <div className="text-sm text-gray-500">
+                      No consoles found.
+                    </div>
                   ) : (
                     <div className="space-y-2">
-                          {consoles.slice().sort((a, b) => a.name.localeCompare(b.name)).map((c) => {
-                        const tvOn = Math.random() < 0.5;
-                        const lampOn = Math.random() < 0.5;
-                        const volumeValue = Math.floor(Math.random() * 101);
-                        return (
-                        <div key={c.id} className="grid grid-cols-6 items-center gap-2 text-sm text-gray-800 border-b pb-1">
-                          <div className="col-span-1 flex items-center justify-center">
-                            <input
-                              aria-label={`select-${c.id}`}
-                              type="checkbox"
-                              checked={selectedConsoleIds.includes(c.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedConsoleIds((s) => [...s, c.id]);
-                                } else {
-                                  setSelectedConsoleIds((s) => s.filter((id) => id !== c.id));
-                                }
-                              }}
-                              className="form-checkbox h-4 w-4 text-indigo-600"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2 col-span-1">
-                            <Gamepad2 className="h-4 w-4 text-gray-500" />
-                            <span className="truncate">{c.name}</span>
-                          </div>
-                          <div className="col-span-1 flex items-center justify-center">
-                            {tvOn ? (
-                              <Power className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <Power className="h-4 w-4 text-red-600" />
-                            )}
-                          </div>
-                          <div className="col-span-1 flex items-center justify-center">
-                            {lampOn ? (
-                              <Lightbulb className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <Lightbulb className="h-4 w-4 text-red-600" />
-                            )}
-                          </div>
-                          <div className="col-span-1 flex items-center justify-end gap-2">
-                            {volumeValue > 0 ? (
-                              <Volume className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <VolumeX className="h-4 w-4 text-red-600" />
-                            )}
-                            <span className="text-sm text-gray-600">/ {volumeValue}</span>
-                          </div>
-                          <div className="col-span-1 flex items-center justify-center">
-                            {typeof c.auto_shutdown_enabled !== "undefined" ? (
-                              c.auto_shutdown_enabled ? (
-                                <Lock className="h-4 w-4 text-green-600" />
-                              ) : (
-                                <Unlock className="h-4 w-4 text-red-600" />
-                              )
-                            ) : (
-                              Math.random() < 0.5 ? (
-                                <Lock className="h-4 w-4 text-green-600" />
-                              ) : (
-                                <Unlock className="h-4 w-4 text-red-600" />
-                              )
-                            )}
-                          </div>
-                        </div>
-                        );
-                      })}
+                      {consoles
+                        .slice()
+                        .sort((a, b) => Number(a.name) - Number(b.name))
+                        .map((c) => {
+                          // Gunakan data real dari consoleStatuses atau fallback ke status console
+                          const status = consoleStatuses[c.id] || {
+                            tv: c.status === "rented",
+                            lamp: c.status === "rented",
+                            volume: 50,
+                          };
+                          return (
+                            <div
+                              key={c.id}
+                              className="grid grid-cols-6 items-center gap-2 text-sm text-gray-800 border-b pb-1"
+                            >
+                              <div className="col-span-1 flex items-center justify-center">
+                                <input
+                                  aria-label={`select-${c.id}`}
+                                  type="checkbox"
+                                  checked={selectedConsoleIds.includes(c.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedConsoleIds((s) => [
+                                        ...s,
+                                        c.id,
+                                      ]);
+                                    } else {
+                                      setSelectedConsoleIds((s) =>
+                                        s.filter((id) => id !== c.id)
+                                      );
+                                    }
+                                  }}
+                                  className="form-checkbox h-4 w-4 text-indigo-600"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2 col-span-1">
+                                <Gamepad2 className="h-4 w-4 text-gray-500" />
+                                <span className="truncate">{c.name}</span>
+                              </div>
+                              <div className="col-span-1 flex items-center justify-center">
+                                {status.tv ? (
+                                  <Power className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <Power className="h-4 w-4 text-red-600" />
+                                )}
+                              </div>
+                              <div className="col-span-1 flex items-center justify-center">
+                                {status.lamp ? (
+                                  <Lightbulb className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <Lightbulb className="h-4 w-4 text-red-600" />
+                                )}
+                              </div>
+                              <div className="col-span-1 flex items-center justify-center gap-2">
+                                {status.volume > 0 ? (
+                                  <Volume className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <VolumeX className="h-4 w-4 text-red-600" />
+                                )}
+                                <span className="text-sm text-gray-600">
+                                  / {status.volume}
+                                </span>
+                              </div>
+                              <div className="col-span-1 flex items-center justify-center">
+                                {c.auto_shutdown_enabled ? (
+                                  <Lock className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <Unlock className="h-4 w-4 text-red-600" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   )}
                 </div>
               </div>
 
               <div className="flex justify-end pt-4 border-t">
-                <button onClick={() => setShowToolsModal(false)} className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">Close</button>
+                <button
+                  onClick={() => setShowToolsModal(false)}
+                  className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
@@ -4587,21 +5450,22 @@ const ActiveRentals: React.FC = () => {
                     )}
 
                     {/* Action Buttons */}
-                    {console.status === "available" ? (
-                      <button
-                        onClick={() => {
-                          if (!ensureCashierActive()) return;
-                          setShowStartRentalModal(console.id);
-                        }}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
-                      >
-                        <Play className="h-5 w-5" />
-                        Start Rental
-                      </button>
-                    ) : console.status === "rented" && activeSession ? (
-                      <>
-                        {/* Tombol Pause/Resume */}
-                        {/* {activeSession.status !== "paused" ? (
+                    <div className="flex gap-1">
+                      {console.status === "available" ? (
+                        <button
+                          onClick={() => {
+                            if (!ensureCashierActive()) return;
+                            setShowStartRentalModal(console.id);
+                          }}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                        >
+                          <Play className="h-5 w-5" />
+                          Start Rental
+                        </button>
+                      ) : console.status === "rented" && activeSession ? (
+                        <>
+                          {/* Tombol Pause/Resume */}
+                          {/* {activeSession.status !== "paused" ? (
                           <button
                             onClick={() => handlePauseSession(activeSession.id)}
                             className="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
@@ -4621,60 +5485,62 @@ const ActiveRentals: React.FC = () => {
                           </button>
                         )} */}
 
-                        {/* Tombol Add Time */}
-                        {activeSession?.duration_minutes && (
+                          {/* Tombol Add Time */}
+                          {activeSession?.duration_minutes && (
+                            <button
+                              onClick={() => {
+                                if (!ensureCashierActive()) return;
+                                const rateProfile = getConsoleRateProfile(
+                                  console.id
+                                );
+                                setShowAddTimeModal({
+                                  session: activeSession,
+                                  console: console,
+                                  currentDuration:
+                                    activeSession.duration_minutes,
+                                  hourlyRate: rateProfile?.hourly_rate || 0,
+                                });
+                              }}
+                              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                              title="Tambah Waktu"
+                            >
+                              <Plus className="h-5 w-5" />
+                              Tambah Waktu
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => handleEndSession(activeSession.id)}
+                            className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                          >
+                            <Square className="h-5 w-5" />
+                            End Rental
+                          </button>
                           <button
                             onClick={() => {
                               if (!ensureCashierActive()) return;
-                              const rateProfile = getConsoleRateProfile(
-                                console.id
-                              );
-                              setShowAddTimeModal({
-                                session: activeSession,
-                                console: console,
-                                currentDuration: activeSession.duration_minutes,
-                                hourlyRate: rateProfile?.hourly_rate || 0,
+                              setShowMoveModal({
+                                sessionId: activeSession.id,
+                                fromConsoleId: console.id,
                               });
                             }}
-                            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
-                            title="Tambah Waktu"
+                            className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                            title="Pindah Unit"
                           >
-                            <Plus className="h-5 w-5" />
-                            Tambah Waktu
+                            <ArrowRightLeft className="h-4 w-4" />
+                            Pindah Unit
                           </button>
-                        )}
-
+                        </>
+                      ) : (
                         <button
-                          onClick={() => handleEndSession(activeSession.id)}
-                          className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                          disabled
+                          className="w-full bg-gray-400 text-white py-3 rounded-lg font-medium mb-2 cursor-not-allowed"
                         >
-                          <Square className="h-5 w-5" />
-                          End Rental
+                          <Wrench className="h-5 w-5 inline mr-2" />
+                          In Maintenance
                         </button>
-                        <button
-                          onClick={() => {
-                            if (!ensureCashierActive()) return;
-                            setShowMoveModal({
-                              sessionId: activeSession.id,
-                              fromConsoleId: console.id,
-                            });
-                          }}
-                          className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
-                          title="Pindah Unit"
-                        >
-                          <ArrowRightLeft className="h-4 w-4" />
-                          Pindah Unit
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        disabled
-                        className="w-full bg-gray-400 text-white py-3 rounded-lg font-medium mb-2 cursor-not-allowed"
-                      >
-                        <Wrench className="h-5 w-5 inline mr-2" />
-                        In Maintenance
-                      </button>
-                    )}
+                      )}
+                    </div>
 
                     {/* Add Products Button */}
                     {!activeSession?.duration_minutes && (
