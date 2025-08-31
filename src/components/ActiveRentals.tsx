@@ -203,6 +203,7 @@ const ActiveRentals: React.FC = () => {
       volume: number;
     };
   }>({});
+  const [isRefreshingStatuses, setIsRefreshingStatuses] = useState(false);
 
   // --- TV Status JSON and selectedConsole hooks must be after all state declarations ---
   const [tvStatusJson, setTvStatusJson] = React.useState<string>("");
@@ -2926,13 +2927,18 @@ const ActiveRentals: React.FC = () => {
   };
 
   const refreshConsoleStatuses = async () => {
-    const newStatuses: { [key: string]: any } = {};
+    setIsRefreshingStatuses(true);
+    try {
+      const newStatuses: { [key: string]: any } = {};
 
-    for (const console of consoles) {
-      newStatuses[console.id] = await fetchConsoleStatus(console);
+      for (const console of consoles) {
+        newStatuses[console.id] = await fetchConsoleStatus(console);
+      }
+
+      setConsoleStatuses(newStatuses);
+    } finally {
+      setIsRefreshingStatuses(false);
     }
-
-    setConsoleStatuses(newStatuses);
   };
 
   const runCommand = async () => {
@@ -2944,13 +2950,13 @@ const ActiveRentals: React.FC = () => {
       return;
     }
 
-    // if (selectedConsoleIds.length === 0) {
-    //   await Swal.fire({
-    //     icon: "warning",
-    //     title: "Pilih console terlebih dahulu",
-    //   });
-    //   return;
-    // }
+    if (selectedConsoleIds.length === 0) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Pilih console terlebih dahulu",
+      });
+      return;
+    }
 
     const r = await Swal.fire({
       title: `Jalankan: ${selectedCommand}?`,
@@ -3472,7 +3478,39 @@ const ActiveRentals: React.FC = () => {
           },
         });
 
+        const originalAutoShutdownStates: { [key: string]: boolean } = {};
+
         try {
+          for (const device of selectedConsoles) {
+            // Simpan nilai awal
+            originalAutoShutdownStates[device.id] =
+              device.auto_shutdown_enabled || false;
+
+            // Jika auto_shutdown masih true, update ke false
+            if (device.auto_shutdown_enabled) {
+              try {
+                await supabase
+                  .from("consoles")
+                  .update({ auto_shutdown_enabled: false })
+                  .eq("id", device.id);
+
+                // Update local state juga
+                setConsoles((prev) =>
+                  prev.map((c) =>
+                    c.id === device.id
+                      ? { ...c, auto_shutdown_enabled: false }
+                      : c
+                  )
+                );
+              } catch (error) {
+                console.error(
+                  `Error updating auto_shutdown for ${device.name}:`,
+                  error
+                );
+              }
+            }
+          }
+
           const turnOnResults = await Promise.allSettled(
             selectedConsoles.map(async (device) => {
               const results = [];
@@ -3633,9 +3671,63 @@ const ActiveRentals: React.FC = () => {
               icon: "success",
               confirmButtonText: "OK",
             });
+
+            for (const device of selectedConsoles) {
+              const originalValue = originalAutoShutdownStates[device.id];
+              if (originalValue !== undefined) {
+                try {
+                  await supabase
+                    .from("consoles")
+                    .update({ auto_shutdown_enabled: originalValue })
+                    .eq("id", device.id);
+
+                  // Update local state juga
+                  setConsoles((prev) =>
+                    prev.map((c) =>
+                      c.id === device.id
+                        ? { ...c, auto_shutdown_enabled: originalValue }
+                        : c
+                    )
+                  );
+                } catch (error) {
+                  console.error(
+                    `Error restoring auto_shutdown for ${device.name}:`,
+                    error
+                  );
+                }
+              }
+            }
           }, (preparationMinutes || 5) * 60 * 1000); // Konversi menit ke milidetik
         } catch (error) {
           console.error("Error during preparation:", error);
+
+          // Restore auto_shutdown values
+          for (const device of selectedConsoles) {
+            const originalValue = originalAutoShutdownStates[device.id];
+            if (originalValue !== undefined) {
+              try {
+                await supabase
+                  .from("consoles")
+                  .update({ auto_shutdown_enabled: originalValue })
+                  .eq("id", device.id);
+
+                // Update local state juga
+                setConsoles((prev) =>
+                  prev.map((c) =>
+                    c.id === device.id
+                      ? { ...c, auto_shutdown_enabled: originalValue }
+                      : c
+                  )
+                );
+              } catch (restoreError) {
+                console.error(
+                  `Error restoring auto_shutdown for ${device.name}:`,
+                  restoreError
+                );
+              }
+            }
+          }
+
           await Swal.fire({
             title: "Error",
             text: "Terjadi kesalahan saat menjalankan persiapan",
@@ -4147,14 +4239,27 @@ const ActiveRentals: React.FC = () => {
             <RealTimeClock />
           </div>
           {/* Search Console */}
-          <input
-            type="text"
-            placeholder="Cari nama console..."
-            value={searchConsole}
-            onChange={(e) => setSearchConsole(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            style={{ minWidth: 180 }}
-          />
+          <div className="relative" style={{ minWidth: 180 }}>
+            <input
+              type="text"
+              placeholder="Cari nama console..."
+              value={searchConsole}
+              onChange={(e) => setSearchConsole(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              style={{ minWidth: 180 }}
+            />
+            {searchConsole && (
+              <button
+                type="button"
+                onClick={() => setSearchConsole("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                tabIndex={-1}
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
 
           {/* Add Product */}
           <button
@@ -4162,7 +4267,7 @@ const ActiveRentals: React.FC = () => {
               if (!ensureCashierActive()) return;
               setShowProductModal("retail");
             }}
-            className={`w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+            className={`w-full bg-orange-500 hover:bg-orange-600 text-white py-3 mx-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
           >
             <ShoppingCart className="h-5 w-5" />
             Add Products
@@ -4493,10 +4598,22 @@ const ActiveRentals: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={refreshConsoleStatuses}
-                    className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                    disabled={isRefreshingStatuses}
+                    className={`px-3 py-1 text-sm rounded transition-colors ${
+                      isRefreshingStatuses
+                        ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                        : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                    }`}
                     title="Refresh status console"
                   >
-                    Refresh
+                    {isRefreshingStatuses ? (
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                        Loading...
+                      </div>
+                    ) : (
+                      "Refresh"
+                    )}
                   </button>
                   <button
                     onClick={() => setShowToolsModal(false)}
@@ -4710,6 +4827,7 @@ const ActiveRentals: React.FC = () => {
             .filter((c) =>
               c.name.toLowerCase().includes(searchConsole.toLowerCase())
             )
+            .sort((a, b) => Number(a.name) - Number(b.name))
             .map((console) => {
               const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
@@ -5019,6 +5137,7 @@ const ActiveRentals: React.FC = () => {
             .filter((c) =>
               c.name.toLowerCase().includes(searchConsole.toLowerCase())
             )
+            .sort((a, b) => Number(a.name) - Number(b.name))
             .map((console) => {
               // const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
@@ -5194,6 +5313,7 @@ const ActiveRentals: React.FC = () => {
             .filter((c) =>
               c.name.toLowerCase().includes(searchConsole.toLowerCase())
             )
+            .sort((a, b) => Number(a.name) - Number(b.name))
             .map((console) => {
               const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
