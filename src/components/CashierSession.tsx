@@ -74,6 +74,7 @@ const CashierSessionComponent: React.FC = () => {
   const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
   const [todayIncome, setTodayIncome] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [rekapTab, setRekapTab] = useState<"rental" | "cafe">("rental");
 
   // Get current user (in real app, this would come from auth context)
   const { user } = useAuth();
@@ -352,11 +353,6 @@ const CashierSessionComponent: React.FC = () => {
   };
 
   const handleOpenSession = async () => {
-    if (openingCash <= 0) {
-      alert("Saldo awal harus lebih dari 0");
-      return;
-    }
-
     if (!user) return;
 
     const nowIso = new Date().toISOString();
@@ -520,6 +516,155 @@ const CashierSessionComponent: React.FC = () => {
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "transfer")
       .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0);
+
+  // Rekap data untuk rental dan cafe
+  const rekapRental = useMemo(() => {
+    const consoleMap = new Map<
+      string,
+      {
+        console: string;
+        totalHours: number;
+        totalRevenue: number;
+        count: number;
+      }
+    >();
+    console.log(todayRentals);
+
+    todayRentals.forEach((rental) => {
+      // Debug: log rental data untuk analisis
+      console.log("Rental data:", {
+        id: rental.id,
+        reference_id: rental.reference_id,
+        type: rental.type,
+        amount: rental.amount,
+        items: rental.items,
+        metadata: rental.metadata,
+        details: rental.details,
+      });
+
+      // Filter rental yang tidak valid
+      if (
+        rental.reference_id?.toUpperCase().includes("MOVE_RENTAL") ||
+        rental.reference_id?.toUpperCase().includes("CANCELLED") ||
+        rental.reference_id?.toUpperCase().includes("ADD-TIME")
+      ) {
+        console.log("Skipping rental:", rental.reference_id);
+        return; // Skip rental ini
+      }
+
+      const rentalItems = getTransactionItems(rental).items;
+      console.log("Rental items after filtering:", rentalItems);
+
+      // Ambil console name dari items array
+      const consoleName =
+        rentalItems && rentalItems.length > 0
+          ? rentalItems[0].name
+          : "Unknown Console";
+
+      // Ambil durasi dari description atau metadata
+      let hours = 0;
+      if (rentalItems && rentalItems.length > 0) {
+        // Parse durasi dari description
+        const description = rentalItems[0].description || "";
+
+        // Pattern 1: "Durasi: 2 jam (Prepaid)" - untuk prepaid
+        const prepaidMatch = description.match(/Durasi:\s*(\d+)\s*jam/);
+        if (prepaidMatch) {
+          hours = parseInt(prepaidMatch[1]);
+        }
+
+        // Pattern 2: "Durasi : 02:29:50" - untuk pay-as-you-go
+        const payAsYouGoMatch = description.match(
+          /Durasi\s*:\s*(\d{2}):(\d{2}):(\d{2})/
+        );
+        if (payAsYouGoMatch) {
+          const hoursPart = parseInt(payAsYouGoMatch[1]);
+          const minutesPart = parseInt(payAsYouGoMatch[2]);
+          const secondsPart = parseInt(payAsYouGoMatch[3]);
+
+          // Konversi ke jam (dengan desimal untuk menit dan detik)
+          hours = hoursPart + minutesPart / 60 + secondsPart / 3600;
+        }
+
+        // Pattern 3: "Durasi: 2 jam 30 menit Tambahan" atau "Durasi: 1 jam Tambahan" - untuk add-time
+        const addTimeMatch = description.match(
+          /Durasi:\s*(\d+)\s*jam\s*(?:(\d+)\s*menit)?\s*(?:Tambahan)?/
+        );
+        if (addTimeMatch) {
+          const hoursPart = parseInt(addTimeMatch[1]);
+          const minutesPart = addTimeMatch[2] ? parseInt(addTimeMatch[2]) : 0;
+
+          // Konversi ke jam (dengan desimal untuk menit)
+          hours = hoursPart + minutesPart / 60;
+        }
+      }
+
+      // Jika tidak ada di description, coba dari metadata
+      if (hours === 0) {
+        hours =
+          rental.metadata?.duration_hours ||
+          rental.details?.duration_hours ||
+          0;
+      }
+
+      const revenue = Number(rental.amount) || 0;
+
+      if (consoleMap.has(consoleName)) {
+        const existing = consoleMap.get(consoleName)!;
+        existing.totalHours += hours;
+        existing.totalRevenue += revenue;
+        existing.count += 1;
+      } else {
+        consoleMap.set(consoleName, {
+          console: consoleName,
+          totalHours: hours,
+          totalRevenue: revenue,
+          count: 1,
+        });
+      }
+    });
+
+    return Array.from(consoleMap.values()).sort(
+      (a, b) => b.totalHours - a.totalHours
+    );
+  }, [todayRentals]);
+
+  console.log("rekap", rekapRental);
+
+  const rekapCafe = useMemo(() => {
+    const productMap = new Map<
+      string,
+      { product: string; totalQty: number; totalRevenue: number; count: number }
+    >();
+
+    todaySales.forEach((sale) => {
+      const items = getTransactionItems(sale).items;
+
+      items.forEach((item: any) => {
+        const productName = item.name || item.product_name || "Unknown Product";
+        const qty = Number(item.qty || item.quantity || 1);
+        const revenue = Number(item.total || item.price || 0);
+
+        if (productMap.has(productName)) {
+          const existing = productMap.get(productName)!;
+          existing.totalQty += qty;
+          existing.totalRevenue += revenue;
+          existing.count += 1;
+        } else {
+          productMap.set(productName, {
+            product: productName,
+            totalQty: qty,
+            totalRevenue: revenue,
+            count: 1,
+          });
+        }
+      });
+    });
+
+    return Array.from(productMap.values()).sort(
+      (a, b) => b.totalQty - a.totalQty
+    );
+  }, [todaySales]);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -1133,6 +1278,244 @@ const CashierSessionComponent: React.FC = () => {
                           </div>
                         </div>
                       )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Rekap Transaksi */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Rekap Transaksi
+                  </h2>
+                  <p className="text-gray-600 text-sm">
+                    Ringkasan performa rental dan cafe dalam sesi kasir aktif
+                  </p>
+                </div>
+
+                {/* Tab Navigation */}
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setRekapTab("rental")}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                      rekapTab === "rental"
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-gray-600 hover:text-blue-600"
+                    }`}
+                  >
+                    <Receipt className="h-4 w-4" />
+                    Rental ({rekapRental.length})
+                  </button>
+                  <button
+                    onClick={() => setRekapTab("cafe")}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                      rekapTab === "cafe"
+                        ? "bg-white text-green-600 shadow-sm"
+                        : "text-gray-600 hover:text-green-600"
+                    }`}
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    Cafe ({rekapCafe.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {rekapTab === "rental" ? (
+                  <>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-blue-800">
+                          Total Console:
+                        </span>
+                        <span className="text-lg font-bold text-blue-600">
+                          {rekapRental.length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-blue-800">
+                          Total Jam:
+                        </span>
+                        <span className="text-lg font-bold text-blue-600">
+                          {rekapRental
+                            .reduce((sum, item) => sum + item.totalHours, 0)
+                            .toFixed(1)}{" "}
+                          Jam
+                        </span>
+                      </div>
+                    </div>
+                    {/* <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-blue-800">
+                          Total Revenue:
+                        </span>
+                        <span className="text-lg font-bold text-blue-600">
+                          Rp{" "}
+                          {rekapRental
+                            .reduce((sum, item) => sum + item.totalRevenue, 0)
+                            .toLocaleString("id-ID")}
+                        </span>
+                      </div>
+                    </div> */}
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-green-800">
+                          Total Product:
+                        </span>
+                        <span className="text-lg font-bold text-green-600">
+                          {rekapCafe.length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-green-800">
+                          Total Qty:
+                        </span>
+                        <span className="text-lg font-bold text-green-600">
+                          {rekapCafe.reduce(
+                            (sum, item) => sum + item.totalQty,
+                            0
+                          )}{" "}
+                          Qty
+                        </span>
+                      </div>
+                    </div>
+                    {/* <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-green-800">
+                          Total Revenue:
+                        </span>
+                        <span className="text-lg font-bold text-green-600">
+                          Rp{" "}
+                          {rekapCafe
+                            .reduce((sum, item) => sum + item.totalRevenue, 0)
+                            .toLocaleString("id-ID")}
+                        </span>
+                      </div>
+                    </div> */}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+              {rekapTab === "rental" ? (
+                rekapRental.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <Receipt className="h-16 w-16 text-blue-300 mx-auto mb-4" />
+                    <p className="text-gray-500">
+                      Belum ada transaksi rental hari ini
+                    </p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Data rental akan muncul di sini setelah ada transaksi
+                      rental
+                    </p>
+                  </div>
+                ) : (
+                  rekapRental.map((item, index) => (
+                    <div
+                      key={index}
+                      className="p-6 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <Receipt className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-gray-900">
+                              {item.console}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-1">
+                              {/* <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {item.count} transaksi
+                              </span> */}
+                              <div className="flex items-center gap-1 text-sm text-gray-600">
+                                <Clock className="h-4 w-4" />
+                                {item.totalHours.toFixed(1)} jam
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        {/* <div className="text-right">
+                          <p className="text-lg font-bold text-blue-600">
+                            Rp {item.totalRevenue.toLocaleString("id-ID")}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Rata-rata: Rp{" "}
+                            {(item.totalRevenue / item.totalHours)
+                              .toFixed(0)
+                              .toLocaleString("id-ID")}
+                            /jam
+                          </p>
+                        </div> */}
+                      </div>
+                    </div>
+                  ))
+                )
+              ) : rekapCafe.length === 0 ? (
+                <div className="p-8 text-center">
+                  <ShoppingCart className="h-16 w-16 text-green-300 mx-auto mb-4" />
+                  <p className="text-gray-500">
+                    Belum ada transaksi cafe hari ini
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Data cafe akan muncul di sini setelah ada transaksi
+                    penjualan
+                  </p>
+                </div>
+              ) : (
+                rekapCafe.map((item, index) => (
+                  <div
+                    key={index}
+                    className="p-6 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                          <ShoppingCart className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900">
+                            {item.product}
+                          </h3>
+                          <div className="flex items-center gap-3 mt-1">
+                            {/* <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              {item.count} transaksi
+                            </span> */}
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <span className="font-medium">
+                                {item.totalQty}
+                              </span>
+                              <span>qty terjual</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      {/* <div className="text-right">
+                        <p className="text-lg font-bold text-green-600">
+                          Rp {item.totalRevenue.toLocaleString("id-ID")}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Rata-rata: Rp{" "}
+                          {(item.totalRevenue / item.totalQty)
+                            .toFixed(0)
+                            .toLocaleString("id-ID")}
+                          /qty
+                        </p>
+                      </div> */}
+                    </div>
                   </div>
                 ))
               )}

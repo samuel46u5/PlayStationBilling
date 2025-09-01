@@ -183,6 +183,11 @@ const ActiveRentals: React.FC = () => {
   const [rentalDurationHours, setRentalDurationHours] = useState<number>(1);
   const [rentalDurationMinutes, setRentalDurationMinutes] = useState<number>(0);
 
+  const [rentalStartTime, setRentalStartTime] = useState<string>(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  });
   // Auto shutdown protection states
   const [autoShutdownEnabled, setAutoShutdownEnabled] = useState<boolean>(true);
   const [consoleAutoShutdownStates, setConsoleAutoShutdownStates] = useState<{
@@ -313,18 +318,18 @@ const ActiveRentals: React.FC = () => {
       }
 
       // Nyalakan nomor/relay
-      if (console.relay_command_on) {
-        try {
-          const relayRes = await fetch(console.relay_command_on);
-          if (relayRes.ok) {
-            results.push({ type: "relay", status: "success" });
-          } else {
-            results.push({ type: "relay", status: "failed" });
-          }
-        } catch (error) {
-          results.push({ type: "relay", status: "failed" });
-        }
-      }
+      // if (console.relay_command_on) {
+      //   try {
+      //     const relayRes = await fetch(console.relay_command_on);
+      //     if (relayRes.ok) {
+      //       results.push({ type: "relay", status: "success" });
+      //     } else {
+      //       results.push({ type: "relay", status: "failed" });
+      //     }
+      //   } catch (error) {
+      //     results.push({ type: "relay", status: "failed" });
+      //   }
+      // }
 
       // Hitung hasil
       const successful = results.filter((r) => r.status === "success").length;
@@ -388,18 +393,18 @@ const ActiveRentals: React.FC = () => {
     }
 
     // Matikan nomor/relay
-    if (console.relay_command_off) {
-      try {
-        const relayRes = await fetch(console.relay_command_off);
-        if (relayRes.ok) {
-          shutdownResults.push({ type: "relay", status: "success" });
-        } else {
-          shutdownResults.push({ type: "relay", status: "failed" });
-        }
-      } catch (error) {
-        shutdownResults.push({ type: "relay", status: "failed" });
-      }
-    }
+    // if (console.relay_command_off) {
+    //   try {
+    //     const relayRes = await fetch(console.relay_command_off);
+    //     if (relayRes.ok) {
+    //       shutdownResults.push({ type: "relay", status: "success" });
+    //     } else {
+    //       shutdownResults.push({ type: "relay", status: "failed" });
+    //     }
+    //   } catch (error) {
+    //     shutdownResults.push({ type: "relay", status: "failed" });
+    //   }
+    // }
 
     // Kembalikan nilai auto_shutdown ke nilai awal
     if (originalAutoShutdown !== console.auto_shutdown_enabled) {
@@ -1044,7 +1049,8 @@ const ActiveRentals: React.FC = () => {
     } else {
       const extraMinutes = totalMinutes - 60;
       const perMinuteRate = hourlyRate / 60;
-      return hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
+      const total = hourlyRate + Math.ceil(extraMinutes * perMinuteRate);
+      return Math.ceil(total / 100) * 100;
     }
   };
 
@@ -3019,7 +3025,7 @@ const ActiveRentals: React.FC = () => {
           payment_status: paymentStatus,
           total_amount: totalAmount,
           paid_amount: paidAmount,
-          start_time: new Date().toISOString(),
+          start_time: new Date(rentalStartTime).toISOString(),
           duration_minutes:
             rentalType === "prepaid" ? totalDurationMinutes : null,
         });
@@ -3053,6 +3059,7 @@ const ActiveRentals: React.FC = () => {
       setRentalType("pay-as-you-go");
       setRentalDurationHours(1);
       setRentalDurationMinutes(0);
+      setRentalStartTime(new Date().toISOString().slice(0, 16));
       setNonMemberName("");
       setSearchConsole("");
       setNonMemberPhone("");
@@ -4090,7 +4097,7 @@ const ActiveRentals: React.FC = () => {
           payment_status: "paid",
           total_amount: finalTotal,
           paid_amount: paymentAmount,
-          start_time: new Date().toISOString(),
+          start_time: new Date(rentalStartTime).toISOString(),
           duration_minutes: duration,
           payment_method: paymentMethod,
         });
@@ -4215,6 +4222,7 @@ const ActiveRentals: React.FC = () => {
       setRentalType("pay-as-you-go");
       setRentalDurationHours(1);
       setRentalDurationMinutes(0);
+      setRentalStartTime(new Date().toISOString().slice(0, 16));
       setNonMemberName("");
       setNonMemberPhone("");
 
@@ -6455,6 +6463,32 @@ const ActiveRentals: React.FC = () => {
                       </div>
                     </div>
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Waktu Mulai Rental
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="datetime-local"
+                      value={rentalStartTime}
+                      onChange={(e) => setRentalStartTime(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                        setRentalStartTime(d.toISOString().slice(0, 16));
+                      }}
+                      className="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg border border-blue-300 text-sm font-medium"
+                      title="Set ke waktu saat ini"
+                    >
+                      Sekarang
+                    </button>
+                  </div>
                 </div>
 
                 <div>

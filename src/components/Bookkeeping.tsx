@@ -6,17 +6,19 @@ import {
   Calendar,
   DollarSign,
   FileText,
-  Filter,
-  Search,
   Loader2,
   AlertCircle,
   SquarePen,
   Coffee,
   Gamepad,
+  Clock,
+  Receipt,
+  X,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
 import Swal from "sweetalert2";
+import { printReceipt } from "../utils/receipt";
 
 type Summary = {
   totalRental?: number;
@@ -58,12 +60,19 @@ const Bookkeeping: React.FC = () => {
 
   const [showEditForm, setShowEditForm] = useState(false);
   const [editEntry, setEditEntry] = useState<BookkeepingEntry | null>(null);
-  const [activeView, setActiveView] = useState<"jurnal" | "laba_rugi">(
-    "jurnal"
-  );
+  const [activeView, setActiveView] = useState<
+    "jurnal" | "laba_rugi" | "laporan_kasir"
+  >("jurnal");
   const [activeTab, setActiveTab] = useState<
     "all" | "income" | "expense" | "rental" | "sale"
   >("all");
+
+  // Laporan Kasir states
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>("");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [showSessionModal, setShowSessionModal] = useState(false);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -99,27 +108,43 @@ const Bookkeeping: React.FC = () => {
       let query = supabase
         .from("cashier_transactions")
         .select("*")
-        .or("type.eq.sale,type.eq.rental")
+        // .or("type.eq.sale,type.eq.rental")
         .order("timestamp", { ascending: false });
 
-      if (selectedPeriod !== "all") {
-        const now = new Date();
-        let startDate = new Date();
-        switch (selectedPeriod) {
-          case "today":
-            startDate.setHours(0, 0, 0, 0);
-            break;
-          case "week":
-            startDate.setDate(now.getDate() - 7);
-            break;
-          case "month":
-            startDate.setMonth(now.getMonth() - 1);
-            break;
-          case "year":
-            startDate.setFullYear(now.getFullYear() - 1);
-            break;
+      if (activeView === "laba_rugi") {
+        query = query.or("type.eq.sale,type.eq.rental");
+
+        if (selectedPeriod !== "all") {
+          const now = new Date();
+          let startDateCalc = new Date();
+          switch (selectedPeriod) {
+            case "today":
+              startDateCalc.setHours(0, 0, 0, 0);
+              break;
+            case "week":
+              startDateCalc.setDate(now.getDate() - 7);
+              break;
+            case "month":
+              startDateCalc.setMonth(now.getMonth() - 1);
+              break;
+            case "year":
+              startDateCalc.setFullYear(now.getFullYear() - 1);
+              break;
+          }
+          query = query.gte("timestamp", startDateCalc.toISOString());
         }
-        query = query.gte("timestamp", startDate.toISOString());
+      } else if (activeView === "laporan_kasir") {
+        if (selectedSessionId) {
+          query = query.eq("session_id", selectedSessionId);
+        }
+        // if (startDate) {
+        //   query = query.gte("timestamp", new Date(startDate).toISOString());
+        // }
+        // if (endDate) {
+        //   const end = new Date(endDate);
+        //   end.setHours(23, 59, 59, 999);
+        //   query = query.lte("timestamp", end.toISOString());
+        // }
       }
 
       const { data, error } = await query;
@@ -190,18 +215,48 @@ const Bookkeeping: React.FC = () => {
   useEffect(() => {
     if (activeView === "laba_rugi") {
       fetchTransaction();
+    } else if (activeView === "laporan_kasir") {
+      fetchTransaction();
     } else {
       fetchEntries();
     }
-  }, [selectedPeriod, activeView]);
+  }, [selectedPeriod, activeView, selectedSessionId, startDate, endDate]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, activeView]);
 
+  // Ambil daftar sesi saat masuk tab laporan_kasir
+  useEffect(() => {
+    const fetchSessions = async () => {
+      try {
+        if (activeView !== "laporan_kasir") return;
+        setLoading(true);
+        const { data, error } = await supabase
+          .from("cashier_sessions")
+          .select("*")
+          .order("start_time", { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        setSessions(data || []);
+        if (!selectedSessionId && (data || []).length > 0) {
+          setSelectedSessionId((data as any[])[0].id);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSessions();
+  }, [activeView]);
+
   // Pagination
   const sourceList = useMemo(
-    () => (activeView === "laba_rugi" ? transactions : entries),
+    () =>
+      activeView === "laba_rugi" || activeView === "laporan_kasir"
+        ? transactions
+        : entries,
     [activeView, transactions, entries]
   );
 
@@ -216,6 +271,12 @@ const Bookkeeping: React.FC = () => {
       return sourceList.filter((e) => e.type === "rental");
     if (activeView === "laba_rugi" && activeTab === "sale")
       return sourceList.filter((e) => e.type === "sale");
+    if (activeView === "laporan_kasir" && activeTab === "income")
+      return sourceList.filter(
+        (e) => e.type === "income" || e.type === "sale" || e.type === "rental"
+      );
+    if (activeView === "laporan_kasir" && activeTab === "expense")
+      return sourceList.filter((e) => e.type === "expense");
     return sourceList;
   }, [sourceList, activeTab, activeView]);
 
@@ -287,6 +348,75 @@ const Bookkeeping: React.FC = () => {
   }, [entries]);
 
   const summary = activeView === "laba_rugi" ? profitSummary : financialSummary;
+
+  // ===== Utilities untuk Laporan Kasir =====
+  const getTransactionItems = (t: any) => {
+    const d = t?.details ?? t?.metadata ?? {};
+    const items = t?.items ?? d?.items ?? d?.line_items ?? [];
+    const discount = d?.discount ?? 0;
+    return Array.isArray(items) ? { items, discount } : { items: [], discount };
+  };
+
+  const convertTransactionToReceiptData = (transaction: any) => {
+    const txItems = getTransactionItems(transaction);
+    const items = txItems.items;
+    const discount = txItems.discount;
+
+    const receiptItems = items.map((item: any) => ({
+      name: item.name || item.product_name || item.title || "Item",
+      type:
+        transaction.type === "sale"
+          ? ("product" as const)
+          : ("rental" as const),
+      quantity: Number(item.qty || item.quantity || 1),
+      total: Number(item.total || item.price || 0),
+      description: item.description || "",
+    }));
+
+    if (receiptItems.length === 0) {
+      receiptItems.push({
+        name: transaction.description || "Transaksi",
+        type:
+          transaction.type === "sale"
+            ? ("product" as const)
+            : ("rental" as const),
+        quantity: 1,
+        total: Number(transaction.amount || 0),
+        description: "",
+      });
+    }
+
+    return {
+      id: `COPY ${transaction.reference_id}` || `TXN-${transaction.id}`,
+      timestamp: new Date(transaction.timestamp).toLocaleString("id-ID"),
+      customer: { name: transaction.customer_name || "Customer" },
+      items: receiptItems,
+      subtotal: Number(transaction.amount || 0) + (discount?.amount || 0),
+      tax: 0,
+      discount: discount?.amount
+        ? {
+            type: "amount" as const,
+            value: discount.amount,
+            amount: discount.amount,
+          }
+        : undefined,
+      total: Number(transaction.amount || 0),
+      paymentMethod: transaction.payment_method || "cash",
+      paymentAmount: transaction.details?.payment?.amount,
+      change: transaction.details?.payment?.change,
+      cashier: transaction.cashier_name || "Kasir",
+    };
+  };
+
+  const handlePrintReceipt = (transaction: any) => {
+    try {
+      const receiptData = convertTransactionToReceiptData(transaction);
+      printReceipt(receiptData);
+    } catch (error) {
+      console.error("Error printing receipt:", error);
+      Swal.fire("Error", "Gagal mencetak struk. Silakan coba lagi.", "error");
+    }
+  };
 
   // Utility functions
   const getCategoryColor = (category: string) => {
@@ -470,18 +600,36 @@ const Bookkeeping: React.FC = () => {
           </div>
 
           <div className="flex gap-x-4">
-            {/* Period Filter */}
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {periods.map((period) => (
-                <option key={period.value} value={period.value}>
-                  {period.label}
-                </option>
-              ))}
-            </select>
+            {/* Period Filter / Date range for laporan_kasir */}
+            {activeView !== "laporan_kasir" ? (
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {periods.map((period) => (
+                  <option key={period.value} value={period.value}>
+                    {period.label}
+                  </option>
+                ))}
+              </select>
+            ) : // <div className="flex items-center gap-2">
+            //   <input
+            //     type="date"
+            //     value={startDate}
+            //     defaultValue={new Date().toISOString().split("T")[0]}
+            //     onChange={(e) => setStartDate(e.target.value)}
+            //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            //   />
+            //   <span className="text-gray-500">s/d</span>
+            //   <input
+            //     type="date"
+            //     value={endDate}
+            //     onChange={(e) => setEndDate(e.target.value)}
+            //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            //   />
+            // </div>
+            null}
             {activeView === "jurnal" && (
               <button
                 onClick={() => setShowAddForm(true)}
@@ -505,11 +653,11 @@ const Bookkeeping: React.FC = () => {
         )}
 
         <div className="mt-4">
-          <div className="grid grid-cols-2 bg-gray-100 rounded-lg p-1 shadow-sm">
+          <div className="grid grid-cols-3 bg-gray-100 rounded-lg p-1 shadow-sm">
             <button
               onClick={() => setActiveView("jurnal")}
               className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeView !== "laba_rugi"
+                activeView === "jurnal"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-600 hover:text-gray-900"
               }`}
@@ -526,6 +674,16 @@ const Bookkeeping: React.FC = () => {
             >
               Laba Rugi
             </button>
+            <button
+              onClick={() => setActiveView("laporan_kasir")}
+              className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeView === "laporan_kasir"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Laporan Pembelian Kasir
+            </button>
           </div>
         </div>
       </div>
@@ -538,6 +696,8 @@ const Bookkeeping: React.FC = () => {
               <h2 className="text-xl font-semibold text-gray-900">
                 {activeView === "laba_rugi"
                   ? "Laporan Laba Rugi"
+                  : activeView === "laporan_kasir"
+                  ? "Laporan Pembelian Kasir"
                   : "Riwayat Transaksi"}
               </h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -558,7 +718,13 @@ const Bookkeeping: React.FC = () => {
               </button>
               <button
                 onClick={() =>
-                  setActiveTab(activeView === "jurnal" ? "income" : "rental")
+                  setActiveTab(
+                    activeView === "jurnal"
+                      ? "income"
+                      : activeView === "laba_rugi"
+                      ? "rental"
+                      : "income"
+                  )
                 }
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
                   activeTab === "income" || activeTab === "rental"
@@ -568,15 +734,33 @@ const Bookkeeping: React.FC = () => {
               >
                 {activeView === "jurnal" ? (
                   <TrendingUp className="h-4 w-4" />
-                ) : (
+                ) : activeView === "laba_rugi" ? (
                   <Gamepad className="h-4 w-4" />
+                ) : (
+                  <TrendingUp className="h-4 w-4" />
                 )}
-                {activeView === "jurnal" ? "Pemasukan" : "Rental"} (
-                {activeView === "jurnal" ? incomeCount : rentalCount})
+                {activeView === "jurnal"
+                  ? "Pemasukan"
+                  : activeView === "laba_rugi"
+                  ? "Rental"
+                  : "Pemasukan"}{" "}
+                (
+                {activeView === "jurnal"
+                  ? incomeCount
+                  : activeView === "laba_rugi"
+                  ? rentalCount
+                  : incomeCount}
+                )
               </button>
               <button
                 onClick={() =>
-                  setActiveTab(activeView === "jurnal" ? "expense" : "sale")
+                  setActiveTab(
+                    activeView === "jurnal"
+                      ? "expense"
+                      : activeView === "laba_rugi"
+                      ? "sale"
+                      : "expense"
+                  )
                 }
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
                   activeTab === "expense" || activeTab === "sale"
@@ -586,11 +770,23 @@ const Bookkeeping: React.FC = () => {
               >
                 {activeView === "jurnal" ? (
                   <TrendingDown className="h-4 w-4" />
-                ) : (
+                ) : activeView === "laba_rugi" ? (
                   <Coffee className="h-4 w-4" />
+                ) : (
+                  <TrendingDown className="h-4 w-4" />
                 )}
-                {activeView === "jurnal" ? "Pengeluaran" : "Cafe"} (
-                {activeView === "jurnal" ? expenseCount : saleCount})
+                {activeView === "jurnal"
+                  ? "Pengeluaran"
+                  : activeView === "laba_rugi"
+                  ? "Cafe"
+                  : "Pengeluaran"}{" "}
+                (
+                {activeView === "jurnal"
+                  ? expenseCount
+                  : activeView === "laba_rugi"
+                  ? saleCount
+                  : expenseCount}
+                )
               </button>
             </div>
           </div>
@@ -599,40 +795,95 @@ const Bookkeeping: React.FC = () => {
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-green-800">
-                  {activeView === "jurnal" ? "Total Pemasukan" : "Total Rental"}
+                  {activeView === "jurnal"
+                    ? "Total Pemasukan"
+                    : activeView === "laba_rugi"
+                    ? "Total Rental"
+                    : "Total Pemasukan"}
                 </span>
                 <span className="text-lg font-bold text-green-600">
                   Rp{" "}
                   {activeView === "jurnal"
                     ? summary.totalIncome?.toLocaleString("id-ID")
-                    : summary.totalRental?.toLocaleString("id-ID")}
+                    : activeView === "laba_rugi"
+                    ? summary.totalRental?.toLocaleString("id-ID")
+                    : sourceList
+                        .filter(
+                          (t: any) =>
+                            t.type === "income" ||
+                            t.type === "sale" ||
+                            t.type === "rental"
+                        )
+                        .reduce(
+                          (s: number, t: any) => s + (Number(t.amount) || 0),
+                          0
+                        )
+                        .toLocaleString("id-ID")}
                 </span>
               </div>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-red-800">
-                  {activeView === "jurnal" ? "Total Pengeluaran" : "Total Cafe"}
+                  {activeView === "jurnal"
+                    ? "Total Pengeluaran"
+                    : activeView === "laba_rugi"
+                    ? "Total Cafe"
+                    : "Total Pengeluaran"}
                 </span>
                 <span className="text-lg font-bold text-red-600">
                   Rp{" "}
                   {activeView === "jurnal"
                     ? summary.totalExpense?.toLocaleString("id-ID")
-                    : summary.totalCafe?.toLocaleString("id-ID")}
+                    : activeView === "laba_rugi"
+                    ? summary.totalCafe?.toLocaleString("id-ID")
+                    : sourceList
+                        .filter((t: any) => t.type === "expense")
+                        .reduce(
+                          (s: number, t: any) => s + (Number(t.amount) || 0),
+                          0
+                        )
+                        .toLocaleString("id-ID")}
                 </span>
               </div>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-blue-800">
-                  {activeView === "jurnal" ? "Profit" : "Laba Bruto"}
+                  {activeView === "jurnal"
+                    ? "Profit"
+                    : activeView === "laba_rugi"
+                    ? "Laba Bruto"
+                    : "Saldo Net"}
                 </span>
                 <span
                   className={`text-lg font-bold ${
                     summary.netProfit >= 0 ? "text-green-600" : "text-red-600"
                   }`}
                 >
-                  Rp {summary.netProfit.toLocaleString("id-ID")}
+                  Rp{" "}
+                  {(activeView === "laba_rugi"
+                    ? summary.netProfit
+                    : activeView === "jurnal"
+                    ? summary.netProfit
+                    : sourceList
+                        .filter(
+                          (t: any) =>
+                            t.type === "income" ||
+                            t.type === "sale" ||
+                            t.type === "rental"
+                        )
+                        .reduce(
+                          (s: number, t: any) => s + (Number(t.amount) || 0),
+                          0
+                        ) -
+                      sourceList
+                        .filter((t: any) => t.type === "expense")
+                        .reduce(
+                          (s: number, t: any) => s + (Number(t.amount) || 0),
+                          0
+                        )
+                  ).toLocaleString("id-ID")}
                 </span>
               </div>
             </div>
@@ -753,7 +1004,7 @@ const Bookkeeping: React.FC = () => {
                                 className="flex justify-between items-center text-sm"
                               >
                                 <span className="text-gray-700">
-                                  {name} x {qty}{" "}
+                                  {name} x @{qty}{" "}
                                   {t.details.discount?.amount &&
                                     t.details.discount.amount > 0 &&
                                     item.type === "rental" && (
@@ -780,6 +1031,245 @@ const Bookkeeping: React.FC = () => {
               })
             )}
           </div>
+        ) : activeView === "laporan_kasir" ? (
+          <>
+            {/* Session selector */}
+            <div className="px-6 pb-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                <div className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">
+                    Pilih Sesi Kasir
+                  </label>
+
+                  <button
+                    onClick={() => setShowSessionModal(true)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50 transition-colors"
+                  >
+                    {selectedSessionId
+                      ? sessions.find((s) => s.id === selectedSessionId)
+                        ? `${
+                            sessions.find((s) => s.id === selectedSessionId)
+                              ?.cashier_name || "Kasir"
+                          } - ${new Date(
+                            sessions.find(
+                              (s) => s.id === selectedSessionId
+                            )?.start_time
+                          ).toLocaleString("id-ID", {
+                            day: "numeric",
+                            month: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: false,
+                          })}`
+                        : "Pilih Sesi Kasir"
+                      : "Pilih Sesi Kasir"}
+                  </button>
+                </div>
+                {/* {selectedSessionId && (
+                  <div className="flex items-end text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      <span>Transaksi: {sourceList.length} entri</span>
+                    </div>
+                  </div>
+                )} */}
+              </div>
+            </div>
+
+            <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+              {paginatedData.length === 0 ? (
+                <div className="p-12 text-center">
+                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">Tidak ada transaksi ditemukan</p>
+                </div>
+              ) : (
+                paginatedData.map((transaction: any) => {
+                  const isSelected = selectedItem === String(transaction.id);
+                  return (
+                    <div
+                      key={transaction.id}
+                      className="p-6 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              transaction.type === "income"
+                                ? "bg-emerald-100"
+                                : transaction.type === "sale"
+                                ? "bg-green-100"
+                                : transaction.type === "rental"
+                                ? "bg-blue-100"
+                                : "bg-red-100"
+                            }`}
+                          >
+                            {transaction.type === "income" ? (
+                              <DollarSign className="h-5 w-5 text-emerald-600" />
+                            ) : transaction.type === "sale" ? (
+                              <Coffee className="h-5 w-5 text-green-600" />
+                            ) : transaction.type === "rental" ? (
+                              <Gamepad className="h-5 w-5 text-blue-600" />
+                            ) : (
+                              <TrendingDown className="h-5 w-5 text-red-600" />
+                            )}
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-gray-900">
+                              {transaction.description}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span
+                                className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                                  transaction.type === "income"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : transaction.payment_method === "cash"
+                                    ? "bg-green-100 text-green-800"
+                                    : transaction.payment_method === "card"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-purple-100 text-purple-800"
+                                }`}
+                              >
+                                {transaction.type === "income"
+                                  ? "SALDO"
+                                  : (
+                                      transaction.payment_method || "cash"
+                                    ).toUpperCase()}
+                              </span>
+                              <div className="flex items-center gap-1 text-sm text-gray-600">
+                                <Clock className="h-4 w-4" />
+                                {new Date(transaction.timestamp).toLocaleString(
+                                  "id-ID",
+                                  {
+                                    day: "numeric",
+                                    month: "numeric",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: false,
+                                  }
+                                )}
+                              </div>
+                              {transaction.reference_id && (
+                                <span className="text-sm text-gray-500">
+                                  Ref: {transaction.reference_id}
+                                </span>
+                              )}
+
+                              {!transaction?.details ||
+                                (!transaction.details?.action && (
+                                  <button
+                                    onClick={() =>
+                                      setSelectedItem((prev) =>
+                                        prev === String(transaction.id)
+                                          ? null
+                                          : String(transaction.id)
+                                      )
+                                    }
+                                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                    title={
+                                      isSelected
+                                        ? "Sembunyikan detail"
+                                        : "Lihat detail"
+                                    }
+                                  >
+                                    {isSelected ? "Tutup" : "Detail"}
+                                  </button>
+                                ))}
+
+                              {!(transaction.type === "expense") &&
+                                transaction.reference_id &&
+                                !String(transaction.reference_id)
+                                  .toUpperCase()
+                                  .includes("OPENING-CASH") &&
+                                !String(transaction.reference_id)
+                                  .toUpperCase()
+                                  .includes("MOVE_RENTAL") &&
+                                !String(transaction.reference_id)
+                                  .toUpperCase()
+                                  .includes("CANCELLED") && (
+                                  <button
+                                    onClick={() =>
+                                      handlePrintReceipt(transaction)
+                                    }
+                                    className="text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
+                                    title="Cetak struk"
+                                  >
+                                    <Receipt className="h-3 w-3" />
+                                    Print
+                                  </button>
+                                )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p
+                            className={`text-lg font-bold ${
+                              transaction.type === "expense"
+                                ? "text-red-600"
+                                : "text-green-600"
+                            }`}
+                          >
+                            {transaction.type === "expense" ? "-" : "+"}Rp{" "}
+                            {Number(transaction.amount || 0).toLocaleString(
+                              "id-ID"
+                            )}
+                          </p>
+                          <p className="text-sm text-gray-600 capitalize">
+                            {transaction.type}
+                          </p>
+                        </div>
+                      </div>
+
+                      {isSelected &&
+                        (
+                          transaction.details?.items ??
+                          transaction.metadata?.items ??
+                          []
+                        ).length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            <h4 className="font-medium text-gray-900 mb-3">
+                              Detail
+                            </h4>
+                            <div className="space-y-2">
+                              {(
+                                (transaction.details?.items ??
+                                  transaction.metadata?.items) ||
+                                []
+                              ).map((it: any, idx: number) => {
+                                const name =
+                                  it.name ??
+                                  it.product_name ??
+                                  it.title ??
+                                  "Item";
+                                const qty = Number(it.qty ?? it.quantity ?? 1);
+                                const unit = Number(it.price ?? 0);
+                                const total =
+                                  Number(it.total ?? unit * qty) || 0;
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="flex justify-between items-center text-sm"
+                                  >
+                                    <span className="text-gray-700">
+                                      {name} x @{qty}
+                                    </span>
+                                    <span className="font-medium text-gray-900">
+                                      Rp {total.toLocaleString("id-ID")}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
         ) : (
           <>
             <div className="divide-y divide-gray-200">
@@ -1083,6 +1573,137 @@ const Bookkeeping: React.FC = () => {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pilih Sesi Kasir */}
+      {showSessionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Pilih Sesi Kasir
+                </h2>
+
+                <button
+                  onClick={() => setShowSessionModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Sessions List */}
+              <div className="space-y-3">
+                {sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                      selectedSessionId === session.id
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setSelectedSessionId(session.id);
+                      setShowSessionModal(false);
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <Clock className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-gray-900">
+                              {session.cashier_name || "Kasir"}
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              ID: {session.id}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-600">Mulai:</span>
+                            <p className="font-medium">
+                              {new Date(session.start_time).toLocaleString(
+                                "id-ID",
+                                {
+                                  day: "numeric",
+                                  month: "numeric",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: false,
+                                }
+                              )}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Status:</span>
+                            <p
+                              className={`font-medium ${
+                                session.status === "active"
+                                  ? "text-green-600"
+                                  : "text-gray-600"
+                              }`}
+                            >
+                              {session.status === "active"
+                                ? "Aktif"
+                                : "Selesai"}
+                            </p>
+                          </div>
+                          {session.end_time && (
+                            <div>
+                              <span className="text-gray-600">Selesai:</span>
+                              <p className="font-medium">
+                                {new Date(session.end_time).toLocaleString(
+                                  "id-ID"
+                                )}
+                              </p>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-gray-600">Saldo Awal:</span>
+                            <p className="font-medium">
+                              Rp{" "}
+                              {Number(session.opening_cash || 0).toLocaleString(
+                                "id-ID"
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <button
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            selectedSessionId === session.id
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          {selectedSessionId === session.id
+                            ? "Dipilih"
+                            : "Pilih"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {sessions.length === 0 && (
+                <div className="text-center py-8">
+                  <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">
+                    Tidak ada sesi kasir ditemukan
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
