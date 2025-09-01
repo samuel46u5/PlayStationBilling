@@ -2443,13 +2443,13 @@ const ActiveRentals: React.FC = () => {
         customer: { name: session.customers?.name || "" },
         items: [
           {
-            name: `Tambah Waktu ${consoleData.name}`,
+            name: `Rental ${consoleData.name}`,
             type: "rental" as const,
             capital: consoleData?.rate_profiles?.capital ?? 0,
             total: additionalCost,
             profit: finalTotal - (consoleData?.rate_profiles?.capital ?? 0),
-            description: `Durasi tambahan: ${additionalHours} jam ${
-              additionalMinutes > 0 ? `${additionalMinutes} menit` : ""
+            description: `Durasi: ${additionalHours} jam ${
+              additionalMinutes > 0 ? `${additionalMinutes} menit` : " Tambahan"
             }`,
           },
         ],
@@ -5072,18 +5072,180 @@ const ActiveRentals: React.FC = () => {
                                 <span className="truncate">{c.name}</span>
                               </div>
                               <div className="col-span-1 flex items-center justify-center">
-                                {status.tv ? (
-                                  <Power className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <Power className="h-4 w-4 text-red-600" />
-                                )}
+                                <button
+                                  onClick={async (event) => {
+                                    const button =
+                                      event.currentTarget as HTMLButtonElement;
+                                    const originalContent = button.innerHTML;
+
+                                    try {
+                                      // Konfirmasi sebelum menjalankan command
+                                      const action = status.tv
+                                        ? "mematikan"
+                                        : "menyalakan";
+                                      const result = await Swal.fire({
+                                        title: `Konfirmasi`,
+                                        text: `Apakah Anda yakin ingin ${action} TV untuk console ${c.name}?`,
+                                        icon: "question",
+                                        showCancelButton: true,
+                                        confirmButtonText: "Ya",
+                                        cancelButtonText: "Batal",
+                                      });
+
+                                      if (!result.isConfirmed) return;
+
+                                      // Tampilkan loading state
+                                      button.innerHTML =
+                                        '<div class="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>';
+                                      button.disabled = true;
+
+                                      if (status.tv) {
+                                        // Matikan TV
+                                        if (c.power_tv_command) {
+                                          await fetch(c.power_tv_command);
+                                          // Refresh status setelah command
+                                          setTimeout(() => {
+                                            refreshConsoleStatuses();
+                                          }, 1000);
+                                        }
+                                      } else {
+                                        // Nyalakan TV
+                                        if (c.power_tv_command) {
+                                          await fetch(c.power_tv_command);
+                                          // Refresh status setelah command
+                                          setTimeout(() => {
+                                            refreshConsoleStatuses();
+                                          }, 1000);
+                                        }
+                                      }
+
+                                      // Tampilkan sukses message
+                                      Swal.fire({
+                                        icon: "success",
+                                        title: "Berhasil",
+                                        text: `TV berhasil ${action}`,
+                                        timer: 1500,
+                                        showConfirmButton: false,
+                                      });
+                                    } catch (error) {
+                                      console.error(
+                                        "Error toggling TV:",
+                                        error
+                                      );
+                                      // Tampilkan error message
+                                      Swal.fire({
+                                        icon: "error",
+                                        title: "Error",
+                                        text: "Gagal mengubah status TV",
+                                      });
+                                    } finally {
+                                      // Restore button state
+                                      button.innerHTML = originalContent;
+                                      button.disabled = false;
+                                    }
+                                  }}
+                                  className="p-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                  title={
+                                    status.tv ? "Matikan TV" : "Nyalakan TV"
+                                  }
+                                  disabled={!c.power_tv_command}
+                                >
+                                  {status.tv ? (
+                                    <Power className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <Power className="h-4 w-4 text-red-600" />
+                                  )}
+                                </button>
                               </div>
                               <div className="col-span-1 flex items-center justify-center">
-                                {status.lamp ? (
-                                  <Lightbulb className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <Lightbulb className="h-4 w-4 text-red-600" />
-                                )}
+                                <button
+                                  onClick={async (event) => {
+                                    const button =
+                                      event.currentTarget as HTMLButtonElement;
+                                    const originalContent = button.innerHTML;
+
+                                    try {
+                                      // Konfirmasi sebelum menjalankan command
+                                      const action = status.lamp
+                                        ? "mematikan"
+                                        : "menyalakan";
+                                      const result = await Swal.fire({
+                                        title: `Konfirmasi`,
+                                        text: `Apakah Anda yakin ingin ${action} lampu untuk console ${c.name}?`,
+                                        icon: "question",
+                                        showCancelButton: true,
+                                        confirmButtonText: "Ya",
+                                        cancelButtonText: "Batal",
+                                      });
+
+                                      if (!result.isConfirmed) return;
+
+                                      // Tampilkan loading state
+                                      button.innerHTML =
+                                        '<div class="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>';
+                                      button.disabled = true;
+
+                                      if (status.lamp) {
+                                        // Matikan lampu
+                                        if (c.relay_command_off) {
+                                          await fetch(c.relay_command_off);
+                                          // Refresh status setelah command
+                                          setTimeout(() => {
+                                            refreshConsoleStatuses();
+                                          }, 1000);
+                                        }
+                                      } else {
+                                        // Nyalakan lampu
+                                        if (c.relay_command_on) {
+                                          await fetch(c.relay_command_on);
+                                          // Refresh status setelah command
+                                          setTimeout(() => {
+                                            refreshConsoleStatuses();
+                                          }, 1000);
+                                        }
+                                      }
+
+                                      // Tampilkan sukses message
+                                      Swal.fire({
+                                        icon: "success",
+                                        title: "Berhasil",
+                                        text: `Lampu berhasil ${action}`,
+                                        timer: 1500,
+                                        showConfirmButton: false,
+                                      });
+                                    } catch (error) {
+                                      console.error(
+                                        "Error toggling lamp:",
+                                        error
+                                      );
+                                      // Tampilkan error message
+                                      Swal.fire({
+                                        icon: "error",
+                                        title: "Error",
+                                        text: "Gagal mengubah status lampu",
+                                      });
+                                    } finally {
+                                      // Restore button state
+                                      button.innerHTML = originalContent;
+                                      button.disabled = false;
+                                    }
+                                  }}
+                                  className="p-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                  title={
+                                    status.lamp
+                                      ? "Matikan Lampu"
+                                      : "Nyalakan Lampu"
+                                  }
+                                  disabled={
+                                    !c.relay_command_on && !c.relay_command_off
+                                  }
+                                >
+                                  {status.lamp ? (
+                                    <Lightbulb className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <Lightbulb className="h-4 w-4 text-red-600" />
+                                  )}
+                                </button>
                               </div>
                               <div className="col-span-1 flex items-center justify-center gap-2">
                                 {status.volume > 0 ? (
@@ -5254,8 +5416,17 @@ const ActiveRentals: React.FC = () => {
                             if (!ensureCashierActive()) return;
                             setShowStartRentalModal(console.id);
                           }}
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-1 rounded flex items-center justify-center text-xs"
-                          title="Start Rental"
+                          disabled={preparationMode[console.id]?.isActive}
+                          className={`flex-1 py-1 rounded flex items-center justify-center text-xs ${
+                            preparationMode[console.id]?.isActive
+                              ? "bg-gray-400 cursor-not-allowed text-gray-200"
+                              : "bg-green-600 hover:bg-green-700 text-white"
+                          }`}
+                          title={
+                            preparationMode[console.id]?.isActive
+                              ? "Console sedang dalam mode persiapan"
+                              : "Start Rental"
+                          }
                         >
                           <Play className="h-4 w-4" />
                         </button>
@@ -5611,8 +5782,17 @@ const ActiveRentals: React.FC = () => {
                             if (!ensureCashierActive()) return;
                             setShowStartRentalModal(console.id);
                           }}
-                          className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
-                          title="Mulai Rental"
+                          disabled={preparationMode[console.id]?.isActive}
+                          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                            preparationMode[console.id]?.isActive
+                              ? "bg-gray-400 cursor-not-allowed text-gray-200"
+                              : "bg-green-600 hover:bg-green-700 text-white"
+                          }`}
+                          title={
+                            preparationMode[console.id]?.isActive
+                              ? "Console sedang dalam mode persiapan"
+                              : "Mulai Rental"
+                          }
                         >
                           <Play className="h-5 w-5" />
                           Mulai Rental
@@ -5912,7 +6092,17 @@ const ActiveRentals: React.FC = () => {
                               if (!ensureCashierActive()) return;
                               setShowStartRentalModal(console.id);
                             }}
-                            className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                            disabled={preparationMode[console.id]?.isActive}
+                            className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                              preparationMode[console.id]?.isActive
+                                ? "bg-gray-400 cursor-not-allowed text-gray-200"
+                                : "bg-green-600 hover:bg-green-700 text-white"
+                            }`}
+                            title={
+                              preparationMode[console.id]?.isActive
+                                ? "Console sedang dalam mode persiapan"
+                                : "Start Rental"
+                            }
                           >
                             <Play className="h-5 w-5" />
                             Start Rental
