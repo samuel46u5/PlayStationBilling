@@ -216,6 +216,7 @@ const ActiveRentals: React.FC = () => {
       isActive: boolean;
       timeoutId: NodeJS.Timeout | null;
       originalAutoShutdown: boolean;
+      endAtMs: number;
     };
   }>({});
 
@@ -233,7 +234,7 @@ const ActiveRentals: React.FC = () => {
   }, [showStartRentalModal, getNowForDatetimeLocal]);
 
   // Fungsi untuk menjalankan persiapan untuk satu console
-  const handleSingleConsolePersiapan = async (console: Console) => {
+  const handleSingleConsolePersiapan = async (targetConsole: Console) => {
     const { value: preparationMinutes } = await Swal.fire({
       title: "Persiapan Console",
       html: `
@@ -242,7 +243,7 @@ const ActiveRentals: React.FC = () => {
           <li>Menyalakan TV dan nomor untuk waktu tertentu</li>
           <li>Mematikan semuanya secara otomatis setelah waktu habis</li>
         </ul>
-        <p><strong>Console: ${console.name}</strong></p>
+        <p><strong>Console: ${targetConsole.name}</strong></p>
         <div style="margin-top: 15px;">
           <label for="preparation-minutes" style="display: block; margin-bottom: 5px; font-weight: bold;">
             Durasi Persiapan (menit):
@@ -289,31 +290,33 @@ const ActiveRentals: React.FC = () => {
 
     try {
       // Simpan nilai auto_shutdown awal
-      const originalAutoShutdown = console.auto_shutdown_enabled || false;
+      const originalAutoShutdown = targetConsole.auto_shutdown_enabled || false;
 
       // Clear timeout lama jika ada
-      const existing = preparationMode[console.id];
-      if (existing?.timeoutId) {
-        clearTimeout(existing.timeoutId);
+      const existingPrep = preparationMode[targetConsole.id];
+      if (existingPrep?.timeoutId) {
+        clearTimeout(existingPrep.timeoutId);
       }
 
       // Jika auto_shutdown masih true, update ke false
-      if (console.auto_shutdown_enabled) {
+      if (targetConsole.auto_shutdown_enabled) {
         try {
           await supabase
             .from("consoles")
             .update({ auto_shutdown_enabled: false })
-            .eq("id", console.id);
+            .eq("id", targetConsole.id);
 
           // Update local state juga
           setConsoles((prev) =>
             prev.map((c) =>
-              c.id === console.id ? { ...c, auto_shutdown_enabled: false } : c
+              c.id === targetConsole.id
+                ? { ...c, auto_shutdown_enabled: false }
+                : c
             )
           );
         } catch (error) {
           console.error(
-            `Error updating auto_shutdown for ${console.name}:`,
+            `Error updating auto_shutdown for ${targetConsole.name}:`,
             error
           );
         }
@@ -323,9 +326,9 @@ const ActiveRentals: React.FC = () => {
       const results = [];
 
       // Nyalakan TV
-      if (console.power_tv_command) {
+      if (targetConsole.power_tv_command) {
         try {
-          const tvRes = await fetch(console.power_tv_command);
+          const tvRes = await fetch(targetConsole.power_tv_command);
           if (tvRes.ok) {
             results.push({ type: "tv", status: "success" });
           } else {
@@ -357,7 +360,7 @@ const ActiveRentals: React.FC = () => {
       await Swal.fire({
         title: "Persiapan Dimulai!",
         html: `
-          <p>Console: <strong>${console.name}</strong></p>
+          <p>Console: <strong>${targetConsole.name}</strong></p>
           <p>Status: ${successful}/${total} perintah berhasil</p>
           <p>TV dan nomor akan dimatikan otomatis dalam ${preparationMinutes} menit</p>
         `,
@@ -368,16 +371,17 @@ const ActiveRentals: React.FC = () => {
 
       // Set timer untuk mematikan setelah waktu yang ditentukan
       const timeoutId = setTimeout(async () => {
-        await handleStopPreparation(console, originalAutoShutdown);
+        await handleStopPreparation(targetConsole, originalAutoShutdown);
       }, preparationMinutes * 60 * 1000); // Konversi menit ke milidetik
 
       // Simpan state persiapan
       setPreparationMode((prev) => ({
         ...prev,
-        [console.id]: {
+        [targetConsole.id]: {
           isActive: true,
           timeoutId,
           originalAutoShutdown,
+          endAtMs: Date.now() + preparationMinutes * 60 * 1000,
         },
       }));
     } catch (error) {
@@ -475,13 +479,13 @@ const ActiveRentals: React.FC = () => {
   };
 
   // Fungsi untuk menghentikan persiapan secara manual
-  const handleStopPreparationManual = async (console: Console) => {
-    const preparation = preparationMode[console.id];
+  const handleStopPreparationManual = async (targetConsole: Console) => {
+    const preparation = preparationMode[targetConsole.id];
     if (!preparation) return;
 
     const confirmResult = await Swal.fire({
       title: "Berhenti Persiapan",
-      text: `Apakah Anda yakin ingin menghentikan persiapan untuk console ${console.name}?`,
+      text: `Apakah Anda yakin ingin menghentikan persiapan untuk console ${targetConsole.name}?`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Ya, Hentikan",
@@ -496,7 +500,10 @@ const ActiveRentals: React.FC = () => {
     }
 
     // Hentikan persiapan
-    await handleStopPreparation(console, preparation.originalAutoShutdown);
+    await handleStopPreparation(
+      targetConsole,
+      preparation.originalAutoShutdown
+    );
   };
 
   // --- TV Status JSON and selectedConsole hooks must be after all state declarations ---
@@ -3747,299 +3754,299 @@ const ActiveRentals: React.FC = () => {
         });
         break;
       }
-      case "Persiapan": {
-        const confirmResult = await Swal.fire({
-          title: `Persiapan ${preparationMinutes} Menit`,
-          html: `
-            <p>Perintah ini akan:</p>
-            <ul style="text-align: left; margin: 10px 0;">
-              <li>Menyalakan TV dan nomor untuk ${preparationMinutes} menit</li>
-              <li>Mematikan semuanya secara otomatis setelah waktu habis</li>
-            </ul>
-            <p><strong>Console yang dipilih: ${selectedConsoles.length}</strong></p>
-          `,
-          icon: "question",
-          showCancelButton: true,
-          confirmButtonText: "Mulai Persiapan",
-          cancelButtonText: "Batal",
-        });
+      // case "Persiapan": {
+      //   const confirmResult = await Swal.fire({
+      //     title: `Persiapan ${preparationMinutes} Menit`,
+      //     html: `
+      //       <p>Perintah ini akan:</p>
+      //       <ul style="text-align: left; margin: 10px 0;">
+      //         <li>Menyalakan TV dan nomor untuk ${preparationMinutes} menit</li>
+      //         <li>Mematikan semuanya secara otomatis setelah waktu habis</li>
+      //       </ul>
+      //       <p><strong>Console yang dipilih: ${selectedConsoles.length}</strong></p>
+      //     `,
+      //     icon: "question",
+      //     showCancelButton: true,
+      //     confirmButtonText: "Mulai Persiapan",
+      //     cancelButtonText: "Batal",
+      //   });
 
-        if (!confirmResult.isConfirmed) return;
+      //   if (!confirmResult.isConfirmed) return;
 
-        // Tampilkan loading
-        const loadingAlert = Swal.fire({
-          title: "Memulai Persiapan...",
-          html: "Menyalakan TV dan nomor...",
-          allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          },
-        });
+      //   // Tampilkan loading
+      //   const loadingAlert = Swal.fire({
+      //     title: "Memulai Persiapan...",
+      //     html: "Menyalakan TV dan nomor...",
+      //     allowOutsideClick: false,
+      //     didOpen: () => {
+      //       Swal.showLoading();
+      //     },
+      //   });
 
-        const originalAutoShutdownStates: { [key: string]: boolean } = {};
+      //   const originalAutoShutdownStates: { [key: string]: boolean } = {};
 
-        try {
-          for (const device of selectedConsoles) {
-            // Simpan nilai awal
-            originalAutoShutdownStates[device.id] =
-              device.auto_shutdown_enabled || false;
+      //   try {
+      //     for (const device of selectedConsoles) {
+      //       // Simpan nilai awal
+      //       originalAutoShutdownStates[device.id] =
+      //         device.auto_shutdown_enabled || false;
 
-            // Clear timeout lama jika ada
-            const existing = preparationMode[device.id];
-            if (existing?.timeoutId) {
-              clearTimeout(existing.timeoutId);
-            }
+      //       // Clear timeout lama jika ada
+      //       const existing = preparationMode[device.id];
+      //       if (existing?.timeoutId) {
+      //         clearTimeout(existing.timeoutId);
+      //       }
 
-            // Jika auto_shutdown masih true, update ke false
-            if (device.auto_shutdown_enabled) {
-              try {
-                await supabase
-                  .from("consoles")
-                  .update({ auto_shutdown_enabled: false })
-                  .eq("id", device.id);
+      //       // Jika auto_shutdown masih true, update ke false
+      //       if (device.auto_shutdown_enabled) {
+      //         try {
+      //           await supabase
+      //             .from("consoles")
+      //             .update({ auto_shutdown_enabled: false })
+      //             .eq("id", device.id);
 
-                // Update local state juga
-                setConsoles((prev) =>
-                  prev.map((c) =>
-                    c.id === device.id
-                      ? { ...c, auto_shutdown_enabled: false }
-                      : c
-                  )
-                );
-              } catch (error) {
-                console.error(
-                  `Error updating auto_shutdown for ${device.name}:`,
-                  error
-                );
-              }
-            }
-          }
+      //           // Update local state juga
+      //           setConsoles((prev) =>
+      //             prev.map((c) =>
+      //               c.id === device.id
+      //                 ? { ...c, auto_shutdown_enabled: false }
+      //                 : c
+      //             )
+      //           );
+      //         } catch (error) {
+      //           console.error(
+      //             `Error updating auto_shutdown for ${device.name}:`,
+      //             error
+      //           );
+      //         }
+      //       }
+      //     }
 
-          const turnOnResults = await Promise.allSettled(
-            selectedConsoles.map(async (device) => {
-              const results = [];
+      //     const turnOnResults = await Promise.allSettled(
+      //       selectedConsoles.map(async (device) => {
+      //         const results = [];
 
-              // Nyalakan TV
-              try {
-                const tvRes = await fetch(device.power_tv_command);
-                if (tvRes.ok) {
-                  results.push({ type: "tv", status: "success" });
-                } else {
-                  results.push({ type: "tv", status: "failed" });
-                }
-              } catch (error) {
-                results.push({ type: "tv", status: "failed" });
-              }
+      //         // Nyalakan TV
+      //         try {
+      //           const tvRes = await fetch(device.power_tv_command);
+      //           if (tvRes.ok) {
+      //             results.push({ type: "tv", status: "success" });
+      //           } else {
+      //             results.push({ type: "tv", status: "failed" });
+      //           }
+      //         } catch (error) {
+      //           results.push({ type: "tv", status: "failed" });
+      //         }
 
-              // Nyalakan nomor/relay
-              // try {
-              //   const relayRes = await fetch(device.relay_command_on);
-              //   if (relayRes.ok) {
-              //     results.push({ type: "relay", status: "success" });
-              //   } else {
-              //     results.push({ type: "relay", status: "failed" });
-              //   }
-              // } catch (error) {
-              //   results.push({ type: "relay", status: "failed" });
-              // }
+      //         // Nyalakan nomor/relay
+      //         // try {
+      //         //   const relayRes = await fetch(device.relay_command_on);
+      //         //   if (relayRes.ok) {
+      //         //     results.push({ type: "relay", status: "success" });
+      //         //   } else {
+      //         //     results.push({ type: "relay", status: "failed" });
+      //         //   }
+      //         // } catch (error) {
+      //         //   results.push({ type: "relay", status: "failed" });
+      //         // }
 
-              return { device, results };
-            })
-          );
+      //         return { device, results };
+      //       })
+      //     );
 
-          // Hitung hasil
-          const successful = turnOnResults
-            .filter(
-              (
-                r
-              ): r is PromiseFulfilledResult<{ device: any; results: any[] }> =>
-                r.status === "fulfilled"
-            )
-            .map((r) => r.value);
+      //     // Hitung hasil
+      //     const successful = turnOnResults
+      //       .filter(
+      //         (
+      //           r
+      //         ): r is PromiseFulfilledResult<{ device: any; results: any[] }> =>
+      //           r.status === "fulfilled"
+      //       )
+      //       .map((r) => r.value);
 
-          const failed = turnOnResults
-            .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-            .map((_, i) => selectedConsoles[i]);
+      //     const failed = turnOnResults
+      //       .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+      //       .map((_, i) => selectedConsoles[i]);
 
-          // Tampilkan hasil awal
-          await Swal.fire({
-            title: "Persiapan Dimulai",
-            html: `
-              <h4><strong>Berhasil Dinyalakan:</strong></h4>
-              <ul>
-                ${successful
-                  .map((item) => `<li>${item.device.name}</li>`)
-                  .join("")}
-              </ul>
-              ${
-                failed.length > 0
-                  ? `
-              <h4><strong>Gagal:</strong></h4>
-              <ul>
-                ${failed.map((device) => `<li>${device.name}</li>`).join("")}
-              </ul>
-              `
-                  : ""
-              }
-              <p><strong>Timer: ${preparationMinutes} menit</strong></p>
-            `,
-            icon: "success",
-            timer: 3000,
-            timerProgressBar: true,
-          });
+      //     // Tampilkan hasil awal
+      //     await Swal.fire({
+      //       title: "Persiapan Dimulai",
+      //       html: `
+      //         <h4><strong>Berhasil Dinyalakan:</strong></h4>
+      //         <ul>
+      //           ${successful
+      //             .map((item) => `<li>${item.device.name}</li>`)
+      //             .join("")}
+      //         </ul>
+      //         ${
+      //           failed.length > 0
+      //             ? `
+      //         <h4><strong>Gagal:</strong></h4>
+      //         <ul>
+      //           ${failed.map((device) => `<li>${device.name}</li>`).join("")}
+      //         </ul>
+      //         `
+      //             : ""
+      //         }
+      //         <p><strong>Timer: ${preparationMinutes} menit</strong></p>
+      //       `,
+      //       icon: "success",
+      //       timer: 3000,
+      //       timerProgressBar: true,
+      //     });
 
-          setTimeout(async () => {
-            // Tampilkan notifikasi bahwa akan mematikan
-            await Swal.fire({
-              title: "Waktu Persiapan Habis",
-              text: "Mematikan TV dan nomor...",
-              icon: "info",
-              timer: 2000,
-              timerProgressBar: true,
-            });
+      //     setTimeout(async () => {
+      //       // Tampilkan notifikasi bahwa akan mematikan
+      //       await Swal.fire({
+      //         title: "Waktu Persiapan Habis",
+      //         text: "Mematikan TV dan nomor...",
+      //         icon: "info",
+      //         timer: 2000,
+      //         timerProgressBar: true,
+      //       });
 
-            // Matikan semua TV dan nomor
-            const turnOffResults = await Promise.allSettled(
-              selectedConsoles.map(async (device) => {
-                const results = [];
+      //       // Matikan semua TV dan nomor
+      //       const turnOffResults = await Promise.allSettled(
+      //         selectedConsoles.map(async (device) => {
+      //           const results = [];
 
-                // Matikan TV
-                try {
-                  const tvRes = await fetch(device.power_tv_command);
-                  if (tvRes.ok) {
-                    results.push({ type: "tv", status: "success" });
-                  } else {
-                    results.push({ type: "tv", status: "failed" });
-                  }
-                } catch (error) {
-                  results.push({ type: "tv", status: "failed" });
-                }
+      //           // Matikan TV
+      //           try {
+      //             const tvRes = await fetch(device.power_tv_command);
+      //             if (tvRes.ok) {
+      //               results.push({ type: "tv", status: "success" });
+      //             } else {
+      //               results.push({ type: "tv", status: "failed" });
+      //             }
+      //           } catch (error) {
+      //             results.push({ type: "tv", status: "failed" });
+      //           }
 
-                // Matikan nomor/relay
-                try {
-                  const relayRes = await fetch(device.relay_command_off);
-                  if (relayRes.ok) {
-                    results.push({ type: "relay", status: "success" });
-                  } else {
-                    results.push({ type: "relay", status: "failed" });
-                  }
-                } catch (error) {
-                  results.push({ type: "relay", status: "failed" });
-                }
+      //           // Matikan nomor/relay
+      //           try {
+      //             const relayRes = await fetch(device.relay_command_off);
+      //             if (relayRes.ok) {
+      //               results.push({ type: "relay", status: "success" });
+      //             } else {
+      //               results.push({ type: "relay", status: "failed" });
+      //             }
+      //           } catch (error) {
+      //             results.push({ type: "relay", status: "failed" });
+      //           }
 
-                return { device, results };
-              })
-            );
+      //           return { device, results };
+      //         })
+      //       );
 
-            // Hitung hasil akhir
-            const turnOffSuccessful = turnOffResults
-              .filter(
-                (
-                  r
-                ): r is PromiseFulfilledResult<{
-                  device: any;
-                  results: any[];
-                }> => r.status === "fulfilled"
-              )
-              .map((r) => r.value);
+      //       // Hitung hasil akhir
+      //       const turnOffSuccessful = turnOffResults
+      //         .filter(
+      //           (
+      //             r
+      //           ): r is PromiseFulfilledResult<{
+      //             device: any;
+      //             results: any[];
+      //           }> => r.status === "fulfilled"
+      //         )
+      //         .map((r) => r.value);
 
-            const turnOffFailed = turnOffResults
-              .filter(
-                (r): r is PromiseRejectedResult => r.status === "rejected"
-              )
-              .map((_, i) => selectedConsoles[i]);
+      //       const turnOffFailed = turnOffResults
+      //         .filter(
+      //           (r): r is PromiseRejectedResult => r.status === "rejected"
+      //         )
+      //         .map((_, i) => selectedConsoles[i]);
 
-            // Tampilkan hasil akhir
-            await Swal.fire({
-              title: "Persiapan Selesai",
-              html: `
-                <h4><strong>Berhasil Dimatikan:</strong></h4>
-                <ul>
-                  ${turnOffSuccessful
-                    .map((item) => `<li>${item.device.name}</li>`)
-                    .join("")}
-                </ul>
-                ${
-                  turnOffFailed.length > 0
-                    ? `
-                <h4><strong>Gagal Dimatikan:</strong></h4>
-                <ul>
-                  ${turnOffFailed
-                    .map((device) => `<li>${device.name}</li>`)
-                    .join("")}
-                </ul>
-                `
-                    : ""
-                }
-              `,
-              icon: "success",
-              confirmButtonText: "OK",
-            });
+      //       // Tampilkan hasil akhir
+      //       await Swal.fire({
+      //         title: "Persiapan Selesai",
+      //         html: `
+      //           <h4><strong>Berhasil Dimatikan:</strong></h4>
+      //           <ul>
+      //             ${turnOffSuccessful
+      //               .map((item) => `<li>${item.device.name}</li>`)
+      //               .join("")}
+      //           </ul>
+      //           ${
+      //             turnOffFailed.length > 0
+      //               ? `
+      //           <h4><strong>Gagal Dimatikan:</strong></h4>
+      //           <ul>
+      //             ${turnOffFailed
+      //               .map((device) => `<li>${device.name}</li>`)
+      //               .join("")}
+      //           </ul>
+      //           `
+      //               : ""
+      //           }
+      //         `,
+      //         icon: "success",
+      //         confirmButtonText: "OK",
+      //       });
 
-            for (const device of selectedConsoles) {
-              const originalValue = originalAutoShutdownStates[device.id];
-              if (originalValue !== undefined) {
-                try {
-                  await supabase
-                    .from("consoles")
-                    .update({ auto_shutdown_enabled: originalValue })
-                    .eq("id", device.id);
+      //       for (const device of selectedConsoles) {
+      //         const originalValue = originalAutoShutdownStates[device.id];
+      //         if (originalValue !== undefined) {
+      //           try {
+      //             await supabase
+      //               .from("consoles")
+      //               .update({ auto_shutdown_enabled: originalValue })
+      //               .eq("id", device.id);
 
-                  // Update local state juga
-                  setConsoles((prev) =>
-                    prev.map((c) =>
-                      c.id === device.id
-                        ? { ...c, auto_shutdown_enabled: originalValue }
-                        : c
-                    )
-                  );
-                } catch (error) {
-                  console.error(
-                    `Error restoring auto_shutdown for ${device.name}:`,
-                    error
-                  );
-                }
-              }
-            }
-          }, (preparationMinutes || 5) * 60 * 1000); // Konversi menit ke milidetik
-        } catch (error) {
-          console.error("Error during preparation:", error);
+      //             // Update local state juga
+      //             setConsoles((prev) =>
+      //               prev.map((c) =>
+      //                 c.id === device.id
+      //                   ? { ...c, auto_shutdown_enabled: originalValue }
+      //                   : c
+      //               )
+      //             );
+      //           } catch (error) {
+      //             console.error(
+      //               `Error restoring auto_shutdown for ${device.name}:`,
+      //               error
+      //             );
+      //           }
+      //         }
+      //       }
+      //     }, (preparationMinutes || 5) * 60 * 1000); // Konversi menit ke milidetik
+      //   } catch (error) {
+      //     console.error("Error during preparation:", error);
 
-          // Restore auto_shutdown values
-          for (const device of selectedConsoles) {
-            const originalValue = originalAutoShutdownStates[device.id];
-            if (originalValue !== undefined) {
-              try {
-                await supabase
-                  .from("consoles")
-                  .update({ auto_shutdown_enabled: originalValue })
-                  .eq("id", device.id);
+      //     // Restore auto_shutdown values
+      //     for (const device of selectedConsoles) {
+      //       const originalValue = originalAutoShutdownStates[device.id];
+      //       if (originalValue !== undefined) {
+      //         try {
+      //           await supabase
+      //             .from("consoles")
+      //             .update({ auto_shutdown_enabled: originalValue })
+      //             .eq("id", device.id);
 
-                // Update local state juga
-                setConsoles((prev) =>
-                  prev.map((c) =>
-                    c.id === device.id
-                      ? { ...c, auto_shutdown_enabled: originalValue }
-                      : c
-                  )
-                );
-              } catch (restoreError) {
-                console.error(
-                  `Error restoring auto_shutdown for ${device.name}:`,
-                  restoreError
-                );
-              }
-            }
-          }
+      //           // Update local state juga
+      //           setConsoles((prev) =>
+      //             prev.map((c) =>
+      //               c.id === device.id
+      //                 ? { ...c, auto_shutdown_enabled: originalValue }
+      //                 : c
+      //             )
+      //           );
+      //         } catch (restoreError) {
+      //           console.error(
+      //             `Error restoring auto_shutdown for ${device.name}:`,
+      //             restoreError
+      //           );
+      //         }
+      //       }
+      //     }
 
-          await Swal.fire({
-            title: "Error",
-            text: "Terjadi kesalahan saat menjalankan persiapan",
-            icon: "error",
-          });
-        }
-        break;
-      }
+      //     await Swal.fire({
+      //       title: "Error",
+      //       text: "Terjadi kesalahan saat menjalankan persiapan",
+      //       icon: "error",
+      //     });
+      //   }
+      //   break;
+      // }
     }
   };
 
@@ -4980,7 +4987,7 @@ const ActiveRentals: React.FC = () => {
                     <option value="Nyalakan Nomor">Nyalakan Nomor</option>
                     <option value="Set volume TV">Set volume TV</option>
                     <option value="Set mute TV">Set mute TV</option>
-                    <option value="Persiapan">Persiapan</option>
+                    {/* <option value="Persiapan">Persiapan</option> */}
                   </select>
 
                   {selectedCommand === "Set volume TV" && (
@@ -5441,6 +5448,18 @@ const ActiveRentals: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Info Mode Persiapan */}
+                    {preparationMode[console.id]?.isActive && (
+                      <div className="w-full text-[10px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 mb-1">
+                        Mode persiapan akan berakhir pada:
+                        <span className="ml-1 font-semibold">
+                          {new Date(
+                            preparationMode[console.id]!.endAtMs
+                          ).toLocaleString("id-ID")}
+                        </span>
+                      </div>
+                    )}
+
                     {/* Action Buttons  */}
                     <div className="flex gap-1 mt-auto">
                       {console.status === "available" ? (
@@ -5809,40 +5828,63 @@ const ActiveRentals: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            if (!ensureCashierActive()) return;
-                            setShowStartRentalModal(console.id);
-                          }}
-                          disabled={preparationMode[console.id]?.isActive}
-                          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
-                            preparationMode[console.id]?.isActive
-                              ? "bg-gray-400 cursor-not-allowed text-gray-200"
-                              : "bg-green-600 hover:bg-green-700 text-white"
-                          }`}
-                          title={
-                            preparationMode[console.id]?.isActive
-                              ? "Console sedang dalam mode persiapan"
-                              : "Mulai Rental"
-                          }
-                        >
-                          <Play className="h-5 w-5" />
-                          Mulai Rental
-                        </button>
-
-                        {/* Persiapan Button */}
-                        {console.status !== "rented" && (
-                          <button
-                            onClick={() =>
-                              handleSingleConsolePersiapan(console)
-                            }
-                            className="bg-purple-500 hover:bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
-                          >
-                            <Clock className="h-5 w-5" />
-                            Mode Persiapan
-                          </button>
+                      <div className="flex flex-col gap-2 w-full">
+                        {preparationMode[console.id]?.isActive && (
+                          <div className="w-full text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                            Mode persiapan akan berakhir pada:
+                            <span className="ml-1 font-semibold">
+                              {new Date(
+                                preparationMode[console.id]!.endAtMs
+                              ).toLocaleString("id-ID")}
+                            </span>
+                          </div>
                         )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              if (!ensureCashierActive()) return;
+                              setShowStartRentalModal(console.id);
+                            }}
+                            disabled={preparationMode[console.id]?.isActive}
+                            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                              preparationMode[console.id]?.isActive
+                                ? "bg-gray-400 cursor-not-allowed text-gray-200"
+                                : "bg-green-600 hover:bg-green-700 text-white"
+                            }`}
+                            title={
+                              preparationMode[console.id]?.isActive
+                                ? "Console sedang dalam mode persiapan"
+                                : "Mulai Rental"
+                            }
+                          >
+                            <Play className="h-5 w-5" />
+                            Mulai Rental
+                          </button>
+
+                          {/* Persiapan Button */}
+                          {console.status !== "rented" &&
+                          preparationMode[console.id]?.isActive ? (
+                            <button
+                              onClick={() =>
+                                handleStopPreparationManual(console)
+                              }
+                              className="bg-purple-500 hover:bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                            >
+                              <Square className="h-5 w-5" />
+                              Stop Persiapan
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                handleSingleConsolePersiapan(console)
+                              }
+                              className="bg-purple-500 hover:bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                            >
+                              <Clock className="h-5 w-5" />
+                              Mode Persiapan
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -6113,6 +6155,18 @@ const ActiveRentals: React.FC = () => {
                             />
                           </div>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Info Mode Persiapan (Detail card) */}
+                    {preparationMode[console.id]?.isActive && (
+                      <div className="w-full text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 mb-2">
+                        Mode persiapan akan berakhir pada:
+                        <span className="ml-1 font-semibold">
+                          {new Date(
+                            preparationMode[console.id]!.endAtMs
+                          ).toLocaleString("id-ID")}
+                        </span>
                       </div>
                     )}
 
