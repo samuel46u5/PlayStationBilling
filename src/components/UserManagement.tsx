@@ -157,6 +157,7 @@ const UserManagement = () => {
     if (result.isConfirmed) {
       try {
         const dataUser = await db.delete("users", user.id);
+        await supabase.auth.admin.deleteUser(user.id);
         await db.logs.logActivity({
           user_id: currentUser.id,
           action: "delete",

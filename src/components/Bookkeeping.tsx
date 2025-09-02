@@ -38,7 +38,7 @@ const Bookkeeping: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
   // Filter states
-  const [selectedPeriod, setSelectedPeriod] = useState("month");
+  const [selectedPeriod, setSelectedPeriod] = useState("today");
 
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -73,6 +73,9 @@ const Bookkeeping: React.FC = () => {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [showSessionModal, setShowSessionModal] = useState(false);
+  const [sessionPeriod, setSessionPeriod] = useState<string>("month");
+  const [sessionStartDate, setSessionStartDate] = useState<string>("");
+  const [sessionEndDate, setSessionEndDate] = useState<string>("");
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -81,9 +84,10 @@ const Bookkeeping: React.FC = () => {
   // Constants
   const periods = [
     { value: "today", label: "Hari Ini" },
+    { value: "yesterday", label: "Kemarin" },
     { value: "week", label: "Minggu Ini" },
     { value: "month", label: "Bulan Ini" },
-    { value: "year", label: "Tahun Ini" },
+    { value: "range", label: "Rentang Waktu" },
   ];
 
   const types = [
@@ -101,6 +105,70 @@ const Bookkeeping: React.FC = () => {
     { value: "voucher", label: "Penjualan Voucher" },
     { value: "other", label: "Lainnya" },
   ];
+
+  const filteredSessions = useMemo(() => {
+    if (!showSessionModal) return sessions;
+    let start: Date | null = null;
+    let end: Date | null = null;
+    const now = new Date();
+    switch (sessionPeriod) {
+      case "today": {
+        start = new Date();
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "yesterday": {
+        start = new Date();
+        start.setDate(start.getDate() - 1);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "week": {
+        start = new Date();
+        const day = start.getDay();
+        const diff = (day === 0 ? -6 : 1) - day; // Senin awal minggu
+        start.setDate(start.getDate() + diff);
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "month": {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "range": {
+        if (sessionStartDate) {
+          start = new Date(sessionStartDate);
+          start.setHours(0, 0, 0, 0);
+        }
+        if (sessionEndDate) {
+          end = new Date(sessionEndDate);
+          end.setHours(23, 59, 59, 999);
+        }
+        break;
+      }
+    }
+    return sessions.filter((s) => {
+      const st = s.start_time ? new Date(s.start_time) : null;
+      if (!st) return false;
+      if (start && st < start) return false;
+      if (end && st > end) return false;
+      return true;
+    });
+  }, [
+    sessions,
+    sessionPeriod,
+    sessionStartDate,
+    sessionEndDate,
+    showSessionModal,
+  ]);
 
   const fetchTransaction = async () => {
     try {
@@ -172,26 +240,62 @@ const Bookkeeping: React.FC = () => {
         .order("entry_date", { ascending: false });
 
       // Apply period filter
-      if (selectedPeriod !== "all") {
+      if (selectedPeriod) {
         const now = new Date();
-        let startDate = new Date();
+        let start: Date | null = null;
+        let end: Date | null = null;
 
         switch (selectedPeriod) {
-          case "today":
-            startDate.setHours(0, 0, 0, 0);
+          case "today": {
+            start = new Date();
+            start.setHours(0, 0, 0, 0);
+            end = new Date();
+            end.setHours(23, 59, 59, 999);
             break;
-          case "week":
-            startDate.setDate(now.getDate() - 7);
+          }
+          case "yesterday": {
+            start = new Date();
+            start.setDate(start.getDate() - 1);
+            start.setHours(0, 0, 0, 0);
+            end = new Date(start);
+            end.setHours(23, 59, 59, 999);
             break;
-          case "month":
-            startDate.setMonth(now.getMonth() - 1);
+          }
+          case "week": {
+            start = new Date();
+            const day = start.getDay();
+            const diff = (day === 0 ? -6 : 1) - day; // Senin sebagai awal minggu
+            start.setDate(start.getDate() + diff);
+            start.setHours(0, 0, 0, 0);
+            end = new Date();
+            end.setHours(23, 59, 59, 999);
             break;
-          case "year":
-            startDate.setFullYear(now.getFullYear() - 1);
+          }
+          case "month": {
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+            end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            end.setHours(23, 59, 59, 999);
             break;
+          }
+          case "range": {
+            if (startDate) {
+              start = new Date(startDate);
+              start.setHours(0, 0, 0, 0);
+            }
+            if (endDate) {
+              end = new Date(endDate);
+              end.setHours(23, 59, 59, 999);
+            }
+            break;
+          }
         }
 
-        query = query.gte("entry_date", startDate.toISOString().split("T")[0]);
+        if (start) {
+          query = query.gte("entry_date", start.toISOString().split("T")[0]);
+        }
+        if (end) {
+          query = query.lte("entry_date", end.toISOString().split("T")[0]);
+        }
       }
 
       const { data, error: fetchError } = await query;
@@ -602,34 +706,94 @@ const Bookkeeping: React.FC = () => {
           <div className="flex gap-x-4">
             {/* Period Filter / Date range for laporan_kasir */}
             {activeView !== "laporan_kasir" ? (
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {periods.map((period) => (
-                  <option key={period.value} value={period.value}>
-                    {period.label}
-                  </option>
-                ))}
-              </select>
-            ) : // <div className="flex items-center gap-2">
-            //   <input
-            //     type="date"
-            //     value={startDate}
-            //     defaultValue={new Date().toISOString().split("T")[0]}
-            //     onChange={(e) => setStartDate(e.target.value)}
-            //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            //   />
-            //   <span className="text-gray-500">s/d</span>
-            //   <input
-            //     type="date"
-            //     value={endDate}
-            //     onChange={(e) => setEndDate(e.target.value)}
-            //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            //   />
-            // </div>
-            null}
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedPeriod}
+                  onChange={(e) => setSelectedPeriod(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {periods.map((period) => (
+                    <option key={period.value} value={period.value}>
+                      {period.label}
+                    </option>
+                  ))}
+                </select>
+                {selectedPeriod === "range" && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <span className="text-gray-500">s/d</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              // <div className="flex items-center gap-2">
+              //   <input
+              //     type="date"
+              //     value={startDate}
+              //     defaultValue={new Date().toISOString().split("T")[0]}
+              //     onChange={(e) => setStartDate(e.target.value)}
+              //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              //   />
+              //   <span className="text-gray-500">s/d</span>
+              //   <input
+              //     type="date"
+              //     value={endDate}
+              //     onChange={(e) => setEndDate(e.target.value)}
+              //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              //   />
+              // </div>
+              <div className="px-6 pb-4">
+                <div className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">
+                    Pilih Sesi Kasir
+                  </label>
+
+                  <button
+                    onClick={() => setShowSessionModal(true)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50 transition-colors"
+                  >
+                    {selectedSessionId
+                      ? sessions.find((s) => s.id === selectedSessionId)
+                        ? `${
+                            sessions.find((s) => s.id === selectedSessionId)
+                              ?.cashier_name || "Kasir"
+                          } - ${new Date(
+                            sessions.find(
+                              (s) => s.id === selectedSessionId
+                            )?.start_time
+                          ).toLocaleString("id-ID", {
+                            day: "numeric",
+                            month: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: false,
+                          })}`
+                        : "Pilih Sesi Kasir"
+                      : "Pilih Sesi Kasir"}
+                  </button>
+                </div>
+                {/* {selectedSessionId && (
+                  <div className="flex items-end text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      <span>Transaksi: {sourceList.length} entri</span>
+                    </div>
+                  </div>
+                )} */}
+              </div>
+            )}
             {activeView === "jurnal" && (
               <button
                 onClick={() => setShowAddForm(true)}
@@ -682,7 +846,7 @@ const Bookkeeping: React.FC = () => {
                   : "text-gray-600 hover:text-gray-900"
               }`}
             >
-              Laporan Pembelian Kasir
+              Laporan Transaksi Kasir
             </button>
           </div>
         </div>
@@ -697,7 +861,7 @@ const Bookkeeping: React.FC = () => {
                 {activeView === "laba_rugi"
                   ? "Laporan Laba Rugi"
                   : activeView === "laporan_kasir"
-                  ? "Laporan Pembelian Kasir"
+                  ? "Laporan Transaksi Kasir"
                   : "Riwayat Transaksi"}
               </h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -1004,7 +1168,10 @@ const Bookkeeping: React.FC = () => {
                                 className="flex justify-between items-center text-sm"
                               >
                                 <span className="text-gray-700">
-                                  {name} x @{qty}{" "}
+                                  {/* {name} x @{qty}{" "} */}
+                                  {item.type === "rental"
+                                    ? name
+                                    : `${name} x @${qty}`}
                                   {t.details.discount?.amount &&
                                     t.details.discount.amount > 0 &&
                                     item.type === "rental" && (
@@ -1033,50 +1200,6 @@ const Bookkeeping: React.FC = () => {
           </div>
         ) : activeView === "laporan_kasir" ? (
           <>
-            {/* Session selector */}
-            <div className="px-6 pb-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                <div className="flex flex-col">
-                  <label className="text-sm text-gray-600 mb-1">
-                    Pilih Sesi Kasir
-                  </label>
-
-                  <button
-                    onClick={() => setShowSessionModal(true)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50 transition-colors"
-                  >
-                    {selectedSessionId
-                      ? sessions.find((s) => s.id === selectedSessionId)
-                        ? `${
-                            sessions.find((s) => s.id === selectedSessionId)
-                              ?.cashier_name || "Kasir"
-                          } - ${new Date(
-                            sessions.find(
-                              (s) => s.id === selectedSessionId
-                            )?.start_time
-                          ).toLocaleString("id-ID", {
-                            day: "numeric",
-                            month: "numeric",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          })}`
-                        : "Pilih Sesi Kasir"
-                      : "Pilih Sesi Kasir"}
-                  </button>
-                </div>
-                {/* {selectedSessionId && (
-                  <div className="flex items-end text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      <span>Transaksi: {sourceList.length} entri</span>
-                    </div>
-                  </div>
-                )} */}
-              </div>
-            </div>
-
             <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
               {paginatedData.length === 0 ? (
                 <div className="p-12 text-center">
@@ -1253,7 +1376,10 @@ const Bookkeeping: React.FC = () => {
                                     className="flex justify-between items-center text-sm"
                                   >
                                     <span className="text-gray-700">
-                                      {name} x @{qty}
+                                      {/* {name} x @{qty} */}
+                                      {it.type === "rental"
+                                        ? name
+                                        : `${name} x @${qty}`}
                                     </span>
                                     <span className="font-medium text-gray-900">
                                       Rp {total.toLocaleString("id-ID")}
@@ -1596,9 +1722,41 @@ const Bookkeeping: React.FC = () => {
                 </button>
               </div>
 
+              {/* Filters */}
+              <div className="mb-4 flex items-center gap-2">
+                <select
+                  value={sessionPeriod}
+                  onChange={(e) => setSessionPeriod(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {periods.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+                {sessionPeriod === "range" && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={sessionStartDate}
+                      onChange={(e) => setSessionStartDate(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <span className="text-gray-500">s/d</span>
+                    <input
+                      type="date"
+                      value={sessionEndDate}
+                      onChange={(e) => setSessionEndDate(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* Sessions List */}
               <div className="space-y-3">
-                {sessions.map((session) => (
+                {filteredSessions.map((session) => (
                   <div
                     key={session.id}
                     className={`p-4 border rounded-lg cursor-pointer transition-colors ${
