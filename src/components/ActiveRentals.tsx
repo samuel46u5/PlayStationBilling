@@ -219,6 +219,19 @@ const ActiveRentals: React.FC = () => {
     };
   }>({});
 
+  const getNowForDatetimeLocal = React.useCallback(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  }, []);
+
+  // Sinkronkan waktu setiap kali modal Start Rental dibuka
+  React.useEffect(() => {
+    if (showStartRentalModal) {
+      setRentalStartTime(getNowForDatetimeLocal());
+    }
+  }, [showStartRentalModal, getNowForDatetimeLocal]);
+
   // Fungsi untuk menjalankan persiapan untuk satu console
   const handleSingleConsolePersiapan = async (console: Console) => {
     const { value: preparationMinutes } = await Swal.fire({
@@ -277,6 +290,12 @@ const ActiveRentals: React.FC = () => {
     try {
       // Simpan nilai auto_shutdown awal
       const originalAutoShutdown = console.auto_shutdown_enabled || false;
+
+      // Clear timeout lama jika ada
+      const existing = preparationMode[console.id];
+      if (existing?.timeoutId) {
+        clearTimeout(existing.timeoutId);
+      }
 
       // Jika auto_shutdown masih true, update ke false
       if (console.auto_shutdown_enabled) {
@@ -3059,7 +3078,7 @@ const ActiveRentals: React.FC = () => {
       setRentalType("pay-as-you-go");
       setRentalDurationHours(1);
       setRentalDurationMinutes(0);
-      setRentalStartTime(new Date().toISOString().slice(0, 16));
+      setRentalStartTime(getNowForDatetimeLocal());
       setNonMemberName("");
       setSearchConsole("");
       setNonMemberPhone("");
@@ -3765,6 +3784,12 @@ const ActiveRentals: React.FC = () => {
             originalAutoShutdownStates[device.id] =
               device.auto_shutdown_enabled || false;
 
+            // Clear timeout lama jika ada
+            const existing = preparationMode[device.id];
+            if (existing?.timeoutId) {
+              clearTimeout(existing.timeoutId);
+            }
+
             // Jika auto_shutdown masih true, update ke false
             if (device.auto_shutdown_enabled) {
               try {
@@ -3807,16 +3832,16 @@ const ActiveRentals: React.FC = () => {
               }
 
               // Nyalakan nomor/relay
-              try {
-                const relayRes = await fetch(device.relay_command_on);
-                if (relayRes.ok) {
-                  results.push({ type: "relay", status: "success" });
-                } else {
-                  results.push({ type: "relay", status: "failed" });
-                }
-              } catch (error) {
-                results.push({ type: "relay", status: "failed" });
-              }
+              // try {
+              //   const relayRes = await fetch(device.relay_command_on);
+              //   if (relayRes.ok) {
+              //     results.push({ type: "relay", status: "success" });
+              //   } else {
+              //     results.push({ type: "relay", status: "failed" });
+              //   }
+              // } catch (error) {
+              //   results.push({ type: "relay", status: "failed" });
+              // }
 
               return { device, results };
             })
@@ -4222,7 +4247,7 @@ const ActiveRentals: React.FC = () => {
       setRentalType("pay-as-you-go");
       setRentalDurationHours(1);
       setRentalDurationMinutes(0);
-      setRentalStartTime(new Date().toISOString().slice(0, 16));
+      setRentalStartTime(getNowForDatetimeLocal());
       setNonMemberName("");
       setNonMemberPhone("");
 
