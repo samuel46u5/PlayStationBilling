@@ -466,8 +466,9 @@ const ActiveRentals: React.FC = () => {
         <p>TV dan nomor telah dimatikan</p>
       `,
       icon: "info",
-      timer: 3000,
-      timerProgressBar: true,
+      confirmButtonColor: "#3b82f6",
+      // timer: 3000,
+      // timerProgressBar: true,
     });
 
     // Hapus state persiapan
