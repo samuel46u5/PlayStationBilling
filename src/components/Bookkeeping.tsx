@@ -189,6 +189,10 @@ const Bookkeeping: React.FC = () => {
             case "today":
               startDateCalc.setHours(0, 0, 0, 0);
               break;
+            case "yesterday":
+              startDateCalc.setDate(now.getDate() - 1);
+              startDateCalc.setHours(0, 0, 0, 0);
+              break;
             case "week":
               startDateCalc.setDate(now.getDate() - 7);
               break;
