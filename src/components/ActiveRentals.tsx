@@ -1,7 +1,7 @@
 // ...existing code...
 
 // ...existing code...
-import { Pause, Power, Printer } from "lucide-react";
+import { Pause, Power, Printer, Ticket } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
@@ -43,7 +43,7 @@ import {
   Lock,
   Unlock,
 } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { db, supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
 
 interface Console {
@@ -173,6 +173,12 @@ const ActiveRentals: React.FC = () => {
   const [rentalType, setRentalType] = useState<"pay-as-you-go" | "prepaid">(
     "pay-as-you-go"
   );
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [voucherSearchTerm, setVoucherSearchTerm] = useState("");
+  const [voucherList, setVoucherList] = useState<any[]>([]);
+  const [showSellVoucherModal, setShowSellVoucherModal] = useState(false);
+  const [selectedVoucherId, setSelectedVoucherId] = useState("");
+  const [selling, setSelling] = useState(false);
 
   const [showAddTimeModal, setShowAddTimeModal] =
     useState<AddTimeModalState>(null);
@@ -921,6 +927,11 @@ const ActiveRentals: React.FC = () => {
     loadHistorySessions(historyStartDate, historyEndDate);
   }, [currentPage, historyStartDate, historyEndDate]);
 
+  useEffect(() => {
+    // Fetch voucher list
+    db.select("vouchers", "*").then((v) => setVoucherList(v || []));
+  }, []);
+
   // Load data on component mount
   useEffect(() => {
     loadData();
@@ -1302,11 +1313,11 @@ const ActiveRentals: React.FC = () => {
         await finalizeProductsAndStock(session.id);
 
         await loadData();
-        Swal.fire(
-          "Berhasil",
-          "Rental telah diakhiri otomatis (bayar dimuka)",
-          "success"
-        );
+        // Swal.fire(
+        //   "Berhasil",
+        //   "Rental telah diakhiri otomatis (bayar dimuka)",
+        //   "success"
+        // );
         return;
       }
 
@@ -1467,7 +1478,7 @@ const ActiveRentals: React.FC = () => {
   };
 
   async function logCashierTransaction(params: {
-    type: "sale" | "rental";
+    type: "sale" | "rental" | "voucher";
     amount: number;
     paymentMethod: "cash" | "qris" | "card" | "transfer";
     referenceId: string;
@@ -4051,6 +4062,104 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
+  const handleSellVoucher = async () => {
+    const voucher = voucherList.find((v) => v.id === selectedVoucherId);
+    const customer = customers.find((c) => c.id === selectedCustomerId);
+    if (!voucher || !customer) return;
+
+    // 1. Insert ke cashier_transaction
+    // await db.insert("cashier_transaction", {
+    //   type: "voucher",
+    //   amount: voucher.voucher_price,
+    //   payment_method: paymentMethod,
+    //   reference_id: voucher.id,
+    //   description: `Penjualan voucher ${voucher.voucher_code} ke ${customer.name}`,
+    //   timestamp: new Date().toISOString(),
+    //   cashier_id: /* isi dengan id admin aktif */,
+    //   details: {
+    //     items: [
+    //       {
+    //         name: voucher.name,
+    //         type: "voucher",
+    //         total: voucher.voucher_price,
+    //         profit: voucher.voucher_price - voucher.capital,
+    //         capital: voucher.capital,
+    //         description: `Voucher Code: ${voucher.voucher_code}`,
+    //       },
+    //     ],
+    //     voucher: {
+    //       voucher_id: voucher.id,
+    //       voucher_code: voucher.voucher_code,
+    //       total_minutes: voucher.total_minutes,
+    //       hourly_rate: voucher.hourly_rate,
+    //     },
+    //     payment: {
+    //       amount: voucher.voucher_price,
+    //       method: paymentMethod,
+    //     },
+    //     customer: {
+    //       name: customer.name,
+    //       phone: customer.phone,
+    //     },
+    //     breakdown: {
+    //       voucher_price: voucher.voucher_price,
+    //     },
+    //   },
+    // });
+    await logCashierTransaction({
+      type: "voucher",
+      amount: voucher.voucher_price,
+      paymentMethod: paymentMethod,
+      referenceId: `VOUCHER-${Date.now()}`,
+      description: `Penjualan voucher ${voucher.voucher_code} ke ${customer.name}`,
+      details: {
+        items: [
+          {
+            name: voucher.name,
+            type: "voucher",
+            total: voucher.voucher_price,
+            profit: voucher.voucher_price - voucher.capital,
+            capital: voucher.capital,
+            description: `Voucher Code: ${voucher.voucher_code}`,
+          },
+        ],
+        voucher: {
+          voucher_id: voucher.id,
+          voucher_code: voucher.voucher_code,
+          total_minutes: voucher.total_minutes,
+          hourly_rate: voucher.hourly_rate,
+        },
+        payment: {
+          amount: voucher.voucher_price,
+          method: paymentMethod,
+        },
+        customer: {
+          name: customer.name,
+          phone: customer.phone,
+        },
+        breakdown: {
+          voucher_price: voucher.voucher_price,
+        },
+      },
+    });
+
+    // 2. Update balance_time customer
+    await db.update("customers", customer.id, {
+      balance_time: (customer.balance_time || 0) + voucher.total_minutes,
+    });
+
+    // 3. Notifikasi sukses
+    Swal.fire({
+      icon: "success",
+      title: "Berhasil",
+      text: "Voucher berhasil dijual dan waktu customer bertambah!",
+      confirmButtonText: "OK",
+    });
+    setShowSellVoucherModal(false);
+    setSelectedVoucherId("");
+    setSelectedCustomerId("");
+  };
+
   // Handler konfirmasi pembayaran prepaid
   const handleConfirmPrepaidPayment = async (
     paymentMethod: "cash" | "qris",
@@ -4370,6 +4479,33 @@ const ActiveRentals: React.FC = () => {
           reason: cancelReason,
         },
       });
+
+      const { data: trx } = await supabase
+        .from("cashier_transactions")
+        .select("id, details, description, timestamp")
+        .eq("type", "rental")
+        .contains("details", { session_id: session.id })
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (trx?.id) {
+        const newDetails = {
+          ...(trx.details ?? {}),
+          cancelled: true,
+          cancel_reason: cancelReason,
+          cancelled_at: new Date().toISOString(),
+        };
+
+        await supabase
+          .from("cashier_transactions")
+          .update({
+            amount: 0,
+            description: `[CANCELLED] ${trx.description || ""}`.trim(),
+            details: newDetails,
+          })
+          .eq("id", trx.id);
+      }
       // Rollback stok produk jika ada
       const { data: products } = await supabase
         .from("rental_session_products")
@@ -4580,10 +4716,21 @@ const ActiveRentals: React.FC = () => {
               if (!ensureCashierActive()) return;
               setShowProductModal("retail");
             }}
-            className={`w-full bg-orange-500 hover:bg-orange-600 text-white py-3 mx-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+            className={` bg-orange-500 hover:bg-orange-600 text-white py-3 px-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
           >
             <ShoppingCart className="h-5 w-5" />
             Add Products
+          </button>
+
+          <button
+            onClick={() => {
+              setShowSellVoucherModal(true);
+              setSelectedCustomerId("");
+            }}
+            className=" bg-blue-500 hover:bg-blue-600 text-white py-3 px-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <Ticket className="h-5 w-5" />
+            Jual Voucher
           </button>
         </div>
 
@@ -4679,6 +4826,243 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Voucher Modal */}
+      {showSellVoucherModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Jual Voucher
+              </h2>
+              <form className="space-y-4">
+                {/* Pilih Voucher */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Pilih Voucher
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVoucherModal(true);
+                        setVoucherSearchTerm("");
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50"
+                    >
+                      {selectedVoucherId
+                        ? voucherList.find((v) => v.id === selectedVoucherId)
+                            ?.name || "Pilih Voucher"
+                        : "Pilih Voucher"}
+                    </button>
+                    {selectedVoucherId && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVoucherId("")}
+                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Pilih Member
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerModal(true)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50"
+                    >
+                      {selectedCustomerId
+                        ? customers.find((c) => c.id === selectedCustomerId)
+                            ?.name || "Pilih Member"
+                        : "Pilih Member"}
+                    </button>
+                    {selectedCustomerId && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCustomerId("")}
+                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Metode Pembayaran
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) =>
+                      setPaymentMethod(
+                        e.target.value as "cash" | "qris" | "card"
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="qris">QRIS</option>
+                  </select>
+                </div>
+                {/* Preview */}
+                {selectedVoucherId && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {(() => {
+                      const v = voucherList.find(
+                        (v) => v.id === selectedVoucherId
+                      );
+                      if (!v) return null;
+                      return (
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span>Kode Voucher:</span>
+                            <span>{v.voucher_code}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Nama Voucher:</span>
+                            <span>{v.name}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Total Jam:</span>
+                            <span>{(v.total_minutes / 60).toFixed(2)} jam</span>
+                          </div>
+                          <div className="flex justify-between font-medium border-t border-gray-200 pt-2">
+                            <span>Total Bayar:</span>
+                            <span>
+                              Rp {v.voucher_price?.toLocaleString("id-ID")}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </form>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowSellVoucherModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!selectedVoucherId || !selectedCustomerId) {
+                      alert("Pilih voucher dan customer!");
+                      return;
+                    }
+                    setSelling(true);
+                    await handleSellVoucher();
+                    setSelling(false);
+                  }}
+                  disabled={selling}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {selling ? "Memproses..." : "Jual Voucher"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search Voucher Modal */}
+      {showVoucherModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Pilih Voucher
+                </h2>
+                <button
+                  onClick={() => setShowVoucherModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="relative mb-4">
+                <input
+                  type="text"
+                  value={voucherSearchTerm}
+                  onChange={(e) => setVoucherSearchTerm(e.target.value)}
+                  placeholder="Cari nama/kode voucher..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* List Voucher */}
+              <div className="space-y-2">
+                {(voucherList || [])
+                  .filter((v: any) => {
+                    const q = voucherSearchTerm.toLowerCase();
+                    return (
+                      (v.name || "").toLowerCase().includes(q) ||
+                      (v.voucher_code || "").toLowerCase().includes(q)
+                    );
+                  })
+                  .map((v: any) => (
+                    <button
+                      key={v.id}
+                      onClick={() => {
+                        setSelectedVoucherId(v.id);
+                        setShowVoucherModal(false);
+                      }}
+                      className={`w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition flex justify-between items-center ${
+                        selectedVoucherId === v.id
+                          ? "border-blue-500"
+                          : "border-gray-300"
+                      }`}
+                    >
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {v.name}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {v.voucher_code} • {(v.total_minutes / 60).toFixed(2)}{" "}
+                          jam
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-green-600">
+                        Rp{" "}
+                        {Number(v.voucher_price || 0).toLocaleString("id-ID")}
+                      </div>
+                    </button>
+                  ))}
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowVoucherModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Tutup
+                </button>
+                <button
+                  onClick={() => {
+                    if (!selectedVoucherId) return;
+                    setShowVoucherModal(false);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Gunakan Voucher
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* History Modal */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

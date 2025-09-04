@@ -20,6 +20,7 @@ import {
   ArrowDownCircle,
   ShoppingCart,
   Plus,
+  Ticket,
 } from "lucide-react";
 import { CashierSession } from "../types";
 import { printReceipt } from "../utils/receipt";
@@ -71,6 +72,7 @@ const CashierSessionComponent: React.FC = () => {
   const [todayTransactions, setTodayTransactions] = useState<any[]>([]);
   const [todaySales, setTodaySales] = useState<any[]>([]);
   const [todayRentals, setTodayRentals] = useState<any[]>([]);
+  const [todayVouchers, setTodayVouchers] = useState<any[]>([]);
   const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
   const [todayIncome, setTodayIncome] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
@@ -110,6 +112,7 @@ const CashierSessionComponent: React.FC = () => {
         setTodayTransactions([]);
         setTodaySales([]);
         setTodayRentals([]);
+        setTodayVouchers([]);
         setTodayExpenses([]);
         setTodayIncome([]);
         return;
@@ -135,6 +138,7 @@ const CashierSessionComponent: React.FC = () => {
       setTodayTransactions(trxRes.data || []);
       setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
       setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
+      setTodayVouchers(trxRes.data.filter((t: any) => t.type === "voucher"));
       setTodayExpenses(trxRes.data.filter((t: any) => t.type === "expense"));
       setTodayIncome(trxRes.data.filter((t: any) => t.type === "income"));
     })();
@@ -166,7 +170,10 @@ const CashierSessionComponent: React.FC = () => {
             // t.type === "rental" ||
             // t.type === "income" ||
             // !t.reference_id.toUpperCase().includes("CANCELLED")
-            (t.type === "sale" || t.type === "rental" || t.type === "income") &&
+            (t.type === "sale" ||
+              t.type === "rental" ||
+              t.type === "income" ||
+              t.type === "voucher") &&
             !(
               (t.reference_id &&
                 t.reference_id.toUpperCase().includes("CANCELLED")) ||
@@ -193,7 +200,11 @@ const CashierSessionComponent: React.FC = () => {
   const tabTotals = useMemo(() => {
     const income = todayTransactions
       .filter(
-        (t) => t.type === "sale" || t.type === "rental" || t.type === "income"
+        (t) =>
+          t.type === "sale" ||
+          t.type === "rental" ||
+          t.type === "income" ||
+          t.type === "voucher"
       )
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
@@ -210,7 +221,8 @@ const CashierSessionComponent: React.FC = () => {
     const income =
       todaySales.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) +
       todayRentals.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
-      todayIncome.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      todayIncome.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
+      todayVouchers.reduce((sum, v) => sum + (Number(v.amount) || 0), 0);
 
     const expenses = todayExpenses.reduce(
       (sum, e) => sum + (Number(e.amount) || 0),
@@ -218,7 +230,7 @@ const CashierSessionComponent: React.FC = () => {
     );
 
     return income - expenses;
-  }, [currentSession, todaySales, todayRentals, todayExpenses]);
+  }, [currentSession, todaySales, todayRentals, todayExpenses, todayVouchers]);
 
   const handleAddTransaction = async () => {
     if (totalAmount <= 0) {
@@ -261,6 +273,7 @@ const CashierSessionComponent: React.FC = () => {
       setTodayTransactions(trxRes.data || []);
       setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
       setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
+      setTodayVouchers(trxRes.data.filter((t: any) => t.type === "voucher"));
       setTodayExpenses(trxRes.data.filter((t: any) => t.type === "expense"));
       setTodayIncome(trxRes.data.filter((t: any) => t.type === "income"));
 
@@ -293,7 +306,6 @@ const CashierSessionComponent: React.FC = () => {
   const convertTransactionToReceiptData = (transaction: any) => {
     const items = getTransactionItems(transaction).items;
     const discount = getTransactionItems(transaction).discount;
-    console.log(transaction);
 
     const receiptItems = items.map((item: any) => ({
       name: item.name || item.product_name || item.title || "Item",
@@ -489,9 +501,13 @@ const CashierSessionComponent: React.FC = () => {
     (sum, income) => sum + (Number(income.amount) || 0),
     0
   );
+  const todayTotalVouchers = todayVouchers.reduce(
+    (sum, voucher) => sum + (Number(voucher.amount) || 0),
+    0
+  );
 
   const todayTotalRevenue =
-    todayTotalSales + todayTotalRentals + todayTotalIncome;
+    todayTotalSales + todayTotalRentals + todayTotalIncome + todayTotalVouchers;
 
   const todayCashSales =
     (todaySales || [])
@@ -499,7 +515,10 @@ const CashierSessionComponent: React.FC = () => {
       .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "cash")
-      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0);
+      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0) +
+    (todayVouchers || [])
+      .filter((v: any) => v.payment_method === "cash")
+      .reduce((sum, v: any) => sum + (Number(v.amount) || 0), 0);
 
   const todayCardSales =
     (todaySales || [])
@@ -507,7 +526,10 @@ const CashierSessionComponent: React.FC = () => {
       .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "card")
-      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0);
+      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0) +
+    (todayVouchers || [])
+      .filter((v: any) => v.payment_method === "card")
+      .reduce((sum, v: any) => sum + (Number(v.amount) || 0), 0);
 
   const todayTransferSales =
     (todaySales || [])
@@ -515,7 +537,10 @@ const CashierSessionComponent: React.FC = () => {
       .reduce((sum, s: any) => sum + (Number(s.amount) || 0), 0) +
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "transfer")
-      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0);
+      .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0) +
+    (todayVouchers || [])
+      .filter((v: any) => v.payment_method === "transfer")
+      .reduce((sum, v: any) => sum + (Number(v.amount) || 0), 0);
 
   // Rekap data untuk rental dan cafe
   const rekapRental = useMemo(() => {
@@ -528,32 +553,18 @@ const CashierSessionComponent: React.FC = () => {
         count: number;
       }
     >();
-    console.log(todayRentals);
 
     todayRentals.forEach((rental) => {
-      // Debug: log rental data untuk analisis
-      console.log("Rental data:", {
-        id: rental.id,
-        reference_id: rental.reference_id,
-        type: rental.type,
-        amount: rental.amount,
-        items: rental.items,
-        metadata: rental.metadata,
-        details: rental.details,
-      });
-
       // Filter rental yang tidak valid
       if (
         rental.reference_id?.toUpperCase().includes("MOVE_RENTAL") ||
         rental.reference_id?.toUpperCase().includes("CANCELLED") ||
         rental.reference_id?.toUpperCase().includes("ADD-TIME")
       ) {
-        console.log("Skipping rental:", rental.reference_id);
-        return; // Skip rental ini
+        return;
       }
 
       const rentalItems = getTransactionItems(rental).items;
-      console.log("Rental items after filtering:", rentalItems);
 
       // Ambil console name dari items array
       const consoleName =
@@ -628,8 +639,6 @@ const CashierSessionComponent: React.FC = () => {
       (a, b) => b.totalHours - a.totalHours
     );
   }, [todayRentals]);
-
-  console.log("rekap", rekapRental);
 
   const rekapCafe = useMemo(() => {
     const productMap = new Map<
@@ -982,6 +991,7 @@ const CashierSessionComponent: React.FC = () => {
                         (transaction) =>
                           (transaction.type === "income" ||
                             transaction.type === "sale" ||
+                            transaction.type === "voucher" ||
                             transaction.type === "rental") &&
                           !(
                             (transaction.reference_id &&
@@ -1108,6 +1118,8 @@ const CashierSessionComponent: React.FC = () => {
                               ? "bg-green-100"
                               : transaction.type === "rental"
                               ? "bg-blue-100"
+                              : transaction.type === "voucher"
+                              ? "bg-purple-100"
                               : "bg-red-100"
                           }`}
                         >
@@ -1117,6 +1129,8 @@ const CashierSessionComponent: React.FC = () => {
                             <ShoppingCart className="h-5 w-5 text-green-600" />
                           ) : transaction.type === "rental" ? (
                             <Receipt className="h-5 w-5 text-blue-600" />
+                          ) : transaction.type === "voucher" ? (
+                            <Ticket className="h-5 w-5 text-purple-600" />
                           ) : (
                             <TrendingDown className="h-5 w-5 text-red-600" />
                           )}

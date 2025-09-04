@@ -260,8 +260,8 @@ export const db = {
       return db.insert('vouchers', {
         ...voucher,
         voucher_code: data,
-        created_by: user.id,
-        expiry_date: new Date(Date.now() + voucher.validity_days * 24 * 60 * 60 * 1000).toISOString()
+        // created_by: user.id,
+        // expiry_date: new Date(Date.now() + voucher.validity_days * 24 * 60 * 60 * 1000).toISOString()
       });
     },
 

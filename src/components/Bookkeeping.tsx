@@ -14,6 +14,7 @@ import {
   Clock,
   Receipt,
   X,
+  Ticket,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
@@ -64,7 +65,7 @@ const Bookkeeping: React.FC = () => {
     "jurnal" | "laba_rugi" | "laporan_kasir"
   >("jurnal");
   const [activeTab, setActiveTab] = useState<
-    "all" | "income" | "expense" | "rental" | "sale"
+    "all" | "income" | "expense" | "rental" | "sale" | "voucher"
   >("all");
 
   // Laporan Kasir states
@@ -180,7 +181,7 @@ const Bookkeeping: React.FC = () => {
         .order("timestamp", { ascending: false });
 
       if (activeView === "laba_rugi") {
-        query = query.or("type.eq.sale,type.eq.rental");
+        query = query.or("type.eq.sale,type.eq.rental, type.eq.voucher");
 
         if (selectedPeriod !== "all") {
           const now = new Date();
@@ -379,9 +380,15 @@ const Bookkeeping: React.FC = () => {
       return sourceList.filter((e) => e.type === "rental");
     if (activeView === "laba_rugi" && activeTab === "sale")
       return sourceList.filter((e) => e.type === "sale");
+    if (activeView === "laba_rugi" && activeTab === "voucher")
+      return sourceList.filter((e) => e.type === "voucher");
     if (activeView === "laporan_kasir" && activeTab === "income")
       return sourceList.filter(
-        (e) => e.type === "income" || e.type === "sale" || e.type === "rental"
+        (e) =>
+          e.type === "income" ||
+          e.type === "sale" ||
+          e.type === "rental" ||
+          e.type === "voucher"
       );
     if (activeView === "laporan_kasir" && activeTab === "expense")
       return sourceList.filter((e) => e.type === "expense");
@@ -391,7 +398,11 @@ const Bookkeeping: React.FC = () => {
   const incomeCount = useMemo(
     () =>
       sourceList.filter(
-        (e) => e.type === "income" || e.type === "sale" || e.type === "rental"
+        (e) =>
+          e.type === "income" ||
+          e.type === "sale" ||
+          e.type === "rental" ||
+          e.type === "voucher"
       ).length,
     [activeView, sourceList]
   );
@@ -405,6 +416,10 @@ const Bookkeeping: React.FC = () => {
   );
   const saleCount = useMemo(
     () => sourceList.filter((e) => e.type === "sale").length,
+    [activeView, sourceList]
+  );
+  const voucherCount = useMemo(
+    () => sourceList.filter((e) => e.type === "voucher").length,
     [activeView, sourceList]
   );
   const totalPages = Math.ceil(filteredByTab.length / entriesPerPage);
@@ -956,6 +971,19 @@ const Bookkeeping: React.FC = () => {
                   : expenseCount}
                 )
               </button>
+              {activeView === "laba_rugi" && (
+                <button
+                  onClick={() => setActiveTab("voucher")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                    activeTab === "voucher"
+                      ? "bg-white text-purple-600 shadow-sm"
+                      : "text-gray-600 hover:text-purple-600"
+                  }`}
+                >
+                  <Ticket className="h-4 w-4" />
+                  Voucher ({voucherCount})
+                </button>
+              )}
             </div>
           </div>
 
@@ -980,7 +1008,8 @@ const Bookkeeping: React.FC = () => {
                           (t: any) =>
                             t.type === "income" ||
                             t.type === "sale" ||
-                            t.type === "rental"
+                            t.type === "rental" ||
+                            t.type === "voucher"
                         )
                         .reduce(
                           (s: number, t: any) => s + (Number(t.amount) || 0),
@@ -1039,7 +1068,8 @@ const Bookkeeping: React.FC = () => {
                           (t: any) =>
                             t.type === "income" ||
                             t.type === "sale" ||
-                            t.type === "rental"
+                            t.type === "rental" ||
+                            t.type === "voucher"
                         )
                         .reduce(
                           (s: number, t: any) => s + (Number(t.amount) || 0),
@@ -1077,13 +1107,19 @@ const Bookkeeping: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <div
                           className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            t.type === "rental" ? "bg-green-100" : "bg-red-100"
+                            t.type === "rental"
+                              ? "bg-green-100"
+                              : t.type === "sale"
+                              ? "bg-red-100"
+                              : "bg-purple-100"
                           }`}
                         >
                           {t.type === "rental" ? (
                             <Gamepad className="h-4 w-4 text-green-600" />
-                          ) : (
+                          ) : t.type === "sale" ? (
                             <Coffee className="h-4 w-4 text-red-600" />
+                          ) : (
+                            <Ticket className="h-4 w-4 text-purple-600" />
                           )}
                         </div>
                         <div>
@@ -1095,7 +1131,9 @@ const Bookkeeping: React.FC = () => {
                               className={`inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800  ${
                                 t.type === "rental"
                                   ? "bg-green-100 text-green-800"
-                                  : "bg-red-100 text-red-800"
+                                  : t.type === "sale"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-purple-100 text-purple-800"
                               }`}
                             >
                               {(t.type || "").toString().toUpperCase()}
@@ -1228,6 +1266,8 @@ const Bookkeeping: React.FC = () => {
                                 ? "bg-green-100"
                                 : transaction.type === "rental"
                                 ? "bg-blue-100"
+                                : transaction.type === "voucher"
+                                ? "bg-purple-100"
                                 : "bg-red-100"
                             }`}
                           >
@@ -1237,6 +1277,8 @@ const Bookkeeping: React.FC = () => {
                               <Coffee className="h-5 w-5 text-green-600" />
                             ) : transaction.type === "rental" ? (
                               <Gamepad className="h-5 w-5 text-blue-600" />
+                            ) : transaction.type === "voucher" ? (
+                              <Ticket className="h-5 w-5 text-purple-600" />
                             ) : (
                               <TrendingDown className="h-5 w-5 text-red-600" />
                             )}
