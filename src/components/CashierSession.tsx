@@ -77,6 +77,12 @@ const CashierSessionComponent: React.FC = () => {
   const [todayIncome, setTodayIncome] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [rekapTab, setRekapTab] = useState<"rental" | "cafe">("rental");
+  // Ubah Pembayaran modal state
+  const [showChangePaymentModal, setShowChangePaymentModal] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<any | null>(null);
+  const [newPaymentMethod, setNewPaymentMethod] = useState<
+    "cash" | "card" | "transfer"
+  >("cash");
 
   // Get current user (in real app, this would come from auth context)
   const { user } = useAuth();
@@ -293,6 +299,55 @@ const CashierSessionComponent: React.FC = () => {
         title: "Gagal!",
         text: "Gagal menambahkan transaksi",
       });
+    }
+  };
+
+  const refreshTodayTransactions = async (sessionId: string) => {
+    const [trxRes] = await Promise.all([
+      supabase
+        .from("cashier_transactions")
+        .select("*")
+        .eq("session_id", sessionId)
+        .order("timestamp", { ascending: false }),
+    ]);
+    if (trxRes.error) throw trxRes.error;
+    setTodayTransactions(trxRes.data || []);
+    setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
+    setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
+    setTodayVouchers(trxRes.data.filter((t: any) => t.type === "voucher"));
+    setTodayExpenses(trxRes.data.filter((t: any) => t.type === "expense"));
+    setTodayIncome(trxRes.data.filter((t: any) => t.type === "income"));
+  };
+
+  const openChangePayment = (transaction: any) => {
+    setPaymentTarget(transaction);
+    setNewPaymentMethod(
+      (transaction.payment_method as "cash" | "card" | "transfer") || "cash"
+    );
+    setShowChangePaymentModal(true);
+  };
+
+  const handleUpdatePayment = async () => {
+    if (!paymentTarget || !currentSession) return;
+    try {
+      const { error } = await supabase
+        .from("cashier_transactions")
+        .update({ payment_method: newPaymentMethod })
+        .eq("id", paymentTarget.id);
+      if (error) throw error;
+
+      await refreshTodayTransactions(currentSession.id);
+      setShowChangePaymentModal(false);
+      setPaymentTarget(null);
+
+      Swal.fire({
+        icon: "success",
+        title: "Pembayaran diperbarui",
+        text: `Metode: ${newPaymentMethod.toUpperCase()}`,
+      });
+    } catch (e) {
+      console.error("Failed to update payment method", e);
+      Swal.fire("Error", "Gagal mengubah metode pembayaran", "error");
     }
   };
 
@@ -1221,6 +1276,26 @@ const CashierSessionComponent: React.FC = () => {
                                   Print
                                 </button>
                               )}
+                            {!(transaction.type === "expense") &&
+                              transaction.reference_id &&
+                              !transaction.reference_id
+                                .toUpperCase()
+                                .includes("OPENING-CASH") &&
+                              !transaction.reference_id
+                                .toUpperCase()
+                                .includes("MOVE_RENTAL") &&
+                              !transaction.reference_id
+                                .toUpperCase()
+                                .includes("CANCELLED") && (
+                                <button
+                                  onClick={() => openChangePayment(transaction)}
+                                  className="text-purple-600 hover:text-purple-700 text-sm font-medium flex items-center gap-1 ml-2"
+                                  title="Ubah pembayaran"
+                                >
+                                  <CreditCard className="h-3 w-3" />
+                                  Ubah Pembayaran
+                                </button>
+                              )}
                           </div>
                         </div>
                       </div>
@@ -1889,6 +1964,77 @@ const CashierSessionComponent: React.FC = () => {
                   className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
                   Tutup Kasir
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Payment Modal */}
+      {showChangePaymentModal && paymentTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Ubah Pembayaran
+              </h2>
+              <div className="space-y-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Ref</span>
+                    <span className="font-medium">
+                      {paymentTarget.reference_id}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Deskripsi</span>
+                    <span className="font-medium">
+                      {paymentTarget.description}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Jumlah</span>
+                    <span className="font-bold">
+                      Rp{" "}
+                      {Number(paymentTarget.amount || 0).toLocaleString(
+                        "id-ID"
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Metode Pembayaran
+                  </label>
+                  <select
+                    value={newPaymentMethod}
+                    onChange={(e) => setNewPaymentMethod(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="card">Card</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowChangePaymentModal(false);
+                    setPaymentTarget(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleUpdatePayment}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Simpan
                 </button>
               </div>
             </div>
