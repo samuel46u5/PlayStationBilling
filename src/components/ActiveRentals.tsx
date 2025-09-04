@@ -239,6 +239,8 @@ const ActiveRentals: React.FC = () => {
     }
   }, [showStartRentalModal, getNowForDatetimeLocal]);
 
+  console.log(voucherList);
+
   // Fungsi untuk menjalankan persiapan untuk satu console
   const handleSingleConsolePersiapan = async (targetConsole: Console) => {
     const { value: preparationMinutes } = await Swal.fire({
@@ -4118,8 +4120,10 @@ const ActiveRentals: React.FC = () => {
             name: voucher.name,
             type: "voucher",
             total: voucher.voucher_price,
-            profit: voucher.voucher_price - voucher.capital,
-            capital: voucher.capital,
+            profit:
+              voucher.voucher_price -
+              voucher.capital * (voucher.total_minutes / 60),
+            capital: voucher.capital * (voucher.total_minutes / 60),
             description: `Voucher Code: ${voucher.voucher_code}`,
           },
         ],

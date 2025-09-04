@@ -248,7 +248,7 @@ const VoucherManagement: React.FC = () => {
         name: newVoucher.name,
         description: newVoucher.description,
         total_minutes: totalMinutes,
-        capital: Number(Number(newVoucher.capital).toFixed(2)),
+        capital: Number(Number(newVoucher.capital)),
         hourly_rate: hourlyRate,
         voucher_price: voucherPrice,
         status: "active",
@@ -617,6 +617,12 @@ const VoucherManagement: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {activeVouchers.map((voucher) => {
           const totalHours = (voucher.totalMinutes ?? 0) / 60;
+          const totalCapital = Number(voucher.capital * totalHours || 0);
+          const capitalPerHour = Number(voucher.capital);
+          const totalPrice = Number(voucher.voucherPrice || 0);
+          const marginPct = totalPrice
+            ? ((totalPrice - totalCapital) / totalPrice) * 100
+            : 0;
 
           return (
             <div
@@ -707,6 +713,13 @@ const VoucherManagement: React.FC = () => {
                           Rp {voucher.hourlyRate.toLocaleString("id-ID")}
                         </span>
                       </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Modal per Jam</span>
+                        <span className="font-medium">
+                          Rp {capitalPerHour.toLocaleString("id-ID")}
+                        </span>
+                      </div>
+
                       <div className="flex justify-between border-b border-gray-200 pb-1">
                         <span className="font-medium text-purple-600">
                           Total Jam
@@ -718,10 +731,19 @@ const VoucherManagement: React.FC = () => {
                       <div className="flex justify-between">
                         <span className="text-gray-600">Harga Voucher</span>
                         <span className="font-bold text-green-600">
-                          Rp{" "}
-                          {Number(voucher.voucherPrice || 0).toLocaleString(
-                            "id-ID"
-                          )}
+                          Rp {totalPrice.toLocaleString("id-ID")}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total Modal</span>
+                        <span className="font-medium">
+                          Rp {totalCapital.toLocaleString("id-ID")}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Margin</span>
+                        <span className="font-bold">
+                          {marginPct.toFixed(1)}%
                         </span>
                       </div>
                     </div>
@@ -1110,7 +1132,7 @@ const VoucherManagement: React.FC = () => {
         name: editingVoucher.name,
         description: editingVoucher.description,
         total_minutes: totalMinutes,
-        capital: Number(Number(editingVoucher.capital).toFixed(2)),
+        capital: Number(Number(editingVoucher.capital)),
         hourly_rate: hourlyRate,
         voucher_price: voucherPrice,
       });
@@ -1302,7 +1324,7 @@ const VoucherManagement: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Harga Modal Voucher
+                      Modal Per Jam
                     </label>
                     <input
                       type="number"
@@ -1709,7 +1731,7 @@ const VoucherManagement: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Harga Modal Voucher
+                    Modal per Jam
                   </label>
                   <input
                     type="number"
