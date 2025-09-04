@@ -1747,35 +1747,74 @@ const VoucherManagement: React.FC = () => {
                 </div>
 
                 {/* Preview Harga */}
-                {editingVoucher.hourlyRate && editingVoucher.totalHours && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-2">
-                      Preview Harga
-                    </h4>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span>Harga Per Jam:</span>
-                        <span>
-                          Rp {editingVoucher.hourlyRate.toLocaleString("id-ID")}
-                        </span>
+                {editingVoucher.hourlyRate &&
+                  editingVoucher.totalHours &&
+                  (() => {
+                    const totalHours = Number(editingVoucher.totalHours) || 0;
+                    const capitalPerHour = Number(editingVoucher.capital) || 0;
+                    const hourlyRate = Number(editingVoucher.hourlyRate) || 0;
+                    const totalPrice = Number(hourlyRate * totalHours) || 0;
+                    const totalCapital =
+                      Number(capitalPerHour * totalHours) || 0;
+                    const marginPct = totalPrice
+                      ? ((totalPrice - totalCapital) / totalPrice) * 100
+                      : 0;
+                    return (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="font-medium text-gray-900 mb-2">
+                          Preview Harga
+                        </h4>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="font-medium text-purple-600">
+                                Harga Per Jam
+                              </span>
+                              <span className="font-bold text-purple-600">
+                                Rp {hourlyRate.toLocaleString("id-ID")}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">
+                                Modal per Jam
+                              </span>
+                              <span className="font-medium">
+                                Rp {capitalPerHour.toLocaleString("id-ID")}
+                              </span>
+                            </div>
+                            <div className="flex justify-between border-b border-gray-200 pb-1">
+                              <span className="font-medium text-purple-600">
+                                Total Jam
+                              </span>
+                              <span className="font-bold text-purple-600">
+                                {totalHours} jam
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">
+                                Harga Voucher
+                              </span>
+                              <span className="font-bold text-green-600">
+                                Rp {totalPrice.toLocaleString("id-ID")}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Total Modal</span>
+                              <span className="font-medium">
+                                Rp {totalCapital.toLocaleString("id-ID")}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Margin</span>
+                              <span className="font-bold">
+                                {marginPct.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Total Jam:</span>
-                        <span>{editingVoucher.totalHours} jam</span>
-                      </div>
-                      <div className="flex justify-between border-t border-gray-200 pt-1">
-                        <span>Harga Voucher:</span>
-                        <span className="font-bold text-green-600">
-                          Rp{" "}
-                          {(
-                            editingVoucher.hourlyRate *
-                            editingVoucher.totalHours
-                          ).toLocaleString("id-ID")}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                    );
+                  })()}
               </form>
 
               <div className="flex gap-3 mt-6">
