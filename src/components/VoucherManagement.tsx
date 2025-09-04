@@ -1694,24 +1694,6 @@ const VoucherManagement: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Total Jam *
-                    </label>
-                    <input
-                      type="number"
-                      value={editingVoucher.totalHours}
-                      onChange={(e) =>
-                        setEditingVoucher({
-                          ...editingVoucher,
-                          totalHours: Number(e.target.value),
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      min="1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Harga Per Jam *
                     </label>
                     <input
@@ -1727,23 +1709,40 @@ const VoucherManagement: React.FC = () => {
                       min="1000"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Modal per Jam
+                    </label>
+                    <input
+                      type="number"
+                      value={editingVoucher.capital}
+                      onChange={(e) =>
+                        setEditingVoucher({
+                          ...editingVoucher,
+                          capital: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="0"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Modal per Jam
+                    Total Jam *
                   </label>
                   <input
                     type="number"
-                    value={editingVoucher.capital}
+                    value={editingVoucher.totalHours}
                     onChange={(e) =>
                       setEditingVoucher({
                         ...editingVoucher,
-                        capital: Number(e.target.value),
+                        totalHours: Number(e.target.value),
                       })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    min="0"
+                    min="1"
                   />
                 </div>
 
