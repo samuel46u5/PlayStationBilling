@@ -1,7 +1,7 @@
 // ...existing code...
 
 // ...existing code...
-import { Pause, Power, Printer, Ticket } from "lucide-react";
+import { CreditCard, Pause, Power, Printer, Ticket } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
@@ -170,9 +170,9 @@ const ActiveRentals: React.FC = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerSearchTerm, setCustomerSearchTerm] = useState("");
   const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
-  const [rentalType, setRentalType] = useState<"pay-as-you-go" | "prepaid">(
-    "pay-as-you-go"
-  );
+  const [rentalType, setRentalType] = useState<
+    "pay-as-you-go" | "prepaid" | "member-card"
+  >("pay-as-you-go");
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [voucherSearchTerm, setVoucherSearchTerm] = useState("");
   const [voucherList, setVoucherList] = useState<any[]>([]);
@@ -238,8 +238,6 @@ const ActiveRentals: React.FC = () => {
       setRentalStartTime(getNowForDatetimeLocal());
     }
   }, [showStartRentalModal, getNowForDatetimeLocal]);
-
-  console.log(voucherList);
 
   // Fungsi untuk menjalankan persiapan untuk satu console
   const handleSingleConsolePersiapan = async (targetConsole: Console) => {
@@ -1320,6 +1318,106 @@ const ActiveRentals: React.FC = () => {
         //   "Rental telah diakhiri otomatis (bayar dimuka)",
         //   "success"
         // );
+        return;
+      }
+
+      // Untuk MEMBER CARD (balance_time), potong balance dan akhiri sesi
+      if ((session as any).is_voucher_used) {
+        const consoleObj = consoles.find((c) => c.id === session.console_id);
+        if (consoleObj?.power_tv_command) {
+          await fetch(consoleObj.power_tv_command).catch(() => {});
+        }
+        if (consoleObj?.relay_command_off) {
+          await fetch(consoleObj.relay_command_off).catch(() => {});
+        }
+
+        // Hitung menit yang terpakai
+        const startTime = session.start_time
+          ? new Date(session.start_time)
+          : new Date();
+        const endTime = new Date();
+        const elapsedMinutes = Math.ceil(
+          (endTime.getTime() - startTime.getTime()) / (1000 * 60)
+        );
+
+        // Ambil data customer untuk mendapatkan balance_time
+        const { data: customerData, error: customerError } = await supabase
+          .from("customers")
+          .select("balance_time")
+          .eq("id", session.customer_id)
+          .single();
+
+        if (customerError || !customerData) {
+          Swal.fire("Error", "Gagal mengambil data customer", "error");
+          return;
+        }
+
+        const currentBalance = Math.max(0, customerData.balance_time || 0);
+        const usedFromBalance = Math.min(elapsedMinutes, currentBalance);
+        const remainingBalance = currentBalance - usedFromBalance;
+
+        // Update balance_time customer
+        await supabase
+          .from("customers")
+          .update({ balance_time: remainingBalance })
+          .eq("id", session.customer_id);
+
+        // Update rental session
+        const hoursUsed = Number((usedFromBalance / 60).toFixed(2));
+        const hoursBefore = Number((currentBalance / 60).toFixed(2));
+        const hoursAfter = Number((remainingBalance / 60).toFixed(2));
+
+        await supabase
+          .from("rental_sessions")
+          .update({
+            end_time: endTime.toISOString(),
+            status: "completed",
+            payment_status: "paid",
+            total_amount: 0,
+            paid_amount: 0,
+            duration_minutes: elapsedMinutes,
+            voucher_hours_used: hoursUsed,
+            voucher_remaining_before: hoursBefore,
+            voucher_remaining_after: hoursAfter,
+          })
+          .eq("id", session.id);
+
+        // Update console status
+        await supabase
+          .from("consoles")
+          .update({ status: "available" })
+          .eq("id", session.console_id);
+
+        await finalizeProductsAndStock(session.id);
+
+        // Log transaksi kasir
+        await logCashierTransaction({
+          type: "rental",
+          amount: 0,
+          paymentMethod,
+          referenceId: `MEMBER_CARD-${session.id}-${Date.now()}`,
+          description: `Rental (member card) - ${
+            session.customers?.name ?? "Tanpa Nama"
+          }`,
+          details: {
+            action: "member_card_session",
+            session_id: session.id,
+            customer_id: session.customer_id,
+            console_id: session.console_id,
+            elapsed_minutes: elapsedMinutes,
+            voucher_hours_used: hoursUsed,
+            voucher_remaining_before: hoursBefore,
+            voucher_remaining_after: hoursAfter,
+          },
+        });
+
+        await loadData();
+        await refreshActiveSessions();
+        Swal.fire(
+          "Berhasil",
+          `Sesi rental (member card) berhasil diakhiri. Waktu terpakai: ${elapsedMinutes} menit, sisa balance: ${remainingBalance} menit`,
+          "success"
+        );
         return;
       }
 
@@ -3055,6 +3153,87 @@ const ActiveRentals: React.FC = () => {
         });
         return; // Tunggu konfirmasi modal
       }
+
+      // Member Card Mode - gunakan balance_time
+      if (rentalType === "member-card") {
+        if (customerType !== "member" || !customerId) {
+          Swal.fire("Error", "Mode member card hanya untuk member", "warning");
+          return;
+        }
+
+        const customer = customers.find((c) => c.id === customerId);
+        const availableBalance = Math.max(0, customer?.balance_time || 0);
+        if (availableBalance <= 0) {
+          Swal.fire("Error", "Balance time member habis", "warning");
+          return;
+        }
+
+        // Nyalakan perangkat (sama seperti pay-as-you-go)
+        if (latestConsole.power_tv_command) {
+          fetch(latestConsole.power_tv_command).catch(() => {});
+        }
+        if (latestConsole.relay_command_on) {
+          fetch(latestConsole.relay_command_on).catch(() => {});
+        }
+
+        // Insert rental session dengan flag voucher
+        const { error: rentalError } = await supabase
+          .from("rental_sessions")
+          .insert({
+            customer_id: customerId,
+            console_id: consoleId,
+            status: "active",
+            payment_status: "pending",
+            total_amount: 0,
+            paid_amount: 0,
+            start_time: new Date(rentalStartTime).toISOString(),
+            duration_minutes: null, // Tidak ada durasi tetap
+            is_voucher_used: true, // Tandai menggunakan balance
+          });
+
+        if (rentalError) throw rentalError;
+
+        // Update console status
+        const { error: consoleError } = await supabase
+          .from("consoles")
+          .update({ status: "rented" })
+          .eq("id", consoleId);
+        if (consoleError) throw consoleError;
+
+        // Cetak bukti
+        let customerName = "";
+        if (customerType === "member" && customerId) {
+          const customerRow = customers.find((c) => c.id === customerId);
+          customerName = customerRow?.name || "Customer";
+        }
+
+        printRentalProof({
+          customerName: customerName,
+          unitNumber: latestConsole.name,
+          startTimestamp: new Date().toLocaleString("id-ID"),
+          mode: rentalType,
+        });
+
+        setShowStartRentalModal(null);
+        setSelectedCustomerId("");
+        setCustomerType("member");
+        setRentalType("pay-as-you-go");
+        setRentalDurationHours(1);
+        setRentalDurationMinutes(0);
+        setRentalStartTime(getNowForDatetimeLocal());
+        setNonMemberName("");
+        setSearchConsole("");
+        setNonMemberPhone("");
+        await loadData();
+        await refreshActiveSessions();
+        Swal.fire(
+          "Berhasil",
+          "Sesi rental (member card) berhasil dimulai",
+          "success"
+        );
+        return;
+      }
+
       // Create new rental session (pay-as-you-go)
       const { error: rentalError } = await supabase
         .from("rental_sessions")
@@ -6988,6 +7167,18 @@ const ActiveRentals: React.FC = () => {
                       <DollarSign className="h-5 w-5" />
                       <span className="font-medium">Bayar Dimuka</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setRentalType("member-card")}
+                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
+                        rentalType === "member-card"
+                          ? "bg-green-50 border-green-500 text-green-700"
+                          : "bg-white border-gray-300 text-gray-700"
+                      }`}
+                    >
+                      <CreditCard className="h-5 w-5" />
+                      <span className="font-medium">Member Card</span>
+                    </button>
                   </div>
 
                   {rentalType === "prepaid" && (
@@ -7031,6 +7222,34 @@ const ActiveRentals: React.FC = () => {
                       <p className="text-xs text-gray-500 mt-1">
                         Jam dan menit akan digabung sebagai total durasi.
                       </p>
+                    </div>
+                  )}
+
+                  {/* Member Card Mode */}
+                  {rentalType === "member-card" && (
+                    <div>
+                      {customerType === "member" && selectedCustomerId ? (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-sm font-medium text-blue-800">
+                            Sisa Balance:{" "}
+                            {customers.find((c) => c.id === selectedCustomerId)
+                              ?.balance_time ?? 0}{" "}
+                            menit
+                          </p>
+                          <p className="text-xs text-blue-600 mt-1">
+                            Waktu terpakai akan otomatis dipotong dari balance
+                            saat sesi diakhiri. Sisa balance akan tetap
+                            tersimpan.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                          <p className="text-sm text-yellow-800">
+                            Mode ini hanya untuk member. Silakan pilih member
+                            terlebih dahulu.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -2015,7 +2015,7 @@ const CashierSessionComponent: React.FC = () => {
                   >
                     <option value="cash">Cash</option>
                     <option value="card">Card</option>
-                    <option value="transfer">Transfer</option>
+                    <option value="transfer">QRIS</option>
                   </select>
                 </div>
               </div>
