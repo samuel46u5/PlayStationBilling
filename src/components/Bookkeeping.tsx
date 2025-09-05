@@ -15,6 +15,7 @@ import {
   Receipt,
   X,
   Ticket,
+  Trash,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
@@ -701,6 +702,52 @@ const Bookkeeping: React.FC = () => {
     }
   };
 
+  const handleDeleteTransaction = async (transactionId: string) => {
+    const result = await Swal.fire({
+      title: "Konfirmasi Hapus",
+      text: "Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Ya, Hapus!",
+      cancelButtonText: "Batal",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      setSaving(true);
+
+      const { error: deleteError } = await supabase
+        .from("cashier_transactions")
+        .delete()
+        .eq("id", transactionId);
+
+      if (deleteError) throw deleteError;
+
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: "Transaksi berhasil dihapus!",
+        confirmButtonColor: "#3b82f6",
+      });
+
+      // Refresh transaction data
+      await fetchTransaction();
+    } catch (err) {
+      console.error("Gagal menghapus transaksi:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Gagal menghapus transaksi. Silakan coba lagi.",
+        confirmButtonColor: "#3b82f6",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1366,6 +1413,28 @@ const Bookkeeping: React.FC = () => {
                                   >
                                     <Receipt className="h-3 w-3" />
                                     Print
+                                  </button>
+                                )}
+
+                              {/* Delete button */}
+                              {transaction.type !== "expense" &&
+                                transaction.reference_id &&
+                                !String(transaction.reference_id)
+                                  .toUpperCase()
+                                  .includes("OPENING-CASH") &&
+                                !String(transaction.reference_id)
+                                  .toUpperCase()
+                                  .includes("MOVE_RENTAL") && (
+                                  <button
+                                    onClick={() =>
+                                      handleDeleteTransaction(transaction.id)
+                                    }
+                                    disabled={saving}
+                                    className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Hapus transaksi"
+                                  >
+                                    <Trash className="h-3 w-3" />
+                                    Hapus
                                   </button>
                                 )}
                             </div>
