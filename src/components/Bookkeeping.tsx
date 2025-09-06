@@ -359,7 +359,7 @@ const Bookkeeping: React.FC = () => {
       }
     };
     fetchSessions();
-  }, [activeView]);
+  }, [activeView, selectedSessionId, activeTab]);
 
   // Pagination
   const sourceList = useMemo(
