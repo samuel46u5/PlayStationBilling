@@ -706,11 +706,16 @@ const ActiveRentals: React.FC = () => {
         const active = Array.isArray(sessions) && sessions.length > 0;
         setIsCashierActive(active);
         if (!active) {
-          Swal.fire(
-            "Peringatan",
-            "Tidak ada sesi kasir aktif. Silakan buka sesi kasir terlebih dahulu.",
-            "warning"
-          );
+          Swal.fire({
+            toast: true,
+            position: "top-end",
+            icon: "warning",
+            title:
+              "Tidak ada sesi kasir aktif. Silakan buka sesi kasir terlebih dahulu.",
+            showConfirmButton: false,
+            timer: 5000,
+            timerProgressBar: true,
+          });
         }
       } catch {
         setIsCashierActive(false);

@@ -103,6 +103,38 @@ const Products: React.FC = () => {
   >([]);
   const [selectAllProducts, setSelectAllProducts] = useState(false);
 
+  // State untuk modal pemilihan produk pada form Purchase Order
+  const [showProductSelectModal, setShowProductSelectModal] = useState<{
+    open: boolean;
+    index: number | null;
+  }>({ open: false, index: null });
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+
+  const filteredProductsForSelect = React.useMemo(() => {
+    const term = productSearchTerm.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter((p) => {
+      const byName = (p.name || "").toLowerCase().includes(term);
+      const byCat = (p.category || "").toLowerCase().includes(term);
+      const byBarcode = (p.barcode || "").toLowerCase().includes(term);
+      return byName || byCat || byBarcode;
+    });
+  }, [productSearchTerm, products]);
+
+  // State untuk modal pemilihan supplier pada form Purchase Order
+  const [showSupplierSelectModal, setShowSupplierSelectModal] = useState(false);
+  const [supplierSearchTerm, setSupplierSearchTerm] = useState("");
+  const filteredSuppliersForSelect = React.useMemo(() => {
+    const term = supplierSearchTerm.trim().toLowerCase();
+    if (!term) return suppliers;
+    return suppliers.filter((s: any) => {
+      const byName = (s.name || "").toLowerCase().includes(term);
+      const byContact = (s.contact_person || "").toLowerCase().includes(term);
+      const byPhone = (s.phone || "").toLowerCase().includes(term);
+      return byName || byContact || byPhone;
+    });
+  }, [supplierSearchTerm, suppliers]);
+
   // Fungsi untuk print price list
   const handlePrintPriceList = async () => {
     if (selectedProductsForPrint.length === 0) {
@@ -1779,23 +1811,20 @@ const Products: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Supplier *
                       </label>
-                      <select
-                        value={newPurchase.supplierId}
-                        onChange={(e) =>
-                          setNewPurchase({
-                            ...newPurchase,
-                            supplierId: e.target.value,
-                          })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      <button
+                        type="button"
+                        onClick={() => setShowSupplierSelectModal(true)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left flex items-center justify-between"
                       >
-                        <option value="">Pilih Supplier</option>
-                        {suppliers.map((supplier) => (
-                          <option key={supplier.id} value={supplier.id}>
-                            {supplier.name}
-                          </option>
-                        ))}
-                      </select>
+                        <span>
+                          {newPurchase.supplierId
+                            ? suppliers.find(
+                                (s) => s.id === newPurchase.supplierId
+                              )?.name || "Pilih Supplier"
+                            : "Pilih Supplier"}
+                        </span>
+                        <Search className="h-4 w-4 text-gray-400" />
+                      </button>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1841,24 +1870,24 @@ const Products: React.FC = () => {
                             <label className="block text-xs font-medium text-gray-700 mb-1">
                               Produk
                             </label>
-                            <select
-                              value={item.productId}
-                              onChange={(e) =>
-                                updatePurchaseItem(
-                                  index,
-                                  "productId",
-                                  e.target.value
-                                )
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowProductSelectModal({ open: true, index })
                               }
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left flex items-center justify-between"
                             >
-                              <option value="">Pilih Produk</option>
-                              {products.map((product) => (
-                                <option key={product.id} value={product.id}>
-                                  {product.name}
-                                </option>
-                              ))}
-                            </select>
+                              <span>
+                                {item.productId
+                                  ? products.find(
+                                      (p) => p.id === item.productId
+                                    )?.name ||
+                                    item.productName ||
+                                    "Pilih Produk"
+                                  : "Pilih Produk"}
+                              </span>
+                              <Search className="h-4 w-4 text-gray-400" />
+                            </button>
                           </div>
                           <div className="col-span-2">
                             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -2347,6 +2376,195 @@ const Products: React.FC = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Product Select Modal for Purchase Items */}
+        {showProductSelectModal.open && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex">
+              <div className="flex-1 p-6 overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Pilih Produk
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowProductSelectModal({ open: false, index: null });
+                      setProductSearchTerm("");
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <XCircle className="h-6 w-6" />
+                  </button>
+                </div>
+
+                <div className="relative mb-4">
+                  <input
+                    type="text"
+                    placeholder="Cari produk berdasarkan nama, kategori, atau barcode..."
+                    value={productSearchTerm}
+                    onChange={(e) => setProductSearchTerm(e.target.value)}
+                    className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                </div>
+
+                <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100">
+                  {filteredProductsForSelect.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500">
+                      {productSearchTerm
+                        ? "Tidak ada produk yang cocok"
+                        : "Belum ada produk"}
+                    </div>
+                  ) : (
+                    filteredProductsForSelect.map((p: any) => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          if (showProductSelectModal.index !== null) {
+                            updatePurchaseItem(
+                              showProductSelectModal.index,
+                              "productId",
+                              p.id
+                            );
+                          }
+                          setShowProductSelectModal({
+                            open: false,
+                            index: null,
+                          });
+                          setProductSearchTerm("");
+                        }}
+                        className="w-full text-left p-4 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {p.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Kategori: {p.category || "-"}
+                              {p.barcode ? ` • Barcode: ${p.barcode}` : ""}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-gray-700">
+                              Stok: {p.stock}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Modal: Rp{" "}
+                              {Number(p.cost || 0).toLocaleString("id-ID")}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <div className="border-t border-gray-200 pt-4 mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProductSelectModal({ open: false, index: null });
+                      setProductSearchTerm("");
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Supplier Select Modal for Purchase Order */}
+        {showSupplierSelectModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex">
+              <div className="flex-1 p-6 overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Pilih Supplier
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowSupplierSelectModal(false);
+                      setSupplierSearchTerm("");
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <XCircle className="h-6 w-6" />
+                  </button>
+                </div>
+
+                <div className="relative mb-4">
+                  <input
+                    type="text"
+                    placeholder="Cari supplier berdasarkan nama, kontak, atau telepon..."
+                    value={supplierSearchTerm}
+                    onChange={(e) => setSupplierSearchTerm(e.target.value)}
+                    className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                </div>
+
+                <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100">
+                  {filteredSuppliersForSelect.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500">
+                      {supplierSearchTerm
+                        ? "Tidak ada supplier yang cocok"
+                        : "Belum ada supplier"}
+                    </div>
+                  ) : (
+                    filteredSuppliersForSelect.map((s: any) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          setNewPurchase({ ...newPurchase, supplierId: s.id });
+                          setShowSupplierSelectModal(false);
+                          setSupplierSearchTerm("");
+                        }}
+                        className="w-full text-left p-4 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {s.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {s.contact_person || ""}
+                              {s.phone ? ` • ${s.phone}` : ""}
+                            </div>
+                          </div>
+                          <div className="text-right text-xs text-gray-400">
+                            {s.email || ""}
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <div className="border-t border-gray-200 pt-4 mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSupplierSelectModal(false);
+                      setSupplierSearchTerm("");
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Tutup
+                  </button>
+                </div>
               </div>
             </div>
           </div>
