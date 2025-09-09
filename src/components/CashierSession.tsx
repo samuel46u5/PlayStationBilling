@@ -225,10 +225,16 @@ const CashierSessionComponent: React.FC = () => {
     if (!currentSession) return 0;
 
     const income =
-      todaySales.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) +
-      todayRentals.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
+      todaySales
+        .filter((s) => s.payment_method === "cash")
+        .reduce((sum, s) => sum + (Number(s.amount) || 0), 0) +
+      todayRentals
+        .filter((r) => r.payment_method === "cash")
+        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
       todayIncome.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
-      todayVouchers.reduce((sum, v) => sum + (Number(v.amount) || 0), 0);
+      todayVouchers
+        .filter((v) => v.payment_method === "cash")
+        .reduce((sum, v) => sum + (Number(v.amount) || 0), 0);
 
     const expenses = todayExpenses.reduce(
       (sum, e) => sum + (Number(e.amount) || 0),
