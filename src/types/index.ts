@@ -350,7 +350,7 @@ export interface Voucher {
   voucherCode: string; // Unique code like "VCH001", "VCH002"
   name: string; // e.g., "Voucher 5 Jam Gaming"
   description: string;
-  totalHours: number; // Total hours in voucher
+  totalPoints: number; // Total hours in voucher
   remainingHours: number; // Hours left to use
   usedHours: number; // Hours already used
   originalPrice: number; // Normal price without discount

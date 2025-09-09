@@ -36,8 +36,8 @@ type CashierDetails = {
   voucher?: {
     voucher_id?: string;
     voucher_code?: string;
-    total_minutes?: number;
-    hourly_rate?: number;
+    total_points?: number;
+    voucher_price?: number;
   };
   payment?: { amount?: number; method?: string };
   customer?: { name?: string; phone?: string };
@@ -72,9 +72,9 @@ const VoucherManagement: React.FC = () => {
   const [newVoucher, setNewVoucher] = useState({
     name: "",
     description: "",
-    totalHours: 5,
-    hourlyRate: 10000,
+    totalPoints: 5000,
     capital: 10000,
+    voucherPrice: 50000,
   });
 
   const [sellVoucher, setSellVoucher] = useState({
@@ -98,9 +98,9 @@ const VoucherManagement: React.FC = () => {
           voucherCode: it.voucher_code ?? it.voucherCode,
           name: it.name,
           description: it.description,
-          totalMinutes: it.total_minutes ?? 0,
+          totalPoints: it.total_points ?? 0,
           capital: it.capital ?? 0,
-          hourlyRate: it.hourly_rate ?? 0,
+          // hourlyRate: it.hourly_rate ?? 0,
           voucherPrice: it.voucher_price ?? 0,
           status: it.status,
           customerId: it.customer_id ?? it.customerId,
@@ -229,28 +229,32 @@ const VoucherManagement: React.FC = () => {
   // };
 
   const handleCreateVoucher = async () => {
-    if (!newVoucher.name || !newVoucher.totalHours || !newVoucher.hourlyRate) {
-      alert("Nama, total jam, dan harga original wajib diisi");
+    if (
+      !newVoucher.name ||
+      !newVoucher.totalPoints ||
+      !newVoucher.voucherPrice
+    ) {
+      alert("Nama, total points, dan harga original wajib diisi");
       return;
     }
 
     try {
-      const totalMinutes = Math.max(
-        Math.floor(Number(newVoucher.totalHours) * 60),
-        1
-      );
-      const hourlyRate = Number(Number(newVoucher.hourlyRate).toFixed(2));
-      const voucherPrice = Number(
-        (hourlyRate * Number(newVoucher.totalHours)).toFixed(2)
-      );
+      // const totalMinutes = Math.max(
+      //   Math.floor(Number(newVoucher.totalHours) * 60),
+      //   1
+      // );
+      // const hourlyRate = Number(Number(newVoucher.hourlyRate).toFixed(2));
+      // const voucherPrice = Number(
+      //   (hourlyRate * Number(newVoucher.totalHours)).toFixed(2)
+      // );
 
       const created = await db.vouchers.create({
         name: newVoucher.name,
         description: newVoucher.description,
-        total_minutes: totalMinutes,
+        total_points: newVoucher.totalPoints,
         capital: Number(Number(newVoucher.capital)),
-        hourly_rate: hourlyRate,
-        voucher_price: voucherPrice,
+        // hourly_rate: hourlyRate,
+        voucher_price: newVoucher.voucherPrice,
         status: "active",
       });
       alert(
@@ -267,8 +271,8 @@ const VoucherManagement: React.FC = () => {
     setNewVoucher({
       name: "",
       description: "",
-      totalHours: 5,
-      hourlyRate: 50000,
+      totalPoints: 5000,
+      voucherPrice: 50000,
       // validityDays: 30,
       capital: 10000,
     });
@@ -414,8 +418,8 @@ const VoucherManagement: React.FC = () => {
             <span className="font-bold">{voucher.name}</span>
           </div>
           <div className="flex justify-between">
-            <span>Total Jam:</span>
-            <span className="font-bold">{voucher.totalHours} Jam</span>
+            <span>Total Points:</span>
+            <span className="font-bold">{voucher.totalPoints} Points</span>
           </div>
           <div className="flex justify-between">
             <span>Harga:</span>
@@ -616,12 +620,14 @@ const VoucherManagement: React.FC = () => {
       {/* Vouchers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {activeVouchers.map((voucher) => {
-          const totalHours = (voucher.totalMinutes ?? 0) / 60;
-          const totalCapital = Number(voucher.capital * totalHours || 0);
-          const capitalPerHour = Number(voucher.capital);
-          const totalPrice = Number(voucher.voucherPrice || 0);
-          const marginPct = totalPrice
-            ? ((totalPrice - totalCapital) / totalPrice) * 100
+          // const totalHours = (voucher.totalMinutes ?? 0) / 60;
+          // const totalCapital = Number(voucher.capital * totalHours || 0);
+          // const capitalPerHour = Number(voucher.capital);
+          // const totalPrice = Number(voucher.voucherPrice || 0);
+          const marginPct = voucher.voucherPrice
+            ? ((voucher.voucherPrice - voucher.capital) /
+                voucher.voucherPrice) *
+              100
             : 0;
 
           return (
@@ -692,12 +698,12 @@ const VoucherManagement: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Ringkasan Jam */}
+                  {/* Ringkasan points */}
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Total Jam</span>
+                      <span className="text-gray-600">Total Points:</span>
                       <span className="font-medium">
-                        {totalHours.toFixed(2)} jam
+                        {voucher.totalPoints} points
                       </span>
                     </div>
                   </div>
@@ -707,39 +713,39 @@ const VoucherManagement: React.FC = () => {
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
                         <span className="font-medium text-purple-600">
-                          Harga Per Jam
+                          Harga Voucher
                         </span>
                         <span className="font-bold text-purple-600">
-                          Rp {voucher.hourlyRate.toLocaleString("id-ID")}
+                          Rp {voucher.voucherPrice.toLocaleString("id-ID")}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Modal per Jam</span>
+                        <span className="text-gray-600">Modal Voucher</span>
                         <span className="font-medium">
-                          Rp {capitalPerHour.toLocaleString("id-ID")}
+                          Rp {voucher.capital.toLocaleString("id-ID")}
                         </span>
                       </div>
 
                       <div className="flex justify-between border-b border-gray-200 pb-1">
                         <span className="font-medium text-purple-600">
-                          Total Jam
+                          Total Points
                         </span>
                         <span className="font-bold text-purple-600">
-                          {Number(voucher.totalMinutes) / 60} jam
+                          {Number(voucher.totalPoints)} points
                         </span>
                       </div>
-                      <div className="flex justify-between">
+                      {/* <div className="flex justify-between">
                         <span className="text-gray-600">Harga Voucher</span>
                         <span className="font-bold text-green-600">
-                          Rp {totalPrice.toLocaleString("id-ID")}
+                          Rp {voucher.voucherPrice.toLocaleString("id-ID")}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Total Modal</span>
                         <span className="font-medium">
-                          Rp {totalCapital.toLocaleString("id-ID")}
+                          Rp {voucher.capital.toLocaleString("id-ID")}
                         </span>
-                      </div>
+                      </div> */}
                       <div className="flex justify-between">
                         <span className="text-gray-600">Margin</span>
                         <span className="font-bold">
@@ -1096,8 +1102,8 @@ const VoucherManagement: React.FC = () => {
       voucherCode: voucher.voucherCode,
       name: voucher.name,
       description: voucher.description,
-      totalHours: (voucher.totalMinutes ?? 0) / 60,
-      hourlyRate: voucher.hourlyRate,
+      totalPoints: voucher.totalPoints,
+      voucherPrice: voucher.voucherPrice,
       capital: voucher.capital,
     });
     setShowEditVoucherForm(true);
@@ -1107,34 +1113,34 @@ const VoucherManagement: React.FC = () => {
     if (
       !editingVoucher ||
       !editingVoucher.name ||
-      !editingVoucher.totalHours ||
-      !editingVoucher.hourlyRate
+      !editingVoucher.capital ||
+      !editingVoucher.voucherPrice
     ) {
       await Swal.fire({
         icon: "error",
         title: "Error",
-        text: "Nama, total jam, dan harga per jam wajib diisi",
+        text: "Nama, modal voucher, dan harga voucher wajib diisi",
       });
       return;
     }
 
     try {
-      const totalMinutes = Math.max(
-        Math.floor(Number(editingVoucher.totalHours) * 60),
-        1
-      );
-      const hourlyRate = Number(Number(editingVoucher.hourlyRate).toFixed(2));
-      const voucherPrice = Number(
-        (hourlyRate * Number(editingVoucher.totalHours)).toFixed(2)
-      );
+      // const totalMinutes = Math.max(
+      //   Math.floor(Number(editingVoucher.totalHours) * 60),
+      //   1
+      // );
+      // const hourlyRate = Number(Number(editingVoucher.hourlyRate).toFixed(2));
+      // const voucherPrice = Number(
+      //   (hourlyRate * Number(editingVoucher.totalHours)).toFixed(2)
+      // );
 
       await db.update("vouchers", editingVoucher.id, {
         name: editingVoucher.name,
         description: editingVoucher.description,
-        total_minutes: totalMinutes,
+        total_points: editingVoucher.totalPoints,
         capital: Number(Number(editingVoucher.capital)),
-        hourly_rate: hourlyRate,
-        voucher_price: voucherPrice,
+        // hourly_rate: hourlyRate,
+        voucher_price: editingVoucher.voucherPrice,
       });
 
       await Swal.fire({
@@ -1286,15 +1292,15 @@ const VoucherManagement: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Total Jam *
+                      Total Points *
                     </label>
                     <input
                       type="number"
-                      value={newVoucher.totalHours}
+                      value={newVoucher.totalPoints}
                       onChange={(e) =>
                         setNewVoucher({
                           ...newVoucher,
-                          totalHours: Number(e.target.value),
+                          totalPoints: Number(e.target.value),
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1304,15 +1310,15 @@ const VoucherManagement: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Harga Per Jam *
+                      Harga Voucher *
                     </label>
                     <input
                       type="number"
-                      value={newVoucher.hourlyRate}
+                      value={newVoucher.voucherPrice}
                       onChange={(e) =>
                         setNewVoucher({
                           ...newVoucher,
-                          hourlyRate: Number(e.target.value),
+                          voucherPrice: Number(e.target.value),
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1324,7 +1330,7 @@ const VoucherManagement: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Modal Per Jam
+                      Modal Voucher
                     </label>
                     <input
                       type="number"
@@ -1556,8 +1562,8 @@ const VoucherManagement: React.FC = () => {
                             <span>{selectedVoucher.name}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>Total Jam:</span>
-                            <span>{selectedVoucher.totalHours} jam</span>
+                            <span>Total Points:</span>
+                            <span>{selectedVoucher.totalPoints} points</span>
                           </div>
                           <div className="flex justify-between">
                             <span>Berlaku:</span>
@@ -1694,15 +1700,15 @@ const VoucherManagement: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Harga Per Jam *
+                      Harga Voucher *
                     </label>
                     <input
                       type="number"
-                      value={editingVoucher.hourlyRate}
+                      value={editingVoucher.voucherPrice}
                       onChange={(e) =>
                         setEditingVoucher({
                           ...editingVoucher,
-                          hourlyRate: Number(e.target.value),
+                          voucherPrice: Number(e.target.value),
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1711,7 +1717,7 @@ const VoucherManagement: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Modal per Jam
+                      Modal Voucher
                     </label>
                     <input
                       type="number"
@@ -1730,15 +1736,15 @@ const VoucherManagement: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Total Jam *
+                    Total Points *
                   </label>
                   <input
                     type="number"
-                    value={editingVoucher.totalHours}
+                    value={editingVoucher.totalPoints}
                     onChange={(e) =>
                       setEditingVoucher({
                         ...editingVoucher,
-                        totalHours: Number(e.target.value),
+                        totalPoints: Number(e.target.value),
                       })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1747,17 +1753,20 @@ const VoucherManagement: React.FC = () => {
                 </div>
 
                 {/* Preview Harga */}
-                {editingVoucher.hourlyRate &&
-                  editingVoucher.totalHours &&
+                {editingVoucher.voucherPrice &&
+                  editingVoucher.totalPoints > 0 &&
                   (() => {
-                    const totalHours = Number(editingVoucher.totalHours) || 0;
-                    const capitalPerHour = Number(editingVoucher.capital) || 0;
-                    const hourlyRate = Number(editingVoucher.hourlyRate) || 0;
-                    const totalPrice = Number(hourlyRate * totalHours) || 0;
-                    const totalCapital =
-                      Number(capitalPerHour * totalHours) || 0;
-                    const marginPct = totalPrice
-                      ? ((totalPrice - totalCapital) / totalPrice) * 100
+                    // const totalHours = Number(editingVoucher.totalHours) || 0;
+                    // const capitalPerHour = Number(editingVoucher.capital) || 0;
+                    // const hourlyRate = Number(editingVoucher.hourlyRate) || 0;
+                    // const totalPrice = Number(hourlyRate * totalHours) || 0;
+                    // const totalCapital =
+                    //   Number(capitalPerHour * totalHours) || 0;
+                    const marginPct = editingVoucher.voucherPrice
+                      ? ((editingVoucher.voucherPrice -
+                          editingVoucher.capital) /
+                          editingVoucher.voucherPrice) *
+                        100
                       : 0;
                     return (
                       <div className="bg-gray-50 rounded-lg p-4">
@@ -1768,42 +1777,50 @@ const VoucherManagement: React.FC = () => {
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="font-medium text-purple-600">
-                                Harga Per Jam
+                                Harga Voucher
                               </span>
                               <span className="font-bold text-purple-600">
-                                Rp {hourlyRate.toLocaleString("id-ID")}
+                                Rp{" "}
+                                {editingVoucher.voucherPrice.toLocaleString(
+                                  "id-ID"
+                                )}
                               </span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-600">
-                                Modal per Jam
+                                Modal Voucher
                               </span>
                               <span className="font-medium">
-                                Rp {capitalPerHour.toLocaleString("id-ID")}
+                                Rp{" "}
+                                {editingVoucher.capital.toLocaleString("id-ID")}
                               </span>
                             </div>
                             <div className="flex justify-between border-b border-gray-200 pb-1">
                               <span className="font-medium text-purple-600">
-                                Total Jam
+                                Total Points
                               </span>
                               <span className="font-bold text-purple-600">
-                                {totalHours} jam
+                                {editingVoucher.totalPoints} points
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            {/* <div className="flex justify-between">
                               <span className="text-gray-600">
                                 Harga Voucher
                               </span>
                               <span className="font-bold text-green-600">
-                                Rp {totalPrice.toLocaleString("id-ID")}
+                                Rp{" "}
+                                {editingVoucher.voucherPrice.toLocaleString(
+                                  "id-ID"
+                                )}
                               </span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-600">Total Modal</span>
                               <span className="font-medium">
-                                Rp {totalCapital.toLocaleString("id-ID")}
+                                Rp{" "}
+                                {editingVoucher.capital.toLocaleString("id-ID")}
                               </span>
-                            </div>
+                            </div> */}
                             <div className="flex justify-between">
                               <span className="text-gray-600">Margin</span>
                               <span className="font-bold">

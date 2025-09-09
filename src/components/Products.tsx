@@ -93,7 +93,7 @@ const Products: React.FC = () => {
 
   // Calculate totals whenever items change
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
-  const [purchaseTax, setPurchaseTax] = useState(0);
+  // const [purchaseTax, setPurchaseTax] = useState(0);
   const [purchaseTotal, setPurchaseTotal] = useState(0);
 
   // State untuk print price list
@@ -164,11 +164,11 @@ const Products: React.FC = () => {
       (sum, item) => sum + item.total,
       0
     );
-    const tax = subtotal * 0.1; // 10% tax
-    const total = subtotal + tax;
+    // const tax = subtotal * 0.1; // 10% tax
+    const total = subtotal;
 
     setPurchaseSubtotal(subtotal);
-    setPurchaseTax(tax);
+    // setPurchaseTax(tax);
     setPurchaseTotal(total);
   }, [newPurchase.items]);
 
@@ -245,27 +245,6 @@ const Products: React.FC = () => {
   //     // items: p.items || [] // items will be fetched separately if needed
   //   };
   // }
-
-  // Fetch purchases from Supabase (replace mockPurchaseOrders)
-  useEffect(() => {
-    const fetchPurchases = async () => {
-      try {
-        // const data = await db.purchases.getAll(); // purchases fetch not needed
-        // Map DB fields to UI fields
-        // const mapped = (data || []).map(mapPurchaseFromDb); // purchases mapping not needed
-        // setPurchases(mapped); // commented out since purchases state is removed
-      } catch (error: any) {
-        Swal.fire({
-          icon: "error",
-          title: "Gagal memuat daftar pembelian",
-          text:
-            error.message || "Terjadi kesalahan saat mengambil data pembelian.",
-        });
-      }
-    };
-    fetchPurchases();
-    (window as any).refreshPurchases = fetchPurchases;
-  }, []);
 
   // Buka modal edit dan isi data produk
   useEffect(() => {
@@ -378,35 +357,35 @@ const Products: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "ordered":
-        return "bg-blue-100 text-blue-800";
-      case "received":
-        return "bg-green-100 text-green-800";
-      case "cancelled":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+  // const getStatusColor = (status: string) => {
+  //   switch (status) {
+  //     case "pending":
+  //       return "bg-yellow-100 text-yellow-800";
+  //     case "ordered":
+  //       return "bg-blue-100 text-blue-800";
+  //     case "received":
+  //       return "bg-green-100 text-green-800";
+  //     case "cancelled":
+  //       return "bg-red-100 text-red-800";
+  //     default:
+  //       return "bg-gray-100 text-gray-800";
+  //   }
+  // };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <Clock className="h-4 w-4" />;
-      case "ordered":
-        return <Truck className="h-4 w-4" />;
-      case "received":
-        return <CheckCircle className="h-4 w-4" />;
-      case "cancelled":
-        return <XCircle className="h-4 w-4" />;
-      default:
-        return <Clock className="h-4 w-4" />;
-    }
-  };
+  // const getStatusIcon = (status: string) => {
+  //   switch (status) {
+  //     case "pending":
+  //       return <Clock className="h-4 w-4" />;
+  //     case "ordered":
+  //       return <Truck className="h-4 w-4" />;
+  //     case "received":
+  //       return <CheckCircle className="h-4 w-4" />;
+  //     case "cancelled":
+  //       return <XCircle className="h-4 w-4" />;
+  //     default:
+  //       return <Clock className="h-4 w-4" />;
+  //   }
+  // };
 
   const lowStockProducts = products.filter((p) => p.stock <= p.min_stock);
 
@@ -650,7 +629,8 @@ const Products: React.FC = () => {
           `Produk ${product.name} berhasil dihapus.`,
           "success"
         );
-        if ((window as any).refreshProducts) (window as any).refreshProducts();
+        if ((window as any).refreshProducts)
+          await (window as any).refreshProducts();
       } catch (error: any) {
         Swal.fire("Gagal", error.message || "Gagal menghapus produk.", "error");
       }
@@ -690,7 +670,7 @@ const Products: React.FC = () => {
           "success"
         );
         if ((window as any).refreshSuppliers)
-          (window as any).refreshSuppliers();
+          await (window as any).refreshSuppliers();
       } catch (error: any) {
         Swal.fire(
           "Gagal",
@@ -1050,7 +1030,7 @@ const Products: React.FC = () => {
                     <p className="text-gray-600">{supplier?.name}</p>
                   </div>
                 </div>
-                <div className="text-right">
+                {/* <div className="text-right">
                   <span
                     className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
                       purchase.status
@@ -1059,7 +1039,7 @@ const Products: React.FC = () => {
                     {getStatusIcon(purchase.status)}
                     {purchase.status?.toUpperCase()}
                   </span>
-                </div>
+                </div> */}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -1231,9 +1211,9 @@ const Products: React.FC = () => {
                         <div>
                           <strong>PO Number:</strong> {purchase.po_number}
                         </div>
-                        <div>
+                        {/* <div>
                           <strong>Status:</strong> {purchase.status}
-                        </div>
+                        </div> */}
                         <div>
                           <strong>Total:</strong> Rp{" "}
                           {Number(purchase.total_amount).toLocaleString(
@@ -1333,9 +1313,9 @@ const Products: React.FC = () => {
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Supplier
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Status
-              </th>
+              </th> */}
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Total
               </th>
@@ -1365,7 +1345,7 @@ const Products: React.FC = () => {
                       : "-"}
                   </td>
                   <td className="px-4 py-3">{supplier?.name || "-"}</td>
-                  <td className="px-4 py-3">
+                  {/* <td className="px-4 py-3">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
                         po.status
@@ -1373,11 +1353,50 @@ const Products: React.FC = () => {
                     >
                       {po.status}
                     </span>
-                  </td>
+                  </td> */}
                   <td className="px-4 py-3 font-semibold text-blue-700">
                     Rp {Number(po.total_amount).toLocaleString("id-ID")}
                   </td>
-                  <td className="px-4 py-3">{/* Aksi detail, dll */}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={async () => {
+                        const confirm = await Swal.fire({
+                          title: "Hapus Purchase Order?",
+                          text: "Tindakan ini akan menghapus transaksi pembelian dan mengembalikan stok produk.",
+                          icon: "warning",
+                          showCancelButton: true,
+                          confirmButtonColor: "#d33",
+                          cancelButtonColor: "#6b7280",
+                          confirmButtonText: "Ya, hapus",
+                          cancelButtonText: "Batal",
+                        });
+                        if (!confirm.isConfirmed) return;
+
+                        try {
+                          await db.purchases.delete(po.id);
+                          await Swal.fire({
+                            icon: "success",
+                            title: "Berhasil",
+                            text: "Purchase Order telah dihapus dan stok dikembalikan.",
+                          });
+                          if ((window as any).refreshPurchases) {
+                            await (window as any).refreshPurchases();
+                          }
+                        } catch (err: any) {
+                          await Swal.fire({
+                            icon: "error",
+                            title: "Gagal menghapus",
+                            text:
+                              (err?.message || "") +
+                              (err?.details ? "\n" + err.details : ""),
+                          });
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -1953,31 +1972,46 @@ const Products: React.FC = () => {
                         </h4>
                         <div className="space-y-2">
                           {(() => {
-                            const subtotal = newPurchase.items.reduce(
+                            const total = newPurchase.items.reduce(
                               (sum, item) =>
                                 sum + item.quantity * item.unitCost,
                               0
                             );
-                            const tax = Math.round(subtotal * 0.1);
-                            const total = subtotal + tax;
                             return (
                               <>
-                                <div className="flex justify-between items-center">
+                                {/* <div className="flex justify-between items-center">
                                   <span className="text-blue-800">
                                     Subtotal:
                                   </span>
                                   <span className="font-medium text-blue-900">
                                     Rp {subtotal.toLocaleString("id-ID")}
                                   </span>
-                                </div>
-                                <div className="flex justify-between items-center">
+                                </div> */}
+                                {newPurchase.items.map((item, index) => (
+                                  <div
+                                    key={index}
+                                    className="flex justify-between items-center"
+                                  >
+                                    <div className="text-blue-800">
+                                      {item.productName} ({item.quantity} x Rp{" "}
+                                      {item.unitCost.toLocaleString("id-ID")})
+                                    </div>
+                                    <div className="font-medium text-blue-900">
+                                      Rp{" "}
+                                      {(
+                                        item.quantity * item.unitCost
+                                      ).toLocaleString("id-ID")}
+                                    </div>
+                                  </div>
+                                ))}
+                                {/* <div className="flex justify-between items-center">
                                   <span className="text-blue-800">
                                     Pajak (10%):
                                   </span>
                                   <span className="font-medium text-blue-900">
                                     Rp {tax.toLocaleString("id-ID")}
                                   </span>
-                                </div>
+                                </div> */}
                                 <div className="flex justify-between items-center border-t border-blue-300 pt-2">
                                   <span className="font-bold text-blue-900">
                                     Total:
@@ -2030,7 +2064,7 @@ const Products: React.FC = () => {
                           notes: newPurchase.notes,
                           expected_date: newPurchase.expectedDate,
                           subtotal: purchaseSubtotal,
-                          tax: purchaseTax,
+                          // tax: purchaseTax,
                           total_amount: purchaseTotal, // field DB
                         });
                         Swal.fire({
@@ -2048,7 +2082,9 @@ const Products: React.FC = () => {
                           expectedDate: new Date().toISOString().split("T")[0],
                         });
                         if ((window as any).refreshPurchases)
-                          (window as any).refreshPurchases();
+                          await (window as any).refreshPurchases();
+                        if ((window as any).refreshProducts)
+                          await (window as any).refreshProducts();
                       } catch (error: any) {
                         Swal.fire({
                           icon: "error",

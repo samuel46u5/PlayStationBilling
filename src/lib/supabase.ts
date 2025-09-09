@@ -176,6 +176,28 @@ export const db = {
       }
     },
 
+    async increaseStock(id: string, quantity: number) {
+      const { data: product, error } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      if (!product) throw new Error('Produk tidak ditemukan');
+      return db.update('products', id, { stock: (Number(product.stock) || 0) + Number(quantity) });
+    },
+
+    async decreaseStock(id: string, quantity: number) {
+      const { data: product, error } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      if (!product) throw new Error('Produk tidak ditemukan');
+      return db.update('products', id, { stock: (Number(product.stock) || 0) - Number(quantity) });
+    },
+
     async update(id: string, product: any) {
       return db.update('products', id, product);
     }
@@ -370,9 +392,9 @@ export const db = {
         notes: purchase.notes,
         expected_date: purchase.expected_date,
         subtotal: purchase.subtotal,
-        tax: purchase.tax,
+        // tax: purchase.tax,
         total_amount: purchase.total_amount || purchase.total, // fallback for old code
-        status: 'pending',
+        // status: 'pending',
         // created_by: null // tidak perlu jika tidak ada user
       });
       // Insert PO items
@@ -386,9 +408,31 @@ export const db = {
             unit_cost: item.unitCost,
             total: item.total
           });
+
+          if (item.productId && item.quantity > 0) {
+            await db.products.increaseStock(item.productId, item.quantity);
+          }
         }
       }
       return po;
+    },
+
+    async delete(poId: string) {
+      const { data: items, error: itemsErr } = await supabase
+        .from('purchase_order_items')
+        .select('product_id, quantity')
+        .eq('po_id', poId);
+      if (itemsErr) throw itemsErr;
+
+      if (Array.isArray(items)) {
+        for (const it of items) {
+          if (it?.product_id && it?.quantity) {
+            await db.products.decreaseStock(it.product_id, it.quantity);
+          }
+        }
+      }
+
+      return db.delete('purchase_orders', poId);
     }
   },
 
