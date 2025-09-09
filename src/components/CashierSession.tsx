@@ -834,7 +834,8 @@ const CashierSessionComponent: React.FC = () => {
               <p className="text-gray-600 text-sm">Total Revenue Hari Ini</p>
               <p className="text-xs text-gray-500 mt-1">
                 Cafe: Rp {todayTotalSales.toLocaleString("id-ID")} | Rental: Rp{" "}
-                {todayTotalRentals.toLocaleString("id-ID")} | Modal: Rp{" "}
+                {todayTotalRentals.toLocaleString("id-ID")} | Voucher: Rp{" "}
+                {todayTotalVouchers.toLocaleString("id-ID")} | Modal: Rp{" "}
                 {todayTotalIncome.toLocaleString("id-ID")}
               </p>
             </div>
@@ -902,6 +903,8 @@ const CashierSessionComponent: React.FC = () => {
                   {todaySales.filter((s) => s.payment_method === "cash")
                     .length +
                     todayRentals.filter((r) => r.payment_method === "cash")
+                      .length +
+                    todayVouchers.filter((v) => v.payment_method === "cash")
                       .length}{" "}
                   transaksi hari ini
                 </p>
@@ -937,6 +940,8 @@ const CashierSessionComponent: React.FC = () => {
                   {todaySales.filter((s) => s.payment_method === "card")
                     .length +
                     todayRentals.filter((r) => r.payment_method === "card")
+                      .length +
+                    todayVouchers.filter((v) => v.payment_method === "card")
                       .length}{" "}
                   transaksi hari ini
                 </p>
@@ -972,6 +977,8 @@ const CashierSessionComponent: React.FC = () => {
                   {todaySales.filter((s) => s.payment_method === "transfer")
                     .length +
                     todayRentals.filter((r) => r.payment_method === "transfer")
+                      .length +
+                    todayVouchers.filter((v) => v.payment_method === "trasnfer")
                       .length}{" "}
                   transaksi hari ini
                 </p>

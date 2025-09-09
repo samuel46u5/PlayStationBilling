@@ -78,6 +78,9 @@ const Bookkeeping: React.FC = () => {
   const [sessionPeriod, setSessionPeriod] = useState<string>("month");
   const [sessionStartDate, setSessionStartDate] = useState<string>("");
   const [sessionEndDate, setSessionEndDate] = useState<string>("");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<
+    "all" | "cash" | "non-cash"
+  >("all");
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -326,7 +329,11 @@ const Bookkeeping: React.FC = () => {
     if (activeView === "laba_rugi") {
       fetchTransaction();
     } else if (activeView === "laporan_kasir") {
-      fetchTransaction();
+      if (selectedSessionId) {
+        fetchTransaction();
+      } else {
+        setTransactions([]);
+      }
     } else {
       fetchEntries();
     }
@@ -370,31 +377,71 @@ const Bookkeeping: React.FC = () => {
     [activeView, transactions, entries]
   );
 
+  // const filteredByTab = useMemo(() => {
+  //   if (activeView === "jurnal" && activeTab === "income")
+  //     return sourceList.filter(
+  //       (e) => e.type === "income" || e.type === "sale" || e.type === "rental"
+  //     );
+  //   if (activeView === "jurnal" && activeTab === "expense")
+  //     return sourceList.filter((e) => e.type === "expense");
+  //   if (activeView === "laba_rugi" && activeTab === "rental")
+  //     return sourceList.filter((e) => e.type === "rental");
+  //   if (activeView === "laba_rugi" && activeTab === "sale")
+  //     return sourceList.filter((e) => e.type === "sale");
+  //   if (activeView === "laba_rugi" && activeTab === "voucher")
+  //     return sourceList.filter((e) => e.type === "voucher");
+  //   if (activeView === "laporan_kasir" && activeTab === "income")
+  //     return sourceList.filter(
+  //       (e) =>
+  //         e.type === "income" ||
+  //         e.type === "sale" ||
+  //         e.type === "rental" ||
+  //         e.type === "voucher"
+  //     );
+  //   // Filter berdasarkan metode pembayaran
+  //   if (paymentMethodFilter === "cash") {
+  //     sourceList = sourceList.filter((e) => (e.payment_method || "cash") === "cash");
+  //   } else if (paymentMethodFilter === "non-cash") {
+  //     sourceList = sourceList.filter((e) => (e.payment_method || "cash") !== "cash");
+  //   }
+  //   if (activeView === "laporan_kasir" && activeTab === "expense")
+  //     return sourceList.filter((e) => e.type === "expense");
+  //   return sourceList;
+  // }, [sourceList, activeTab, activeView]);
+
   const filteredByTab = useMemo(() => {
+    let list = sourceList;
     if (activeView === "jurnal" && activeTab === "income")
-      return sourceList.filter(
+      list = list.filter(
         (e) => e.type === "income" || e.type === "sale" || e.type === "rental"
       );
     if (activeView === "jurnal" && activeTab === "expense")
-      return sourceList.filter((e) => e.type === "expense");
+      list = list.filter((e) => e.type === "expense");
     if (activeView === "laba_rugi" && activeTab === "rental")
-      return sourceList.filter((e) => e.type === "rental");
+      list = list.filter((e) => e.type === "rental");
     if (activeView === "laba_rugi" && activeTab === "sale")
-      return sourceList.filter((e) => e.type === "sale");
+      list = list.filter((e) => e.type === "sale");
     if (activeView === "laba_rugi" && activeTab === "voucher")
-      return sourceList.filter((e) => e.type === "voucher");
-    if (activeView === "laporan_kasir" && activeTab === "income")
-      return sourceList.filter(
+      list = list.filter((e) => e.type === "voucher");
+    if (activeView === "laporan_kasir" && activeTab === "income") {
+      list = list.filter(
         (e) =>
           e.type === "income" ||
           e.type === "sale" ||
           e.type === "rental" ||
           e.type === "voucher"
       );
+      // Filter berdasarkan metode pembayaran
+      if (paymentMethodFilter === "cash") {
+        list = list.filter((e) => (e.payment_method || "cash") === "cash");
+      } else if (paymentMethodFilter === "non-cash") {
+        list = list.filter((e) => (e.payment_method || "cash") !== "cash");
+      }
+    }
     if (activeView === "laporan_kasir" && activeTab === "expense")
-      return sourceList.filter((e) => e.type === "expense");
-    return sourceList;
-  }, [sourceList, activeTab, activeView]);
+      list = list.filter((e) => e.type === "expense");
+    return list;
+  }, [sourceList, activeTab, activeView, paymentMethodFilter]);
 
   const incomeCount = useMemo(
     () =>
@@ -1030,6 +1077,22 @@ const Bookkeeping: React.FC = () => {
                   <Ticket className="h-4 w-4" />
                   Voucher ({voucherCount})
                 </button>
+              )}
+              {activeView === "laporan_kasir" && activeTab === "income" && (
+                <div className="flex items-center gap-2 ml-4">
+                  <label className="text-sm text-gray-600">Pembayaran:</label>
+                  <select
+                    value={paymentMethodFilter}
+                    onChange={(e) =>
+                      setPaymentMethodFilter(e.target.value as any)
+                    }
+                    className="px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="all">Semua</option>
+                    <option value="cash">Tunai</option>
+                    <option value="non-cash">Non Tunai</option>
+                  </select>
+                </div>
               )}
             </div>
           </div>
