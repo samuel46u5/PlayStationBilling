@@ -434,6 +434,93 @@ export const db = {
 
       return db.delete('purchase_orders', poId);
     }
+    ,
+    async update(poId: string, purchase: any) {
+      // Fetch existing items
+      const { data: oldItems, error: oldErr } = await supabase
+        .from('purchase_order_items')
+        .select('id, product_id, quantity')
+        .eq('po_id', poId);
+      if (oldErr) throw oldErr;
+
+      const oldItemsArray = Array.isArray(oldItems) ? oldItems : [];
+
+      // Compute stock deltas per product
+      const deltaByProduct: Record<string, number> = {};
+      for (const it of oldItemsArray) {
+        const pid = String(it.product_id);
+        deltaByProduct[pid] = (deltaByProduct[pid] || 0) - Number(it.quantity || 0);
+      }
+
+      const newItems = Array.isArray(purchase.items) ? purchase.items : [];
+      for (const it of newItems) {
+        if (!it.productId) continue;
+        const pid = String(it.productId);
+        deltaByProduct[pid] = (deltaByProduct[pid] || 0) + Number(it.quantity || 0);
+      }
+
+      // Update PO header
+      await db.update('purchase_orders', poId, {
+        supplier_id: purchase.supplier_id ?? undefined,
+        notes: purchase.notes ?? undefined,
+        expected_date: purchase.expected_date ?? undefined,
+        subtotal: purchase.subtotal ?? undefined,
+        total_amount: purchase.total_amount ?? purchase.total ?? undefined
+      });
+
+      // Upsert items
+      const existingIds = new Set<string>();
+      for (const it of newItems) {
+        if (it.id) {
+          existingIds.add(String(it.id));
+          await db.update('purchase_order_items', String(it.id), {
+            po_id: poId,
+            product_id: it.productId,
+            product_name: it.productName,
+            quantity: it.quantity,
+            unit_cost: it.unitCost,
+            total: it.total
+          });
+        } else {
+          const inserted = await db.insert('purchase_order_items', {
+            po_id: poId,
+            product_id: it.productId,
+            product_name: it.productName,
+            quantity: it.quantity,
+            unit_cost: it.unitCost,
+            total: it.total
+          });
+          if (inserted?.id) existingIds.add(String(inserted.id));
+        }
+      }
+
+      // Delete removed items
+      for (const oi of oldItemsArray) {
+        const idStr = String(oi.id);
+        if (!existingIds.has(idStr)) {
+          await db.delete('purchase_order_items', idStr);
+        }
+      }
+
+      // Apply stock adjustments
+      for (const [productId, delta] of Object.entries(deltaByProduct)) {
+        if (!productId || !Number.isFinite(delta as unknown as number)) continue;
+        if ((delta as number) > 0) {
+          await db.products.increaseStock(productId, delta as number);
+        } else if ((delta as number) < 0) {
+          await db.products.decreaseStock(productId, Math.abs(delta as number));
+        }
+      }
+
+      // Return updated PO
+      const { data: updated, error: getErr } = await supabase
+        .from('purchase_orders')
+        .select('*')
+        .eq('id', poId)
+        .single();
+      if (getErr) throw getErr;
+      return updated;
+    }
   },
 
   // System settings (single row: id = 'default')

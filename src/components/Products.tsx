@@ -47,6 +47,7 @@ const Products: React.FC = () => {
   const [newPurchase, setNewPurchase] = useState({
     supplierId: "",
     items: [] as Array<{
+      id?: string;
       productId: string;
       productName: string;
       quantity: number;
@@ -56,6 +57,9 @@ const Products: React.FC = () => {
     notes: "",
     expectedDate: new Date().toISOString().split("T")[0],
   });
+
+  const [editingPoId, setEditingPoId] = useState<string | null>(null);
+  const [isSavingPurchase, setIsSavingPurchase] = useState(false);
 
   const [newSupplier, setNewSupplier] = useState({
     name: "",
@@ -1358,44 +1362,88 @@ const Products: React.FC = () => {
                     Rp {Number(po.total_amount).toLocaleString("id-ID")}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={async () => {
-                        const confirm = await Swal.fire({
-                          title: "Hapus Purchase Order?",
-                          text: "Tindakan ini akan menghapus transaksi pembelian dan mengembalikan stok produk.",
-                          icon: "warning",
-                          showCancelButton: true,
-                          confirmButtonColor: "#d33",
-                          cancelButtonColor: "#6b7280",
-                          confirmButtonText: "Ya, hapus",
-                          cancelButtonText: "Batal",
-                        });
-                        if (!confirm.isConfirmed) return;
-
-                        try {
-                          await db.purchases.delete(po.id);
-                          await Swal.fire({
-                            icon: "success",
-                            title: "Berhasil",
-                            text: "Purchase Order telah dihapus dan stok dikembalikan.",
-                          });
-                          if ((window as any).refreshPurchases) {
-                            await (window as any).refreshPurchases();
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            // Prefill edit modal with existing PO and items
+                            const items = await db.select(
+                              "purchase_order_items",
+                              "*",
+                              { po_id: po.id }
+                            );
+                            setNewPurchase({
+                              supplierId: po.supplier_id,
+                              items: (items || []).map((it: any) => ({
+                                id: it.id,
+                                productId: it.product_id,
+                                productName: it.product_name,
+                                quantity: Number(it.quantity) || 0,
+                                unitCost: Number(it.unit_cost) || 0,
+                                total: Number(it.total) || 0,
+                              })),
+                              notes: po.notes || "",
+                              expectedDate: po.expected_date
+                                ? new Date(po.expected_date)
+                                    .toISOString()
+                                    .split("T")[0]
+                                : new Date().toISOString().split("T")[0],
+                            });
+                            setEditingPoId(po.id);
+                            setShowPurchaseForm(true);
+                          } catch (err: any) {
+                            Swal.fire({
+                              icon: "error",
+                              title: "Gagal membuka edit",
+                              text:
+                                (err?.message || "") +
+                                (err?.details ? "\n" + err.details : ""),
+                            });
                           }
-                        } catch (err: any) {
-                          await Swal.fire({
-                            icon: "error",
-                            title: "Gagal menghapus",
-                            text:
-                              (err?.message || "") +
-                              (err?.details ? "\n" + err.details : ""),
+                        }}
+                        className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const confirm = await Swal.fire({
+                            title: "Hapus Purchase Order?",
+                            text: "Tindakan ini akan menghapus transaksi pembelian dan mengembalikan stok produk.",
+                            icon: "warning",
+                            showCancelButton: true,
+                            confirmButtonColor: "#d33",
+                            cancelButtonColor: "#6b7280",
+                            confirmButtonText: "Ya, hapus",
+                            cancelButtonText: "Batal",
                           });
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                          if (!confirm.isConfirmed) return;
+
+                          try {
+                            await db.purchases.delete(po.id);
+                            await Swal.fire({
+                              icon: "success",
+                              title: "Berhasil",
+                              text: "Purchase Order telah dihapus dan stok dikembalikan.",
+                            });
+                            if ((window as any).refreshPurchases) {
+                              await (window as any).refreshPurchases();
+                            }
+                          } catch (err: any) {
+                            await Swal.fire({
+                              icon: "error",
+                              title: "Gagal menghapus",
+                              text:
+                                (err?.message || "") +
+                                (err?.details ? "\n" + err.details : ""),
+                            });
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -1820,7 +1868,7 @@ const Products: React.FC = () => {
             <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Buat Purchase Order
+                  {editingPoId ? "Edit Purchase Order" : "Buat Purchase Order"}
                 </h2>
 
                 <form className="space-y-6">
@@ -2049,32 +2097,59 @@ const Products: React.FC = () => {
                 </form>
                 <div className="flex gap-3 mt-6">
                   <button
-                    onClick={() => setShowPurchaseForm(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                    onClick={() => {
+                      if (isSavingPurchase) return;
+                      setShowPurchaseForm(false);
+                      setEditingPoId(null);
+                    }}
+                    disabled={isSavingPurchase}
+                    className={`flex-1 px-4 py-2 border rounded-lg font-medium transition-colors ${
+                      isSavingPurchase
+                        ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                        : "border-gray-300 hover:border-gray-400 text-gray-700"
+                    }`}
                   >
                     Batal
                   </button>
                   <button
                     onClick={async () => {
-                      // Simpan ke database
+                      if (isSavingPurchase) return;
+                      setIsSavingPurchase(true);
                       try {
-                        await db.purchases.create({
-                          supplier_id: newPurchase.supplierId, // field DB
-                          items: newPurchase.items,
-                          notes: newPurchase.notes,
-                          expected_date: newPurchase.expectedDate,
-                          subtotal: purchaseSubtotal,
-                          // tax: purchaseTax,
-                          total_amount: purchaseTotal, // field DB
-                        });
-                        Swal.fire({
-                          icon: "success",
-                          title: "Berhasil!",
-                          text: `Purchase Order berhasil dibuat dengan total Rp ${purchaseTotal.toLocaleString(
-                            "id-ID"
-                          )}`,
-                        });
+                        if (editingPoId) {
+                          await db.purchases.update(editingPoId, {
+                            supplier_id: newPurchase.supplierId,
+                            items: newPurchase.items,
+                            notes: newPurchase.notes,
+                            expected_date: newPurchase.expectedDate,
+                            subtotal: purchaseSubtotal,
+                            total_amount: purchaseTotal,
+                          });
+                          Swal.fire({
+                            icon: "success",
+                            title: "Berhasil!",
+                            text: `Purchase Order berhasil diperbarui.`,
+                          });
+                        } else {
+                          await db.purchases.create({
+                            supplier_id: newPurchase.supplierId,
+                            items: newPurchase.items,
+                            notes: newPurchase.notes,
+                            expected_date: newPurchase.expectedDate,
+                            subtotal: purchaseSubtotal,
+                            total_amount: purchaseTotal,
+                          });
+                          Swal.fire({
+                            icon: "success",
+                            title: "Berhasil!",
+                            text: `Purchase Order berhasil dibuat dengan total Rp ${purchaseTotal.toLocaleString(
+                              "id-ID"
+                            )}`,
+                          });
+                        }
+
                         setShowPurchaseForm(false);
+                        setEditingPoId(null);
                         setNewPurchase({
                           supplierId: "",
                           items: [],
@@ -2088,19 +2163,33 @@ const Products: React.FC = () => {
                       } catch (error: any) {
                         Swal.fire({
                           icon: "error",
-                          title: "Gagal tambah PO",
+                          title: editingPoId
+                            ? "Gagal memperbarui PO"
+                            : "Gagal tambah PO",
                           text:
                             (error?.message || "") +
                             (error?.details ? "\n" + error.details : ""),
                         });
-                        // Optional: log error detail ke console
                         // eslint-disable-next-line no-console
                         console.error("PO Error:", error);
+                      } finally {
+                        setIsSavingPurchase(false);
                       }
                     }}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    disabled={isSavingPurchase}
+                    className={`flex-1 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
+                      isSavingPurchase
+                        ? "bg-green-400 cursor-wait"
+                        : "bg-green-600 hover:bg-green-700"
+                    }`}
                   >
-                    Buat Purchase Order
+                    {isSavingPurchase
+                      ? editingPoId
+                        ? "Menyimpan..."
+                        : "Membuat..."
+                      : editingPoId
+                      ? "Simpan Perubahan"
+                      : "Buat Purchase Order"}
                   </button>
                 </div>
               </div>
