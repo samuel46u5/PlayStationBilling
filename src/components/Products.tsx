@@ -15,6 +15,8 @@ import {
   Clock,
   XCircle,
   Printer,
+  DollarSign,
+  ListOrdered,
 } from "lucide-react";
 import { List as ListIcon, LayoutGrid } from "lucide-react";
 import { db } from "../lib/supabase"; // Hanya import db
@@ -94,6 +96,8 @@ const Products: React.FC = () => {
   const [purchaseItemsError, setPurchaseItemsError] = useState<string | null>(
     null
   );
+  // Preset periode untuk daftar Purchase Order
+  const [purchasePeriod, setPurchasePeriod] = useState<string>("week");
 
   // Calculate totals whenever items change
   const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
@@ -106,6 +110,7 @@ const Products: React.FC = () => {
     string[]
   >([]);
   const [selectAllProducts, setSelectAllProducts] = useState(false);
+  const [selectLowStockProducts, setSelectLowStockProducts] = useState(false);
 
   // State untuk modal pemilihan produk pada form Purchase Order
   const [showProductSelectModal, setShowProductSelectModal] = useState<{
@@ -329,17 +334,64 @@ const Products: React.FC = () => {
     // Filter status
     const statusMatch =
       purchaseStatus === "all" || po.status === purchaseStatus;
+
+    // Hitung periode tanggal berdasarkan preset
+    let start: Date | null = null;
+    let end: Date | null = null;
+    const now = new Date();
+    switch (purchasePeriod) {
+      case "today": {
+        start = new Date();
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "yesterday": {
+        start = new Date();
+        start.setDate(start.getDate() - 1);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "week": {
+        start = new Date();
+        const day = start.getDay();
+        const diff = (day === 0 ? -6 : 1) - day; // Senin awal minggu
+        start.setDate(start.getDate() + diff);
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "month": {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "range": {
+        if (purchaseDateRange.start) {
+          start = new Date(purchaseDateRange.start);
+          start.setHours(0, 0, 0, 0);
+        }
+        if (purchaseDateRange.end) {
+          end = new Date(purchaseDateRange.end);
+          end.setHours(23, 59, 59, 999);
+        }
+        break;
+      }
+    }
+
     // Filter tanggal order
     let dateMatch = true;
-    if (purchaseDateRange.start) {
-      dateMatch =
-        dateMatch &&
-        new Date(po.order_date) >= new Date(purchaseDateRange.start);
+    const orderDate = po.order_date ? new Date(po.order_date) : null;
+    if (orderDate) {
+      if (start && orderDate < start) dateMatch = false;
+      if (end && orderDate > end) dateMatch = false;
     }
-    if (purchaseDateRange.end) {
-      dateMatch =
-        dateMatch && new Date(po.order_date) <= new Date(purchaseDateRange.end);
-    }
+
     // Filter search
     const supplier = suppliers.find((s) => s.id === po.supplier_id);
     const searchMatch =
@@ -993,7 +1045,15 @@ const Products: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => setShowPurchaseForm(true)}
+          onClick={() => {
+            setShowPurchaseForm(true);
+            setNewPurchase({
+              supplierId: "",
+              items: [],
+              notes: "",
+              expectedDate: new Date().toISOString().split("T")[0],
+            });
+          }}
           className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
         >
           <ShoppingBag className="h-5 w-5" />
@@ -1265,44 +1325,143 @@ const Products: React.FC = () => {
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
-            Status
+            Periode
           </label>
           <select
-            value={purchaseStatus}
-            onChange={(e) => setPurchaseStatus(e.target.value)}
+            value={purchasePeriod}
+            onChange={(e) => setPurchasePeriod(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <option value="all">Semua</option>
-            <option value="pending">Pending</option>
-            <option value="ordered">Ordered</option>
-            <option value="received">Received</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="today">Hari Ini</option>
+            <option value="yesterday">Kemarin</option>
+            <option value="week">Minggu Ini</option>
+            <option value="month">Bulan Ini</option>
+            <option value="range">Rentang Waktu</option>
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Tanggal Order
-          </label>
-          <div className="flex gap-2 items-center">
-            <input
-              type="date"
-              value={purchaseDateRange.start}
-              onChange={(e) =>
-                setPurchaseDateRange((r) => ({ ...r, start: e.target.value }))
-              }
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <span className="self-center">-</span>
-            <input
-              type="date"
-              value={purchaseDateRange.end}
-              onChange={(e) =>
-                setPurchaseDateRange((r) => ({ ...r, end: e.target.value }))
-              }
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+        {purchasePeriod === "range" && (
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Tanggal Order
+            </label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="date"
+                value={purchaseDateRange.start}
+                onChange={(e) =>
+                  setPurchaseDateRange((r) => ({ ...r, start: e.target.value }))
+                }
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <span className="self-center">-</span>
+              <input
+                type="date"
+                value={purchaseDateRange.end}
+                onChange={(e) =>
+                  setPurchaseDateRange((r) => ({ ...r, end: e.target.value }))
+                }
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* Summary Card for Purchase Orders */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        {(() => {
+          const totalAmount = filteredPurchaseOrders.reduce(
+            (sum, po) => sum + Number(po.total_amount || 0),
+            0
+          );
+          const periodLabel = (() => {
+            switch (purchasePeriod) {
+              case "today":
+                return "Hari Ini";
+              case "yesterday":
+                return "Kemarin";
+              case "week":
+                return "Minggu Ini";
+              case "month":
+                return "Bulan Ini";
+              case "range": {
+                const s = purchaseDateRange.start
+                  ? new Date(purchaseDateRange.start).toLocaleDateString(
+                      "id-ID"
+                    )
+                  : "-";
+                const e = purchaseDateRange.end
+                  ? new Date(purchaseDateRange.end).toLocaleDateString("id-ID")
+                  : "-";
+                return `Rentang Waktu (${s} - ${e})`;
+              }
+              default:
+                return "Periode";
+            }
+          })();
+          return (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-gray-500">Periode</div>
+                  <div className="font-semibold text-gray-900">
+                    {periodLabel}
+                  </div>
+                </div>
+              </div>
+              {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="rounded-lg border border-gray-100 p-4">
+                  <div className="text-sm text-gray-500">
+                    Jumlah Purchase Order
+                  </div>
+                  <div className="mt-1 text-2xl font-bold text-gray-900">
+                    {filteredPurchaseOrders.length}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-gray-100 p-4">
+                  <div className="text-sm text-gray-500">Total Nilai</div>
+                  <div className="mt-1 text-2xl font-bold text-gray-900">
+                    {`Rp ${totalAmount.toLocaleString("id-ID")}`}
+                  </div>
+                </div>
+              </div> */}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Total Pembelian
+                    </h3>
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <DollarSign className="h-5 w-5 text-green-600" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-2xl font-bold text-gray-900">
+                      {`Rp ${totalAmount.toLocaleString("id-ID")}`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Jumlah Purchase Order
+                    </h3>
+                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                      <ListOrdered className="h-5 w-5 text-purple-600" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-2xl font-bold text-gray-900">
+                      {filteredPurchaseOrders.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -2878,7 +3037,7 @@ const Products: React.FC = () => {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">
-                  Print Price List
+                  Print Product List
                 </h2>
                 <button
                   onClick={() => {
@@ -2915,6 +3074,42 @@ const Products: React.FC = () => {
                   />
                   <span className="font-medium text-gray-900">
                     Pilih Semua Produk ({products.length})
+                  </span>
+                </label>
+              </div>
+
+              {/* Select Low Stock Checkbox */}
+              <div className="mb-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectLowStockProducts}
+                    onChange={(e) => {
+                      const lowStockProducts = products.filter(
+                        (p) => p.stock <= p.min_stock
+                      );
+                      setSelectLowStockProducts(e.target.checked);
+                      if (e.target.checked) {
+                        setSelectedProductsForPrint((prev) => [
+                          ...prev,
+                          ...lowStockProducts
+                            .map((p) => p.id)
+                            .filter((id) => !prev.includes(id)),
+                        ]);
+                      } else {
+                        setSelectedProductsForPrint((prev) =>
+                          prev.filter(
+                            (id) => !lowStockProducts.some((p) => p.id === id)
+                          )
+                        );
+                      }
+                    }}
+                    className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                  />
+                  <span className="font-medium text-orange-900 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Pilih Produk Stok Rendah (
+                    {products.filter((p) => p.stock <= p.min_stock).length})
                   </span>
                 </label>
               </div>

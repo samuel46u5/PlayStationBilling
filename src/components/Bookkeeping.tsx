@@ -19,7 +19,7 @@ import {
   CreditCard,
   Banknote,
 } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { supabase, db } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
 import Swal from "sweetalert2";
 import { printReceipt } from "../utils/receipt";
@@ -472,7 +472,7 @@ const Bookkeeping: React.FC = () => {
     () => sourceList.filter((e) => e.type === "voucher").length,
     [activeView, sourceList]
   );
-  // Ringkasan pembayaran untuk Laporan Kasir (hanya transaksi pemasukan: sale, rental, voucher)
+  // Ringkasan pembayaran untuk Laporan Kasir
   const paymentSummary = useMemo(() => {
     const incomeTypes = new Set(["sale", "rental", "voucher"]);
     const list = transactions.filter((t: any) => incomeTypes.has(t.type));
@@ -846,6 +846,143 @@ const Bookkeeping: React.FC = () => {
         text: "Gagal menghapus transaksi. Silakan coba lagi.",
         confirmButtonColor: "#3b82f6",
       });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ===== Edit Transaksi (Laporan Kasir) =====
+  const [showEditTxModal, setShowEditTxModal] = useState(false);
+  const [editTx, setEditTx] = useState<any | null>(null);
+  const [editTxItems, setEditTxItems] = useState<any[]>([]);
+
+  const openEditTransaction = (transaction: any) => {
+    // Hanya izinkan edit untuk tipe sale (mempengaruhi stok)
+    // if (transaction.type !== "sale") {
+    //   Swal.fire(
+    //     "Info",
+    //     "Hanya transaksi penjualan (cafe) yang bisa diedit.",
+    //     "info"
+    //   );
+    //   return;
+    // }
+    const d = transaction?.details ?? transaction?.metadata ?? {};
+    const items = Array.isArray(d.items) ? d.items : [];
+    // Siapkan field standar: id, productId, name, price, quantity, total
+    const normalized = items.map((it: any, idx: number) => ({
+      id: it.id ?? idx,
+      productId: it.product_id ?? it.productId ?? it.id ?? null,
+      name: it.name ?? it.product_name ?? it.title ?? it.description ?? "Item",
+      price: Number(it.price ?? 0),
+      quantity: Number(it.qty ?? it.quantity ?? 1),
+      total: Number(
+        it.total ?? Number(it.price ?? 0) * Number(it.qty ?? it.quantity ?? 1)
+      ),
+      type: it.type || "product",
+    }));
+    setEditTx(transaction);
+    setEditTxItems(normalized);
+    setShowEditTxModal(true);
+  };
+
+  const updateEditItemQuantity = (index: number, qty: number) => {
+    setEditTxItems((prev) => {
+      const next = [...prev];
+      const it = { ...next[index] };
+      const newQty = Math.max(0, Math.floor(Number(qty) || 0));
+      it.quantity = newQty;
+      it.total = Number(it.price || 0) * newQty;
+      next[index] = it;
+      return next;
+    });
+  };
+
+  const removeEditItem = (index: number) => {
+    setEditTxItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const saveEditedTransaction = async () => {
+    if (!editTx) return;
+    try {
+      setSaving(true);
+
+      // Ambil items lama untuk hitung delta stok
+      const oldItemsRaw = (editTx?.details?.items ??
+        editTx?.metadata?.items ??
+        []) as any[];
+      const oldItems = oldItemsRaw.map((it: any, idx: number) => ({
+        productId: it.product_id ?? it.productId ?? it.id ?? null,
+        quantity: Number(it.qty ?? it.quantity ?? 1),
+        type: it.type || "product",
+      }));
+
+      // Hitung delta per productId untuk item type product (bukan rental)
+      const deltaByProduct: Record<string, number> = {};
+      for (const it of oldItems) {
+        if (!it.productId || it.type === "rental") continue;
+        const pid = String(it.productId);
+        deltaByProduct[pid] =
+          (deltaByProduct[pid] || 0) - Number(it.quantity || 0);
+      }
+      for (const it of editTxItems) {
+        if (!it.productId || it.type === "rental") continue;
+        const pid = String(it.productId);
+        deltaByProduct[pid] =
+          (deltaByProduct[pid] || 0) + Number(it.quantity || 0);
+      }
+
+      // Recalculate amount
+      const newAmount = editTxItems.reduce(
+        (sum, it) =>
+          sum +
+          (Number(it.total) ||
+            Number(it.price || 0) * Number(it.quantity || 0)),
+        0
+      );
+
+      // Susun details baru
+      const newDetails = {
+        ...(editTx.details || {}),
+        items: editTxItems.map((it) => ({
+          id: it.id,
+          product_id: it.productId,
+          name: it.name,
+          price: it.price,
+          qty: it.quantity,
+          total: it.total,
+          type: it.type,
+        })),
+      };
+
+      // Update transaksi
+      const { error: updErr } = await supabase
+        .from("cashier_transactions")
+        .update({ amount: newAmount, details: newDetails })
+        .eq("id", editTx.id);
+      if (updErr) throw updErr;
+
+      // Terapkan penyesuaian stok per delta
+      for (const [productId, delta] of Object.entries(deltaByProduct)) {
+        if (!productId) continue;
+        const d = Number(delta);
+        if (d > 0) {
+          // butuh stok tambahan
+          await db.products.decreaseStock(productId, d);
+        } else if (d < 0) {
+          // kembalikan stok
+          await db.products.increaseStock(productId, Math.abs(d));
+        }
+      }
+
+      // Refresh
+      await fetchTransaction();
+      setShowEditTxModal(false);
+      setEditTx(null);
+      setEditTxItems([]);
+      Swal.fire("Berhasil", "Transaksi berhasil diperbarui.", "success");
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "Gagal memperbarui transaksi.", "error");
     } finally {
       setSaving(false);
     }
@@ -1633,6 +1770,28 @@ const Bookkeeping: React.FC = () => {
                                   </button>
                                 )}
 
+                              {/* Edit button */}
+                              {!(
+                                transaction.type === "expense" ||
+                                transaction.type === "voucher" ||
+                                transaction.type === "rental"
+                              ) &&
+                                transaction.reference_id &&
+                                !String(transaction.reference_id)
+                                  .toUpperCase()
+                                  .includes("OPENING-CASH") && (
+                                  <button
+                                    onClick={() =>
+                                      openEditTransaction(transaction)
+                                    }
+                                    className="text-amber-600 hover:text-amber-700 text-sm font-medium flex items-center gap-1"
+                                    title="Edit transaksi"
+                                  >
+                                    <SquarePen className="h-3 w-3" />
+                                    Edit
+                                  </button>
+                                )}
+
                               {/* Delete button */}
                               {transaction.type !== "expense" &&
                                 transaction.reference_id &&
@@ -2194,6 +2353,123 @@ const Bookkeeping: React.FC = () => {
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Edit Transaksi Kasir (Sale) */}
+      {showEditTxModal && editTx && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Edit Transaksi
+                </h2>
+                <button
+                  onClick={() => setShowEditTxModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="text-sm text-gray-600">
+                  <div>Ref: {editTx.reference_id || "-"}</div>
+                  <div>
+                    Metode: {(editTx.payment_method || "cash").toUpperCase()}
+                  </div>
+                </div>
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="grid grid-cols-12 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700">
+                    <div className="col-span-6">Item</div>
+                    <div className="col-span-2 text-right">Harga</div>
+                    <div className="col-span-2 text-right">Qty</div>
+                    <div className="col-span-2 text-right">Total</div>
+                  </div>
+                  {editTxItems.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">
+                      Tidak ada item
+                    </div>
+                  ) : (
+                    editTxItems.map((it, idx) => (
+                      <div
+                        key={idx}
+                        className="grid grid-cols-12 px-4 py-2 border-t text-sm items-center"
+                      >
+                        <div className="col-span-6">
+                          <div className="font-medium text-gray-900">
+                            {it.name}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            PID: {it.productId || "-"}
+                          </div>
+                        </div>
+                        <div className="col-span-2 text-right">
+                          Rp {Number(it.price || 0).toLocaleString("id-ID")}
+                        </div>
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            value={it.quantity}
+                            min={0}
+                            onChange={(e) =>
+                              updateEditItemQuantity(
+                                idx,
+                                Number(e.target.value)
+                              )
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-right"
+                          />
+                        </div>
+                        <div className="col-span-2 text-right flex items-center justify-end gap-2">
+                          <span>
+                            Rp {Number(it.total || 0).toLocaleString("id-ID")}
+                          </span>
+                          <button
+                            onClick={() => removeEditItem(idx)}
+                            className="text-red-600 hover:text-red-700"
+                            title="Hapus item"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div />
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Subtotal</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      Rp{" "}
+                      {editTxItems
+                        .reduce((s, it) => s + (Number(it.total) || 0), 0)
+                        .toLocaleString("id-ID")}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setShowEditTxModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={saveEditedTransaction}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {saving ? "Menyimpan..." : "Simpan Perubahan"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
