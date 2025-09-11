@@ -479,6 +479,7 @@ const CashierSessionComponent: React.FC = () => {
       total_transfer: todayTransferSales,
       total_transactions: todayTransactions.length,
       total_revenue: todayTotalRevenue,
+      total_expense: todayTotalExpenses,
       variance,
       end_time: new Date().toISOString(),
       notes,

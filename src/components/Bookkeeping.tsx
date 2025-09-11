@@ -2245,6 +2245,160 @@ const Bookkeeping: React.FC = () => {
                 )}
               </div>
 
+              {/* Summary for filtered sessions */}
+              <div className="mb-4">
+                {(() => {
+                  const totalIncome = filteredSessions.reduce(
+                    (sum: number, s: any) => sum + Number(s.total_revenue || 0),
+                    0
+                  );
+                  const totalExpense = filteredSessions.reduce(
+                    (sum: number, s: any) => sum + Number(s.total_expense || 0),
+                    0
+                  );
+
+                  const cashAmount = filteredSessions.reduce(
+                    (sum: number, s: any) => sum + Number(s.total_cash || 0),
+                    0
+                  );
+                  const cardAmount = filteredSessions.reduce(
+                    (sum: number, s: any) => sum + Number(s.total_card || 0),
+                    0
+                  );
+                  const transferAmount = filteredSessions.reduce(
+                    (sum: number, s: any) =>
+                      sum + Number(s.total_transfer || 0),
+                    0
+                  );
+                  // const cashCount = filteredSessions.reduce(
+                  //   (sum: number, s: any) =>
+                  //     sum + Number(s.cash_transactions || 0),
+                  //   0
+                  // );
+                  // const cardCount = filteredSessions.reduce(
+                  //   (sum: number, s: any) =>
+                  //     sum + Number(s.card_transactions || 0),
+                  //   0
+                  // );
+                  // const transferCount = filteredSessions.reduce(
+                  //   (sum: number, s: any) =>
+                  //     sum + Number(s.transfer_transactions || 0),
+                  //   0
+                  // );
+                  const paymentTotal = cashAmount + cardAmount + transferAmount;
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                          <div className="text-sm text-green-700">
+                            Total Pemasukan
+                          </div>
+                          <div className="mt-1 text-2xl font-bold text-green-800">
+                            {`Rp ${totalIncome.toLocaleString("id-ID")}`}
+                          </div>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                          <div className="text-sm text-red-700">
+                            Total Pengeluaran
+                          </div>
+                          <div className="mt-1 text-2xl font-bold text-red-800">
+                            {`Rp ${totalExpense.toLocaleString("id-ID")}`}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-sm font-medium text-gray-700">
+                              Pembayaran Tunai
+                            </div>
+                            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                              <Banknote className="h-4 w-4 text-green-600" />
+                            </div>
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">{`Rp ${cashAmount.toLocaleString(
+                            "id-ID"
+                          )}`}</div>
+                          {/* <div className="text-xs text-gray-600 mt-1">
+                            {cashCount} transaksi
+                          </div> */}
+                          <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div
+                              className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                              style={{
+                                width: `${
+                                  paymentTotal > 0
+                                    ? (cashAmount / paymentTotal) * 100
+                                    : 0
+                                }%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-sm font-medium text-gray-700">
+                              Pembayaran Kartu
+                            </div>
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <CreditCard className="h-4 w-4 text-blue-600" />
+                            </div>
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">{`Rp ${cardAmount.toLocaleString(
+                            "id-ID"
+                          )}`}</div>
+                          {/* <div className="text-xs text-gray-600 mt-1">
+                            {cardCount} transaksi
+                          </div> */}
+                          <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{
+                                width: `${
+                                  paymentTotal > 0
+                                    ? (cardAmount / paymentTotal) * 100
+                                    : 0
+                                }%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-sm font-medium text-gray-700">
+                              Transfer
+                            </div>
+                            <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                              <CreditCard className="h-4 w-4 text-purple-600" />
+                            </div>
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">{`Rp ${transferAmount.toLocaleString(
+                            "id-ID"
+                          )}`}</div>
+                          {/* <div className="text-xs text-gray-600 mt-1">
+                            {transferCount} transaksi
+                          </div> */}
+                          <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div
+                              className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                              style={{
+                                width: `${
+                                  paymentTotal > 0
+                                    ? (transferAmount / paymentTotal) * 100
+                                    : 0
+                                }%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* Sessions List */}
               <div className="space-y-3">
                 {filteredSessions.map((session) => (
@@ -2275,7 +2429,7 @@ const Bookkeeping: React.FC = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                           <div>
                             <span className="text-gray-600">Mulai:</span>
                             <p className="font-medium">
@@ -2323,6 +2477,28 @@ const Bookkeeping: React.FC = () => {
                               {Number(session.opening_cash || 0).toLocaleString(
                                 "id-ID"
                               )}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">
+                              Total Pemasukan:
+                            </span>
+                            <p className="font-medium text-green-600">
+                              Rp{" "}
+                              {Number(
+                                session.total_revenue || 0
+                              ).toLocaleString("id-ID")}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">
+                              Total Pengeluaran:
+                            </span>
+                            <p className="font-medium text-red-600">
+                              Rp{" "}
+                              {Number(
+                                session.total_expense || 0
+                              ).toLocaleString("id-ID")}
                             </p>
                           </div>
                         </div>
