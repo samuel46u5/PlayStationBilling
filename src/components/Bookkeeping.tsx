@@ -16,6 +16,8 @@ import {
   X,
   Ticket,
   Trash,
+  CreditCard,
+  Banknote,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
@@ -470,6 +472,60 @@ const Bookkeeping: React.FC = () => {
     () => sourceList.filter((e) => e.type === "voucher").length,
     [activeView, sourceList]
   );
+  // Ringkasan pembayaran untuk Laporan Kasir (hanya transaksi pemasukan: sale, rental, voucher)
+  const paymentSummary = useMemo(() => {
+    const incomeTypes = new Set(["sale", "rental", "voucher"]);
+    const list = transactions.filter((t: any) => incomeTypes.has(t.type));
+
+    const normalizeMethod = (method: any) => {
+      const m = (method || "cash").toString().toLowerCase();
+      if (m === "debit" || m === "kartu" || m === "card") return "card";
+      if (m === "transfer" || m === "tf" || m === "bank") return "transfer";
+      return m === "cash" ? "cash" : m;
+    };
+
+    let cashAmount = 0;
+    let cardAmount = 0;
+    let transferAmount = 0;
+    let cashCount = 0;
+    let cardCount = 0;
+    let transferCount = 0;
+    let totalRevenue = 0;
+
+    for (const t of list) {
+      const amount = Number(t.amount) || 0;
+      totalRevenue += amount;
+      const method = normalizeMethod(t.payment_method);
+      if (method === "cash") {
+        cashAmount += amount;
+        cashCount += 1;
+      } else if (method === "card") {
+        cardAmount += amount;
+        cardCount += 1;
+      } else if (method === "transfer") {
+        transferAmount += amount;
+        transferCount += 1;
+      }
+    }
+
+    return {
+      cashAmount,
+      cardAmount,
+      transferAmount,
+      totalRevenue,
+      countsByMethod: {
+        cash: cashCount,
+        card: cardCount,
+        transfer: transferCount,
+      },
+    };
+  }, [transactions]);
+
+  const todayCashSales = paymentSummary.cashAmount;
+  const todayCardSales = paymentSummary.cardAmount;
+  const todayTransferSales = paymentSummary.transferAmount;
+  const todayTotalRevenue = paymentSummary.totalRevenue;
+  const paymentCounts = paymentSummary.countsByMethod;
   const totalPages = Math.ceil(filteredByTab.length / entriesPerPage);
   const paginatedData = filteredByTab.slice(
     (currentPage - 1) * entriesPerPage,
@@ -982,6 +1038,7 @@ const Bookkeeping: React.FC = () => {
                 {filteredByTab.length}
               </p>
             </div>
+
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab("all")}
@@ -1096,6 +1153,103 @@ const Bookkeeping: React.FC = () => {
               )}
             </div>
           </div>
+
+          {activeView === "laporan_kasir" && activeTab === "income" && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Pembayaran Tunai
+                  </h3>
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <Banknote className="h-5 w-5 text-green-600" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-gray-900">
+                    Rp {todayCashSales.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {paymentCounts.cash} transaksi hari ini
+                  </p>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${
+                          todayTotalRevenue > 0
+                            ? (todayCashSales / todayTotalRevenue) * 100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Pembayaran Kartu
+                  </h3>
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <CreditCard className="h-5 w-5 text-blue-600" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-gray-900">
+                    Rp {todayCardSales.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {paymentCounts.card} transaksi hari ini
+                  </p>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${
+                          todayTotalRevenue > 0
+                            ? (todayCardSales / todayTotalRevenue) * 100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Transfer
+                  </h3>
+                  <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                    <CreditCard className="h-5 w-5 text-purple-600" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-gray-900">
+                    Rp {todayTransferSales.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {paymentCounts.transfer} transaksi hari ini
+                  </p>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${
+                          todayTotalRevenue > 0
+                            ? (todayTransferSales / todayTotalRevenue) * 100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
