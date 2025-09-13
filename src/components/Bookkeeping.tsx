@@ -2245,7 +2245,6 @@ const Bookkeeping: React.FC = () => {
                 )}
               </div>
 
-              {/* Summary for filtered sessions */}
               <div className="mb-4">
                 {(() => {
                   const totalIncome = filteredSessions.reduce(

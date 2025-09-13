@@ -5,6 +5,7 @@ export interface Customer {
   email?: string;
   address?: string;
   totalSpent: number;
+  balancePoints: number; // Saldo poin untuk member-card
   joinDate: string;
   status: 'active' | 'inactive';
 }
@@ -539,7 +540,7 @@ export interface CashierSession {
   closingCash?: number; // Uang yang disetor ke bos
   expectedCash?: number; // Perhitungan sistem (opening + cash sales - change)
   variance?: number; // Selisih antara expected dan actual
-  totalSales: number;
+  totalRevenue: number;
   totalCash: number; // Total penjualan tunai
   totalCard: number; // Total penjualan kartu
   totalTransfer: number; // Total penjualan transfer

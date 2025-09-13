@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
+import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
 
 interface RentalSession {
   id: string;
@@ -19,6 +20,10 @@ interface RentalSession {
   status: "active" | "completed" | "paused";
   payment_status: "pending" | "partial" | "paid";
   paid_amount: number;
+  is_voucher_used?: boolean;
+  hourly_rate_snapshot?: number;
+  per_minute_rate_snapshot?: number;
+  total_points_deducted?: number;
   // pause_start_time?: string;
   // total_pause_minutes?: number;
   customers?: {
@@ -58,7 +63,11 @@ interface TimerProviderProps {
 
 export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   const [activeSessions, setActiveSessions] = useState<RentalSession[]>([]);
+  const [isCheckingSessions, setIsCheckingSessions] = useState(false);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // Member card billing hook
+  useMemberCardBilling(activeSessions);
 
   // Fetch active sessions from database
   const fetchActiveSessions = useCallback(async () => {
@@ -223,14 +232,23 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
 
   // Check all active sessions for timeout
   const checkAllSessions = useCallback(async () => {
+    if (isCheckingSessions) return;
+    setIsCheckingSessions(true);
+
     const prepaidSessions = activeSessions.filter(
       (session) => session.duration_minutes && session.status === "active"
     );
 
-    for (const session of prepaidSessions) {
-      await checkSessionTimeout(session.id);
-    }
-  }, [activeSessions, checkSessionTimeout]);
+    // for (const session of prepaidSessions) {
+    //   await checkSessionTimeout(session.id);
+    // }
+
+    await Promise.all(
+      prepaidSessions.map((session) => checkSessionTimeout(session.id))
+    );
+
+    setIsCheckingSessions(false);
+  }, [activeSessions, checkSessionTimeout, isCheckingSessions]);
 
   // Refresh active sessions (public method)
   const refreshActiveSessions = useCallback(async () => {
@@ -350,17 +368,23 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   // Set up interval to check sessions every 30 seconds
   useEffect(() => {
     setIsTimerRunning(true);
-
     const interval = setInterval(() => {
       checkAllSessions();
-      checkAndShutdownUnusedConsoles();
-    }, 5000); // Check every 30 seconds
+    }, 30000); // Check every 30 seconds
 
     return () => {
       clearInterval(interval);
       setIsTimerRunning(false);
     };
-  }, [checkAllSessions, checkAndShutdownUnusedConsoles]);
+  }, [checkAllSessions]);
+
+  useEffect(() => {
+    const consoleInterval = setInterval(() => {
+      checkAndShutdownUnusedConsoles();
+    }, 60000);
+
+    return () => clearInterval(consoleInterval);
+  }, [checkAndShutdownUnusedConsoles]);
 
   const value: TimerContextType = {
     activeSessions,

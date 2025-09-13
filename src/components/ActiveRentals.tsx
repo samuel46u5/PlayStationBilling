@@ -1,6 +1,3 @@
-// ...existing code...
-
-// ...existing code...
 import { CreditCard, Pause, Power, Printer, Ticket } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
@@ -17,10 +14,6 @@ interface SaleItem {
   total?: number;
 }
 
-interface RentalSession {
-  // ...existing properties...
-  sale_items?: SaleItem[];
-}
 import {
   Clock,
   User,
@@ -71,6 +64,7 @@ interface RateProfile {
   id: string;
   name: string;
   hourly_rate: number;
+  minimum_minutes: number;
 }
 
 interface RentalSession {
@@ -84,6 +78,11 @@ interface RentalSession {
   status: "active" | "completed" | "paused" | "cancelled";
   payment_status: "pending" | "partial" | "paid";
   paid_amount: number;
+  is_voucher_used?: boolean;
+  hourly_rate_snapshot?: number;
+  per_minute_rate_snapshot?: number;
+  total_points_deducted?: number;
+  sale_items?: SaleItem[];
   // pause_start_time?: string;
   // total_pause_minutes?: number;
   customers?: {
@@ -767,7 +766,6 @@ const ActiveRentals: React.FC = () => {
       console.error("Error loading console auto shutdown states:", error);
     }
   };
-
   const updateConsoleAutoShutdown = async (
     consoleId: string,
     enabled: boolean
@@ -942,6 +940,44 @@ const ActiveRentals: React.FC = () => {
     loadData();
   }, []);
 
+  // Listen for member card session ended events
+  useEffect(() => {
+    const handleMemberCardSessionEnded = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { sessionId, reason } = customEvent.detail;
+      console.log(`Member card session ${sessionId} ended due to: ${reason}`);
+
+      // Refresh data to update UI
+      await loadData();
+      await refreshActiveSessions();
+
+      // Show notification to user
+      if (reason === "insufficient_balance") {
+        Swal.fire({
+          toast: true,
+          position: "top-end",
+          title: "Session Diakhiri",
+          text: `Session rental diakhiri karena saldo member card habis`,
+          icon: "warning",
+          timer: 5000,
+          showConfirmButton: false,
+        });
+      }
+    };
+
+    window.addEventListener(
+      "memberCardSessionEnded",
+      handleMemberCardSessionEnded
+    );
+
+    return () => {
+      window.removeEventListener(
+        "memberCardSessionEnded",
+        handleMemberCardSessionEnded
+      );
+    };
+  }, [refreshActiveSessions]);
+
   // Sync with global timer context
   useEffect(() => {
     if (globalActiveSessions.length > 0) {
@@ -1087,7 +1123,25 @@ const ActiveRentals: React.FC = () => {
       (r) => r.id === console?.rate_profile_id
     );
     const hourlyRate = rateProfile?.hourly_rate || 15000;
-    if (totalMinutes <= 60) {
+    const minimumMinutes = rateProfile?.minimum_minutes || 60;
+
+    // Untuk member-card, gunakan logika yang sama dengan useMemberCardBilling
+    if (session.is_voucher_used) {
+      // Gunakan rate snapshot yang sama dengan yang digunakan di billing
+      const hourlyRateSnapshot = session.hourly_rate_snapshot || hourlyRate;
+      const perMinuteRateSnapshot =
+        session.per_minute_rate_snapshot || hourlyRate / 60;
+
+      if (totalMinutes <= minimumMinutes) {
+        return hourlyRateSnapshot;
+      } else {
+        const extraMinutes = totalMinutes - 60;
+        return hourlyRateSnapshot + extraMinutes * perMinuteRateSnapshot;
+      }
+    }
+
+    // Untuk pay-as-you-go dan prepaid, gunakan logika lama dengan pembulatan
+    if (totalMinutes <= minimumMinutes) {
       return hourlyRate;
     } else {
       const extraMinutes = totalMinutes - 60;
@@ -1105,6 +1159,7 @@ const ActiveRentals: React.FC = () => {
     refreshMs?: number;
   }> = ({ session, productsTotal, refreshMs = 60000 }) => {
     const [tick, setTick] = useState(0);
+    const [realTimeCost, setRealTimeCost] = useState(0);
     const isPrepaid = !!session.duration_minutes;
 
     useEffect(() => {
@@ -1113,13 +1168,60 @@ const ActiveRentals: React.FC = () => {
       return () => clearInterval(id);
     }, [isPrepaid, refreshMs, session.id]);
 
-    return (
-      <>
-        {(calculateCurrentCost(session) + (productsTotal || 0)).toLocaleString(
-          "id-ID"
-        )}
-      </>
-    );
+    // Untuk member-card, gunakan total_points_deducted dari database
+    useEffect(() => {
+      if (session.is_voucher_used && !isPrepaid) {
+        // Fetch fresh data dari database untuk sinkronisasi dengan billing system
+        const fetchFreshSessionData = async () => {
+          try {
+            const { data: freshSession } = await supabase
+              .from("rental_sessions")
+              .select("total_points_deducted")
+              .eq("id", session.id)
+              .single();
+
+            if (freshSession) {
+              setRealTimeCost(freshSession.total_points_deducted || 0);
+            } else {
+              // Fallback ke data session yang ada
+              setRealTimeCost(session.total_points_deducted || 0);
+            }
+          } catch (error) {
+            console.error("Error fetching fresh session data:", error);
+            // Fallback ke data session yang ada
+            setRealTimeCost(session.total_points_deducted || 0);
+          }
+        };
+
+        fetchFreshSessionData();
+
+        // Listen for billing updates
+        const handleBillingUpdate = (event: Event) => {
+          const customEvent = event as CustomEvent;
+          if (customEvent.detail?.sessionId === session.id) {
+            setRealTimeCost(customEvent.detail.newTotalDeducted);
+          }
+        };
+
+        window.addEventListener("memberCardBillingUpdate", handleBillingUpdate);
+
+        // Refresh setiap 30 detik untuk sinkronisasi dengan billing
+        const interval = setInterval(fetchFreshSessionData, 30000);
+
+        return () => {
+          clearInterval(interval);
+          window.removeEventListener(
+            "memberCardBillingUpdate",
+            handleBillingUpdate
+          );
+        };
+      } else {
+        // Untuk pay-as-you-go dan prepaid, gunakan perhitungan real-time
+        setRealTimeCost(calculateCurrentCost(session));
+      }
+    }, [session.is_voucher_used, session.id, isPrepaid, tick]);
+
+    return <>{(realTimeCost + (productsTotal || 0)).toLocaleString("id-ID")}</>;
   };
 
   // Letakkan helper ini di file yang sama (di luar komponen), ganti versi lama jika sudah ada
@@ -1326,8 +1428,8 @@ const ActiveRentals: React.FC = () => {
         return;
       }
 
-      // Untuk MEMBER CARD (balance_time), potong balance dan akhiri sesi
-      if ((session as any).is_voucher_used) {
+      // Untuk MEMBER CARD (points), finalisasi sesi dan lakukan final delta deduction bila ada
+      if (session.is_voucher_used) {
         const consoleObj = consoles.find((c) => c.id === session.console_id);
         if (consoleObj?.power_tv_command) {
           await fetch(consoleObj.power_tv_command).catch(() => {});
@@ -1345,45 +1447,74 @@ const ActiveRentals: React.FC = () => {
           (endTime.getTime() - startTime.getTime()) / (1000 * 60)
         );
 
-        // Ambil data customer untuk mendapatkan balance_time
-        const { data: customerData, error: customerError } = await supabase
-          .from("customers")
-          .select("balance_time")
-          .eq("id", session.customer_id)
-          .single();
+        // Hitung total points yang seharusnya ditarik untuk durasi berjalan
+        // Gunakan snapshot tarif yang sudah disimpan saat start rental
+        const hourlyRateSnapshot = session.hourly_rate_snapshot || 15000;
+        // const perMinuteRateSnapshot =
+        //   Math.ceil(
+        //     (session.per_minute_rate_snapshot ||
+        //       (session.hourly_rate_snapshot || 15000) / 60) / 100
+        //   ) * 100;
+        const perMinuteRateSnapshot =
+          session.per_minute_rate_snapshot || hourlyRateSnapshot / 60;
+        const rp = rateProfiles.find(
+          (r) => r.id === consoleObj?.rate_profile_id
+        );
+        const minimumMinutes = rp?.minimum_minutes || 60;
 
-        if (customerError || !customerData) {
-          Swal.fire("Error", "Gagal mengambil data customer", "error");
-          return;
+        let totalPoints = 0;
+        if (elapsedMinutes <= minimumMinutes) {
+          totalPoints = hourlyRateSnapshot;
+        } else {
+          totalPoints =
+            hourlyRateSnapshot +
+            Math.ceil((elapsedMinutes - 60) * perMinuteRateSnapshot);
         }
 
-        const currentBalance = Math.max(0, customerData.balance_time || 0);
-        const usedFromBalance = Math.min(elapsedMinutes, currentBalance);
-        const remainingBalance = currentBalance - usedFromBalance;
+        // Ambil total yang sudah dipotong dari session atau log
+        let alreadyDeducted = session.total_points_deducted || 0;
 
-        // Update balance_time customer
-        await supabase
-          .from("customers")
-          .update({ balance_time: remainingBalance })
-          .eq("id", session.customer_id);
+        const needToDeduct = Math.max(0, totalPoints - alreadyDeducted);
+
+        // Ambil data customer untuk final deduction
+        let customerRow = null;
+        let willDeduct = 0;
+        if (session.customer_id) {
+          const { data } = await supabase
+            .from("customers")
+            .select("balance_points")
+            .eq("id", session.customer_id)
+            .single();
+          customerRow = data;
+        }
+
+        // Lakukan final deduction jika masih ada selisih dan saldo cukup
+        if (needToDeduct > 0 && session.customer_id) {
+          const currentPoints = Number(customerRow?.balance_points) || 0;
+          willDeduct = Math.min(currentPoints, needToDeduct);
+          if (willDeduct > 0) {
+            const newBalance = currentPoints - willDeduct;
+            await supabase
+              .from("customers")
+              .update({ balance_points: newBalance })
+              .eq("id", session.customer_id);
+            await supabase.from("point_usage_logs").insert({
+              session_id: session.id,
+              customer_id: session.customer_id,
+              points_deducted: willDeduct,
+              sisa_balance: newBalance,
+            });
+          }
+        }
 
         // Update rental session
-        const hoursUsed = Number((usedFromBalance / 60).toFixed(2));
-        const hoursBefore = Number((currentBalance / 60).toFixed(2));
-        const hoursAfter = Number((remainingBalance / 60).toFixed(2));
-
         await supabase
           .from("rental_sessions")
           .update({
             end_time: endTime.toISOString(),
             status: "completed",
             payment_status: "paid",
-            total_amount: 0,
-            paid_amount: 0,
             duration_minutes: elapsedMinutes,
-            voucher_hours_used: hoursUsed,
-            voucher_remaining_before: hoursBefore,
-            voucher_remaining_after: hoursAfter,
           })
           .eq("id", session.id);
 
@@ -1395,24 +1526,61 @@ const ActiveRentals: React.FC = () => {
 
         await finalizeProductsAndStock(session.id);
 
-        // Log transaksi kasir
+        // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
         await logCashierTransaction({
           type: "rental",
           amount: 0,
-          paymentMethod,
-          referenceId: `MEMBER_CARD-${session.id}-${Date.now()}`,
+          paymentMethod: "cash",
+          referenceId: `MEMBER_CARD-${Date.now()}`,
           description: `Rental (member card) - ${
             session.customers?.name ?? "Tanpa Nama"
           }`,
           details: {
-            action: "member_card_session",
-            session_id: session.id,
+            items: [
+              {
+                name: `Rental ${session.consoles?.name || "Console"}`,
+                type: "rental",
+                quantity: 1,
+                total: totalPoints,
+                description: `Member Card - ${elapsedMinutes} menit`,
+                qty: 1,
+                price: totalPoints,
+                product_name: `Rental ${session.consoles?.name || "Console"}`,
+              },
+            ],
+            breakdown: {
+              rental_cost: totalPoints,
+              products_total: 0,
+            },
+            customer: {
+              name: session.customers?.name ?? "Tanpa Nama",
+              id: session.customer_id,
+            },
+            rental: {
+              session_id: session.id,
+              console: session.consoles?.name,
+              duration_minutes: elapsedMinutes,
+              start_time: session.start_time,
+              end_time: new Date().toISOString(),
+            },
+            member_card: {
+              points_used: totalPoints,
+              points_remaining: Math.max(
+                0,
+                (Number(customerRow?.balance_points) || 0) - willDeduct
+              ),
+              points_deducted_final: willDeduct,
+              hourly_rate_snapshot: session.hourly_rate_snapshot,
+              per_minute_rate_snapshot: session.per_minute_rate_snapshot,
+            },
+            payment: {
+              method: "member_card",
+              amount: totalPoints,
+              change: 0,
+            },
             customer_id: session.customer_id,
             console_id: session.console_id,
             elapsed_minutes: elapsedMinutes,
-            voucher_hours_used: hoursUsed,
-            voucher_remaining_before: hoursBefore,
-            voucher_remaining_after: hoursAfter,
           },
         });
 
@@ -1420,7 +1588,7 @@ const ActiveRentals: React.FC = () => {
         await refreshActiveSessions();
         Swal.fire(
           "Berhasil",
-          `Sesi rental (member card) berhasil diakhiri. Waktu terpakai: ${elapsedMinutes} menit, sisa balance: ${remainingBalance} menit`,
+          `Sesi rental (member card) berhasil diakhiri. Waktu terpakai: ${elapsedMinutes} menit`,
           "success"
         );
         return;
@@ -1460,7 +1628,6 @@ const ActiveRentals: React.FC = () => {
       Swal.fire("Error", "Gagal mengakhiri sesi rental", "error");
     }
   };
-
   const handleConfirmMoveSession = async () => {
     if (!ensureCashierActive()) return;
     if (!showMoveModal || !moveTargetConsoleId) {
@@ -1585,7 +1752,7 @@ const ActiveRentals: React.FC = () => {
   async function logCashierTransaction(params: {
     type: "sale" | "rental" | "voucher";
     amount: number;
-    paymentMethod: "cash" | "qris" | "card" | "transfer";
+    paymentMethod: "cash" | "qris" | "card" | "transfer" | "member_card";
     referenceId: string;
     description: string;
     details?: any;
@@ -1799,6 +1966,7 @@ const ActiveRentals: React.FC = () => {
           customer: { name: "Umum" },
           items: cart.map((i) => ({
             name: i.productName,
+            product_id: i.productId,
             type: "product" as const,
             quantity: i.quantity,
             price: i.price,
@@ -1908,7 +2076,9 @@ const ActiveRentals: React.FC = () => {
       // Ambil detail produk langsung dari DB agar akurat
       const { data: productRows } = await supabase
         .from("rental_session_products")
-        .select(`product_name, quantity, price, total, status, products(cost)`)
+        .select(
+          `product_name, quantity, price, total, status, products(cost), product_id`
+        )
         .eq("session_id", session.id)
         .in("status", ["pending", "completed"]);
 
@@ -1930,6 +2100,7 @@ const ActiveRentals: React.FC = () => {
         },
         ...(productRows?.map((p) => ({
           name: p.product_name,
+          product_id: p.product_id,
           type: "product" as const,
           quantity: p.quantity,
           price: p.price,
@@ -2679,7 +2850,6 @@ const ActiveRentals: React.FC = () => {
       setAddTimeLoading(false);
     }
   };
-
   // Modal pembayaran prepaid, UI sama dengan kasir (end rental), tapi logic tetap prepaid
   const PrepaidPaymentModal2 = ({
     open,
@@ -3159,7 +3329,7 @@ const ActiveRentals: React.FC = () => {
         return; // Tunggu konfirmasi modal
       }
 
-      // Member Card Mode - gunakan balance_time
+      // Member Card Mode - gunakan balance_points
       if (rentalType === "member-card") {
         if (customerType !== "member" || !customerId) {
           Swal.fire("Error", "Mode member card hanya untuk member", "warning");
@@ -3167,7 +3337,7 @@ const ActiveRentals: React.FC = () => {
         }
 
         const customer = customers.find((c) => c.id === customerId);
-        const availableBalance = Math.max(0, customer?.balance_time || 0);
+        const availableBalance = Math.max(0, customer?.balance_points || 0);
         if (availableBalance <= 0) {
           Swal.fire("Error", "Balance time member habis", "warning");
           return;
@@ -3181,7 +3351,15 @@ const ActiveRentals: React.FC = () => {
           fetch(latestConsole.relay_command_on).catch(() => {});
         }
 
-        // Insert rental session dengan flag voucher
+        // Ambil snapshot rate untuk konsistensi harga selama sesi
+        const rpForSnapshot = rateProfiles.find(
+          (r) => r.id === latestConsole.rate_profile_id
+        );
+        const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
+        const perMinuteRateSnapshot =
+          Math.ceil(hourlyRateSnapshot / 60 / 100) * 100;
+
+        // Insert rental session dengan flag voucher dan snapshot rate
         const { error: rentalError } = await supabase
           .from("rental_sessions")
           .insert({
@@ -3194,6 +3372,8 @@ const ActiveRentals: React.FC = () => {
             start_time: new Date(rentalStartTime).toISOString(),
             duration_minutes: null, // Tidak ada durasi tetap
             is_voucher_used: true, // Tandai menggunakan balance
+            hourly_rate_snapshot: hourlyRateSnapshot,
+            per_minute_rate_snapshot: perMinuteRateSnapshot,
           });
 
         if (rentalError) throw rentalError;
@@ -3443,7 +3623,6 @@ const ActiveRentals: React.FC = () => {
       setIsRefreshingStatuses(false);
     }
   };
-
   const runCommand = async () => {
     if (!selectedCommand) {
       await Swal.fire({
@@ -4304,18 +4483,16 @@ const ActiveRentals: React.FC = () => {
             name: voucher.name,
             type: "voucher",
             total: voucher.voucher_price,
-            profit:
-              voucher.voucher_price -
-              voucher.capital * (voucher.total_minutes / 60),
-            capital: voucher.capital * (voucher.total_minutes / 60),
+            profit: voucher.voucher_price - voucher.capital,
+            capital: voucher.capital,
             description: `Voucher Code: ${voucher.voucher_code}`,
           },
         ],
         voucher: {
           voucher_id: voucher.id,
           voucher_code: voucher.voucher_code,
-          total_minutes: voucher.total_minutes,
-          hourly_rate: voucher.hourly_rate,
+          total_points: voucher.total_points,
+          voucher_price: voucher.voucher_price,
         },
         payment: {
           amount: voucher.voucher_price,
@@ -4331,16 +4508,16 @@ const ActiveRentals: React.FC = () => {
       },
     });
 
-    // 2. Update balance_time customer
+    // 2. Update balance_points customer
     await db.update("customers", customer.id, {
-      balance_time: (customer.balance_time || 0) + voucher.total_minutes,
+      balance_points: (customer.balance_points || 0) + voucher.total_points,
     });
 
     // 3. Notifikasi sukses
     Swal.fire({
       icon: "success",
       title: "Berhasil",
-      text: "Voucher berhasil dijual dan waktu customer bertambah!",
+      text: "Voucher berhasil dijual dan points customer bertambah!",
       confirmButtonText: "OK",
     });
     setShowSellVoucherModal(false);
@@ -4430,7 +4607,9 @@ const ActiveRentals: React.FC = () => {
           start_time: new Date(rentalStartTime).toISOString(),
           duration_minutes: duration,
           payment_method: paymentMethod,
-        });
+        })
+        .select()
+        .single();
       if (rentalError) throw rentalError;
       rentalSessionId = rentalSession?.id;
 
@@ -4625,8 +4804,6 @@ const ActiveRentals: React.FC = () => {
     setPauseConsoleInfoCheck(!!showPrepaidPaymentModal);
   }, [showPrepaidPaymentModal]);
 
-  // ...existing code...
-
   // Tambahkan state untuk modal batal transaksi
   const [showCancelModal, setShowCancelModal] = useState<null | {
     session: RentalSession;
@@ -4642,7 +4819,20 @@ const ActiveRentals: React.FC = () => {
     }
     setCancelLoading(true);
     try {
-      // Update status dan description
+      const { data: trx } = await supabase
+        .from("cashier_transactions")
+        .select("id, details, description, timestamp, amount")
+        .eq("type", "rental")
+        .filter("details->rental->>session_id", "eq", session.id)
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .single();
+
+      const isPrepaid = Boolean(
+        trx?.details?.rental?.prepaid ?? trx?.details?.prepaid
+      );
+
+      // Update rental session status
       await supabase
         .from("rental_sessions")
         .update({
@@ -4653,30 +4843,6 @@ const ActiveRentals: React.FC = () => {
         })
         .eq("id", session.id);
 
-      await logCashierTransaction({
-        type: "rental",
-        amount: 0,
-        paymentMethod: "cash",
-        referenceId: `CANCELLED-${Date.now()}`,
-        description: `Dibatalkan oleh kasir pada ${new Date().toLocaleString(
-          "id-ID"
-        )}: ${cancelReason}`,
-        details: {
-          action: "cancel_session",
-          session_id: session.id,
-          reason: cancelReason,
-        },
-      });
-
-      const { data: trx } = await supabase
-        .from("cashier_transactions")
-        .select("id, details, description, timestamp")
-        .eq("type", "rental")
-        .contains("details", { session_id: session.id })
-        .order("timestamp", { ascending: false })
-        .limit(1)
-        .single();
-
       if (trx?.id) {
         const newDetails = {
           ...(trx.details ?? {}),
@@ -4685,15 +4851,48 @@ const ActiveRentals: React.FC = () => {
           cancelled_at: new Date().toISOString(),
         };
 
-        await supabase
-          .from("cashier_transactions")
-          .update({
-            amount: 0,
-            description: `[CANCELLED] ${trx.description || ""}`.trim(),
-            details: newDetails,
-          })
-          .eq("id", trx.id);
+        if (isPrepaid) {
+          await Promise.all([
+            supabase
+              .from("rental_sessions")
+              .update({
+                payment_status: "pending",
+                total_amount: 0,
+                paid_amount: 0,
+                end_time: new Date().toISOString(),
+              })
+              .eq("id", session.id),
+
+            supabase
+              .from("cashier_transactions")
+              .update({
+                reference_id: `CANCELLED-${Date.now()}`,
+                amount: 0,
+                description: `[CANCELLED] ${
+                  trx.description || ""
+                } : ${cancelReason}`.trim(),
+                details: newDetails,
+              })
+              .eq("id", trx.id),
+          ]);
+        }
+      } else {
+        await logCashierTransaction({
+          type: "rental",
+          amount: 0,
+          paymentMethod: "cash",
+          referenceId: `CANCELLED-${Date.now()}`,
+          description: `Dibatalkan oleh kasir pada ${new Date().toLocaleString(
+            "id-ID"
+          )}: ${cancelReason}`,
+          details: {
+            action: "cancel_session",
+            session_id: session.id,
+            reason: cancelReason,
+          },
+        });
       }
+
       // Rollback stok produk jika ada
       const { data: products } = await supabase
         .from("rental_session_products")
@@ -4721,8 +4920,8 @@ const ActiveRentals: React.FC = () => {
             console.error("Gagal mematikan TV");
           });
         }
-        if (consoleData?.relay_command_on) {
-          fetch(consoleData.relay_command_on).catch(() => {
+        if (consoleData?.relay_command_off) {
+          fetch(consoleData.relay_command_off).catch(() => {
             console.error("Gagal mematikan relay");
           });
         }
@@ -4738,7 +4937,6 @@ const ActiveRentals: React.FC = () => {
       setCancelLoading(false);
     }
   };
-
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
@@ -5117,8 +5315,8 @@ const ActiveRentals: React.FC = () => {
                             <span>{v.name}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>Total Jam:</span>
-                            <span>{(v.total_minutes / 60).toFixed(2)} jam</span>
+                            <span>Total Points:</span>
+                            <span>{v.total_points} points</span>
                           </div>
                           <div className="flex justify-between font-medium border-t border-gray-200 pt-2">
                             <span>Total Bayar:</span>
@@ -5216,8 +5414,7 @@ const ActiveRentals: React.FC = () => {
                           {v.name}
                         </div>
                         <div className="text-sm text-gray-600">
-                          {v.voucher_code} • {(v.total_minutes / 60).toFixed(2)}{" "}
-                          jam
+                          {v.voucher_code} • {v.total_points} points
                         </div>
                       </div>
                       <div className="text-sm font-semibold text-green-600">
@@ -5506,7 +5703,6 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* Tools Modal */}
       {showToolsModal ? (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -5897,7 +6093,6 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       ) : null}
-
       {/* Console Grid */}
       {viewMode === "simple" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -5908,7 +6103,76 @@ const ActiveRentals: React.FC = () => {
             .filter((c) =>
               c.name.toLowerCase().includes(searchConsole.toLowerCase())
             )
-            .sort((a, b) => Number(a.name) - Number(b.name))
+            .sort((a, b) => {
+              const sa = activeSessions.find((s) => s.console_id === a.id);
+              const sb = activeSessions.find((s) => s.console_id === b.id);
+
+              // Fungsi untuk menghitung sisa waktu prepaid
+              const getRemainingTime = (session: any) => {
+                if (
+                  !session ||
+                  !session.duration_minutes ||
+                  !session.start_time
+                ) {
+                  return Number.POSITIVE_INFINITY;
+                }
+                return Math.max(
+                  0,
+                  Number(session.duration_minutes) * 60 -
+                    Math.floor(
+                      (Date.now() - new Date(session.start_time).getTime()) /
+                        1000
+                    )
+                );
+              };
+
+              // Fungsi untuk menghitung durasi play-as-you-go
+              const getElapsedTime = (session: any) => {
+                if (
+                  !session ||
+                  session.duration_minutes ||
+                  !session.start_time
+                ) {
+                  return 0;
+                }
+                return Math.floor(
+                  (Date.now() - new Date(session.start_time).getTime()) / 1000
+                );
+              };
+
+              // Kategorisasi konsol
+              const getCategory = (console: any, session: any) => {
+                if (!session) return 0; // Available console
+                if (session.duration_minutes) return 1; // Prepaid console
+                return 2; // Pay-as-you-go console
+              };
+
+              const catA = getCategory(a, sa);
+              const catB = getCategory(b, sb);
+
+              // Sort by category first (0: available, 1: prepaid, 2: pay-as-you-go)
+              if (catA !== catB) {
+                return catA - catB;
+              }
+
+              // Within same category, sort differently
+              if (catA === 0) {
+                // Available consoles: sort by name
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              } else if (catA === 1) {
+                // Prepaid consoles: sort by remaining time (ascending - least time first)
+                const remA = getRemainingTime(sa);
+                const remB = getRemainingTime(sb);
+                if (remA !== remB) return remA - remB;
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              } else {
+                // Pay-as-you-go consoles: sort by elapsed time (descending - longest play first)
+                const elapsedA = getElapsedTime(sa);
+                const elapsedB = getElapsedTime(sb);
+                if (elapsedA !== elapsedB) return elapsedB - elapsedA; // Note: reversed for descending
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              }
+            })
             .map((console) => {
               const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
@@ -5999,6 +6263,7 @@ const ActiveRentals: React.FC = () => {
                                 : null
                             }
                             isPrepaid={!!activeSession.duration_minutes}
+                            onComplete={() => {}}
                           />
                         </div>
                         <div className="flex items-center gap-1 text-[11px]">
@@ -6009,11 +6274,15 @@ const ActiveRentals: React.FC = () => {
                             className={`ml-auto font-bold text-[10px] px-2 py-0.5 rounded-full ${
                               activeSession.duration_minutes
                                 ? "bg-purple-100 text-purple-700 border border-purple-300"
+                                : activeSession.is_voucher_used
+                                ? "bg-yellow-100 text-yellow-700 border border-yellow-300"
                                 : "bg-green-100 text-green-700 border border-green-300"
                             }`}
                           >
                             {activeSession.duration_minutes
                               ? "BAYAR DIMUKA"
+                              : activeSession.is_voucher_used
+                              ? "MEMBER CARD"
                               : "PAY AS YOU GO"}
                           </span>
                         </div>
@@ -6023,12 +6292,15 @@ const ActiveRentals: React.FC = () => {
 
                     {/* Info Mode Persiapan */}
                     {preparationMode[console.id]?.isActive && (
-                      <div className="w-full text-[10px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 mb-1">
+                      <div className="w-full text-[15px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 mb-1">
                         Mode persiapan akan berakhir pada:
                         <span className="ml-1 font-semibold">
                           {new Date(
                             preparationMode[console.id]!.endAtMs
-                          ).toLocaleString("id-ID")}
+                          ).toLocaleTimeString("id-ID", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
                       </div>
                     )}
@@ -6252,7 +6524,76 @@ const ActiveRentals: React.FC = () => {
             .filter((c) =>
               c.name.toLowerCase().includes(searchConsole.toLowerCase())
             )
-            .sort((a, b) => Number(a.name) - Number(b.name))
+            .sort((a, b) => {
+              const sa = activeSessions.find((s) => s.console_id === a.id);
+              const sb = activeSessions.find((s) => s.console_id === b.id);
+
+              // Fungsi untuk menghitung sisa waktu prepaid
+              const getRemainingTime = (session: any) => {
+                if (
+                  !session ||
+                  !session.duration_minutes ||
+                  !session.start_time
+                ) {
+                  return Number.POSITIVE_INFINITY;
+                }
+                return Math.max(
+                  0,
+                  Number(session.duration_minutes) * 60 -
+                    Math.floor(
+                      (Date.now() - new Date(session.start_time).getTime()) /
+                        1000
+                    )
+                );
+              };
+
+              // Fungsi untuk menghitung durasi play-as-you-go
+              const getElapsedTime = (session: any) => {
+                if (
+                  !session ||
+                  session.duration_minutes ||
+                  !session.start_time
+                ) {
+                  return 0;
+                }
+                return Math.floor(
+                  (Date.now() - new Date(session.start_time).getTime()) / 1000
+                );
+              };
+
+              // Kategorisasi konsol
+              const getCategory = (console: any, session: any) => {
+                if (!session) return 0; // Available console
+                if (session.duration_minutes) return 1; // Prepaid console
+                return 2; // Pay-as-you-go console
+              };
+
+              const catA = getCategory(a, sa);
+              const catB = getCategory(b, sb);
+
+              // Sort by category first (0: available, 1: prepaid, 2: pay-as-you-go)
+              if (catA !== catB) {
+                return catA - catB;
+              }
+
+              // Within same category, sort differently
+              if (catA === 0) {
+                // Available consoles: sort by name
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              } else if (catA === 1) {
+                // Prepaid consoles: sort by remaining time (ascending - least time first)
+                const remA = getRemainingTime(sa);
+                const remB = getRemainingTime(sb);
+                if (remA !== remB) return remA - remB;
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              } else {
+                // Pay-as-you-go consoles: sort by elapsed time (descending - longest play first)
+                const elapsedA = getElapsedTime(sa);
+                const elapsedB = getElapsedTime(sb);
+                if (elapsedA !== elapsedB) return elapsedB - elapsedA; // Note: reversed for descending
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              }
+            })
             .map((console) => {
               // const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
@@ -6306,6 +6647,27 @@ const ActiveRentals: React.FC = () => {
                           <span>{console.location}</span>
                         </div>
                       )}
+                      {activeSession?.duration_minutes && (
+                        <div className="flex items-center gap-1 text-[13px]">
+                          <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
+                          <Countdown
+                            sessionId={activeSession?.id}
+                            startTimeMs={new Date(
+                              activeSession?.start_time
+                            ).getTime()}
+                            endTimeMs={
+                              activeSession?.duration_minutes
+                                ? new Date(
+                                    activeSession?.start_time
+                                  ).getTime() +
+                                  activeSession?.duration_minutes * 60 * 1000
+                                : null
+                            }
+                            isPrepaid={!!activeSession?.duration_minutes}
+                            onComplete={() => {}}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -6318,11 +6680,15 @@ const ActiveRentals: React.FC = () => {
                           className={`text-[10px] font-bold rounded-full py-1 px-3 mb-2 border ${
                             activeSession.duration_minutes
                               ? "bg-purple-100 text-purple-800 border-purple-300"
+                              : activeSession.is_voucher_used
+                              ? "bg-yellow-100 text-yellow-800 border-yellow-300"
                               : "bg-green-100 text-green-800 border-green-300"
                           }`}
                         >
                           {activeSession.duration_minutes
                             ? "BAYAR DIMUKA"
+                            : activeSession.is_voucher_used
+                            ? "MEMBER CARD"
                             : "PAY AS YOU GO"}
                         </span>
 
@@ -6475,7 +6841,76 @@ const ActiveRentals: React.FC = () => {
             .filter((c) =>
               c.name.toLowerCase().includes(searchConsole.toLowerCase())
             )
-            .sort((a, b) => Number(a.name) - Number(b.name))
+            .sort((a, b) => {
+              const sa = activeSessions.find((s) => s.console_id === a.id);
+              const sb = activeSessions.find((s) => s.console_id === b.id);
+
+              // Fungsi untuk menghitung sisa waktu prepaid
+              const getRemainingTime = (session: any) => {
+                if (
+                  !session ||
+                  !session.duration_minutes ||
+                  !session.start_time
+                ) {
+                  return Number.POSITIVE_INFINITY;
+                }
+                return Math.max(
+                  0,
+                  Number(session.duration_minutes) * 60 -
+                    Math.floor(
+                      (Date.now() - new Date(session.start_time).getTime()) /
+                        1000
+                    )
+                );
+              };
+
+              // Fungsi untuk menghitung durasi play-as-you-go
+              const getElapsedTime = (session: any) => {
+                if (
+                  !session ||
+                  session.duration_minutes ||
+                  !session.start_time
+                ) {
+                  return 0;
+                }
+                return Math.floor(
+                  (Date.now() - new Date(session.start_time).getTime()) / 1000
+                );
+              };
+
+              // Kategorisasi konsol
+              const getCategory = (console: any, session: any) => {
+                if (!session) return 0; // Available console
+                if (session.duration_minutes) return 1; // Prepaid console
+                return 2; // Pay-as-you-go console
+              };
+
+              const catA = getCategory(a, sa);
+              const catB = getCategory(b, sb);
+
+              // Sort by category first (0: available, 1: prepaid, 2: pay-as-you-go)
+              if (catA !== catB) {
+                return catA - catB;
+              }
+
+              // Within same category, sort differently
+              if (catA === 0) {
+                // Available consoles: sort by name
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              } else if (catA === 1) {
+                // Prepaid consoles: sort by remaining time (ascending - least time first)
+                const remA = getRemainingTime(sa);
+                const remB = getRemainingTime(sb);
+                if (remA !== remB) return remA - remB;
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              } else {
+                // Pay-as-you-go consoles: sort by elapsed time (descending - longest play first)
+                const elapsedA = getElapsedTime(sa);
+                const elapsedB = getElapsedTime(sb);
+                if (elapsedA !== elapsedB) return elapsedB - elapsedA; // Note: reversed for descending
+                return a.name.localeCompare(b.name, "id", { numeric: true });
+              }
+            })
             .map((console) => {
               const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
@@ -6548,7 +6983,7 @@ const ActiveRentals: React.FC = () => {
                           : "MAINTENANCE"} */}
                         {activeSession?.status === "active"
                           ? "ACTIVE"
-                          : "COMPLETED"}
+                          : "READY"}
                       </span>
                       {console.location && (
                         <span className="text-sm opacity-80">
@@ -6566,6 +7001,8 @@ const ActiveRentals: React.FC = () => {
                         className={`mb-4 p-3 rounded-lg border ${
                           activeSession.duration_minutes
                             ? "bg-purple-50 border-purple-100"
+                            : activeSession.is_voucher_used
+                            ? "bg-yellow-50 border-yellow-100"
                             : "bg-green-50 border-green-100"
                         }`}
                       >
@@ -6580,11 +7017,15 @@ const ActiveRentals: React.FC = () => {
                             className={`px-2 py-1 rounded-full text-xs font-medium border ${
                               activeSession.duration_minutes
                                 ? "bg-purple-100 text-purple-800 border-purple-300"
+                                : activeSession.is_voucher_used
+                                ? "bg-yellow-100 text-yellow-800 border-yellow-300"
                                 : "bg-green-100 text-green-800 border-green-300"
                             }`}
                           >
                             {activeSession.duration_minutes
                               ? "BAYAR DIMUKA"
+                              : activeSession.is_voucher_used
+                              ? "MEMBER CARD"
                               : "PAY AS YOU GO"}
                           </span>
                         </div>
@@ -6629,6 +7070,7 @@ const ActiveRentals: React.FC = () => {
                                       isPrepaid={
                                         !!activeSession.duration_minutes
                                       }
+                                      onComplete={() => {}}
                                     />
                                     <span className="ml-1">tersisa</span>
                                   </span>
@@ -6656,6 +7098,7 @@ const ActiveRentals: React.FC = () => {
                                       isPrepaid={
                                         !!activeSession.duration_minutes
                                       }
+                                      onComplete={() => {}}
                                     />
                                   </span>
                                 </span>
@@ -6725,6 +7168,7 @@ const ActiveRentals: React.FC = () => {
                                   : null
                               }
                               isPrepaid={!!activeSession.duration_minutes}
+                              onComplete={() => {}}
                             />
                           </div>
                         </div>
@@ -7015,13 +7459,12 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* Start Rental Modal */}
       {/* Timer pengecekan Console Information DIHENTIKAN jika pauseConsoleInfoCheck true */}
-      {/* ...existing code... */}
+      {/* ...rest of the code... */}
       {showStartRentalModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl mx-4">
             <div className="p-6 max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 Start New Rental
@@ -7147,7 +7590,7 @@ const ActiveRentals: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Jenis Rental
                   </label>
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="grid grid-cols-3 gap-3 mb-4">
                     <button
                       type="button"
                       onClick={() => setRentalType("pay-as-you-go")}
@@ -7238,13 +7681,33 @@ const ActiveRentals: React.FC = () => {
                           <p className="text-sm font-medium text-blue-800">
                             Sisa Balance:{" "}
                             {customers.find((c) => c.id === selectedCustomerId)
-                              ?.balance_time ?? 0}{" "}
-                            menit
+                              ?.balance_points ?? 0}{" "}
+                            points
                           </p>
+                          {(() => {
+                            const customerBalance =
+                              customers.find((c) => c.id === selectedCustomerId)
+                                ?.balance_points ?? 0;
+                            const consoleRateProfile =
+                              selectedConsole?.rate_profile_id
+                                ? rateProfiles.find(
+                                    (r) =>
+                                      r.id === selectedConsole.rate_profile_id
+                                  )
+                                : null;
+                            const hourlyRate =
+                              consoleRateProfile?.hourly_rate ?? 0;
+
+                            return customerBalance < hourlyRate ? (
+                              <p className="text-sm text-red-600 mt-2">
+                                ⚠️ Kurang points - Balance tidak cukup untuk
+                                minimal waktu rental
+                              </p>
+                            ) : null;
+                          })()}
                           <p className="text-xs text-blue-600 mt-1">
-                            Waktu terpakai akan otomatis dipotong dari balance
-                            saat sesi diakhiri. Sisa balance akan tetap
-                            tersimpan.
+                            Points akan otomatis dipotong dari balance saat sesi
+                            diakhiri. Sisa balance akan tetap tersimpan.
                           </p>
                         </div>
                       ) : (
@@ -7619,7 +8082,23 @@ const ActiveRentals: React.FC = () => {
                   onClick={() => handleStartRental(showStartRentalModal)}
                   disabled={
                     (customerType === "member" && !selectedCustomerId) ||
-                    (customerType === "non-member" && !nonMemberName)
+                    (customerType === "non-member" && !nonMemberName) ||
+                    (rentalType === "member-card" &&
+                      customerType === "member" &&
+                      selectedCustomerId &&
+                      (() => {
+                        const customerBalance =
+                          customers.find((c) => c.id === selectedCustomerId)
+                            ?.balance_points ?? 0;
+                        const consoleRateProfile =
+                          selectedConsole?.rate_profile_id
+                            ? rateProfiles.find(
+                                (r) => r.id === selectedConsole.rate_profile_id
+                              )
+                            : null;
+                        const hourlyRate = consoleRateProfile?.hourly_rate ?? 0;
+                        return customerBalance < hourlyRate;
+                      })())
                   }
                   className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
@@ -7775,7 +8254,6 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* Product Selection Modal */}
       {showProductModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -8567,7 +9045,6 @@ const ActiveRentals: React.FC = () => {
         hourlyRate={showAddTimeModal?.hourlyRate || 0}
         loading={addTimeLoading}
       />
-
       {/* Modal konfirmasi batal transaksi */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

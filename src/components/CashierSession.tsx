@@ -675,6 +675,15 @@ const CashierSessionComponent: React.FC = () => {
           // Konversi ke jam (dengan desimal untuk menit)
           hours = hoursPart + minutesPart / 60;
         }
+
+        // Pattern 3: "Member Card - 150 menit"
+        const memberCardMatch = description.match(
+          /Member Card\s*-\s*(\d+)\s*menit/
+        );
+        if (memberCardMatch) {
+          const minutes = parseInt(memberCardMatch[1]);
+          hours = minutes / 60;
+        }
       }
 
       // Jika tidak ada di description, coba dari metadata

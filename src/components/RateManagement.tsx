@@ -21,6 +21,7 @@ type RateProfile = {
   description: string;
   capital: number;
   hourlyRate: number;
+  minimumMinutes?: number;
   peakHourRate?: number;
   peakHourStart?: string;
   peakHourEnd?: string;
@@ -81,6 +82,7 @@ const RateManagement: React.FC = () => {
     applicableEquipmentTypes: [] as string[],
     isActive: true,
     capital: 0,
+    minimumMinutes: 60,
   });
 
   // Fetch data from Supabase
@@ -114,6 +116,7 @@ const RateManagement: React.FC = () => {
             description: p.description,
             capital: p.capital,
             hourlyRate: Number(p.hourly_rate) || 0,
+            minimumMinutes: Number(p.minimum_minutes),
             peakHourRate:
               p.peak_hour_rate !== undefined && p.peak_hour_rate !== null
                 ? Number(p.peak_hour_rate)
@@ -189,6 +192,7 @@ const RateManagement: React.FC = () => {
         description: p.description,
         capital: p.capital,
         hourlyRate: Number(p.hourly_rate) || 0,
+        minimumMinutes: Number(p.minimum_minutes) || 60,
         peakHourRate:
           p.peak_hour_rate !== undefined && p.peak_hour_rate !== null
             ? Number(p.peak_hour_rate)
@@ -242,6 +246,7 @@ const RateManagement: React.FC = () => {
       description: newRateProfile.description,
       capital: newRateProfile.capital,
       hourly_rate: newRateProfile.hourlyRate,
+      minimum_minutes: newRateProfile.minimumMinutes,
       daily_rate: 0, // wajib diisi
       weekly_rate: 0, // wajib diisi
       monthly_rate: null, // opsional
@@ -270,6 +275,7 @@ const RateManagement: React.FC = () => {
       peakHourRate: 0,
       peakHourStart: "18:00",
       peakHourEnd: "22:00",
+      minimumMinutes: 60,
       applicableEquipmentTypes: [],
       isActive: true,
       capital: 0,
@@ -291,6 +297,7 @@ const RateManagement: React.FC = () => {
       description: formData.get("description"),
       capital: Number(formData.get("capital")),
       hourly_rate: Number(formData.get("hourlyRate")),
+      minimum_minutes: Number(formData.get("minimumMinutes")),
       peak_hour_rate: Number(formData.get("peakHourRate")),
       peak_hour_start: formData.get("peakHourStart"),
       peak_hour_end: formData.get("peakHourEnd"),
@@ -814,7 +821,7 @@ const RateManagement: React.FC = () => {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Tarif per Jam *
@@ -844,6 +851,24 @@ const RateManagement: React.FC = () => {
                             setNewRateProfile({
                               ...newRateProfile,
                               capital: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Minimum minutes
+                        </label>
+                        <input
+                          type="number"
+                          value={newRateProfile.minimumMinutes}
+                          onChange={(e) =>
+                            setNewRateProfile({
+                              ...newRateProfile,
+                              minimumMinutes: Number(e.target.value),
                             })
                           }
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1050,7 +1075,19 @@ const RateManagement: React.FC = () => {
                               />
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Minimum Minutes
+                              </label>
+                              <input
+                                type="number"
+                                name="minimumMinutes"
+                                defaultValue={profile.minimumMinutes}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                            </div>
+
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Jam Mulai Berlaku Tarif
