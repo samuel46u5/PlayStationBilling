@@ -88,6 +88,18 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
   }, [activeSessions]);
 
   const processSessionBilling = async (session: MemberCardSession, now: Date, minMinutesMap: Record<string, number>) => {
+    const { data: freshStatusRow, error: freshStatusErr } = await supabase
+      .from('rental_sessions')
+      .select('status, end_time, total_points_deducted, hourly_rate_snapshot, per_minute_rate_snapshot')
+      .eq('id', session.id)
+      .single();
+    if (freshStatusErr || !freshStatusRow) {
+      return;
+    }
+    if (freshStatusRow.status !== 'active') {
+      return;
+    }
+
     const startTime = new Date(session.start_time);
     const elapsedMinutes = Math.ceil((now.getTime() - startTime.getTime()) / 60000);
     const minimumMinutes = minMinutesMap[session.console_id] || 60;
@@ -96,15 +108,18 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     let expectedPoints = 0;
     if (elapsedMinutes <= minimumMinutes) {
       // Minimal 1 jam
-      expectedPoints = session.hourly_rate_snapshot;
+      const hourlySnapshot = Number(freshStatusRow.hourly_rate_snapshot ?? session.hourly_rate_snapshot);
+      expectedPoints = hourlySnapshot;
     } else {
       // 1 jam + menit tambahan
       const extraMinutes = elapsedMinutes - 60;
-      expectedPoints = session.hourly_rate_snapshot + (extraMinutes * session.per_minute_rate_snapshot);
+      const hourlySnapshot = Number(freshStatusRow.hourly_rate_snapshot ?? session.hourly_rate_snapshot);
+      const perMinuteSnapshot = Number(freshStatusRow.per_minute_rate_snapshot ?? session.per_minute_rate_snapshot);
+      expectedPoints = hourlySnapshot + (extraMinutes * perMinuteSnapshot);
     }
 
     // Hitung delta yang perlu dipotong
-    const deltaPoints = expectedPoints - session.total_points_deducted;
+    const deltaPoints = expectedPoints - Number(freshStatusRow.total_points_deducted ?? session.total_points_deducted ?? 0);
     
     if (deltaPoints <= 0) {
       return; // Tidak ada yang perlu dipotong
@@ -119,7 +134,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         .single(),
       supabase
         .from('rental_sessions')
-        .select('id,total_points_deducted')
+        .select('id,total_points_deducted,status')
         .eq('id', session.id)
         .limit(1)
     ]);
@@ -132,7 +147,10 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       console.error(`Error fetching fresh session for ${session.id}:`, freshSessErr);
       return;
     }
-    const freshSession = freshSessionRows[0] as { total_points_deducted: number };
+    const freshSession = freshSessionRows[0] as { total_points_deducted: number, status: string };
+    if (freshSession.status !== 'active') {
+      return;
+    }
 
     const currentBalance = Number(customerData.balance_points) || 0;
     const currentTotal = Number(freshSession.total_points_deducted) || 0;

@@ -365,6 +365,28 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     fetchActiveSessions();
   }, [fetchActiveSessions]);
 
+  // Realtime sync for rental_sessions changes across devices
+  useEffect(() => {
+    const channel = supabase
+      .channel("rental_sessions_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rental_sessions" },
+        async () => {
+          try {
+            await fetchActiveSessions();
+          } catch (e) {
+            console.error("Realtime refresh error:", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchActiveSessions]);
+
   // Set up interval to check sessions every 30 seconds
   useEffect(() => {
     setIsTimerRunning(true);

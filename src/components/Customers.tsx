@@ -3,7 +3,6 @@ import {
   Plus,
   Search,
   User,
-  Phone,
   Mail,
   MapPin,
   Calendar,
@@ -19,6 +18,7 @@ import {
   LayoutGrid,
   List as ListIcon,
   Gamepad2,
+  HistoryIcon,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { Customer } from "../types";
@@ -28,7 +28,7 @@ const Customers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  // removed unused selectedCustomer state
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     whatsapp: "",
@@ -37,7 +37,25 @@ const Customers: React.FC = () => {
   });
   const [customerView, setCustomerView] = useState<"card" | "list">("card");
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // State untuk histori points (lazy per customer)
+  const [showHistoryForCustomer, setShowHistoryForCustomer] = useState<
+    string | null
+  >(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [customerHistories, setCustomerHistories] = useState<
+    Record<
+      string,
+      Array<{
+        id: string;
+        type: "add" | "deduct";
+        points: number;
+        timestamp: string;
+        description?: string;
+        sisa_balance?: number;
+      }>
+    >
+  >({});
 
   // OTP States
   const [otpStep, setOtpStep] = useState<"input" | "verify" | "verified">(
@@ -71,7 +89,6 @@ const Customers: React.FC = () => {
 
   // Fetch customers from Supabase
   const fetchCustomers = async () => {
-    setLoading(true);
     const { data, error } = await supabase
       .from("customers")
       .select("*")
@@ -89,12 +106,12 @@ const Customers: React.FC = () => {
           email: c.email,
           address: c.address,
           totalSpent: c.total_spent ?? 0,
+          balancePoints: c.balance_points ?? 0,
           joinDate: c.join_date ? c.join_date : c.created_at,
           status: c.status ?? "active",
         }))
       );
     }
-    setLoading(false);
   };
 
   React.useEffect(() => {
@@ -119,6 +136,129 @@ const Customers: React.FC = () => {
       customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.phone.includes(searchTerm)
   );
+
+  // Ambil histori points: potongan per sesi rental (member-card)
+  const fetchPointHistory = async (customerId: string) => {
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return;
+    // Hindari refetch jika sudah ada
+    if (customerHistories[customerId]?.length) {
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      // Potongan points PER SESI dari rental_sessions
+      const { data: sessions, error: sessErr } = await supabase
+        .from("rental_sessions")
+        .select(
+          "id, start_time, end_time, status, total_points_deducted, duration_minutes, console_id"
+        )
+        .eq("customer_id", customerId)
+        .eq("is_voucher_used", true)
+        .order("start_time", { ascending: false });
+
+      if (sessErr) throw sessErr;
+
+      const sessionIds = (sessions || []).map((s: any) => s.id);
+      const consoleIds = Array.from(
+        new Set((sessions || []).map((s: any) => s.console_id).filter(Boolean))
+      );
+
+      // Map console_id -> name
+      let consoleNameById: Record<string, string> = {};
+      if (consoleIds.length > 0) {
+        const { data: consoles, error: consoleErr } = await supabase
+          .from("consoles")
+          .select("id, name")
+          .in("id", consoleIds);
+        if (consoleErr) throw consoleErr;
+        for (const c of consoles || []) {
+          if (c?.id) consoleNameById[c.id] = c.name || "";
+        }
+      }
+      let latestSisaBySession: Record<string, number> = {};
+      if (sessionIds.length > 0) {
+        const { data: usageLogs, error: usageErr } = await supabase
+          .from("point_usage_logs")
+          .select("session_id, timestamp, sisa_balance")
+          .in("session_id", sessionIds)
+          .order("timestamp", { ascending: false });
+        if (usageErr) throw usageErr;
+        for (const row of usageLogs || []) {
+          if (latestSisaBySession[row.session_id] == null) {
+            latestSisaBySession[row.session_id] =
+              row.sisa_balance != null
+                ? Number(row.sisa_balance)
+                : (undefined as any);
+          }
+        }
+      }
+
+      const mappedDeduct = (sessions || []).map((s: any) => {
+        const points = Number(s.total_points_deducted) || 0;
+        const when = s.end_time || s.start_time;
+        const sisa = latestSisaBySession[s.id];
+        const dur =
+          s.duration_minutes != null ? Number(s.duration_minutes) : undefined;
+        const consoleName = s.console_id
+          ? consoleNameById[s.console_id]
+          : undefined;
+        return {
+          id: `session-${s.id}`,
+          type: "deduct" as const,
+          points,
+          timestamp: when,
+          sisa_balance: sisa,
+          description:
+            `${consoleName ? `[${consoleName}] ` : ""}` +
+            (dur != null
+              ? `Pemotongan points (member-card) - ${dur} menit`
+              : "Pemotongan points (member-card) - Sesi"),
+        };
+      });
+
+      let addLogs: any[] = [];
+      {
+        const phone = customer.phone || "";
+        if (phone) {
+          const { data: txRows, error: txErr } = await supabase
+            .from("cashier_transactions")
+            .select("id, timestamp, description, details")
+            .eq("type", "voucher")
+            .contains("details", { customer: { phone } })
+            .order("timestamp", { ascending: false });
+          if (txErr) throw txErr;
+          addLogs = txRows || [];
+        }
+      }
+
+      const mappedAdd = (addLogs || []).map((tx: any) => {
+        const pts = Number(tx?.details?.voucher?.total_points) || 0;
+        return {
+          id: `add-${tx.id}`,
+          type: "add" as const,
+          points: pts,
+          timestamp: tx.timestamp,
+          description: tx.description || "Penjualan voucher (tambah points)",
+        };
+      });
+
+      const merged = [...mappedDeduct, ...mappedAdd].sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setCustomerHistories((prev) => ({ ...prev, [customerId]: merged }));
+    } catch (e: any) {
+      console.error("fetchPointHistory error:", e);
+      Swal.fire(
+        "Gagal mengambil histori points",
+        e?.message || String(e),
+        "error"
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   // Generate random 6-digit OTP
   const generateOTP = () => {
@@ -451,10 +591,7 @@ const Customers: React.FC = () => {
     }
   };
 
-  const handleStartRental = (customerId: string) => {
-    // Here you would normally navigate to rental creation
-    alert(`Memulai rental baru untuk customer ${customerId}`);
-  };
+  // removed unused handleStartRental
 
   const resetForm = () => {
     setNewCustomer({ name: "", whatsapp: "", email: "", address: "" });
@@ -545,6 +682,12 @@ const Customers: React.FC = () => {
         <div className="flex justify-between">
           <span className="text-gray-600">Total Kunjungan:</span>
           <span className="font-medium">{stats.totalKunjungan} sesi</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Total Points:</span>
+          <span className="font-medium text-green-600">
+            {customers.find((c) => c.id === customerId)?.balancePoints}
+          </span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-600">Rata-rata Sesi:</span>
@@ -677,6 +820,16 @@ const Customers: React.FC = () => {
                       aria-label="Hapus"
                     >
                       <Trash2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setShowHistoryForCustomer(customer.id);
+                        await fetchPointHistory(customer.id);
+                      }}
+                      className="flex items-center justify-center px-3 py-1 rounded-full border border-gray-200 text-white bg-white bg-opacity-10 hover:bg-gray-100 hover:text-blue-600 font-medium text-sm transition-colors"
+                      aria-label="Histori Points"
+                    >
+                      <HistoryIcon className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -811,12 +964,92 @@ const Customers: React.FC = () => {
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
+                      <button
+                        onClick={async () => {
+                          setShowHistoryForCustomer(customer.id);
+                          await fetchPointHistory(customer.id);
+                        }}
+                        className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Histori Points"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal Histori Points */}
+      {showHistoryForCustomer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Histori Points
+                </h2>
+                <button
+                  onClick={() => setShowHistoryForCustomer(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+              {historyLoading ? (
+                <div className="py-6 text-center text-gray-500">Memuat...</div>
+              ) : (
+                <div className="max-h-96 overflow-y-auto divide-y divide-gray-100">
+                  {(customerHistories[showHistoryForCustomer] || []).length ===
+                  0 ? (
+                    <div className="py-6 text-center text-gray-400">
+                      Belum ada histori
+                    </div>
+                  ) : (
+                    (customerHistories[showHistoryForCustomer] || []).map(
+                      (h) => (
+                        <div
+                          key={h.id}
+                          className="py-3 flex items-start justify-between"
+                        >
+                          <div>
+                            <div
+                              className={`text-sm font-medium ${
+                                h.type === "add"
+                                  ? "text-green-700"
+                                  : "text-red-700"
+                              }`}
+                            >
+                              {h.type === "add"
+                                ? `+${h.points} points`
+                                : `-${h.points} points`}
+                            </div>
+                            {h.sisa_balance != null && (
+                              <div className="text-xs text-gray-500">
+                                Sisa balance:{" "}
+                                {Number(h.sisa_balance).toLocaleString("id-ID")}
+                              </div>
+                            )}
+                            {h.description && (
+                              <div className="text-xs text-gray-500">
+                                {h.description}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 ml-4 whitespace-nowrap">
+                            {new Date(h.timestamp).toLocaleString("id-ID")}
+                          </div>
+                        </div>
+                      )
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
