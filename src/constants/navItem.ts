@@ -16,6 +16,7 @@ export const NAV_ITEMS = [
     // { id: "rate-profiles", label: "Profil tarif", icon: TrendingUp },
     { id: "maintenance", label: "Hardware Maintenance" },
     { id: "users", label: "User Management" },
+    { id: "rfid-cards", label: "Master Card" },
     { id: "device", label: "Device Management" },
     { id: "settings", label: "Pengaturan" },
     // { id: 'login', label: 'Login', icon: LogIn }

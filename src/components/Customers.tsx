@@ -19,10 +19,12 @@ import {
   List as ListIcon,
   Gamepad2,
   HistoryIcon,
+  CreditCard,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { Customer } from "../types";
 import Swal from "sweetalert2";
+import { useRFIDReader } from "../hooks/useRFIDReader";
 
 const Customers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,6 +39,25 @@ const Customers: React.FC = () => {
   });
   const [customerView, setCustomerView] = useState<"card" | "list">("card");
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersWithCard, setCustomersWithCard] = useState<Set<string>>(
+    new Set()
+  );
+  const [primaryCardUIDByCustomer, setPrimaryCardUIDByCustomer] = useState<
+    Record<string, string>
+  >({});
+  // Assign card modal state
+  const [assignForCustomer, setAssignForCustomer] = useState<string | null>(
+    null
+  );
+  const [scannedUID, setScannedUID] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+
+  // Activate RFID reader globally but gate by modal open
+  useRFIDReader((uid) => {
+    if (assignForCustomer) {
+      setScannedUID(uid);
+    }
+  });
 
   // State untuk histori points (lazy per customer)
   const [showHistoryForCustomer, setShowHistoryForCustomer] = useState<
@@ -111,6 +132,36 @@ const Customers: React.FC = () => {
           status: c.status ?? "active",
         }))
       );
+      // Tandai siapa saja yang sudah punya kartu + ambil UID kartu
+      const setHas = new Set<string>();
+      const pairs: Array<{ customer_id: string; card_id: string }> = [];
+      for (const row of data as any[]) {
+        if (row?.primary_card_id) {
+          setHas.add(row.id);
+          pairs.push({ customer_id: row.id, card_id: row.primary_card_id });
+        }
+      }
+      setCustomersWithCard(setHas);
+
+      if (pairs.length > 0) {
+        const cardIds = Array.from(new Set(pairs.map((p) => p.card_id)));
+        const { data: cards } = await supabase
+          .from("rfid_cards")
+          .select("id, uid")
+          .in("id", cardIds);
+        const uidByCard: Record<string, string> = {};
+        for (const c of (cards || []) as any[]) {
+          if (c?.id) uidByCard[c.id] = c.uid;
+        }
+        const byCustomer: Record<string, string> = {};
+        for (const p of pairs) {
+          const uid = uidByCard[p.card_id];
+          if (uid) byCustomer[p.customer_id] = uid;
+        }
+        setPrimaryCardUIDByCustomer(byCustomer);
+      } else {
+        setPrimaryCardUIDByCustomer({});
+      }
     }
   };
 
@@ -136,6 +187,56 @@ const Customers: React.FC = () => {
       customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.phone.includes(searchTerm)
   );
+
+  // Assign helpers
+  const assignCardByUID = async (uid: string, customerId: string) => {
+    if (!uid) throw new Error("UID kosong");
+    const { data: card, error: cardErr } = await supabase
+      .from("rfid_cards")
+      .select("id, is_admin, status")
+      .eq("uid", uid)
+      .single();
+    if (cardErr || !card)
+      throw new Error(cardErr?.message || "Kartu tidak ditemukan");
+    if (card.is_admin)
+      throw new Error("Kartu admin tidak bisa di-assign ke customer");
+    if (card.status !== "active") throw new Error("Status kartu bukan ACTIVE");
+
+    // Unassign old primary and set new
+    await supabase
+      .from("customers")
+      .update({ primary_card_id: null })
+      .eq("id", customerId);
+    await supabase
+      .from("customers")
+      .update({ primary_card_id: card.id })
+      .eq("id", customerId);
+    await supabase
+      .from("rfid_cards")
+      .update({ assigned_customer_id: customerId })
+      .eq("id", card.id);
+  };
+
+  const handleAssignConfirm = async () => {
+    if (!assignForCustomer) return;
+    if (!scannedUID.trim()) {
+      Swal.fire("UID kosong", "Silakan scan kartu terlebih dahulu", "warning");
+      return;
+    }
+    setAssignLoading(true);
+    try {
+      await assignCardByUID(scannedUID.trim(), assignForCustomer);
+      Swal.fire("Berhasil", "Kartu berhasil di-assign ke customer", "success");
+      setAssignForCustomer(null);
+      setScannedUID("");
+      // Refresh customers if needed
+      await fetchCustomers();
+    } catch (e: any) {
+      Swal.fire("Gagal", e?.message || String(e), "error");
+    } finally {
+      setAssignLoading(false);
+    }
+  };
 
   // Ambil histori points: potongan per sesi rental (member-card)
   const fetchPointHistory = async (customerId: string) => {
@@ -822,6 +923,17 @@ const Customers: React.FC = () => {
                       <Trash2 className="h-4 w-4" />
                     </button>
                     <button
+                      onClick={() => {
+                        setAssignForCustomer(customer.id);
+                        setScannedUID("");
+                      }}
+                      className="flex items-center justify-center px-3 py-1 rounded-full border border-gray-200 text-white bg-white bg-opacity-10 hover:bg-gray-100 hover:text-yellow-700 font-medium text-sm transition-colors"
+                      aria-label="Assign/Replace Card"
+                      title="Assign/Replace Card"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={async () => {
                         setShowHistoryForCustomer(customer.id);
                         await fetchPointHistory(customer.id);
@@ -873,6 +985,22 @@ const Customers: React.FC = () => {
                           : "-"}
                       </span>
                     </div>
+                    <span
+                      className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
+                        customersWithCard.has(customer.id)
+                          ? "bg-emerald-500 text-white"
+                          : "bg-gray-300 text-gray-700"
+                      }`}
+                      title={
+                        customersWithCard.has(customer.id)
+                          ? "Customer sudah memiliki kartu"
+                          : "Customer belum memiliki kartu"
+                      }
+                    >
+                      {customersWithCard.has(customer.id)
+                        ? "ADA KARTU"
+                        : "NO KARTU"}
+                    </span>
                   </div>
                 </div>
 
@@ -965,6 +1093,16 @@ const Customers: React.FC = () => {
                         <Trash2 className="h-4 w-4" />
                       </button>
                       <button
+                        onClick={() => {
+                          setAssignForCustomer(customer.id);
+                          setScannedUID("");
+                        }}
+                        className="p-1 text-gray-400 hover:text-yellow-600 transition-colors"
+                        title="Assign/Replace Card"
+                      >
+                        <CreditCard className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={async () => {
                           setShowHistoryForCustomer(customer.id);
                           await fetchPointHistory(customer.id);
@@ -972,8 +1110,24 @@ const Customers: React.FC = () => {
                         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                         title="Histori Points"
                       >
-                        <DollarSign className="h-4 w-4" />
+                        <HistoryIcon className="h-4 w-4" />
                       </button>
+                      <span
+                        className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          customersWithCard.has(customer.id)
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                        title={
+                          customersWithCard.has(customer.id)
+                            ? "Customer sudah memiliki kartu"
+                            : "Customer belum memiliki kartu"
+                        }
+                      >
+                        {customersWithCard.has(customer.id)
+                          ? "ADA KARTU"
+                          : "NO KARTU"}
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -1048,6 +1202,71 @@ const Customers: React.FC = () => {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Assign/Replace Card */}
+      {assignForCustomer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-blue-600" /> Assign /
+                  Replace Card
+                </h2>
+                <button
+                  onClick={() => {
+                    setAssignForCustomer(null);
+                    setScannedUID("");
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-4">
+                Fokuskan kursor pada halaman ini lalu scan kartu RFID. UID akan
+                terisi otomatis.
+              </p>
+
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  UID Kartu
+                </label>
+                <input
+                  value={scannedUID}
+                  onChange={(e) => setScannedUID(e.target.value)}
+                  placeholder="Scan atau ketik UID"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setAssignForCustomer(null);
+                    setScannedUID("");
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleAssignConfirm}
+                  disabled={assignLoading}
+                  className={`flex-1 ${
+                    assignLoading
+                      ? "bg-blue-400"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  } text-white px-4 py-2 rounded-lg font-medium transition-colors`}
+                >
+                  {assignLoading ? "Menyimpan..." : "Simpan"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

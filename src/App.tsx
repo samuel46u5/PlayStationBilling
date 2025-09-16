@@ -20,6 +20,7 @@ import Settings from "./components/Settings";
 import MaintenanceManagement from "./components/MaintenanceManagement";
 import RateProfilePage from "./components/RateProfilePage";
 import DeviceManagement from "./components/DeviceManagement";
+import RFIDCards from "./components/RFIDCards";
 import LoginPage from "./pages/LoginPage";
 import { useAuth } from "./contexts/AuthContext";
 import { TimerProvider } from "./contexts/TimerContext";
@@ -81,6 +82,8 @@ const AppLayout: React.FC = () => {
         return <VoucherManagement />;
       case "users":
         return <UserManagement />;
+      case "rfid-cards":
+        return <RFIDCards />;
       case "settings":
         return <Settings />;
       case "maintenance":

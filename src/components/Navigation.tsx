@@ -67,6 +67,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     equipment: Wrench,
     rates: TrendingUp,
     maintenance: Tool,
+    "rfid-cards": CreditCard,
     users: Shield,
     settings: Cog,
   };

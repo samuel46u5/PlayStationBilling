@@ -7,7 +7,7 @@ export interface Customer {
   totalSpent: number;
   balancePoints: number; // Saldo poin untuk member-card
   joinDate: string;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
 }
 
 // Equipment Types for different gaming equipment
@@ -16,7 +16,7 @@ export interface EquipmentType {
   name: string;
   description: string;
   icon: string; // Icon name from lucide-react
-  category: 'gaming' | 'billiard' | 'other';
+  category: "gaming" | "billiard" | "other";
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -27,7 +27,7 @@ export interface RateProfile {
   id: string;
   name: string;
   description: string;
-  capital:number;
+  capital: number;
   hourlyRate: number;
   dailyRate: number;
   weeklyRate: number;
@@ -48,7 +48,7 @@ export interface Console {
   name: string;
   equipmentTypeId: string; // Reference to EquipmentType
   rateProfileId: string; // Reference to RateProfile
-  status: 'available' | 'rented' | 'maintenance';
+  status: "available" | "rented" | "maintenance";
   location?: string; // e.g., "Lantai 1 - Pojok Kiri"
   serialNumber?: string;
   purchaseDate?: string;
@@ -67,13 +67,21 @@ export interface Sparepart {
   id: string;
   name: string;
   partNumber?: string; // Part number dari manufacturer
-  category: 'controller' | 'cable' | 'power' | 'cooling' | 'storage' | 'display' | 'audio' | 'other';
+  category:
+    | "controller"
+    | "cable"
+    | "power"
+    | "cooling"
+    | "storage"
+    | "display"
+    | "audio"
+    | "other";
   compatibleConsoles: string[]; // Array of console IDs or equipment type IDs
   description: string;
   specifications?: string; // Technical specifications
   brand?: string;
   model?: string;
-  condition: 'new' | 'used' | 'refurbished';
+  condition: "new" | "used" | "refurbished";
   price: number; // Harga beli/estimasi
   stock: number;
   minStock: number;
@@ -97,7 +105,7 @@ export interface SparepartUsage {
   sparepartId: string;
   consoleId: string;
   usageDate: string;
-  reason: 'replacement' | 'repair' | 'upgrade' | 'maintenance';
+  reason: "replacement" | "repair" | "upgrade" | "maintenance";
   description: string;
   quantity: number;
   technician?: string;
@@ -119,29 +127,34 @@ export interface MaintenanceTransaction {
   technicianId: string;
   technicianName: string;
   issueDescription: string;
-  serviceStatus: 'scheduled' | 'in-progress' | 'completed' | 'cancelled' | 'on-hold';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  
+  serviceStatus:
+    | "scheduled"
+    | "in-progress"
+    | "completed"
+    | "cancelled"
+    | "on-hold";
+  priority: "low" | "medium" | "high" | "urgent";
+
   // Parts Replacement
   partsUsed: MaintenancePartUsage[];
-  
+
   // Service Costs
   laborCost: number;
   additionalServiceFees: number;
   totalPartsCost: number; // Calculated from parts used
   totalRepairCost: number; // Labor + Additional + Parts
-  
+
   // Payment & Warranty
-  paymentStatus: 'pending' | 'paid' | 'warranty' | 'insurance';
-  warrantyType?: 'manufacturer' | 'service' | 'extended';
+  paymentStatus: "pending" | "paid" | "warranty" | "insurance";
+  warrantyType?: "manufacturer" | "service" | "extended";
   warrantyExpiry?: string;
-  
+
   // Service Details
   serviceNotes: string;
   beforePhotos?: string[]; // Photos before repair
   afterPhotos?: string[]; // Photos after repair
   testResults?: string; // Post-repair testing results
-  
+
   // Audit Trail
   createdBy: string;
   createdAt: string;
@@ -155,25 +168,25 @@ export interface MaintenancePartUsage {
   sparepartName: string;
   partNumber?: string;
   category: string;
-  
+
   // Old Part Details
   oldPartCondition?: string;
   oldPartSerialNumber?: string;
   oldPartNotes?: string;
-  
+
   // New Part Details
   newPartSerialNumber?: string;
-  newPartCondition: 'new' | 'used' | 'refurbished';
-  
+  newPartCondition: "new" | "used" | "refurbished";
+
   // Usage Details
   quantityUsed: number;
   unitCost: number;
   totalCost: number;
-  
+
   // Installation
   installationNotes?: string;
   installationTime?: number; // Minutes taken for installation
-  
+
   // Warranty
   partWarrantyPeriod?: number; // Months
   partWarrantyExpiry?: string;
@@ -188,7 +201,7 @@ export interface MaintenanceHistory {
   averageRepairCost: number;
   commonIssues: MaintenanceIssueFrequency[];
   partsReplacementHistory: PartReplacementHistory[];
-  warrantyStatus: 'active' | 'expired' | 'void';
+  warrantyStatus: "active" | "expired" | "void";
   nextScheduledMaintenance?: string;
 }
 
@@ -211,35 +224,49 @@ export interface PartReplacementHistory {
 // Maintenance Reports
 export interface MaintenanceReport {
   id: string;
-  reportType: 'monthly' | 'quarterly' | 'yearly' | 'custom';
+  reportType: "monthly" | "quarterly" | "yearly" | "custom";
   periodStart: string;
   periodEnd: string;
-  
+
   // Summary Statistics
   totalTransactions: number;
   totalCost: number;
   averageRepairCost: number;
-  
+
   // Console Analysis
   consoleBreakdown: ConsoleMaintenanceBreakdown[];
-  
+
   // Parts Analysis
   mostUsedParts: PartUsageAnalysis[];
-  
+
   // Issue Analysis
   commonIssues: MaintenanceIssueFrequency[];
-  
+
   // Cost Analysis
   costByCategory: CostCategoryBreakdown[];
   costTrend: MonthlyCostTrend[];
-  
+
   // Performance Metrics
   averageRepairTime: number; // Hours
   firstTimeFixRate: number; // Percentage
   warrantyClaimRate: number; // Percentage
-  
+
   generatedAt: string;
   generatedBy: string;
+}
+
+// RFID Cards
+export interface RFIDCard {
+  id: string;
+  uid: string;
+  status: "active" | "blocked" | "lost";
+  assigned_customer_id?: string | null;
+  is_admin: boolean;
+  created_at: string;
+  customers?: {
+    name: string;
+    phone: string;
+  } | null;
 }
 
 export interface ConsoleMaintenanceBreakdown {
@@ -263,7 +290,7 @@ export interface PartUsageAnalysis {
 }
 
 export interface CostCategoryBreakdown {
-  category: 'labor' | 'parts' | 'additional_fees';
+  category: "labor" | "parts" | "additional_fees";
   totalCost: number;
   percentage: number;
   transactionCount: number;
@@ -285,7 +312,7 @@ export interface Technician {
   specializations: string[]; // e.g., ['PS5', 'PS4', 'Cooling Systems']
   certifications: TechnicianCertification[];
   hourlyRate: number;
-  status: 'active' | 'inactive' | 'on-leave';
+  status: "active" | "inactive" | "on-leave";
   totalRepairs: number;
   averageRepairTime: number;
   customerRating: number;
@@ -311,7 +338,7 @@ export interface Supplier {
   phone: string;
   email: string;
   address: string;
-  category: 'beverage' | 'food' | 'snack' | 'other';
+  category: "beverage" | "food" | "snack" | "other";
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -325,7 +352,7 @@ export interface PurchaseOrder {
   orderDate: string;
   expectedDate: string;
   receivedDate?: string;
-  status: 'pending' | 'ordered' | 'received' | 'cancelled';
+  status: "pending" | "ordered" | "received" | "cancelled";
   items: PurchaseOrderItem[];
   subtotal: number;
   tax: number;
@@ -361,7 +388,7 @@ export interface Voucher {
   validityDays: number; // How many days valid after creation
   createdDate: string;
   expiryDate: string;
-  status: 'active' | 'expired' | 'used-up';
+  status: "active" | "expired" | "used-up";
   customerId?: string; // If sold to specific customer
   customerName?: string; // Customer name for easy reference
   customerPhone?: string; // Customer phone
@@ -394,14 +421,14 @@ export interface RentalSession {
   startTime: string;
   endTime?: string;
   duration: number; // in minutes
-  rateType: 'hourly' | 'daily' | 'weekly' | 'monthly';
+  rateType: "hourly" | "daily" | "weekly" | "monthly";
   baseAmount: number;
   peakHourAmount?: number; // Additional charge for peak hours
   weekendAmount?: number; // Additional charge for weekends
   lateFee: number;
   totalAmount: number;
-  status: 'active' | 'completed' | 'overdue';
-  paymentStatus: 'pending' | 'partial' | 'paid';
+  status: "active" | "completed" | "overdue";
+  paymentStatus: "pending" | "partial" | "paid";
   paidAmount: number;
   appliedRateProfile: {
     id: string;
@@ -429,7 +456,7 @@ export interface Invoice {
   subtotal: number;
   lateFee: number;
   total: number;
-  status: 'draft' | 'sent' | 'paid' | 'overdue';
+  status: "draft" | "sent" | "paid" | "overdue";
 }
 
 export interface InvoiceItem {
@@ -445,7 +472,7 @@ export interface Payment {
   customerId: string;
   amount: number;
   paymentDate: string;
-  method: 'cash' | 'card' | 'transfer';
+  method: "cash" | "card" | "transfer";
   reference?: string;
 }
 
@@ -462,8 +489,8 @@ export interface ScheduledBooking {
   totalAmount: number;
   depositAmount: number;
   remainingAmount: number;
-  status: 'confirmed' | 'cancelled' | 'completed' | 'no-show' | 'in-progress';
-  paymentStatus: 'unpaid' | 'deposit-paid' | 'fully-paid';
+  status: "confirmed" | "cancelled" | "completed" | "no-show" | "in-progress";
+  paymentStatus: "unpaid" | "deposit-paid" | "fully-paid";
   notes?: string;
   reminderSent: boolean;
   createdBy: string;
@@ -483,7 +510,7 @@ export interface CalendarEvent {
   title: string;
   start: Date;
   end: Date;
-  type: 'booking' | 'rental' | 'maintenance';
+  type: "booking" | "rental" | "maintenance";
   status: string;
   consoleId: string;
   customerId?: string;
@@ -494,7 +521,7 @@ export interface CalendarEvent {
 export interface Product {
   id: string;
   name: string;
-  category: 'snack' | 'beverage' | 'food' | 'other';
+  category: "snack" | "beverage" | "food" | "other";
   price: number;
   cost: number;
   stock: number;
@@ -513,7 +540,7 @@ export interface Sale {
   tax: number;
   discount: number;
   total: number;
-  paymentMethod: 'cash' | 'card' | 'transfer';
+  paymentMethod: "cash" | "card" | "transfer";
   paymentAmount: number;
   changeAmount: number;
   saleDate: string;
@@ -545,7 +572,7 @@ export interface CashierSession {
   totalCard: number; // Total penjualan kartu
   totalTransfer: number; // Total penjualan transfer
   totalTransactions: number; // Jumlah transaksi
-  status: 'active' | 'closed';
+  status: "active" | "closed";
   notes?: string; // Catatan kasir
   createdAt: string;
   updatedAt: string;
@@ -555,9 +582,9 @@ export interface CashierSession {
 export interface CashierTransaction {
   id: string;
   sessionId: string;
-  type: 'sale' | 'rental' | 'voucher' | 'refund';
+  type: "sale" | "rental" | "voucher" | "refund";
   amount: number;
-  paymentMethod: 'cash' | 'card' | 'transfer';
+  paymentMethod: "cash" | "card" | "transfer";
   referenceId: string; // Sale ID, Rental ID, etc.
   description: string;
   timestamp: string;
@@ -568,10 +595,10 @@ export interface CashierTransaction {
 export interface CashFlow {
   id: string;
   sessionId: string;
-  type: 'in' | 'out';
+  type: "in" | "out";
   amount: number;
   description: string;
-  category: 'sale' | 'change' | 'opening' | 'closing' | 'adjustment';
+  category: "sale" | "change" | "opening" | "closing" | "adjustment";
   timestamp: string;
   cashierId: string;
 }
@@ -579,8 +606,14 @@ export interface CashFlow {
 export interface BookkeepingEntry {
   id: string;
   entry_date: string;
-  type: 'income' | 'expense';
-  category: 'rental' | 'cafe' | 'inventory' | 'operational' | 'voucher' | 'other';
+  type: "income" | "expense";
+  category:
+    | "rental"
+    | "cafe"
+    | "inventory"
+    | "operational"
+    | "voucher"
+    | "other";
   description: string;
   amount: number;
   reference?: string;
@@ -596,7 +629,7 @@ export interface User {
   phone?: string;
   avatar?: string;
   roleId: string;
-  status: 'active' | 'inactive' | 'suspended';
+  status: "active" | "inactive" | "suspended";
   lastLogin?: string;
   createdAt: string;
   updatedAt: string;
@@ -619,7 +652,7 @@ export interface Permission {
   // action: string;
   // resource: string;
   // description: string;
-  label:string
+  label: string;
 }
 
 export interface UserSession {
@@ -629,7 +662,7 @@ export interface UserSession {
   logoutTime?: string;
   ipAddress: string;
   userAgent: string;
-  status: 'active' | 'expired' | 'terminated';
+  status: "active" | "expired" | "terminated";
 }
 
 export interface ActivityLog {
