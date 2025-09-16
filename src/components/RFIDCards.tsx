@@ -310,7 +310,7 @@ const RFIDCards: React.FC = () => {
                             {card.uid}
                           </h3>
                           <span className="text-sm opacity-90">
-                            {card.customers
+                            {assigned
                               ? "Ter-assign ke customer"
                               : "Belum ter-assign"}
                           </span>
