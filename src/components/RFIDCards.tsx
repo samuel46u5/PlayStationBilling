@@ -11,6 +11,7 @@ import {
   UserCheck,
   UserX,
   Trash2,
+  Edit,
 } from "lucide-react";
 
 const RFIDCards: React.FC = () => {
@@ -88,72 +89,72 @@ const RFIDCards: React.FC = () => {
     }
   };
 
-  const toggleAdmin = async (card: RFIDCard) => {
-    try {
-      await supabase
-        .from("rfid_cards")
-        .update({ is_admin: !card.is_admin })
-        .eq("id", card.id);
-      Swal.fire(
-        "Berhasil",
-        `Status admin kartu berhasil diubah menjadi ${
-          !card.is_admin ? "Admin" : "Customer"
-        }`,
-        "success"
-      );
-      load();
-    } catch (e: any) {
-      Swal.fire("Gagal", e?.message || String(e), "error");
-    }
-  };
-
-  const blockCard = async (card: RFIDCard) => {
-    await supabase
-      .from("rfid_cards")
-      .update({ status: card.status === "active" ? "blocked" : "active" })
-      .eq("id", card.id);
-    Swal.fire(
-      "Berhasil",
-      `Kartu berhasil diubah menjadi status "${
-        card.status === "active" ? "blocked" : "active".toUpperCase()
-      }"`,
-      "success"
-    );
-
-    load();
-  };
-
-  // Edit/Delete state & handlers
-  // const [editCard, setEditCard] = useState<
-  //   (RFIDCard & { customers?: { name: string; phone: string } | null }) | null
-  // >(null);
-  // const [editIsAdmin, setEditIsAdmin] = useState(false);
-  // const [savingEdit, setSavingEdit] = useState(false);
-
-  // const openEdit = (
-  //   card: RFIDCard & { customers?: { name: string; phone: string } | null }
-  // ) => {
-  //   setEditCard(card);
-  //   setEditIsAdmin(card.is_admin);
-  // };
-
-  // const saveEdit = async () => {
-  //   if (!editCard) return;
-  //   setSavingEdit(true);
+  // const toggleAdmin = async (card: RFIDCard) => {
   //   try {
   //     await supabase
   //       .from("rfid_cards")
-  //       .update({ is_admin: editIsAdmin })
-  //       .eq("id", editCard.id);
-  //     setEditCard(null);
-  //     Swal.fire("Berhasil", "Kartu berhasil diperbarui", "success");
+  //       .update({ is_admin: !card.is_admin })
+  //       .eq("id", card.id);
+  //     Swal.fire(
+  //       "Berhasil",
+  //       `Status admin kartu berhasil diubah menjadi ${
+  //         !card.is_admin ? "Admin" : "Customer"
+  //       }`,
+  //       "success"
+  //     );
   //     load();
   //   } catch (e: any) {
   //     Swal.fire("Gagal", e?.message || String(e), "error");
-  //   } finally {
-  //     setSavingEdit(false);
   //   }
   // };
+
+  // const blockCard = async (card: RFIDCard) => {
+  //   await supabase
+  //     .from("rfid_cards")
+  //     .update({ status: card.status === "active" ? "blocked" : "active" })
+  //     .eq("id", card.id);
+  //   Swal.fire(
+  //     "Berhasil",
+  //     `Kartu berhasil diubah menjadi status "${
+  //       card.status === "active" ? "blocked" : "active".toUpperCase()
+  //     }"`,
+  //     "success"
+  //   );
+
+  //   load();
+  // };
+
+  // Edit/Delete state & handlers
+  const [editCard, setEditCard] = useState<
+    (RFIDCard & { customers?: { name: string; phone: string } | null }) | null
+  >(null);
+  const [editIsAdmin, setEditIsAdmin] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEdit = (
+    card: RFIDCard & { customers?: { name: string; phone: string } | null }
+  ) => {
+    setEditCard(card);
+    setEditIsAdmin(card.is_admin);
+  };
+
+  const saveEdit = async () => {
+    if (!editCard) return;
+    setSavingEdit(true);
+    try {
+      await supabase
+        .from("rfid_cards")
+        .update({ is_admin: editIsAdmin })
+        .eq("id", editCard.id);
+      setEditCard(null);
+      Swal.fire("Berhasil", "Kartu berhasil diperbarui", "success");
+      load();
+    } catch (e: any) {
+      Swal.fire("Gagal", e?.message || String(e), "error");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const deleteCard = async (
     card: RFIDCard & { customers?: { name: string; phone: string } | null }
@@ -393,8 +394,8 @@ const RFIDCards: React.FC = () => {
 
                       {/* Actions */}
                       <div className="pt-4 border-t border-gray-100">
-                        <div className="flex gap-2">
-                          <button
+                        <div className="flex gap-2 justify-end">
+                          {/* <button
                             onClick={() => toggleAdmin(card)}
                             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                               !card.is_admin
@@ -404,8 +405,8 @@ const RFIDCards: React.FC = () => {
                           >
                             <Shield className="h-4 w-4" />
                             {card.is_admin ? "Remove Admin" : "Make Admin"}
-                          </button>
-                          <button
+                          </button> */}
+                          {/* <button
                             onClick={() => blockCard(card)}
                             className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                               card.status === "active"
@@ -424,13 +425,13 @@ const RFIDCards: React.FC = () => {
                                 Unblock
                               </>
                             )}
-                          </button>
-                          {/* <button
+                          </button> */}
+                          <button
                             onClick={() => openEdit(card as any)}
                             className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
                           >
                             <Edit className="h-4 w-4" />
-                          </button> */}
+                          </button>
                           <button
                             onClick={() => deleteCard(card as any)}
                             className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
@@ -504,7 +505,7 @@ const RFIDCards: React.FC = () => {
           )}
 
           {/* Edit Modal */}
-          {/* {editCard && (
+          {editCard && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
                 <div className="p-6">
@@ -565,7 +566,7 @@ const RFIDCards: React.FC = () => {
                 </div>
               </div>
             </div>
-          )} */}
+          )}
         </>
       )}
     </div>
