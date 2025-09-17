@@ -25,7 +25,7 @@ import Swal from "sweetalert2";
 
 const Products: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
-    "products" | "purchases" | "suppliers" | "purchaseList"
+    "products" | "purchases" | "suppliers" | "purchaseList" | "sales"
   >("products");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -89,6 +89,9 @@ const Products: React.FC = () => {
     end: string;
   }>({ start: "", end: "" });
   const [purchaseStatus, setPurchaseStatus] = useState<string>("all");
+  // State untuk periode filter pada laporan penjualan
+  const [salesPeriod, setSalesPeriod] = useState<string>("week");
+  const [salesDateRange, setSalesDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
 
   // State untuk item PO detail
   const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
@@ -118,6 +121,20 @@ const Products: React.FC = () => {
     index: number | null;
   }>({ open: false, index: null });
   const [productSearchTerm, setProductSearchTerm] = useState("");
+
+  // State untuk Stock Card modal
+  const [showStockCard, setShowStockCard] = useState(false);
+  const [stockCardProduct, setStockCardProduct] = useState<any | null>(null);
+  const [stockHistory, setStockHistory] = useState<any[]>([]);
+  const [stockHistoryLoading, setStockHistoryLoading] = useState(false);
+  const [stockHistoryError, setStockHistoryError] = useState<string | null>(null);
+  // Controlled inputs for Stock Card modal
+  const [stockAdj, setStockAdj] = useState<number>(0);
+  const [stockAdjType, setStockAdjType] = useState<'in' | 'out'>('in');
+  const [stockNote, setStockNote] = useState<string>('');
+  // pagination for stock history
+  const [historyPage, setHistoryPage] = useState<number>(0);
+  const HISTORY_PAGE_SIZE = 10;
 
   const filteredProductsForSelect = React.useMemo(() => {
     const term = productSearchTerm.trim().toLowerCase();
@@ -237,6 +254,23 @@ const Products: React.FC = () => {
     };
     fetchPurchases();
     (window as any).refreshPurchases = fetchPurchases;
+  }, []);
+
+  // State and fetch for sales (cashier transactions of type 'sale')
+  const [sales, setSales] = useState<any[]>([]);
+  useEffect(() => {
+    const fetchSales = async () => {
+      try {
+        // fetch cashier transactions where type is 'sale'
+        const rows = (await db.select('cashier_transactions', '*', { type: 'sale' })) as any[];
+        setSales(rows || []);
+      } catch (err: any) {
+        console.error('Gagal mengambil data penjualan', err?.message || err);
+        setSales([]);
+      }
+    };
+    fetchSales();
+    (window as any).refreshSales = fetchSales;
   }, []);
 
   // Helper: mapping DB fields to UI fields for purchases
@@ -693,6 +727,131 @@ const Products: React.FC = () => {
     }
   };
 
+  // Placeholder: buka kartu stok untuk produk
+  const handleOpenStockCard = (product: any) => {
+    // open React modal instead of Swal to allow richer UI
+    setStockCardProduct(product);
+    // reset controlled inputs
+    setStockAdj(0);
+    setStockAdjType('in');
+    setStockNote('');
+    setShowStockCard(true);
+    // fetch history
+    fetchStockHistory(product.id, product.stock).catch((e) => {
+      console.error('fetchStockHistory error', e);
+    });
+  };
+
+  const fetchStockHistory = async (productId: string, currentStock: number) => {
+    setStockHistoryLoading(true);
+    setStockHistoryError(null);
+    setStockHistory([]);
+
+    try {
+      const rows: any[] = [];
+
+      // 1) incoming: purchase_order_items (assume field 'quantity' and 'created_at' or similar)
+      try {
+        const poItems = (await db.select('purchase_order_items', '*', { product_id: productId })) as any[];
+        if (Array.isArray(poItems) && poItems.length > 0) {
+          for (const r of poItems as any[]) {
+            const qty = Number(r.quantity ?? r.qty ?? r.qty_received ?? 0);
+            rows.push({
+              id: (r as any).id,
+              product_id: productId,
+              quantity: qty, // positive = masuk
+              note: (r as any).note || (r as any).notes || `PO:${(r as any).po_id || (r as any).po_number || ''}`,
+              created_at: (r as any).created_at || (r as any).inserted_at || (r as any).timestamp || new Date().toISOString(),
+            });
+          }
+        }
+      } catch (err) {
+        // table might not exist or other error - ignore
+      }
+
+      // 2) outgoing: cashier_transactions (type = 'sale' or 'rental' etc.) - parse details JSON to find product quantities
+      try {
+        const txs = (await db.select('cashier_transactions', '*', { type: 'sale' })) as any[];
+        if (Array.isArray(txs) && txs.length > 0) {
+          for (const tx of txs as any[]) {
+            const details = (tx as any).details;
+            let parsed: any = details;
+            if (!parsed && (tx as any).details && typeof (tx as any).details === 'string') {
+              try { parsed = JSON.parse((tx as any).details); } catch (e) { parsed = null; }
+            }
+
+            // try several shapes: array of items, { items: [...] }, { products: [...] }
+            const candidates = [] as any[];
+            if (Array.isArray(parsed)) candidates.push(...parsed);
+            if (parsed && Array.isArray(parsed.items)) candidates.push(...parsed.items);
+            if (parsed && Array.isArray(parsed.products)) candidates.push(...parsed.products);
+            if (parsed && Array.isArray(parsed.cart)) candidates.push(...parsed.cart);
+
+            // also some systems store details as object with keys being ids
+            if (candidates.length === 0 && parsed && typeof parsed === 'object') {
+              // attempt to collect values that look like items
+              for (const v of Object.values(parsed)) {
+                if (Array.isArray(v)) candidates.push(...v);
+              }
+            }
+
+            for (const it of candidates) {
+              const pid = (it as any).product_id ?? (it as any).productId ?? (it as any).id ?? (it as any).item_id;
+              if (!pid) continue;
+              if (String(pid) === String(productId)) {
+                const qty = Number((it as any).quantity ?? (it as any).qty ?? (it as any).q ?? 0);
+                if (qty === 0) continue;
+                rows.push({
+                  id: (tx as any).id,
+                  product_id: productId,
+                  quantity: -Math.abs(qty), // negative = keluar
+                  note: (tx as any).description || (tx as any).note || (tx as any).reference_id || (tx as any).details?.note || null,
+                  created_at: (tx as any).timestamp || (tx as any).created_at || (tx as any).inserted_at || new Date().toISOString(),
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // ignore if table missing or error
+      }
+
+      if (rows.length === 0) {
+        setStockHistory([]);
+        setStockHistoryLoading(false);
+        return;
+      }
+
+      // sort ascending (oldest -> newest)
+      rows.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+      const totalDelta = rows.reduce((s: number, r: any) => s + Number(r.quantity || 0), 0);
+      const baseline = Number(currentStock || 0) - totalDelta;
+      let running = baseline;
+      const withBalance = rows.map((r: any) => {
+        const qty = Number(r.quantity || 0);
+        running = running + qty;
+        return {
+          ...r,
+          _qty: qty,
+          _balance: running,
+        };
+      });
+
+      // store newest-first for UI (existing code expects newest-first then we reverse when rendering)
+      setStockHistory(withBalance.reverse());
+    } catch (error: any) {
+      setStockHistoryError(error?.message || String(error));
+    } finally {
+      setStockHistoryLoading(false);
+    }
+  };
+
+  // reset page when history or product changes
+  useEffect(() => {
+    setHistoryPage(0);
+  }, [stockHistory, stockCardProduct]);
+
   // Delete supplier
   const handleDeleteSupplier = async (supplier: any) => {
     // Cek apakah ada produk yang masih terkait dengan supplier ini
@@ -830,6 +989,235 @@ const Products: React.FC = () => {
         </div>
       )}
 
+      {/* Stock Card Modal */}
+      {showStockCard && stockCardProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Kartu Stok - {stockCardProduct.name}
+                </h2>
+                <button
+                  onClick={() => setShowStockCard(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm text-gray-600">Stok Saat Ini</label>
+                  <div className="mt-1 font-semibold text-gray-900">
+                    {stockCardProduct.stock} unit
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600">Min. Stok</label>
+                  <div className="mt-1 text-gray-900">{stockCardProduct.min_stock} unit</div>
+                </div>
+              </div>
+
+                      <div className="mb-4">
+                        <label className="block text-sm text-gray-600 mb-1">Catatan</label>
+                        <textarea
+                          id="stockCardNote"
+                          value={stockNote}
+                          onChange={(e) => setStockNote(e.target.value)}
+                          placeholder="Catatan perubahan stok (opsional)"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          rows={3}
+                        />
+                      </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Tambah / Kurangi Stok</label>
+                  <input
+                    id="stockAdjustment"
+                    type="number"
+                    value={String(stockAdj)}
+                    onChange={(e) => setStockAdj(Number(e.target.value || 0))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Tipe</label>
+                  <select id="stockAdjustmentType" value={stockAdjType} onChange={(e) => setStockAdjType(e.target.value as 'in' | 'out')} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="in">Tambah</option>
+                    <option value="out">Kurangi</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* History Section */}
+            <div className="p-6 border-t border-gray-200 bg-white">
+              <h3 className="font-semibold text-gray-900 mb-3">Riwayat Stok</h3>
+              {stockHistoryLoading ? (
+                <div className="text-sm text-gray-500">Memuat riwayat...</div>
+              ) : stockHistoryError ? (
+                <div className="text-sm text-red-500">{stockHistoryError}</div>
+              ) : stockHistory.length === 0 ? (
+                <div className="text-sm text-gray-500">Belum ada riwayat stok.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-gray-500 uppercase">
+                      <tr>
+                        <th className="px-2 py-2">Tanggal</th>
+                        <th className="px-2 py-2">Keluar</th>
+                        <th className="px-2 py-2">Masuk</th>
+                        <th className="px-2 py-2">Saldo</th>
+                        <th className="px-2 py-2">Catatan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-gray-700">
+                      {/* Show starting balance row */}
+                      {(() => {
+                        // stockHistory is newest-first; compute starting balance from last element
+                        const rev = [...stockHistory].reverse(); // oldest -> newest
+                        const startBalance = rev.length > 0 ? rev[0]._balance - (rev[0]._qty || 0) : (stockCardProduct?.stock || 0);
+
+                        // pagination slice (on chronological list)
+                        const totalPages = Math.max(1, Math.ceil(rev.length / HISTORY_PAGE_SIZE));
+                        const page = Math.max(0, Math.min(historyPage, totalPages - 1));
+                        const start = page * HISTORY_PAGE_SIZE;
+                        const paged = rev.slice(start, start + HISTORY_PAGE_SIZE);
+
+                        return (
+                          <>
+                            <tr className="border-t">
+                              <td className="px-2 py-2">-</td>
+                              <td className="px-2 py-2 text-right">-</td>
+                              <td className="px-2 py-2 text-right">-</td>
+                              <td className="px-2 py-2 text-right font-semibold">{startBalance}</td>
+                              <td className="px-2 py-2">Saldo Awal</td>
+                            </tr>
+                            {paged.map((r) => (
+                              <tr key={r.id || `${r.created_at}-${r._qty}`} className="border-t">
+                                <td className="px-2 py-2">{new Date(r.created_at).toLocaleString('id-ID')}</td>
+                                <td className="px-2 py-2 text-right">{r._qty < 0 ? Math.abs(r._qty) : '-'}</td>
+                                <td className="px-2 py-2 text-right">{r._qty > 0 ? r._qty : '-'}</td>
+                                <td className="px-2 py-2 text-right">{r._balance}</td>
+                                <td className="px-2 py-2">{r.note || r.notes || '-'}</td>
+                              </tr>
+                            ))}
+                            {/* pagination controls row */}
+                            <tr>
+                              <td colSpan={5} className="px-2 py-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="text-xs text-gray-500">Menampilkan {start + 1} - {Math.min(start + HISTORY_PAGE_SIZE, rev.length)} dari {rev.length} entri</div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => setHistoryPage((p) => Math.max(0, p - 1))}
+                                      disabled={page === 0}
+                                      className={`px-3 py-1 rounded-lg border ${page === 0 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                      Prev
+                                    </button>
+                                    <button
+                                      onClick={() => setHistoryPage((p) => Math.min(totalPages - 1, p + 1))}
+                                      disabled={page >= totalPages - 1}
+                                      className={`px-3 py-1 rounded-lg border ${page >= totalPages - 1 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                      Next
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          </>
+                        );
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50 flex gap-3">
+              <button
+                onClick={() => setShowStockCard(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={async () => {
+                  const adj = stockAdj || 0;
+                  const type = stockAdjType || 'in';
+
+                  const newProducts = products.map((p) => {
+                    if (p.id === stockCardProduct.id) {
+                      const newStock = type === 'in' ? p.stock + adj : p.stock - adj;
+                      return { ...p, stock: newStock < 0 ? 0 : newStock };
+                    }
+                    return p;
+                  });
+                  setProducts(newProducts);
+
+                  // Persist to DB using helpers
+                  try {
+                    if (adj !== 0) {
+                      if (type === 'in') {
+                        await db.products.increaseStock(stockCardProduct.id, adj);
+                      } else {
+                        await db.products.decreaseStock(stockCardProduct.id, adj);
+                      }
+
+                      // Try to insert history row into candidate tables
+                      const historyCandidates = [
+                        'stock_movements',
+                        'stock_movements_history',
+                        'inventory_movements',
+                        'product_stock_movements',
+                        'stock_changes',
+                        'stock_journal',
+                        'stock_logs',
+                        'stock_histories',
+                      ];
+                      const noteVal = stockNote || null;
+                      for (const tbl of historyCandidates) {
+                        try {
+                          await db.insert(tbl, {
+                            product_id: stockCardProduct.id,
+                            quantity: type === 'in' ? adj : -adj,
+                            note: noteVal,
+                            created_at: new Date().toISOString(),
+                          });
+                          break; // inserted to first available table
+                        } catch (err) {
+                          // ignore and try next
+                        }
+                      }
+                    }
+                  } catch (err: any) {
+                    console.error('Persist stock error', err);
+                    Swal.fire({ icon: 'error', title: 'Gagal', text: err?.message || 'Gagal menyimpan perubahan stok' });
+                    return;
+                  }
+
+                  // reset controlled inputs
+                  setStockAdj(0);
+                  setStockAdjType('in');
+                  setStockNote('');
+
+                  setShowStockCard(false);
+                  Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Stok diperbarui' });
+                }}
+                className="px-6 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Products Grid/List */}
       {productView === "card" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -854,6 +1242,21 @@ const Products: React.FC = () => {
                       className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                     >
                       <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleOpenStockCard(product)}
+                      title="Kartu Stok"
+                      className="p-1 text-gray-400 hover:text-yellow-600 transition-colors"
+                    >
+                      {/* Using an SVG icon placeholder - you can replace with proper icon */}
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="h-4 w-4"
+                      >
+                        <path d="M3 3h18v2H3V3zm2 6h14v2H5V9zm0 6h8v2H5v-2z" />
+                      </svg>
                     </button>
                     <button
                       onClick={() => handleDeleteProduct(product)}
@@ -1011,12 +1414,28 @@ const Products: React.FC = () => {
                       <button
                         onClick={() => setShowEditForm(product.id)}
                         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Edit"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
+                        onClick={() => handleOpenStockCard(product)}
+                        title="Kartu Stok"
+                        className="p-1 text-gray-400 hover:text-yellow-600 transition-colors"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="h-4 w-4"
+                        >
+                          <path d="M3 3h18v2H3V3zm2 6h14v2H5V9zm0 6h8v2H5v-2z" />
+                        </svg>
+                      </button>
+                      <button
                         onClick={() => handleDeleteProduct(product)}
                         className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                        title="Hapus"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -1613,6 +2032,212 @@ const Products: React.FC = () => {
     </div>
   );
 
+  // Render tab for sales report aggregated per date and per product
+  const renderSalesListTab = () => {
+    const parseItems = (details: any) => {
+      if (!details) return [];
+      let doc = details;
+      if (typeof doc === "string") {
+        try {
+          doc = JSON.parse(doc);
+        } catch (e) {
+          return [];
+        }
+      }
+      if (Array.isArray(doc)) return doc;
+      if (doc.items && Array.isArray(doc.items)) return doc.items;
+      if (doc.lines && Array.isArray(doc.lines)) return doc.lines;
+      if (doc.cart && Array.isArray(doc.cart)) return doc.cart;
+      if (doc.products && Array.isArray(doc.products)) return doc.products;
+      for (const k of Object.keys(doc || {})) {
+        if (Array.isArray((doc as any)[k])) return (doc as any)[k];
+      }
+      return [];
+    };
+
+    const groups: Record<string, { productMap: Record<string, { productId?: string; name: string; qty: number; total: number }>; dateTotal: number }> = {};
+
+    for (const txn of sales) {
+      // prefer timestamp column from cashier_transactions per schema
+      const tsVal = txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
+      const dateKey = tsVal ? new Date(tsVal).toISOString().slice(0, 10) : 'unknown';
+      const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
+      if (!groups[dateKey]) groups[dateKey] = { productMap: {}, dateTotal: 0 };
+      for (const it of items) {
+        const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? it.sku ?? null;
+        // prefer product name from products table when available
+        const prod = productId ? products.find((p) => String(p.id) === String(productId)) : null;
+        const name = prod?.name || it.product_name || it.name || it.title || it.productName || (it.product && it.product.name) || String(it.sku || it.code || productId || '-');
+        const qtyRaw = it.quantity ?? it.qty ?? it.qty_sold ?? it.q ?? 0;
+        const qty = Number(qtyRaw) || 0;
+        let totalRaw = 0;
+        if (it.total !== undefined) totalRaw = it.total;
+        else if (it.subtotal !== undefined) totalRaw = it.subtotal;
+        else if (it.amount !== undefined) totalRaw = it.amount;
+        else if (it.price_total !== undefined) totalRaw = it.price_total;
+        else if (it.unit_price !== undefined) totalRaw = qty * Number(it.unit_price);
+        const total = Number(totalRaw) || 0;
+
+        const key = String(productId ?? name);
+        if (!groups[dateKey].productMap[key]) groups[dateKey].productMap[key] = { productId, name, qty: 0, total: 0 };
+        groups[dateKey].productMap[key].qty += qty;
+        groups[dateKey].productMap[key].total += total;
+        groups[dateKey].dateTotal += total;
+      }
+    }
+
+    const dateKeys = Object.keys(groups).sort((a, b) => (a < b ? 1 : -1));
+    // apply period filter similar to purchasePeriod logic
+    let start: Date | null = null;
+    let end: Date | null = null;
+    const now = new Date();
+    switch (salesPeriod) {
+      case "today":
+        start = new Date(); start.setHours(0,0,0,0);
+        end = new Date(); end.setHours(23,59,59,999);
+        break;
+      case "yesterday":
+        start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0,0,0,0);
+        end = new Date(start); end.setHours(23,59,59,999);
+        break;
+      case "week":
+        start = new Date();
+        const day = start.getDay();
+        const diff = (day === 0 ? -6 : 1) - day;
+        start.setDate(start.getDate() + diff);
+        start.setHours(0,0,0,0);
+        end = new Date(); end.setHours(23,59,59,999);
+        break;
+      case "month":
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0); end.setHours(23,59,59,999);
+        break;
+      case "range":
+        if (salesDateRange.start) { start = new Date(salesDateRange.start); start.setHours(0,0,0,0); }
+        if (salesDateRange.end) { end = new Date(salesDateRange.end); end.setHours(23,59,59,999); }
+        break;
+    }
+
+    const filteredDateKeys = dateKeys.filter((dk) => {
+      const dkDate = dk === 'unknown' ? null : new Date(dk + 'T00:00:00');
+      if (dkDate && start && dkDate < start) return false;
+      if (dkDate && end && dkDate > end) return false;
+      if (!searchTerm) return true;
+      const st = searchTerm.toLowerCase();
+      if (dk.includes(st)) return true;
+      return Object.values(groups[dk].productMap).some((p) => p.name.toLowerCase().includes(st));
+    });
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Laporan Penjualan (Per Tanggal & Per Barang)</h2>
+            <p className="text-gray-600">Rekap penjualan teragregasi per tanggal, lalu per produk.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { if ((window as any).refreshSales) (window as any).refreshSales(); }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-end gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="Filter by tanggal (YYYY-MM-DD) atau nama produk..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Periode</label>
+            <select
+              value={salesPeriod}
+              onChange={(e) => setSalesPeriod(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="today">Hari Ini</option>
+              <option value="yesterday">Kemarin</option>
+              <option value="week">Minggu Ini</option>
+              <option value="month">Bulan Ini</option>
+              <option value="range">Rentang Waktu</option>
+            </select>
+          </div>
+          {salesPeriod === 'range' && (
+            <div className="flex gap-2 items-center">
+              <input
+                type="date"
+                value={salesDateRange.start}
+                onChange={(e) => setSalesDateRange((r) => ({ ...r, start: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              />
+              <span className="self-center">-</span>
+              <input
+                type="date"
+                value={salesDateRange.end}
+                onChange={(e) => setSalesDateRange((r) => ({ ...r, end: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+          )}
+        </div>
+
+        {filteredDateKeys.length === 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center text-gray-500">Tidak ada data penjualan untuk filter ini.</div>
+        )}
+
+        {filteredDateKeys.map((dk) => {
+          const day = groups[dk];
+          const productsArr = Object.values(day.productMap).sort((a, b) => b.total - a.total);
+          return (
+            <div key={dk} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-sm text-gray-500">Tanggal</div>
+                  <div className="font-semibold text-gray-900">{new Date(dk).toLocaleDateString('id-ID')}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">Total Hari Ini</div>
+                  <div className="font-semibold text-green-700">Rp {Number(day.dateTotal || 0).toLocaleString('id-ID')}</div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {productsArr.map((p) => (
+                      <tr key={p.productId || p.name}>
+                        <td className="px-4 py-2">{p.name}</td>
+                        <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
+                        <td className="px-4 py-2 text-right font-semibold">{Number(p.total || 0).toLocaleString('id-ID')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Render tab for suppliers
   const renderSuppliersTab = () => (
     <div className="space-y-6">
@@ -1814,6 +2439,7 @@ const Products: React.FC = () => {
                   label: "Daftar Pembelian",
                   icon: FileText,
                 },
+                { id: "sales", label: "Daftar Penjualan", icon: DollarSign },
                 { id: "suppliers", label: "Supplier", icon: Truck },
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -1840,10 +2466,11 @@ const Products: React.FC = () => {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "products" && renderProductsTab()}
-        {activeTab === "purchases" && renderPurchasesTab()}
-        {activeTab === "purchaseList" && renderPurchaseListTab()}
-        {activeTab === "suppliers" && renderSuppliersTab()}
+  {activeTab === "products" && renderProductsTab()}
+  {activeTab === "purchases" && renderPurchasesTab()}
+  {activeTab === "purchaseList" && renderPurchaseListTab()}
+  {activeTab === "sales" && renderSalesListTab()}
+  {activeTab === "suppliers" && renderSuppliersTab()}
 
         {/* Add Product Modal */}
         {showAddForm && (
