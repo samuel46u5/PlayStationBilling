@@ -57,6 +57,8 @@ const Products: React.FC = () => {
     }>,
     notes: "",
     expectedDate: new Date().toISOString().split("T")[0],
+    // orderDate will be stored in purchase_orders.order_date (ISO string)
+    orderDate: new Date().toISOString(),
   });
 
   const [editingPoId, setEditingPoId] = useState<string | null>(null);
@@ -82,7 +84,7 @@ const Products: React.FC = () => {
   const [editSupplier, setEditSupplier] = useState<any | null>(null);
 
   // Tambah state untuk daftar PO, filter tanggal, dan status
-  const [purchases, setPurchases] = useState<any[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [purchaseDateRange, setPurchaseDateRange] = useState<{
     start: string;
     end: string;
@@ -99,7 +101,7 @@ const Products: React.FC = () => {
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
   // State untuk item PO detail
-  const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
+  const [purchaseOrderItems, setPurchaseOrderItems] = useState<any[]>([]);
   const [loadingPurchaseItems, setLoadingPurchaseItems] = useState(false);
   const [purchaseItemsError, setPurchaseItemsError] = useState<string | null>(
     null
@@ -140,11 +142,36 @@ const Products: React.FC = () => {
       try {
         const poItems = await db.select('purchase_order_items', '*');
         const pos = await db.purchases.getAll();
+        // Apply period & search filters to pos based on rekapTanggalPeriod / rekapTanggalDateRange / rekapTanggalSearch
+        const filteredPos = (pos || []).filter((p: any) => {
+          // period filter
+          let start: Date | null = null;
+          let end: Date | null = null;
+          const now = new Date();
+          switch (rekapTanggalPeriod) {
+            case 'today': start = new Date(); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break;
+            case 'yesterday': start = new Date(); start.setDate(start.getDate()-1); start.setHours(0,0,0,0); end = new Date(start); end.setHours(23,59,59,999); break;
+            case 'week': start = new Date(); const d = start.getDay(); const diff = (d === 0 ? -6 : 1) - d; start.setDate(start.getDate() + diff); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break;
+            case 'month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth()+1, 0); end.setHours(23,59,59,999); break;
+            case 'range': if (rekapTanggalDateRange.start) { start = new Date(rekapTanggalDateRange.start); start.setHours(0,0,0,0); } if (rekapTanggalDateRange.end) { end = new Date(rekapTanggalDateRange.end); end.setHours(23,59,59,999); } break;
+          }
+          const orderDate = p.order_date ? new Date(p.order_date) : null;
+          if (orderDate) {
+            if (start && orderDate < start) return false;
+            if (end && orderDate > end) return false;
+          }
+          if (rekapTanggalSearch) {
+            const st = rekapTanggalSearch.toLowerCase();
+            const supplier = suppliers.find((s:any) => s.id === p.supplier_id);
+            if (!(p.po_number?.toLowerCase().includes(st) || supplier?.name?.toLowerCase().includes(st))) return false;
+          }
+          return true;
+        });
         // build map: date -> productKey -> { qty, total }
         const map: Record<string, any> = {};
         for (const it of (poItems || []) as any[]) {
           const iti: any = it;
-          const po = ((pos || []).find((p: any) => p.id === iti.po_id) as any) || {};
+          const po = ((filteredPos || []).find((p: any) => p.id === iti.po_id) as any) || {};
           const orderDate = (po as any).order_date ? new Date((po as any).order_date).toISOString().slice(0,10) : 'unknown';
           const productId = iti.product_id ?? iti.productId ?? null;
           const name = iti.product_name || (productId ? (products.find((p: any) => String(p.id) === String(productId))?.name) : '') || 'Unknown Produk';
@@ -173,9 +200,37 @@ const Products: React.FC = () => {
       setRekapPerBarangError(null);
       try {
         const poItems = await db.select('purchase_order_items', '*');
+        const pos = await db.purchases.getAll();
+        // apply filters to items/pos based on rekapPerBarangPeriod / rekapPerBarangDateRange / rekapPerBarangSearch
+        const filteredPos2 = (pos || []).filter((p: any) => {
+          let start: Date | null = null;
+          let end: Date | null = null;
+          const now = new Date();
+          switch (rekapPerBarangPeriod) {
+            case 'today': start = new Date(); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break;
+            case 'yesterday': start = new Date(); start.setDate(start.getDate()-1); start.setHours(0,0,0,0); end = new Date(start); end.setHours(23,59,59,999); break;
+            case 'week': start = new Date(); const d = start.getDay(); const diff = (d === 0 ? -6 : 1) - d; start.setDate(start.getDate() + diff); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break;
+            case 'month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth()+1, 0); end.setHours(23,59,59,999); break;
+            case 'range': if (rekapPerBarangDateRange.start) { start = new Date(rekapPerBarangDateRange.start); start.setHours(0,0,0,0); } if (rekapPerBarangDateRange.end) { end = new Date(rekapPerBarangDateRange.end); end.setHours(23,59,59,999); } break;
+          }
+          const orderDate = p.order_date ? new Date(p.order_date) : null;
+          if (orderDate) {
+            if (start && orderDate < start) return false;
+            if (end && orderDate > end) return false;
+          }
+          if (rekapPerBarangSearch) {
+            const st = rekapPerBarangSearch.toLowerCase();
+            const supplier = suppliers.find((s:any) => s.id === p.supplier_id);
+            if (!(p.po_number?.toLowerCase().includes(st) || supplier?.name?.toLowerCase().includes(st))) return false;
+          }
+          return true;
+        });
         const map: Record<string, any> = {};
         for (const it of (poItems || []) as any[]) {
           const iti: any = it;
+          // skip items that belong to pos outside the filteredPos2 set
+          const poRef = (filteredPos2 || []).find((pp: any) => pp.id === iti.po_id);
+          if (!poRef) continue;
           const productId = iti.product_id ?? iti.productId ?? null;
           const name = iti.product_name || (productId ? (products.find((p: any) => String(p.id) === String(productId))?.name) : '') || 'Unknown Produk';
           const qty = Number(iti.quantity || iti.qty || 0) || 0;
@@ -772,7 +827,7 @@ const Products: React.FC = () => {
     const fetchPurchases = async () => {
       try {
         const data = await db.purchases.getAll();
-        setPurchases(data || []);
+        setPurchaseOrders(data || []);
       } catch (error: any) {
         Swal.fire({
           icon: "error",
@@ -847,7 +902,7 @@ const Products: React.FC = () => {
   useEffect(() => {
     const fetchItems = async () => {
       if (!selectedPurchase) {
-        setPurchaseItems([]);
+        setPurchaseOrderItems([]);
         setPurchaseItemsError(null);
         return;
       }
@@ -857,10 +912,10 @@ const Products: React.FC = () => {
         const items = await db.select("purchase_order_items", "*", {
           po_id: selectedPurchase,
         });
-        setPurchaseItems(items || []);
+        setPurchaseOrderItems(items || []);
       } catch (err: any) {
         setPurchaseItemsError(err?.message || "Gagal memuat item PO");
-        setPurchaseItems([]);
+        setPurchaseOrderItems([]);
       } finally {
         setLoadingPurchaseItems(false);
       }
@@ -898,7 +953,7 @@ const Products: React.FC = () => {
       supplier.contact_person.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredPurchaseOrders = purchases.filter((po) => {
+  const filteredPurchaseOrders = purchaseOrders.filter((po) => {
     // Filter status
     const statusMatch =
       purchaseStatus === "all" || po.status === purchaseStatus;
@@ -969,7 +1024,7 @@ const Products: React.FC = () => {
   });
 
   // Filtered list for the Daftar Pembelian subtab (uses independent filter state)
-  const filteredPurchaseOrdersForDaftar = purchases.filter((po) => {
+  const filteredPurchaseOrdersForDaftar = purchaseOrders.filter((po) => {
     // Filter status (same as before)
     const statusMatch = purchaseStatus === "all" || po.status === purchaseStatus;
 
@@ -2078,6 +2133,7 @@ const Products: React.FC = () => {
               items: [],
               notes: "",
               expectedDate: new Date().toISOString().split("T")[0],
+              orderDate: new Date().toISOString(),
             });
           }}
           className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
@@ -2101,7 +2157,7 @@ const Products: React.FC = () => {
 
       {/* Purchase Orders List */}
       <div className="space-y-4">
-        {filteredPurchaseOrders.map((purchase) => {
+                  {filteredPurchaseOrders.map((purchase) => {
           const supplier = suppliers.find((s) => s.id === purchase.supplier_id);
           return (
             <div
@@ -2167,7 +2223,7 @@ const Products: React.FC = () => {
                       {selectedPurchase === purchase.id
                         ? loadingPurchaseItems
                           ? "-"
-                          : `${purchaseItems.length} / ${purchaseItems.reduce(
+                          : `${purchaseOrderItems.length} / ${purchaseOrderItems.reduce(
                               (sum, item) => sum + Number(item.quantity || 0),
                               0
                             )}`
@@ -2215,7 +2271,7 @@ const Products: React.FC = () => {
                       <div className="text-red-500 text-sm">
                         {purchaseItemsError}
                       </div>
-                    ) : purchaseItems.length === 0 ? (
+                    ) : purchaseOrderItems.length === 0 ? (
                       <div className="text-gray-400 text-sm">
                         Tidak ada item pada PO ini.
                       </div>
@@ -2239,7 +2295,7 @@ const Products: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-100">
-                            {purchaseItems.map((item, idx) => {
+                            {purchaseOrderItems.map((item, idx) => {
                               // Cari nama produk dari products jika product_name kosong
                               let productName = item.product_name;
                               if (!productName) {
@@ -2423,7 +2479,7 @@ const Products: React.FC = () => {
                             <button onClick={async () => {
                               try {
                                 const items = await db.select("purchase_order_items", "*", { po_id: po.id });
-                                setNewPurchase({ supplierId: po.supplier_id, items: (items || []).map((it: any) => ({ id: it.id, productId: it.product_id, productName: it.product_name, quantity: Number(it.quantity) || 0, unitCost: Number(it.unit_cost) || 0, total: Number(it.total) || 0 })), notes: po.notes || "", expectedDate: po.expected_date ? new Date(po.expected_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0] });
+                                setNewPurchase({ supplierId: po.supplier_id, items: (items || []).map((it: any) => ({ id: it.id, productId: it.product_id, productName: it.product_name, quantity: Number(it.quantity) || 0, unitCost: Number(it.unit_cost) || 0, total: Number(it.total) || 0 })), notes: po.notes || "", expectedDate: po.expected_date ? new Date(po.expected_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0], orderDate: po.order_date ? new Date(po.order_date).toISOString() : new Date().toISOString() });
                                 setEditingPoId(po.id);
                                 setShowPurchaseForm(true);
                               } catch (err: any) {
@@ -3592,6 +3648,7 @@ const Products: React.FC = () => {
                             items: newPurchase.items,
                             notes: newPurchase.notes,
                             expected_date: newPurchase.expectedDate,
+                            order_date: newPurchase.orderDate,
                             subtotal: purchaseSubtotal,
                             total_amount: purchaseTotal,
                           });
@@ -3606,6 +3663,7 @@ const Products: React.FC = () => {
                             items: newPurchase.items,
                             notes: newPurchase.notes,
                             expected_date: newPurchase.expectedDate,
+                            order_date: newPurchase.orderDate,
                             subtotal: purchaseSubtotal,
                             total_amount: purchaseTotal,
                           });
@@ -3625,6 +3683,7 @@ const Products: React.FC = () => {
                           items: [],
                           notes: "",
                           expectedDate: new Date().toISOString().split("T")[0],
+                          orderDate: new Date().toISOString(),
                         });
                         if ((window as any).refreshPurchases)
                           await (window as any).refreshPurchases();
@@ -4182,7 +4241,7 @@ const Products: React.FC = () => {
               <ShoppingBag className="h-6 w-6 text-green-600" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-1">
-              {purchases?.length || 0}
+              {purchaseOrders?.length || 0}
             </h3>
             <p className="text-gray-600 text-sm">Purchase Order</p>
           </div>
