@@ -11,8 +11,6 @@ import {
   Calendar,
   FileText,
   Truck,
-  CheckCircle,
-  Clock,
   XCircle,
   Printer,
   DollarSign,
@@ -25,7 +23,7 @@ import Swal from "sweetalert2";
 
 const Products: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
-    "products" | "purchases" | "suppliers" | "purchaseList" | "sales"
+    "products" | "purchases" | "suppliers" | "purchaseList" | "sales" | "salesSummary" | "reports"
   >("products");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -88,10 +86,16 @@ const Products: React.FC = () => {
     start: string;
     end: string;
   }>({ start: "", end: "" });
-  const [purchaseStatus, setPurchaseStatus] = useState<string>("all");
+  const [purchaseStatus, _setPurchaseStatus] = useState<string>("all");
   // State untuk periode filter pada laporan penjualan
   const [salesPeriod, setSalesPeriod] = useState<string>("week");
   const [salesDateRange, setSalesDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  // Local search state for sales tab to avoid clashing with global searchTerm
+  const [salesSearch, setSalesSearch] = useState<string>("");
+  // Which report sub-tab is active under Laporan Penjualan
+  const [reportTab, setReportTab] = useState<'sales' | 'salesSummary'>('sales');
+  // expanded products for rekap per barang (store keys of expanded products)
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
   // State untuk item PO detail
   const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
@@ -182,6 +186,268 @@ const Products: React.FC = () => {
       }));
 
     await printPriceList(selectedProducts);
+  };
+
+  // Render tab for sales summary per product (implemented: aggregate per product -> per date)
+  const renderSalesSummaryTab = () => {
+    const parseItems = (details: any) => {
+      if (!details) return [];
+      let doc = details;
+      if (typeof doc === "string") {
+        try {
+          doc = JSON.parse(doc);
+        } catch (e) {
+          return [];
+        }
+      }
+      if (Array.isArray(doc)) return doc;
+      if (doc.items && Array.isArray(doc.items)) return doc.items;
+      if (doc.lines && Array.isArray(doc.lines)) return doc.lines;
+      if (doc.cart && Array.isArray(doc.cart)) return doc.cart;
+      if (doc.products && Array.isArray(doc.products)) return doc.products;
+      for (const k of Object.keys(doc || {})) {
+        if (Array.isArray((doc as any)[k])) return (doc as any)[k];
+      }
+      return [];
+    };
+
+    const productMap: Record<string, any> = {};
+    for (const txn of sales) {
+      const tsVal = txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
+      const dateKey = tsVal ? new Date(tsVal).toISOString().slice(0, 10) : 'unknown';
+      const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
+      for (const it of items) {
+        const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? it.sku ?? null;
+        const prod = productId ? products.find((p) => String(p.id) === String(productId)) : null;
+        const name = prod?.name || it.product_name || it.name || it.title || it.productName || (it.product && it.product.name) || String(it.sku || it.code || productId || '-');
+        const qtyRaw = it.quantity ?? it.qty ?? it.qty_sold ?? it.q ?? 0;
+        const qty = Number(qtyRaw) || 0;
+        let totalRaw = 0;
+        if (it.total !== undefined) totalRaw = it.total;
+        else if (it.subtotal !== undefined) totalRaw = it.subtotal;
+        else if (it.amount !== undefined) totalRaw = it.amount;
+        else if (it.price_total !== undefined) totalRaw = it.price_total;
+        else if (it.unit_price !== undefined) totalRaw = qty * Number(it.unit_price);
+        const total = Number(totalRaw) || 0;
+
+        const key = String(productId ?? name);
+        if (!productMap[key]) productMap[key] = { productId, name, dates: {}, productTotalQty: 0, productTotalAmount: 0 };
+        if (!productMap[key].dates[dateKey]) productMap[key].dates[dateKey] = { qty: 0, total: 0 };
+        productMap[key].dates[dateKey].qty += qty;
+        productMap[key].dates[dateKey].total += total;
+        productMap[key].productTotalQty += qty;
+        productMap[key].productTotalAmount += total;
+      }
+    }
+
+    // apply period filter
+    let periodStart: Date | null = null;
+    let periodEnd: Date | null = null;
+    const now = new Date();
+    switch (salesPeriod) {
+      case 'today':
+        periodStart = new Date(); periodStart.setHours(0,0,0,0);
+        periodEnd = new Date(); periodEnd.setHours(23,59,59,999);
+        break;
+      case 'yesterday':
+        periodStart = new Date(); periodStart.setDate(periodStart.getDate() - 1); periodStart.setHours(0,0,0,0);
+        periodEnd = new Date(periodStart); periodEnd.setHours(23,59,59,999);
+        break;
+      case 'week':
+        periodStart = new Date();
+        const d = periodStart.getDay();
+        const diff = (d === 0 ? -6 : 1) - d;
+        periodStart.setDate(periodStart.getDate() + diff);
+        periodStart.setHours(0,0,0,0);
+        periodEnd = new Date(); periodEnd.setHours(23,59,59,999);
+        break;
+      case 'month':
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0); periodEnd.setHours(23,59,59,999);
+        break;
+      case 'range':
+        if (salesDateRange.start) { periodStart = new Date(salesDateRange.start); periodStart.setHours(0,0,0,0); }
+        if (salesDateRange.end) { periodEnd = new Date(salesDateRange.end); periodEnd.setHours(23,59,59,999); }
+        break;
+    }
+
+    const summaryEntries = Object.values(productMap).map((p: any) => {
+      const filteredDates: Record<string, any> = {};
+      for (const [dk, val] of Object.entries(p.dates)) {
+        const dkDate = dk === 'unknown' ? null : new Date(dk + 'T00:00:00');
+        if (dkDate && periodStart && dkDate < periodStart) continue;
+        if (dkDate && periodEnd && dkDate > periodEnd) continue;
+        filteredDates[dk] = val;
+      }
+      // recompute totals from filteredDates only
+      const productTotalQty = Object.values(filteredDates).reduce((s: number, d: any) => s + (d.qty || 0), 0);
+      const productTotalAmount = Object.values(filteredDates).reduce((s: number, d: any) => s + (d.total || 0), 0);
+      return { ...p, dates: filteredDates, productTotalQty, productTotalAmount };
+    }).filter((p: any) => {
+      const hasDates = Object.keys(p.dates).length > 0;
+      if (!hasDates) return false;
+      if (!salesSearch) return true;
+      const st = salesSearch.toLowerCase();
+      return p.name.toLowerCase().includes(st);
+    }).sort((a: any, b: any) => b.productTotalAmount - a.productTotalAmount);
+
+    const grand = summaryEntries.reduce((acc: any, p: any) => {
+      acc.qty += p.productTotalQty || 0;
+      acc.amount += p.productTotalAmount || 0;
+      return acc;
+    }, { qty: 0, amount: 0 });
+
+    // build human-friendly period label
+    const periodLabel = (() => {
+      if (salesPeriod === 'range') {
+        if (salesDateRange.start && salesDateRange.end) {
+          const s = new Date(salesDateRange.start).toLocaleDateString();
+          const e = new Date(salesDateRange.end).toLocaleDateString();
+          return `${s} s.d. ${e}`;
+        }
+        if (salesDateRange.start) return `Mulai ${new Date(salesDateRange.start).toLocaleDateString()}`;
+        return 'Rentang waktu (tidak lengkap)';
+      }
+      switch (salesPeriod) {
+        case 'today': return 'Hari Ini';
+        case 'yesterday': return 'Kemarin';
+        case 'week': return 'Minggu Ini';
+        case 'month': return 'Bulan Ini';
+        default: return 'Semua Waktu';
+      }
+    })();
+
+    const toggleExpand = (key: string) => {
+      setExpandedProducts((prev) => {
+        const s = new Set(prev);
+        if (s.has(key)) s.delete(key);
+        else s.add(key);
+        return s;
+      });
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Laporan Rekap Per Barang</h2>
+            <p className="text-gray-600">Rekap penjualan per produk, ditampilkan per tanggal dalam rentang yang dipilih.</p>
+            <div className="mt-2 text-sm text-gray-500">Periode: <span className="font-medium text-gray-700">{periodLabel}</span></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => { if ((window as any).refreshSales) (window as any).refreshSales(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Refresh</button>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-end gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="Filter by nama produk..."
+                value={salesSearch}
+                onChange={(e) => setSalesSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Periode</label>
+            <select value={salesPeriod} onChange={(e) => setSalesPeriod(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <option value="today">Hari Ini</option>
+              <option value="yesterday">Kemarin</option>
+              <option value="week">Minggu Ini</option>
+              <option value="month">Bulan Ini</option>
+              <option value="range">Rentang Waktu</option>
+            </select>
+          </div>
+          {salesPeriod === 'range' && (
+            <div className="flex gap-2 items-center">
+              <input type="date" value={salesDateRange.start} onChange={(e) => setSalesDateRange((r) => ({ ...r, start: e.target.value }))} className="px-3 py-2 border border-gray-300 rounded-lg" />
+              <span className="self-center">-</span>
+              <input type="date" value={salesDateRange.end} onChange={(e) => setSalesDateRange((r) => ({ ...r, end: e.target.value }))} className="px-3 py-2 border border-gray-300 rounded-lg" />
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          {summaryEntries.length === 0 ? (
+            <div className="text-center text-gray-500 py-6">Tidak ada data untuk periode ini.</div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {summaryEntries.map((p: any) => {
+                      const key = String(p.productId ?? p.name);
+                      const expanded = expandedProducts.has(key);
+                      const detailCount = Object.keys(p.dates || {}).length;
+                      return (
+                        <React.Fragment key={key}>
+                          <tr>
+                            <td className="px-4 py-2">{p.name}</td>
+                            <td className="px-4 py-2 text-right font-medium">{p.productTotalQty}</td>
+                            <td className="px-4 py-2 text-right font-semibold">{Number(p.productTotalAmount).toLocaleString()}</td>
+                            <td className="px-4 py-2 text-right">
+                              <button onClick={() => toggleExpand(key)} className="text-blue-600 hover:underline text-sm">
+                                {expanded ? `Sembunyikan (${detailCount})` : `Rinci (${detailCount})`}
+                              </button>
+                            </td>
+                          </tr>
+                          {expanded && (
+                            <tr>
+                              <td colSpan={4} className="px-4 py-2 bg-gray-50">
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full">
+                                    <thead>
+                                      <tr className="text-xs text-gray-500">
+                                        <th className="text-left">Tanggal</th>
+                                        <th className="text-right">Qty</th>
+                                        <th className="text-right">Total (Rp)</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="text-sm text-gray-700">
+                                      {Object.keys(p.dates).sort((a,b)=> (a<b?1:-1)).map((dk) => (
+                                        <tr key={dk} className="border-t">
+                                          <td className="py-1">{(new Date(dk + 'T00:00:00')).toLocaleDateString()}</td>
+                                          <td className="py-1 text-right w-24">{p.dates[dk].qty}</td>
+                                          <td className="py-1 text-right w-32">{Number(p.dates[dk].total).toLocaleString()}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="border-t pt-3 mt-3 font-semibold flex justify-between">
+                <div>Grand Total</div>
+                <div className="flex gap-6">
+                  <div className="w-24 text-right">{grand.qty}</div>
+                  <div className="w-32 text-right">{Number(grand.amount).toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // Update totals when items change
@@ -1450,6 +1716,8 @@ const Products: React.FC = () => {
     </div>
   );
 
+  
+
   // const paginatedPurchases = purchases.slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage);
   // const totalPages = Math.ceil(totalPurchases / purchasesPerPage);
 
@@ -2122,8 +2390,8 @@ const Products: React.FC = () => {
       const dkDate = dk === 'unknown' ? null : new Date(dk + 'T00:00:00');
       if (dkDate && start && dkDate < start) return false;
       if (dkDate && end && dkDate > end) return false;
-      if (!searchTerm) return true;
-      const st = searchTerm.toLowerCase();
+      if (!salesSearch) return true;
+      const st = salesSearch.toLowerCase();
       if (dk.includes(st)) return true;
       return Object.values(groups[dk].productMap).some((p) => p.name.toLowerCase().includes(st));
     });
@@ -2152,8 +2420,8 @@ const Products: React.FC = () => {
               <input
                 type="text"
                 placeholder="Filter by tanggal (YYYY-MM-DD) atau nama produk..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={salesSearch}
+                onChange={(e) => setSalesSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -2439,10 +2707,42 @@ const Products: React.FC = () => {
                   label: "Daftar Pembelian",
                   icon: FileText,
                 },
-                { id: "sales", label: "Daftar Penjualan", icon: DollarSign },
+                {
+                  id: "reports",
+                  label: "Laporan Penjualan",
+                  icon: DollarSign,
+                  children: [
+                    { id: "sales", label: "Laporan Penjualan (Per Tanggal & Per Barang)" },
+                    { id: "salesSummary", label: "Laporan Rekap Per Barang" },
+                  ],
+                },
                 { id: "suppliers", label: "Supplier", icon: Truck },
-              ].map((tab) => {
-                const Icon = tab.icon;
+              ].map((tab: any) => {
+                if (tab.children && Array.isArray(tab.children)) {
+                  const Icon = tab.icon as any;
+                  const isParentActive = activeTab === 'reports';
+                  // Render only the parent tab in the main nav. Sub-tabs will appear inside the reports content.
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab('reports' as any);
+                        setReportTab('sales');
+                        setSearchTerm("");
+                      }}
+                      className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
+                        isParentActive
+                          ? "border-blue-500 text-blue-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {tab.label}
+                    </button>
+                  );
+                }
+
+                const Icon = tab.icon as any;
                 return (
                   <button
                     key={tab.id}
@@ -2469,7 +2769,29 @@ const Products: React.FC = () => {
   {activeTab === "products" && renderProductsTab()}
   {activeTab === "purchases" && renderPurchasesTab()}
   {activeTab === "purchaseList" && renderPurchaseListTab()}
-  {activeTab === "sales" && renderSalesListTab()}
+  {/* Reports parent: sub-nav + child content */}
+  {activeTab === "reports" && (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setReportTab('sales')}
+          className={`px-3 py-2 text-sm rounded ${reportTab === 'sales' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-gray-600 hover:text-gray-800'}`}
+        >
+          Laporan Penjualan (Per Tanggal & Per Barang)
+        </button>
+        <button
+          onClick={() => setReportTab('salesSummary')}
+          className={`px-3 py-2 text-sm rounded ${reportTab === 'salesSummary' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-gray-600 hover:text-gray-800'}`}
+        >
+          Laporan Rekap Per Barang
+        </button>
+      </div>
+
+      <div>
+        {reportTab === 'sales' ? renderSalesListTab() : renderSalesSummaryTab()}
+      </div>
+    </div>
+  )}
   {activeTab === "suppliers" && renderSuppliersTab()}
 
         {/* Add Product Modal */}
