@@ -607,6 +607,8 @@ const Products: React.FC = () => {
   const [sales, setSales] = useState<any[]>([]);
   // expanded products within date-based report (key = `${dateKey}::${productKey}`)
   const [expandedDateProducts, setExpandedDateProducts] = useState<Set<string>>(new Set());
+  // expanded dates for per-date report (key = dateKey)
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   useEffect(() => {
     const fetchSales = async () => {
       try {
@@ -2481,6 +2483,16 @@ const Products: React.FC = () => {
       return Object.values(groups[dk].productMap).some((p) => p.name.toLowerCase().includes(st));
     });
 
+    // compute footer totals based on currently filtered dates
+    const footerTotals = filteredDateKeys.reduce((acc: any, dk: string) => {
+      const day = groups[dk];
+      acc.days += 1;
+      acc.amount += Number(day.dateTotal || 0);
+      return acc;
+    }, { days: 0, amount: 0 });
+
+    const averagePerDay = footerTotals.days ? Math.round(footerTotals.amount / footerTotals.days) : 0;
+
     // build human-friendly period label for this tab too
     const periodLabel = (() => {
       if (salesPeriod === 'range') {
@@ -2591,105 +2603,135 @@ const Products: React.FC = () => {
         {filteredDateKeys.map((dk) => {
           const day = groups[dk];
           const productsArr = Object.values(day.productMap).sort((a, b) => b.total - a.total);
+          const dateExpanded = expandedDates.has(dk);
           return (
             <div key={dk} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <div className="text-sm text-gray-500">Tanggal</div>
-                  <div className="font-semibold text-gray-900">{new Date(dk).toLocaleDateString('id-ID')}</div>
+                      <div className="text-sm text-gray-500">{new Date(dk).toLocaleDateString('id-ID', { weekday: 'long' })}</div>
+                      <button
+                        onClick={() => setExpandedDates((prev) => {
+                          const s = new Set(prev);
+                          if (s.has(dk)) s.delete(dk);
+                          else s.add(dk);
+                          return s;
+                        })}
+                        className="font-semibold text-left text-blue-600 hover:underline"
+                      >
+                        {new Date(dk).toLocaleDateString('id-ID')}
+                      </button>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm text-gray-500">Total Hari Ini</div>
-                  <div className="font-semibold text-green-700">Rp {Number(day.dateTotal || 0).toLocaleString('id-ID')}</div>
+                  <div className="text-sm text-gray-500">Total</div>
+                    <div className="font-semibold text-green-700">Rp {Number(day.dateTotal || 0).toLocaleString('id-ID')}</div>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga (Rp)</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {productsArr.map((p) => {
-                      const productKey = String(p.productId ?? p.name);
-                      const compoundKey = `${dk}::${productKey}`;
-                      const detailCount = (p.lines || []).length;
-                      const expanded = expandedDateProducts.has(compoundKey);
-                      const unit = p.qty ? Math.round((p.total || 0) / p.qty) : 0;
-                      return (
-                        <React.Fragment key={productKey}>
-                          <tr>
-                            <td className="px-4 py-2">
-                              <button onClick={() => {
-                                setExpandedDateProducts((prev) => {
-                                  const s = new Set(prev);
-                                  if (s.has(compoundKey)) s.delete(compoundKey);
-                                  else s.add(compoundKey);
-                                  return s;
-                                });
-                              }} className="text-left text-blue-600 hover:underline">
-                                {p.name} <span className="text-xs text-gray-500">({detailCount})</span>
-                              </button>
-                            </td>
-                            <td className="px-4 py-2 text-right">{unit ? Number(unit).toLocaleString('id-ID') : '-'}</td>
-                            <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
-                            <td className="px-4 py-2 text-right font-semibold">{Number(p.total || 0).toLocaleString('id-ID')}</td>
-                          </tr>
-                          {expanded && (
+              {dateExpanded && (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga (Rp)</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {productsArr.map((p) => {
+                        const productKey = String(p.productId ?? p.name);
+                        const compoundKey = `${dk}::${productKey}`;
+                        const detailCount = (p.lines || []).length;
+                        const expanded = expandedDateProducts.has(compoundKey);
+                        const unit = p.qty ? Math.round((p.total || 0) / p.qty) : 0;
+                        return (
+                          <React.Fragment key={productKey}>
                             <tr>
-                              <td colSpan={4} className="px-0 py-0 bg-gray-50">
-                                <div className="w-full overflow-x-auto">
-                                  <table className="min-w-full text-sm text-gray-700">
-                                    <thead>
-                                      <tr>
-                                        <th className="px-4 py-2 text-left text-xs text-gray-500">Waktu</th>
-                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Harga (Rp)</th>
-                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Qty</th>
-                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Total (Rp)</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {(p.lines || []).sort((a,b)=> (a.ts < b.ts ? 1 : -1)).map((ln: any, i: number) => (
-                                        <tr key={i} className="border-t">
-                                          <td className="px-4 py-1">{ln.ts ? new Date(ln.ts).toLocaleString('id-ID') : (ln.txId || '-')}</td>
-                                          <td className="px-4 py-1 text-right">{ln.unitPrice ? Number(Math.round(ln.unitPrice)).toLocaleString('id-ID') : '-'}</td>
-                                          <td className="px-4 py-1 text-right">{ln.qty}</td>
-                                          <td className="px-4 py-1 text-right">{ln.total ? Number(ln.total).toLocaleString('id-ID') : '-'}</td>
-                                        </tr>
-                                      ))}
-                                      {/* subtotal for this product on this date */}
-                                      {(() => {
-                                        const subtotalQty = (p.lines || []).reduce((s: number, d: any) => s + (d.qty || 0), 0);
-                                        const subtotalAmount = (p.lines || []).reduce((s: number, d: any) => s + (d.total || 0), 0);
-                                        return (
-                                          <tr className="border-t bg-gray-100 font-semibold">
-                                            <td className="px-4 py-1">Subtotal</td>
-                                            <td className="px-4 py-1 text-right">-</td>
-                                            <td className="px-4 py-1 text-right">{subtotalQty}</td>
-                                            <td className="px-4 py-1 text-right">{Number(subtotalAmount).toLocaleString('id-ID')}</td>
-                                          </tr>
-                                        );
-                                      })()}
-                                    </tbody>
-                                  </table>
-                                </div>
+                              <td className="px-4 py-2">
+                                <button onClick={() => {
+                                  setExpandedDateProducts((prev) => {
+                                    const s = new Set(prev);
+                                    if (s.has(compoundKey)) s.delete(compoundKey);
+                                    else s.add(compoundKey);
+                                    return s;
+                                  });
+                                }} className="text-left text-blue-600 hover:underline">
+                                  {p.name} <span className="text-xs text-gray-500">({detailCount})</span>
+                                </button>
                               </td>
+                              <td className="px-4 py-2 text-right">{unit ? Number(unit).toLocaleString('id-ID') : '-'}</td>
+                              <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
+                              <td className="px-4 py-2 text-right font-semibold">{Number(p.total || 0).toLocaleString('id-ID')}</td>
                             </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            {expanded && (
+                              <tr>
+                                <td colSpan={4} className="px-0 py-0 bg-gray-50">
+                                  <div className="w-full overflow-x-auto">
+                                    <table className="min-w-full text-sm text-gray-700">
+                                      <thead>
+                                        <tr>
+                                          <th className="px-4 py-2 text-left text-xs text-gray-500">Waktu</th>
+                                          <th className="px-4 py-2 text-right text-xs text-gray-500">Harga (Rp)</th>
+                                          <th className="px-4 py-2 text-right text-xs text-gray-500">Qty</th>
+                                          <th className="px-4 py-2 text-right text-xs text-gray-500">Total (Rp)</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(p.lines || []).sort((a,b)=> (a.ts < b.ts ? 1 : -1)).map((ln: any, i: number) => (
+                                          <tr key={i} className="border-t">
+                                            <td className="px-4 py-1">{ln.ts ? new Date(ln.ts).toLocaleString('id-ID') : (ln.txId || '-')}</td>
+                                            <td className="px-4 py-1 text-right">{ln.unitPrice ? Number(Math.round(ln.unitPrice)).toLocaleString('id-ID') : '-'}</td>
+                                            <td className="px-4 py-1 text-right">{ln.qty}</td>
+                                            <td className="px-4 py-1 text-right">{ln.total ? Number(ln.total).toLocaleString('id-ID') : '-'}</td>
+                                          </tr>
+                                        ))}
+                                        {/* subtotal for this product on this date */}
+                                        {(() => {
+                                          const subtotalQty = (p.lines || []).reduce((s: number, d: any) => s + (d.qty || 0), 0);
+                                          const subtotalAmount = (p.lines || []).reduce((s: number, d: any) => s + (d.total || 0), 0);
+                                          return (
+                                            <tr className="border-t bg-gray-100 font-semibold">
+                                              <td className="px-4 py-1">Subtotal</td>
+                                              <td className="px-4 py-1 text-right">-</td>
+                                              <td className="px-4 py-1 text-right">{subtotalQty}</td>
+                                              <td className="px-4 py-1 text-right">{Number(subtotalAmount).toLocaleString('id-ID')}</td>
+                                            </tr>
+                                          );
+                                        })()}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           );
         })}
+          {/* Footer summary: total days, period label, grand total, average per day */}
+          {filteredDateKeys.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-gray-500">Total {footerTotals.days}-Hari</div>
+                  <div className="font-semibold text-gray-900">{periodLabel}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">Grand Total</div>
+                  <div className="font-semibold text-green-700">Rp {Number(footerTotals.amount).toLocaleString('id-ID')}</div>
+                  <div className="text-sm text-gray-500 mt-2">Rata-rata / hari</div>
+                  <div className="font-medium text-gray-900">Rp {Number(averagePerDay).toLocaleString('id-ID')}</div>
+                </div>
+              </div>
+            </div>
+          )}
       </div>
     );
   };
