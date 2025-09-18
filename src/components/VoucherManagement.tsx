@@ -624,8 +624,8 @@ const VoucherManagement: React.FC = () => {
           // const totalCapital = Number(voucher.capital * totalHours || 0);
           // const capitalPerHour = Number(voucher.capital);
           // const totalPrice = Number(voucher.voucherPrice || 0);
-          const marginPct = voucher.voucherPrice
-            ? ((voucher.voucherPrice - voucher.capital) /
+          const bonusPct = voucher.voucherPrice
+            ? ((voucher.totalPoints - voucher.voucherPrice) /
                 voucher.voucherPrice) *
               100
             : 0;
@@ -719,12 +719,12 @@ const VoucherManagement: React.FC = () => {
                           Rp {voucher.voucherPrice.toLocaleString("id-ID")}
                         </span>
                       </div>
-                      <div className="flex justify-between">
+                      {/* <div className="flex justify-between">
                         <span className="text-gray-600">Modal Voucher</span>
                         <span className="font-medium">
                           Rp {voucher.capital.toLocaleString("id-ID")}
                         </span>
-                      </div>
+                      </div> */}
 
                       <div className="flex justify-between border-b border-gray-200 pb-1">
                         <span className="font-medium text-purple-600">
@@ -747,9 +747,9 @@ const VoucherManagement: React.FC = () => {
                         </span>
                       </div> */}
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Margin</span>
+                        <span className="text-gray-600">Bonus (%)</span>
                         <span className="font-bold">
-                          {marginPct.toFixed(1)}%
+                          {bonusPct.toFixed(1)}%
                         </span>
                       </div>
                     </div>
@@ -1762,12 +1762,13 @@ const VoucherManagement: React.FC = () => {
                     // const totalPrice = Number(hourlyRate * totalHours) || 0;
                     // const totalCapital =
                     //   Number(capitalPerHour * totalHours) || 0;
-                    const marginPct = editingVoucher.voucherPrice
-                      ? ((editingVoucher.voucherPrice -
-                          editingVoucher.capital) /
+                    const bonusPct = editingVoucher.voucherPrice
+                      ? ((editingVoucher.totalPoints -
+                          editingVoucher.voucherPrice) /
                           editingVoucher.voucherPrice) *
                         100
                       : 0;
+
                     return (
                       <div className="bg-gray-50 rounded-lg p-4">
                         <h4 className="font-medium text-gray-900 mb-2">
@@ -1786,7 +1787,7 @@ const VoucherManagement: React.FC = () => {
                                 )}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            {/* <div className="flex justify-between">
                               <span className="text-gray-600">
                                 Modal Voucher
                               </span>
@@ -1794,7 +1795,7 @@ const VoucherManagement: React.FC = () => {
                                 Rp{" "}
                                 {editingVoucher.capital.toLocaleString("id-ID")}
                               </span>
-                            </div>
+                            </div> */}
                             <div className="flex justify-between border-b border-gray-200 pb-1">
                               <span className="font-medium text-purple-600">
                                 Total Points
@@ -1822,9 +1823,9 @@ const VoucherManagement: React.FC = () => {
                               </span>
                             </div> */}
                             <div className="flex justify-between">
-                              <span className="text-gray-600">Margin</span>
+                              <span className="text-gray-600">Bonus (%)</span>
                               <span className="font-bold">
-                                {marginPct.toFixed(1)}%
+                                {bonusPct.toFixed(1)}%
                               </span>
                             </div>
                           </div>

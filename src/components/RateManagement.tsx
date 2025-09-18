@@ -22,6 +22,7 @@ type RateProfile = {
   capital: number;
   hourlyRate: number;
   minimumMinutes?: number;
+  minimumMinutesMember?: number;
   peakHourRate?: number;
   peakHourStart?: string;
   peakHourEnd?: string;
@@ -83,6 +84,7 @@ const RateManagement: React.FC = () => {
     isActive: true,
     capital: 0,
     minimumMinutes: 60,
+    minimumMinutesMember: 60,
   });
 
   // Fetch data from Supabase
@@ -117,6 +119,7 @@ const RateManagement: React.FC = () => {
             capital: p.capital,
             hourlyRate: Number(p.hourly_rate) || 0,
             minimumMinutes: Number(p.minimum_minutes),
+            minimumMinutesMember: Number(p.minimum_minutes_member),
             peakHourRate:
               p.peak_hour_rate !== undefined && p.peak_hour_rate !== null
                 ? Number(p.peak_hour_rate)
@@ -193,6 +196,7 @@ const RateManagement: React.FC = () => {
         capital: p.capital,
         hourlyRate: Number(p.hourly_rate) || 0,
         minimumMinutes: Number(p.minimum_minutes) || 60,
+        minimumMinutesMember: Number(p.minimum_minutes_member) || 60,
         peakHourRate:
           p.peak_hour_rate !== undefined && p.peak_hour_rate !== null
             ? Number(p.peak_hour_rate)
@@ -247,6 +251,7 @@ const RateManagement: React.FC = () => {
       capital: newRateProfile.capital,
       hourly_rate: newRateProfile.hourlyRate,
       minimum_minutes: newRateProfile.minimumMinutes,
+      minimum_minutes_member: newRateProfile.minimumMinutesMember,
       daily_rate: 0, // wajib diisi
       weekly_rate: 0, // wajib diisi
       monthly_rate: null, // opsional
@@ -276,6 +281,7 @@ const RateManagement: React.FC = () => {
       peakHourStart: "18:00",
       peakHourEnd: "22:00",
       minimumMinutes: 60,
+      minimumMinutesMember: 60,
       applicableEquipmentTypes: [],
       isActive: true,
       capital: 0,
@@ -298,6 +304,7 @@ const RateManagement: React.FC = () => {
       capital: Number(formData.get("capital")),
       hourly_rate: Number(formData.get("hourlyRate")),
       minimum_minutes: Number(formData.get("minimumMinutes")),
+      minimum_minutes_member: Number(formData.get("minimumMinutesMember")),
       peak_hour_rate: Number(formData.get("peakHourRate")),
       peak_hour_start: formData.get("peakHourStart"),
       peak_hour_end: formData.get("peakHourEnd"),
@@ -821,7 +828,7 @@ const RateManagement: React.FC = () => {
                       />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Tarif per Jam *
@@ -857,7 +864,9 @@ const RateManagement: React.FC = () => {
                           placeholder="0"
                         />
                       </div>
+                    </div>
 
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Minimum minutes
@@ -869,6 +878,24 @@ const RateManagement: React.FC = () => {
                             setNewRateProfile({
                               ...newRateProfile,
                               minimumMinutes: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Minimum minutes (Member only)
+                        </label>
+                        <input
+                          type="number"
+                          value={newRateProfile.minimumMinutesMember}
+                          onChange={(e) =>
+                            setNewRateProfile({
+                              ...newRateProfile,
+                              minimumMinutesMember: Number(e.target.value),
                             })
                           }
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1075,7 +1102,7 @@ const RateManagement: React.FC = () => {
                               />
                             </div>
                           </div>
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Minimum Minutes
@@ -1087,7 +1114,19 @@ const RateManagement: React.FC = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               />
                             </div>
-
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Minimum Minutes (Member only)
+                              </label>
+                              <input
+                                type="number"
+                                name="minimumMinutesMember"
+                                defaultValue={profile.minimumMinutesMember}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Jam Mulai Berlaku Tarif

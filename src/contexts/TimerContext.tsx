@@ -141,11 +141,24 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
             })
             .eq("id", session.id);
 
-          // Update console status
-          await supabase
-            .from("consoles")
-            .update({ status: "available" })
-            .eq("id", session.console_id);
+          // Update console status with guard: only if no other active sessions exist for this console
+          const { data: otherActiveSessions, error: activeErr } = await supabase
+            .from("rental_sessions")
+            .select("id")
+            .eq("console_id", session.console_id)
+            .eq("status", "active")
+            .limit(1);
+
+          if (
+            !activeErr &&
+            Array.isArray(otherActiveSessions) &&
+            otherActiveSessions.length === 0
+          ) {
+            await supabase
+              .from("consoles")
+              .update({ status: "available" })
+              .eq("id", session.console_id);
+          }
 
           // Finalize products and stock
           await finalizeProductsAndStock(session.id);

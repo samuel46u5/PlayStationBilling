@@ -16,12 +16,12 @@ async function getMinimumMinutesByConsole(consoleIds: string[]) {
   if (!consoleIds.length) return {};
   const { data, error } = await supabase
     .from('consoles')
-    .select('id, rate_profiles(minimum_minutes)')
+    .select('id, rate_profiles(minimum_minutes_member)')
     .in('id', consoleIds);
   if (error || !data) return {};
   const map: Record<string, number> = {};
   for (const row of data) {
-    const min = Number(row?.rate_profiles[0]?.minimum_minutes) || 60;
+    const min = Number(row?.rate_profiles[0]?.minimum_minutes_member) || 0;
     map[row.id] = min;
   }
   return map;
@@ -88,38 +88,25 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
   }, [activeSessions]);
 
   const processSessionBilling = async (session: MemberCardSession, now: Date, minMinutesMap: Record<string, number>) => {
-    const { data: freshStatusRow, error: freshStatusErr } = await supabase
-      .from('rental_sessions')
-      .select('status, end_time, total_points_deducted, hourly_rate_snapshot, per_minute_rate_snapshot')
-      .eq('id', session.id)
-      .single();
-    if (freshStatusErr || !freshStatusRow) {
-      return;
-    }
-    if (freshStatusRow.status !== 'active') {
-      return;
-    }
-
     const startTime = new Date(session.start_time);
     const elapsedMinutes = Math.ceil((now.getTime() - startTime.getTime()) / 60000);
-    const minimumMinutes = minMinutesMap[session.console_id] || 60;
+    const minimumMinutes = minMinutesMap[session.console_id] || 0;
 
     // Hitung expected points berdasarkan waktu berjalan
     let expectedPoints = 0;
-    if (elapsedMinutes <= minimumMinutes) {
+    if (minimumMinutes === 0) {
+      expectedPoints = elapsedMinutes * session.per_minute_rate_snapshot;
+    } else if (elapsedMinutes <= minimumMinutes) {
       // Minimal 1 jam
-      const hourlySnapshot = Number(freshStatusRow.hourly_rate_snapshot ?? session.hourly_rate_snapshot);
-      expectedPoints = hourlySnapshot;
+      expectedPoints = session.hourly_rate_snapshot;
     } else {
       // 1 jam + menit tambahan
-      const extraMinutes = elapsedMinutes - 60;
-      const hourlySnapshot = Number(freshStatusRow.hourly_rate_snapshot ?? session.hourly_rate_snapshot);
-      const perMinuteSnapshot = Number(freshStatusRow.per_minute_rate_snapshot ?? session.per_minute_rate_snapshot);
-      expectedPoints = hourlySnapshot + (extraMinutes * perMinuteSnapshot);
+      const extraMinutes = elapsedMinutes - minimumMinutes;
+      expectedPoints = session.hourly_rate_snapshot + (extraMinutes * session.per_minute_rate_snapshot);
     }
 
     // Hitung delta yang perlu dipotong
-    const deltaPoints = expectedPoints - Number(freshStatusRow.total_points_deducted ?? session.total_points_deducted ?? 0);
+    const deltaPoints = expectedPoints - session.total_points_deducted;
     
     if (deltaPoints <= 0) {
       return; // Tidak ada yang perlu dipotong
@@ -134,7 +121,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         .single(),
       supabase
         .from('rental_sessions')
-        .select('id,total_points_deducted,status')
+        .select('id,total_points_deducted')
         .eq('id', session.id)
         .limit(1)
     ]);
@@ -147,10 +134,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       console.error(`Error fetching fresh session for ${session.id}:`, freshSessErr);
       return;
     }
-    const freshSession = freshSessionRows[0] as { total_points_deducted: number, status: string };
-    if (freshSession.status !== 'active') {
-      return;
-    }
+    const freshSession = freshSessionRows[0] as { total_points_deducted: number };
 
     const currentBalance = Number(customerData.balance_points) || 0;
     const currentTotal = Number(freshSession.total_points_deducted) || 0;
@@ -163,7 +147,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     // Cek apakah saldo cukup
     if (currentBalance < computedDelta) {
       // Jika belum mencapai minimum, jangan akhiri sesi. Biarkan berjalan hingga minimum.
-      if (elapsedMinutes < minimumMinutes) {
+      if (minimumMinutes > 0 && elapsedMinutes < minimumMinutes) {
         return; // tunggu hingga minimum tercapai untuk evaluasi ulang
       }
       // Setelah melewati minimum dan saldo tetap kurang untuk selisih yang dibutuhkan, akhiri sesi

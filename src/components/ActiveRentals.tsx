@@ -65,6 +65,7 @@ interface RateProfile {
   name: string;
   hourly_rate: number;
   minimum_minutes: number;
+  minimum_minutes_member: number;
 }
 
 interface RentalSession {
@@ -1124,6 +1125,7 @@ const ActiveRentals: React.FC = () => {
     );
     const hourlyRate = rateProfile?.hourly_rate || 15000;
     const minimumMinutes = rateProfile?.minimum_minutes || 60;
+    const minimumMinutesMember = rateProfile?.minimum_minutes_member || 60;
 
     // Untuk member-card, gunakan logika yang sama dengan useMemberCardBilling
     if (session.is_voucher_used) {
@@ -1132,10 +1134,12 @@ const ActiveRentals: React.FC = () => {
       const perMinuteRateSnapshot =
         session.per_minute_rate_snapshot || hourlyRate / 60;
 
-      if (totalMinutes <= minimumMinutes) {
+      if (minimumMinutesMember === 0) {
+        return totalMinutes * perMinuteRateSnapshot;
+      } else if (totalMinutes <= minimumMinutesMember) {
         return hourlyRateSnapshot;
       } else {
-        const extraMinutes = totalMinutes - 60;
+        const extraMinutes = totalMinutes - minimumMinutesMember;
         return hourlyRateSnapshot + extraMinutes * perMinuteRateSnapshot;
       }
     }
@@ -1411,11 +1415,24 @@ const ActiveRentals: React.FC = () => {
           })
           .eq("id", session.id);
 
-        // Update console status
-        await supabase
-          .from("consoles")
-          .update({ status: "available" })
-          .eq("id", session.console_id);
+        // Update console status with guard: only if no other active sessions exist for this console
+        const { data: otherActiveSessions, error: activeErr } = await supabase
+          .from("rental_sessions")
+          .select("id")
+          .eq("console_id", session.console_id)
+          .eq("status", "active")
+          .limit(1);
+
+        if (
+          !activeErr &&
+          Array.isArray(otherActiveSessions) &&
+          otherActiveSessions.length === 0
+        ) {
+          await supabase
+            .from("consoles")
+            .update({ status: "available" })
+            .eq("id", session.console_id);
+        }
 
         await finalizeProductsAndStock(session.id);
 
