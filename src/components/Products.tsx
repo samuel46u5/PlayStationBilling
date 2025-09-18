@@ -230,8 +230,33 @@ const Products: React.FC = () => {
         else if (it.unit_price !== undefined) totalRaw = qty * Number(it.unit_price);
         const total = Number(totalRaw) || 0;
 
-        const key = String(productId ?? name);
-        if (!productMap[key]) productMap[key] = { productId, name, dates: {}, productTotalQty: 0, productTotalAmount: 0 };
+        // Build a stable key: prefer productId when available, otherwise try to reuse
+        // an existing entry that matches the product name (case-insensitive, trimmed).
+        const normalizedName = String(name || '').trim().toLowerCase();
+        let key: string;
+        if (productId) {
+          key = String(productId);
+          // if there is an existing entry keyed by name (no id) with the same normalized name,
+          // merge it into the productId key to avoid duplicates
+          const existingNameKey = Object.keys(productMap).find(k => {
+            const e = productMap[k];
+            return e && !e.productId && String(e.name || '').trim().toLowerCase() === normalizedName;
+          });
+          if (existingNameKey && !productMap[key]) {
+            // move existingNameKey data into new productId key
+            const src = productMap[existingNameKey];
+            productMap[key] = { productId, name, dates: { ...src.dates }, productTotalQty: src.productTotalQty || 0, productTotalAmount: src.productTotalAmount || 0 };
+            delete productMap[existingNameKey];
+          }
+        } else {
+          // try find existing key by normalized name
+          const found = Object.keys(productMap).find(k => {
+            const e = productMap[k];
+            return e && String(e.name || '').trim().toLowerCase() === normalizedName;
+          });
+          key = found ?? String(name);
+        }
+        if (!productMap[key]) productMap[key] = { productId: productId ?? null, name, dates: {}, productTotalQty: 0, productTotalAmount: 0 };
         if (!productMap[key].dates[dateKey]) productMap[key].dates[dateKey] = { qty: 0, total: 0 };
         productMap[key].dates[dateKey].qty += qty;
         productMap[key].dates[dateKey].total += total;
@@ -309,11 +334,31 @@ const Products: React.FC = () => {
         return 'Rentang waktu (tidak lengkap)';
       }
       switch (salesPeriod) {
-        case 'today': return 'Hari Ini';
-        case 'yesterday': return 'Kemarin';
-        case 'week': return 'Minggu Ini';
-        case 'month': return 'Bulan Ini';
-        default: return 'Semua Waktu';
+        case 'today': {
+          const d = new Date();
+          return `Hari Ini (${d.toLocaleDateString()})`;
+        }
+        case 'yesterday': {
+          const d = new Date(); d.setDate(d.getDate() - 1);
+          return `Kemarin (${d.toLocaleDateString()})`;
+        }
+        case 'week': {
+          // calculate week start (Mon) to today
+          const d0 = new Date();
+          const dd = new Date(d0);
+          const day = dd.getDay();
+          const diff = (day === 0 ? -6 : 1) - day;
+          dd.setDate(dd.getDate() + diff);
+          return `Minggu Ini (${dd.toLocaleDateString()} - ${new Date().toLocaleDateString()})`;
+        }
+        case 'month': {
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth(), 1);
+          const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          return `Bulan Ini (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`;
+        }
+        default:
+          return 'Semua Waktu';
       }
     })();
 
@@ -381,9 +426,9 @@ const Products: React.FC = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga (Rp)</th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
@@ -394,35 +439,71 @@ const Products: React.FC = () => {
                       return (
                         <React.Fragment key={key}>
                           <tr>
-                            <td className="px-4 py-2">{p.name}</td>
-                            <td className="px-4 py-2 text-right font-medium">{p.productTotalQty}</td>
-                            <td className="px-4 py-2 text-right font-semibold">{Number(p.productTotalAmount).toLocaleString()}</td>
-                            <td className="px-4 py-2 text-right">
-                              <button onClick={() => toggleExpand(key)} className="text-blue-600 hover:underline text-sm">
-                                {expanded ? `Sembunyikan (${detailCount})` : `Rinci (${detailCount})`}
+                            <td className="px-4 py-2">
+                              <button onClick={() => toggleExpand(key)} className="text-left text-blue-600 hover:underline">
+                                {p.name} <span className="text-xs text-gray-500">({detailCount})</span>
                               </button>
                             </td>
+                            {/* unit price = total / qty (rounded) */}
+                            {(() => {
+                              const unit = p.productTotalQty ? Math.round((p.productTotalAmount || 0) / p.productTotalQty) : 0;
+                              return (
+                                <>
+                                  <td className="px-4 py-2 text-right">{unit ? Number(unit).toLocaleString() : '-'}</td>
+                                  <td className="px-4 py-2 text-right font-medium">{p.productTotalQty}</td>
+                                  <td className="px-4 py-2 text-right font-semibold">{Number(p.productTotalAmount).toLocaleString()}</td>
+                                </>
+                              );
+                            })()}
+                            {/* action column removed: toggle now on product name */}
                           </tr>
                           {expanded && (
                             <tr>
-                              <td colSpan={4} className="px-4 py-2 bg-gray-50">
-                                <div className="overflow-x-auto">
-                                  <table className="min-w-full">
+                              <td colSpan={4} className="px-0 py-0 bg-gray-50">
+                                <div className="w-full overflow-x-auto">
+                                  <table className="min-w-full text-sm text-gray-700">
                                     <thead>
-                                      <tr className="text-xs text-gray-500">
-                                        <th className="text-left">Tanggal</th>
-                                        <th className="text-right">Qty</th>
-                                        <th className="text-right">Total (Rp)</th>
+                                      <tr>
+                                        <th className="px-4 py-2 text-left text-xs text-gray-500">Tanggal</th>
+                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Harga (Rp)</th>
+                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Qty</th>
+                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Total (Rp)</th>
+                                        
                                       </tr>
                                     </thead>
-                                    <tbody className="text-sm text-gray-700">
+                                    <tbody>
                                       {Object.keys(p.dates).sort((a,b)=> (a<b?1:-1)).map((dk) => (
                                         <tr key={dk} className="border-t">
-                                          <td className="py-1">{(new Date(dk + 'T00:00:00')).toLocaleDateString()}</td>
-                                          <td className="py-1 text-right w-24">{p.dates[dk].qty}</td>
-                                          <td className="py-1 text-right w-32">{Number(p.dates[dk].total).toLocaleString()}</td>
+                                          <td className="px-4 py-1">{(new Date(dk + 'T00:00:00')).toLocaleDateString()}</td>
+                                          {(() => {
+                                            const qty = Number(p.dates[dk].qty || 0);
+                                            const total = Number(p.dates[dk].total || 0);
+                                            const unit = qty ? Math.round(total / qty) : 0;
+                                            return (
+                                              <>
+                                                <td className="px-4 py-1 text-right">{unit ? Number(unit).toLocaleString() : '-'}</td>
+                                                <td className="px-4 py-1 text-right">{qty}</td>
+                                                <td className="px-4 py-1 text-right">{total ? Number(total).toLocaleString() : '-'}</td>
+                                              </>
+                                            );
+                                          })()}
+                                          <td className="px-4 py-1">&nbsp;</td>
                                         </tr>
                                       ))}
+                                      {/* subtotal row */}
+                                      {(() => {
+                                        const subtotalQty = Object.values(p.dates).reduce((s: number, d: any) => s + (d.qty || 0), 0);
+                                        const subtotalAmount = Object.values(p.dates).reduce((s: number, d: any) => s + (d.total || 0), 0);
+                                        return (
+                                          <tr className="border-t bg-gray-100 font-semibold">
+                                            <td className="px-4 py-1">Subtotal</td>
+                                            <td className="px-4 py-1 text-right">-</td>
+                                            <td className="px-4 py-1 text-right">{subtotalQty}</td>
+                                            <td className="px-4 py-1 text-right">{Number(subtotalAmount).toLocaleString()}</td>
+                                            <td className="px-4 py-1">&nbsp;</td>
+                                          </tr>
+                                        );
+                                      })()}
                                     </tbody>
                                   </table>
                                 </div>
