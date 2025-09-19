@@ -294,7 +294,18 @@ const Products: React.FC = () => {
     loadRekapTanggal();
     loadRekapPerBarang();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [purchaseTabView, products]);
+  }, [
+    purchaseTabView,
+    products,
+    rekapTanggalPeriod,
+    rekapTanggalDateRange.start,
+    rekapTanggalDateRange.end,
+    rekapTanggalSearch,
+    rekapPerBarangPeriod,
+    rekapPerBarangDateRange.start,
+    rekapPerBarangDateRange.end,
+    rekapPerBarangSearch
+  ]);
 
   // Render helpers for rekap tabs
   const renderRekapTanggalTab = () => {
