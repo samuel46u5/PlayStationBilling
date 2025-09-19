@@ -89,6 +89,10 @@ const Products: React.FC = () => {
   // State untuk periode filter pada laporan penjualan
   const [salesPeriod, setSalesPeriod] = useState<string>("week");
   const [salesDateRange, setSalesDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  // Filters for Sales Summary (Laporan Rekap Per Barang)
+  const [salesSummarySearch, setSalesSummarySearch] = useState<string>("");
+  const [salesSummaryPeriod, setSalesSummaryPeriod] = useState<string>("week");
+  const [salesSummaryDateRange, setSalesSummaryDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   // Local search state for sales tab to avoid clashing with global searchTerm
   const [salesSearch, setSalesSearch] = useState<string>("");
   // Which report sub-tab is active under Laporan Penjualan
@@ -2590,6 +2594,20 @@ const Products: React.FC = () => {
 
   // Render tab for sales summary (aggregate per product across sales)
   const renderSalesSummaryTab = () => {
+    // Helper to compute date window from summary period
+    const computeWindow = (period: string, range: { start: string; end: string }) => {
+      let start: Date | null = null;
+      let end: Date | null = null;
+      const now = new Date();
+      switch (period) {
+        case 'today': { start = new Date(); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break; }
+        case 'yesterday': { start = new Date(); start.setDate(start.getDate()-1); start.setHours(0,0,0,0); end = new Date(start); end.setHours(23,59,59,999); break; }
+        case 'week': { start = new Date(); const d = start.getDay(); const diff = (d === 0 ? -6 : 1) - d; start.setDate(start.getDate() + diff); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break; }
+        case 'month': { start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth()+1, 0); end.setHours(23,59,59,999); break; }
+        case 'range': { if (range.start) { start = new Date(range.start); start.setHours(0,0,0,0); } if (range.end) { end = new Date(range.end); end.setHours(23,59,59,999); } break; }
+      }
+      return { start, end };
+    };
     const parseItems = (details: any) => {
       if (!details) return [];
       let doc = details;
@@ -2605,12 +2623,24 @@ const Products: React.FC = () => {
       return [];
     };
 
+    // apply salesSummary filters (period + search)
+    const { start: ssStart, end: ssEnd } = computeWindow(salesSummaryPeriod, salesSummaryDateRange);
     const map: Record<string, any> = {};
     for (const txn of sales) {
+      const tsVal = txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
+      const txnDate = tsVal ? new Date(tsVal) : null;
+      if (txnDate) {
+        if (ssStart && txnDate < ssStart) continue;
+        if (ssEnd && txnDate > ssEnd) continue;
+      }
       const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
       for (const it of items) {
         const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? null;
         const name = productId ? (products.find((p) => String(p.id) === String(productId))?.name) ?? it.product_name ?? it.name : it.product_name || it.name || String(it.sku || it.code || productId || '-');
+        if (salesSummarySearch) {
+          const st = salesSummarySearch.toLowerCase();
+          if (!String(name).toLowerCase().includes(st)) continue;
+        }
         const qty = Number(it.quantity ?? it.qty ?? it.q ?? 0) || 0;
         const total = Number(it.total ?? it.subtotal ?? it.amount ?? (it.unit_price ? qty * Number(it.unit_price) : 0)) || 0;
         const key = String(productId ?? name);
@@ -2623,8 +2653,20 @@ const Products: React.FC = () => {
     const keys = Object.keys(map).sort((a,b) => (map[b].total || 0) - (map[a].total || 0));
     if (keys.length === 0) return <div className="text-sm text-gray-500">Belum ada data penjualan.</div>;
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div>
+        <div className="mb-4">
+          <PurchaseFilters
+            search={salesSummarySearch}
+            onSearch={setSalesSummarySearch}
+            period={salesSummaryPeriod}
+            onPeriodChange={setSalesSummaryPeriod}
+            dateRange={salesSummaryDateRange}
+            onDateRangeChange={setSalesSummaryDateRange}
+            placeholder="Cari produk..."
+          />
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
@@ -2643,6 +2685,7 @@ const Products: React.FC = () => {
           </tbody>
         </table>
       </div>
+    </div>
     );
   };
 
