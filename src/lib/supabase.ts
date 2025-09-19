@@ -642,6 +642,9 @@ export const db = {
     }
   }
 };
+ 
+// Expose the raw Supabase client on the db object for compatibility.
+(db as any).supabase = supabase;
 
 // Auth helper functions
 export const auth = {

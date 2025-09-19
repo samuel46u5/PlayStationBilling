@@ -14,7 +14,6 @@ import {
   XCircle,
   Printer,
   DollarSign,
-  ListOrdered,
 } from "lucide-react";
 import { List as ListIcon, LayoutGrid } from "lucide-react";
 import { db } from "../lib/supabase"; // Hanya import db
@@ -85,10 +84,7 @@ const Products: React.FC = () => {
 
   // Tambah state untuk daftar PO, filter tanggal, dan status
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
-  const [purchaseDateRange, setPurchaseDateRange] = useState<{
-    start: string;
-    end: string;
-  }>({ start: "", end: "" });
+  // purchaseDateRange removed - use daftarDateRange instead
   const [purchaseStatus, _setPurchaseStatus] = useState<string>("all");
   // State untuk periode filter pada laporan penjualan
   const [salesPeriod, setSalesPeriod] = useState<string>("week");
@@ -97,8 +93,7 @@ const Products: React.FC = () => {
   const [salesSearch, setSalesSearch] = useState<string>("");
   // Which report sub-tab is active under Laporan Penjualan
   const [reportTab, setReportTab] = useState<'sales' | 'salesSummary'>('sales');
-  // expanded products for rekap per barang (store keys of expanded products)
-  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  // expandedProducts removed - not currently used
 
   // State untuk item PO detail
   const [purchaseOrderItems, setPurchaseOrderItems] = useState<any[]>([]);
@@ -106,8 +101,7 @@ const Products: React.FC = () => {
   const [purchaseItemsError, setPurchaseItemsError] = useState<string | null>(
     null
   );
-  // Preset periode untuk daftar Purchase Order
-  const [purchasePeriod, setPurchasePeriod] = useState<string>("week");
+  // purchasePeriod removed - use daftarPeriod instead
   // subtab inside Daftar Pembelian: 'daftar' (existing list), 'rekapTanggalBarang', 'rekapPerBarang'
   const [purchaseTabView, setPurchaseTabView] = useState<'daftar' | 'rekapTanggalBarang' | 'rekapPerBarang'>('daftar');
   // Independent filters for the 'Daftar Pembelian' subtab (do not share with other tabs)
@@ -140,37 +134,60 @@ const Products: React.FC = () => {
       setRekapTanggalLoading(true);
       setRekapTanggalError(null);
       try {
-        const poItems = await db.select('purchase_order_items', '*');
-        const pos = await db.purchases.getAll();
-        // Apply period & search filters to pos based on rekapTanggalPeriod / rekapTanggalDateRange / rekapTanggalSearch
-        const filteredPos = (pos || []).filter((p: any) => {
-          // period filter
-          let start: Date | null = null;
-          let end: Date | null = null;
-          const now = new Date();
-          switch (rekapTanggalPeriod) {
-            case 'today': start = new Date(); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break;
-            case 'yesterday': start = new Date(); start.setDate(start.getDate()-1); start.setHours(0,0,0,0); end = new Date(start); end.setHours(23,59,59,999); break;
-            case 'week': start = new Date(); const d = start.getDay(); const diff = (d === 0 ? -6 : 1) - d; start.setDate(start.getDate() + diff); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break;
-            case 'month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth()+1, 0); end.setHours(23,59,59,999); break;
-            case 'range': if (rekapTanggalDateRange.start) { start = new Date(rekapTanggalDateRange.start); start.setHours(0,0,0,0); } if (rekapTanggalDateRange.end) { end = new Date(rekapTanggalDateRange.end); end.setHours(23,59,59,999); } break;
-          }
-          const orderDate = p.order_date ? new Date(p.order_date) : null;
-          if (orderDate) {
-            if (start && orderDate < start) return false;
-            if (end && orderDate > end) return false;
-          }
-          if (rekapTanggalSearch) {
-            const st = rekapTanggalSearch.toLowerCase();
-            const supplier = suppliers.find((s:any) => s.id === p.supplier_id);
-            if (!(p.po_number?.toLowerCase().includes(st) || supplier?.name?.toLowerCase().includes(st))) return false;
-          }
-          return true;
-        });
+        // build date range from period/dateRange
+        let start: string | null = null;
+        let end: string | null = null;
+        const now = new Date();
+        switch (rekapTanggalPeriod) {
+          case 'today': { const s = new Date(); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
+          case 'yesterday': { const s = new Date(); s.setDate(s.getDate()-1); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(s); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
+          case 'week': { const s = new Date(); const d = s.getDay(); const diff = (d === 0 ? -6 : 1) - d; s.setDate(s.getDate() + diff); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
+          case 'month': { const s = new Date(now.getFullYear(), now.getMonth(), 1); start = s.toISOString().slice(0,10); const e = new Date(now.getFullYear(), now.getMonth()+1, 0); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
+          case 'range': if (rekapTanggalDateRange.start) start = new Date(rekapTanggalDateRange.start).toISOString().slice(0,10); if (rekapTanggalDateRange.end) end = new Date(rekapTanggalDateRange.end).toISOString().slice(0,10); break;
+        }
+
+        // Build purchases query with date filters (DB-side)
+        const { supabase } = db as any; // use db.supabase if available, otherwise fallback to exported supabase
+        // prefer using the exported supabase client directly
+        // Query purchase_orders (via supabase)
+        let purchasesQuery: any = (supabase || (db as any).supabase).from('purchase_orders').select('*');
+        if (start) purchasesQuery = purchasesQuery.gte('order_date', start);
+        if (end) purchasesQuery = purchasesQuery.lte('order_date', end);
+        purchasesQuery = purchasesQuery.order('order_date', { ascending: false }).limit(2000);
+        const { data: posData, error: posErr } = await purchasesQuery;
+        if (posErr) throw posErr;
+
+        // apply search: PO number or supplier name
+        let filteredPos = posData || [];
+        if (rekapTanggalSearch) {
+          const st = rekapTanggalSearch.toLowerCase();
+          // try supplier name match
+          const { data: supMatches } = await (supabase || (db as any).supabase).from('suppliers').select('id').ilike('name', `%${st}%`).limit(200);
+          const supplierIds = (supMatches || []).map((s: any) => s.id);
+          filteredPos = (filteredPos || []).filter((p: any) => {
+            const matchPo = p.po_number?.toLowerCase().includes(st);
+            const matchSupplier = supplierIds.length ? supplierIds.includes(p.supplier_id) : false;
+            return matchPo || matchSupplier;
+          });
+        }
+
+        const poIds = (filteredPos || []).map((p: any) => p.id).filter(Boolean);
+
+        // fetch PO items for filtered PO ids only
+        let poItems: any[] = [];
+        if (poIds.length > 0) {
+          const { data: itemsData, error: itemsErr } = await (supabase || (db as any).supabase)
+            .from('purchase_order_items')
+            .select('*')
+            .in('po_id', poIds)
+            .limit(5000);
+          if (itemsErr) throw itemsErr;
+          poItems = itemsData || [];
+        }
+
         // build map: date -> productKey -> { qty, total }
         const map: Record<string, any> = {};
-        for (const it of (poItems || []) as any[]) {
-          const iti: any = it;
+        for (const iti of (poItems || []) as any[]) {
           const po = ((filteredPos || []).find((p: any) => p.id === iti.po_id) as any) || {};
           const orderDate = (po as any).order_date ? new Date((po as any).order_date).toISOString().slice(0,10) : 'unknown';
           const productId = iti.product_id ?? iti.productId ?? null;
@@ -185,6 +202,7 @@ const Products: React.FC = () => {
           map[orderDate].products[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0 });
           map[orderDate].dateTotal += total;
         }
+
         setRekapTanggalData(map);
       } catch (err: any) {
         setRekapTanggalError(err?.message || String(err));
@@ -199,38 +217,59 @@ const Products: React.FC = () => {
       setRekapPerBarangLoading(true);
       setRekapPerBarangError(null);
       try {
-        const poItems = await db.select('purchase_order_items', '*');
-        const pos = await db.purchases.getAll();
-        // apply filters to items/pos based on rekapPerBarangPeriod / rekapPerBarangDateRange / rekapPerBarangSearch
-        const filteredPos2 = (pos || []).filter((p: any) => {
-          let start: Date | null = null;
-          let end: Date | null = null;
-          const now = new Date();
-          switch (rekapPerBarangPeriod) {
-            case 'today': start = new Date(); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break;
-            case 'yesterday': start = new Date(); start.setDate(start.getDate()-1); start.setHours(0,0,0,0); end = new Date(start); end.setHours(23,59,59,999); break;
-            case 'week': start = new Date(); const d = start.getDay(); const diff = (d === 0 ? -6 : 1) - d; start.setDate(start.getDate() + diff); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break;
-            case 'month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth()+1, 0); end.setHours(23,59,59,999); break;
-            case 'range': if (rekapPerBarangDateRange.start) { start = new Date(rekapPerBarangDateRange.start); start.setHours(0,0,0,0); } if (rekapPerBarangDateRange.end) { end = new Date(rekapPerBarangDateRange.end); end.setHours(23,59,59,999); } break;
-          }
-          const orderDate = p.order_date ? new Date(p.order_date) : null;
-          if (orderDate) {
-            if (start && orderDate < start) return false;
-            if (end && orderDate > end) return false;
-          }
-          if (rekapPerBarangSearch) {
-            const st = rekapPerBarangSearch.toLowerCase();
-            const supplier = suppliers.find((s:any) => s.id === p.supplier_id);
-            if (!(p.po_number?.toLowerCase().includes(st) || supplier?.name?.toLowerCase().includes(st))) return false;
-          }
-          return true;
-        });
+        // Build date range (YYYY-MM-DD) from period/dateRange
+        let start: string | null = null;
+        let end: string | null = null;
+        const now = new Date();
+        switch (rekapPerBarangPeriod) {
+          case 'today': { const s = new Date(); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
+          case 'yesterday': { const s = new Date(); s.setDate(s.getDate()-1); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(s); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
+          case 'week': { const s = new Date(); const d = s.getDay(); const diff = (d === 0 ? -6 : 1) - d; s.setDate(s.getDate() + diff); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
+          case 'month': { const s = new Date(now.getFullYear(), now.getMonth(), 1); start = s.toISOString().slice(0,10); const e = new Date(now.getFullYear(), now.getMonth()+1, 0); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
+          case 'range': if (rekapPerBarangDateRange.start) start = new Date(rekapPerBarangDateRange.start).toISOString().slice(0,10); if (rekapPerBarangDateRange.end) end = new Date(rekapPerBarangDateRange.end).toISOString().slice(0,10); break;
+        }
+
+        const supabase = (db as any).supabase;
+
+        // Query matching purchase_orders with date filters
+        let purchasesQuery: any = supabase.from('purchase_orders').select('*');
+        if (start) purchasesQuery = purchasesQuery.gte('order_date', start);
+        if (end) purchasesQuery = purchasesQuery.lte('order_date', end);
+        purchasesQuery = purchasesQuery.order('order_date', { ascending: false }).limit(2000);
+        const { data: posData, error: posErr } = await purchasesQuery;
+        if (posErr) throw posErr;
+
+        let filteredPos = posData || [];
+        if (rekapPerBarangSearch) {
+          const st = rekapPerBarangSearch.toLowerCase();
+          const { data: supMatches } = await supabase.from('suppliers').select('id').ilike('name', `%${st}%`).limit(200);
+          const supplierIds = (supMatches || []).map((s: any) => s.id);
+          filteredPos = (filteredPos || []).filter((p: any) => {
+            const matchPo = p.po_number?.toLowerCase().includes(st);
+            const matchSupplier = supplierIds.length ? supplierIds.includes(p.supplier_id) : false;
+            return matchPo || matchSupplier;
+          });
+        }
+
+        const poIds = (filteredPos || []).map((p: any) => p.id).filter(Boolean);
+
+        // fetch only items for matching PO ids
+        let poItems: any[] = [];
+        if (poIds.length > 0) {
+          const { data: itemsData, error: itemsErr } = await supabase
+            .from('purchase_order_items')
+            .select('*')
+            .in('po_id', poIds)
+            .limit(5000);
+          if (itemsErr) throw itemsErr;
+          poItems = itemsData || [];
+        }
+
+        // aggregate per product
         const map: Record<string, any> = {};
-        for (const it of (poItems || []) as any[]) {
-          const iti: any = it;
-          // skip items that belong to pos outside the filteredPos2 set
-          const poRef = (filteredPos2 || []).find((pp: any) => pp.id === iti.po_id);
-          if (!poRef) continue;
+        for (const iti of (poItems || []) as any[]) {
+          const po = ((filteredPos || []).find((p: any) => p.id === iti.po_id) as any) || {};
+          const orderDate = (po as any).order_date ? new Date((po as any).order_date).toISOString().slice(0,10) : ((iti.created_at || iti.inserted_at || '') ? String((iti.created_at || iti.inserted_at)).slice(0,10) : 'unknown');
           const productId = iti.product_id ?? iti.productId ?? null;
           const name = iti.product_name || (productId ? (products.find((p: any) => String(p.id) === String(productId))?.name) : '') || 'Unknown Produk';
           const qty = Number(iti.quantity || iti.qty || 0) || 0;
@@ -239,8 +278,9 @@ const Products: React.FC = () => {
           if (!map[key]) map[key] = { productId, name, qty: 0, total: 0, lines: [] };
           map[key].qty += qty;
           map[key].total += total;
-          map[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0, date: (iti.created_at || iti.inserted_at || '').slice(0,10) });
+          map[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0, date: orderDate });
         }
+
         setRekapPerBarangData(map);
       } catch (err: any) {
         setRekapPerBarangError(err?.message || String(err));
@@ -403,371 +443,6 @@ const Products: React.FC = () => {
     });
   }, [supplierSearchTerm, suppliers]);
 
-  // Fungsi untuk print price list
-  const handlePrintPriceList = async () => {
-    if (selectedProductsForPrint.length === 0) {
-      Swal.fire({
-        icon: "warning",
-        title: "Pilih Produk",
-        text: "Silakan pilih produk yang akan dicetak",
-      });
-      return;
-    }
-
-    const selectedProducts: ProductPriceList[] = products
-      .filter((product) => selectedProductsForPrint.includes(product.id))
-      .map((product) => ({
-        id: product.id,
-        name: product.name,
-        category: product.category,
-        price: product.price,
-      }));
-
-    await printPriceList(selectedProducts);
-  };
-
-  // Render tab for sales summary per product (implemented: aggregate per product -> per date)
-  const renderSalesSummaryTab = () => {
-    const parseItems = (details: any) => {
-      if (!details) return [];
-      let doc = details;
-      if (typeof doc === "string") {
-        try {
-          doc = JSON.parse(doc);
-        } catch (e) {
-          return [];
-        }
-      }
-      if (Array.isArray(doc)) return doc;
-      if (doc.items && Array.isArray(doc.items)) return doc.items;
-      if (doc.lines && Array.isArray(doc.lines)) return doc.lines;
-      if (doc.cart && Array.isArray(doc.cart)) return doc.cart;
-      if (doc.products && Array.isArray(doc.products)) return doc.products;
-      for (const k of Object.keys(doc || {})) {
-        if (Array.isArray((doc as any)[k])) return (doc as any)[k];
-      }
-      return [];
-    };
-
-    const productMap: Record<string, any> = {};
-    for (const txn of sales) {
-      const tsVal = txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
-      const dateKey = tsVal ? new Date(tsVal).toISOString().slice(0, 10) : 'unknown';
-      const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
-      for (const it of items) {
-        const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? it.sku ?? null;
-        const prod = productId ? products.find((p) => String(p.id) === String(productId)) : null;
-        const name = prod?.name || it.product_name || it.name || it.title || it.productName || (it.product && it.product.name) || String(it.sku || it.code || productId || '-');
-        const qtyRaw = it.quantity ?? it.qty ?? it.qty_sold ?? it.q ?? 0;
-        const qty = Number(qtyRaw) || 0;
-        let totalRaw = 0;
-        if (it.total !== undefined) totalRaw = it.total;
-        else if (it.subtotal !== undefined) totalRaw = it.subtotal;
-        else if (it.amount !== undefined) totalRaw = it.amount;
-        else if (it.price_total !== undefined) totalRaw = it.price_total;
-        else if (it.unit_price !== undefined) totalRaw = qty * Number(it.unit_price);
-        const total = Number(totalRaw) || 0;
-
-        // Build a stable key: prefer productId when available, otherwise try to reuse
-        // an existing entry that matches the product name (case-insensitive, trimmed).
-        const normalizedName = String(name || '').trim().toLowerCase();
-        let key: string;
-        if (productId) {
-          key = String(productId);
-          // if there is an existing entry keyed by name (no id) with the same normalized name,
-          // merge it into the productId key to avoid duplicates
-          const existingNameKey = Object.keys(productMap).find(k => {
-            const e = productMap[k];
-            return e && !e.productId && String(e.name || '').trim().toLowerCase() === normalizedName;
-          });
-          if (existingNameKey && !productMap[key]) {
-            // move existingNameKey data into new productId key
-            const src = productMap[existingNameKey];
-            productMap[key] = { productId, name, dates: { ...src.dates }, productTotalQty: src.productTotalQty || 0, productTotalAmount: src.productTotalAmount || 0 };
-            delete productMap[existingNameKey];
-          }
-        } else {
-          // try find existing key by normalized name
-          const found = Object.keys(productMap).find(k => {
-            const e = productMap[k];
-            return e && String(e.name || '').trim().toLowerCase() === normalizedName;
-          });
-          key = found ?? String(name);
-        }
-        if (!productMap[key]) productMap[key] = { productId: productId ?? null, name, dates: {}, productTotalQty: 0, productTotalAmount: 0 };
-        if (!productMap[key].dates[dateKey]) productMap[key].dates[dateKey] = { qty: 0, total: 0 };
-        productMap[key].dates[dateKey].qty += qty;
-        productMap[key].dates[dateKey].total += total;
-        productMap[key].productTotalQty += qty;
-        productMap[key].productTotalAmount += total;
-      }
-    }
-
-    // apply period filter
-    let periodStart: Date | null = null;
-    let periodEnd: Date | null = null;
-    const now = new Date();
-    switch (salesPeriod) {
-      case 'today':
-        periodStart = new Date(); periodStart.setHours(0,0,0,0);
-        periodEnd = new Date(); periodEnd.setHours(23,59,59,999);
-        break;
-      case 'yesterday':
-        periodStart = new Date(); periodStart.setDate(periodStart.getDate() - 1); periodStart.setHours(0,0,0,0);
-        periodEnd = new Date(periodStart); periodEnd.setHours(23,59,59,999);
-        break;
-      case 'week':
-        periodStart = new Date();
-        const d = periodStart.getDay();
-        const diff = (d === 0 ? -6 : 1) - d;
-        periodStart.setDate(periodStart.getDate() + diff);
-        periodStart.setHours(0,0,0,0);
-        periodEnd = new Date(); periodEnd.setHours(23,59,59,999);
-        break;
-      case 'month':
-        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0); periodEnd.setHours(23,59,59,999);
-        break;
-      case 'range':
-        if (salesDateRange.start) { periodStart = new Date(salesDateRange.start); periodStart.setHours(0,0,0,0); }
-        if (salesDateRange.end) { periodEnd = new Date(salesDateRange.end); periodEnd.setHours(23,59,59,999); }
-        break;
-    }
-
-    const summaryEntries = Object.values(productMap).map((p: any) => {
-      const filteredDates: Record<string, any> = {};
-      for (const [dk, val] of Object.entries(p.dates)) {
-        const dkDate = dk === 'unknown' ? null : new Date(dk + 'T00:00:00');
-        if (dkDate && periodStart && dkDate < periodStart) continue;
-        if (dkDate && periodEnd && dkDate > periodEnd) continue;
-        filteredDates[dk] = val;
-      }
-      // recompute totals from filteredDates only
-      const productTotalQty = Object.values(filteredDates).reduce((s: number, d: any) => s + (d.qty || 0), 0);
-      const productTotalAmount = Object.values(filteredDates).reduce((s: number, d: any) => s + (d.total || 0), 0);
-      return { ...p, dates: filteredDates, productTotalQty, productTotalAmount };
-    }).filter((p: any) => {
-      const hasDates = Object.keys(p.dates).length > 0;
-      if (!hasDates) return false;
-      if (!salesSearch) return true;
-      const st = salesSearch.toLowerCase();
-      return p.name.toLowerCase().includes(st);
-    }).sort((a: any, b: any) => b.productTotalAmount - a.productTotalAmount);
-
-    const grand = summaryEntries.reduce((acc: any, p: any) => {
-      acc.qty += p.productTotalQty || 0;
-      acc.amount += p.productTotalAmount || 0;
-      return acc;
-    }, { qty: 0, amount: 0 });
-
-    // build human-friendly period label
-    const periodLabel = (() => {
-      if (salesPeriod === 'range') {
-        if (salesDateRange.start && salesDateRange.end) {
-          const s = new Date(salesDateRange.start).toLocaleDateString();
-          const e = new Date(salesDateRange.end).toLocaleDateString();
-          return `${s} s.d. ${e}`;
-        }
-        if (salesDateRange.start) return `Mulai ${new Date(salesDateRange.start).toLocaleDateString()}`;
-        return 'Rentang waktu (tidak lengkap)';
-      }
-      switch (salesPeriod) {
-        case 'today': {
-          const d = new Date();
-          return `Hari Ini (${d.toLocaleDateString()})`;
-        }
-        case 'yesterday': {
-          const d = new Date(); d.setDate(d.getDate() - 1);
-          return `Kemarin (${d.toLocaleDateString()})`;
-        }
-        case 'week': {
-          // calculate week start (Mon) to today
-          const d0 = new Date();
-          const dd = new Date(d0);
-          const day = dd.getDay();
-          const diff = (day === 0 ? -6 : 1) - day;
-          dd.setDate(dd.getDate() + diff);
-          return `Minggu Ini (${dd.toLocaleDateString()} - ${new Date().toLocaleDateString()})`;
-        }
-        case 'month': {
-          const now = new Date();
-          const start = new Date(now.getFullYear(), now.getMonth(), 1);
-          const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-          return `Bulan Ini (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`;
-        }
-        default:
-          return 'Semua Waktu';
-      }
-    })();
-
-    const toggleExpand = (key: string) => {
-      setExpandedProducts((prev) => {
-        const s = new Set(prev);
-        if (s.has(key)) s.delete(key);
-        else s.add(key);
-        return s;
-      });
-    };
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Laporan Rekap Per Barang</h2>
-            <p className="text-gray-600">Rekap penjualan per produk, ditampilkan per tanggal dalam rentang yang dipilih.</p>
-            <div className="mt-2 text-sm text-gray-500">Periode: <span className="font-medium text-gray-700">{periodLabel}</span></div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => { if ((window as any).refreshSales) (window as any).refreshSales(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Refresh</button>
-          </div>
-        </div>
-
-        <div className="flex flex-col md:flex-row md:items-end gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                type="text"
-                placeholder="Filter by nama produk..."
-                value={salesSearch}
-                onChange={(e) => setSalesSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Periode</label>
-            <select value={salesPeriod} onChange={(e) => setSalesPeriod(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              <option value="today">Hari Ini</option>
-              <option value="yesterday">Kemarin</option>
-              <option value="week">Minggu Ini</option>
-              <option value="month">Bulan Ini</option>
-              <option value="range">Rentang Waktu</option>
-            </select>
-          </div>
-          {salesPeriod === 'range' && (
-            <div className="flex gap-2 items-center">
-              <input type="date" value={salesDateRange.start} onChange={(e) => setSalesDateRange((r) => ({ ...r, start: e.target.value }))} className="px-3 py-2 border border-gray-300 rounded-lg" />
-              <span className="self-center">-</span>
-              <input type="date" value={salesDateRange.end} onChange={(e) => setSalesDateRange((r) => ({ ...r, end: e.target.value }))} className="px-3 py-2 border border-gray-300 rounded-lg" />
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          {summaryEntries.length === 0 ? (
-            <div className="text-center text-gray-500 py-6">Tidak ada data untuk periode ini.</div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga (Rp)</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {summaryEntries.map((p: any) => {
-                      const key = String(p.productId ?? p.name);
-                      const expanded = expandedProducts.has(key);
-                      const detailCount = Object.keys(p.dates || {}).length;
-                      return (
-                        <React.Fragment key={key}>
-                          <tr>
-                            <td className="px-4 py-2">
-                              <button onClick={() => toggleExpand(key)} className="text-left text-blue-600 hover:underline">
-                                {p.name} <span className="text-xs text-gray-500">({detailCount})</span>
-                              </button>
-                            </td>
-                            {/* unit price = total / qty (rounded) */}
-                            {(() => {
-                              const unit = p.productTotalQty ? Math.round((p.productTotalAmount || 0) / p.productTotalQty) : 0;
-                              return (
-                                <>
-                                  <td className="px-4 py-2 text-right">{unit ? Number(unit).toLocaleString() : '-'}</td>
-                                  <td className="px-4 py-2 text-right font-medium">{p.productTotalQty}</td>
-                                  <td className="px-4 py-2 text-right font-semibold">{Number(p.productTotalAmount).toLocaleString()}</td>
-                                </>
-                              );
-                            })()}
-                            {/* action column removed: toggle now on product name */}
-                          </tr>
-                          {expanded && (
-                            <tr>
-                              <td colSpan={4} className="px-0 py-0 bg-gray-50">
-                                <div className="w-full overflow-x-auto">
-                                  <table className="min-w-full text-sm text-gray-700">
-                                    <thead>
-                                      <tr>
-                                        <th className="px-4 py-2 text-left text-xs text-gray-500">Tanggal</th>
-                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Harga (Rp)</th>
-                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Qty</th>
-                                        <th className="px-4 py-2 text-right text-xs text-gray-500">Total (Rp)</th>
-                                        
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {Object.keys(p.dates).sort((a,b)=> (a<b?1:-1)).map((dk) => (
-                                        <tr key={dk} className="border-t">
-                                          <td className="px-4 py-1">{(new Date(dk + 'T00:00:00')).toLocaleDateString()}</td>
-                                          {(() => {
-                                            const qty = Number(p.dates[dk].qty || 0);
-                                            const total = Number(p.dates[dk].total || 0);
-                                            const unit = qty ? Math.round(total / qty) : 0;
-                                            return (
-                                              <>
-                                                <td className="px-4 py-1 text-right">{unit ? Number(unit).toLocaleString() : '-'}</td>
-                                                <td className="px-4 py-1 text-right">{qty}</td>
-                                                <td className="px-4 py-1 text-right">{total ? Number(total).toLocaleString() : '-'}</td>
-                                              </>
-                                            );
-                                          })()}
-                                          <td className="px-4 py-1">&nbsp;</td>
-                                        </tr>
-                                      ))}
-                                      {/* subtotal row */}
-                                      {(() => {
-                                        const subtotalQty = Object.values(p.dates).reduce((s: number, d: any) => s + (d.qty || 0), 0);
-                                        const subtotalAmount = Object.values(p.dates).reduce((s: number, d: any) => s + (d.total || 0), 0);
-                                        return (
-                                          <tr className="border-t bg-gray-100 font-semibold">
-                                            <td className="px-4 py-1">Subtotal</td>
-                                            <td className="px-4 py-1 text-right">-</td>
-                                            <td className="px-4 py-1 text-right">{subtotalQty}</td>
-                                            <td className="px-4 py-1 text-right">{Number(subtotalAmount).toLocaleString()}</td>
-                                            <td className="px-4 py-1">&nbsp;</td>
-                                          </tr>
-                                        );
-                                      })()}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="border-t pt-3 mt-3 font-semibold flex justify-between">
-                <div>Grand Total</div>
-                <div className="flex gap-6">
-                  <div className="w-24 text-right">{grand.qty}</div>
-                  <div className="w-32 text-right">{Number(grand.amount).toLocaleString()}</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   // Update totals when items change
   useEffect(() => {
@@ -958,11 +633,11 @@ const Products: React.FC = () => {
     const statusMatch =
       purchaseStatus === "all" || po.status === purchaseStatus;
 
-    // Hitung periode tanggal berdasarkan preset
-    let start: Date | null = null;
-    let end: Date | null = null;
-    const now = new Date();
-    switch (purchasePeriod) {
+  // Hitung periode tanggal berdasarkan preset (gunakan daftarPeriod untuk subtab Daftar)
+  let start: Date | null = null;
+  let end: Date | null = null;
+  const now = new Date();
+  switch (daftarPeriod) {
       case "today": {
         start = new Date();
         start.setHours(0, 0, 0, 0);
@@ -994,13 +669,13 @@ const Products: React.FC = () => {
         end.setHours(23, 59, 59, 999);
         break;
       }
-      case "range": {
-        if (purchaseDateRange.start) {
-          start = new Date(purchaseDateRange.start);
+      case 'range': {
+        if (daftarDateRange.start) {
+          start = new Date(daftarDateRange.start);
           start.setHours(0, 0, 0, 0);
         }
-        if (purchaseDateRange.end) {
-          end = new Date(purchaseDateRange.end);
+        if (daftarDateRange.end) {
+          end = new Date(daftarDateRange.end);
           end.setHours(23, 59, 59, 999);
         }
         break;
@@ -2886,6 +2561,80 @@ const Products: React.FC = () => {
     );
   };
 
+  // Function to print selected products price list
+  const handlePrintPriceList = async () => {
+    if (selectedProductsForPrint.length === 0) {
+      Swal.fire({ icon: 'warning', title: 'Pilih Produk', text: 'Silakan pilih produk yang akan dicetak' });
+      return;
+    }
+    const selectedProducts: ProductPriceList[] = products
+      .filter((p) => selectedProductsForPrint.includes(p.id))
+      .map((p) => ({ id: p.id, name: p.name, category: p.category, price: p.price }));
+    try {
+      await printPriceList(selectedProducts);
+    } catch (err: any) {
+      Swal.fire({ icon: 'error', title: 'Gagal', text: err?.message || String(err) });
+    }
+  };
+
+  // Render tab for sales summary (aggregate per product across sales)
+  const renderSalesSummaryTab = () => {
+    const parseItems = (details: any) => {
+      if (!details) return [];
+      let doc = details;
+      if (typeof doc === 'string') {
+        try { doc = JSON.parse(doc); } catch (e) { return []; }
+      }
+      if (Array.isArray(doc)) return doc;
+      if (doc.items && Array.isArray(doc.items)) return doc.items;
+      if (doc.lines && Array.isArray(doc.lines)) return doc.lines;
+      if (doc.cart && Array.isArray(doc.cart)) return doc.cart;
+      if (doc.products && Array.isArray(doc.products)) return doc.products;
+      for (const k of Object.keys(doc || {})) if (Array.isArray((doc as any)[k])) return (doc as any)[k];
+      return [];
+    };
+
+    const map: Record<string, any> = {};
+    for (const txn of sales) {
+      const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
+      for (const it of items) {
+        const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? null;
+        const name = productId ? (products.find((p) => String(p.id) === String(productId))?.name) ?? it.product_name ?? it.name : it.product_name || it.name || String(it.sku || it.code || productId || '-');
+        const qty = Number(it.quantity ?? it.qty ?? it.q ?? 0) || 0;
+        const total = Number(it.total ?? it.subtotal ?? it.amount ?? (it.unit_price ? qty * Number(it.unit_price) : 0)) || 0;
+        const key = String(productId ?? name);
+        if (!map[key]) map[key] = { productId: productId ?? null, name, qty: 0, total: 0 };
+        map[key].qty += qty;
+        map[key].total += total;
+      }
+    }
+
+    const keys = Object.keys(map).sort((a,b) => (map[b].total || 0) - (map[a].total || 0));
+    if (keys.length === 0) return <div className="text-sm text-gray-500">Belum ada data penjualan.</div>;
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {keys.map(k => (
+              <tr key={k}>
+                <td className="px-4 py-2">{map[k].name}</td>
+                <td className="px-4 py-2 text-right font-medium">{map[k].qty}</td>
+                <td className="px-4 py-2 text-right font-semibold">{Number(map[k].total||0).toLocaleString('id-ID')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   // Render tab for suppliers
   const renderSuppliersTab = () => (
     <div className="space-y-6">
@@ -3061,43 +2810,7 @@ const Products: React.FC = () => {
         </div>
       )}
 
-      {/* Filters for Rekap Pembelian (Per tanggal - Per Barang) */}
-      {purchaseTabView === 'rekapTanggalBarang' && (
-        <PurchaseFilters
-          search={rekapTanggalSearch}
-          onSearch={setRekapTanggalSearch}
-          period={rekapTanggalPeriod}
-          onPeriodChange={setRekapTanggalPeriod}
-          dateRange={rekapTanggalDateRange}
-          onDateRangeChange={setRekapTanggalDateRange}
-        />
-      )}
-
-      {/* Render aggregated results for Rekap Pembelian per tanggal when active */}
-      {purchaseTabView === 'rekapTanggalBarang' && (
-        <div className="mt-4">
-          {renderRekapTanggalTab()}
-        </div>
-      )}
-
-      {/* Filters for Rekap Per Barang */}
-      {purchaseTabView === 'rekapPerBarang' && (
-        <PurchaseFilters
-          search={rekapPerBarangSearch}
-          onSearch={setRekapPerBarangSearch}
-          period={rekapPerBarangPeriod}
-          onPeriodChange={setRekapPerBarangPeriod}
-          dateRange={rekapPerBarangDateRange}
-          onDateRangeChange={setRekapPerBarangDateRange}
-        />
-      )}
-
-      {/* Render aggregated results for Rekap Per Barang when active */}
-      {purchaseTabView === 'rekapPerBarang' && (
-        <div className="mt-4">
-          {renderRekapPerBarangTab()}
-        </div>
-      )}
+      
     </div>
   );
 
