@@ -63,9 +63,9 @@ const Products: React.FC = () => {
   const [editingPoId, setEditingPoId] = useState<string | null>(null);
   const [isSavingPurchase, setIsSavingPurchase] = useState(false);
 
-  // Read-only PO detail modal state
-  const [showPoDetail, setShowPoDetail] = useState(false);
+  // Read-only PO detail state (expanded row)
   const [poDetail, setPoDetail] = useState<any | null>(null);
+  const [expandedPoId, setExpandedPoId] = useState<string | null>(null);
 
   const [newSupplier, setNewSupplier] = useState({
     name: "",
@@ -2202,7 +2202,7 @@ const Products: React.FC = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Number</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal Order</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
                   </tr>
                 </thead>
@@ -2215,39 +2215,89 @@ const Products: React.FC = () => {
                   {filteredPurchaseOrdersForDaftar.map((po) => {
                     const supplier = suppliers.find((s) => s.id === po.supplier_id);
                     return (
-                      <tr key={po.id}>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-900">
-                          <button onClick={() => openPoDetail(po)} className="text-blue-600 hover:underline">{po.po_number}</button>
-                        </td>
-                        <td className="px-4 py-3">{po.order_date ? new Date(po.order_date).toLocaleDateString("id-ID") : "-"}</td>
-                        <td className="px-4 py-3">{supplier?.name || "-"}</td>
-                        <td className="px-4 py-3 font-semibold text-blue-700">Rp {Number(po.total_amount).toLocaleString("id-ID")}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <button onClick={async () => {
-                              try {
-                                const items = await db.select("purchase_order_items", "*", { po_id: po.id });
-                                setNewPurchase({ supplierId: po.supplier_id, items: (items || []).map((it: any) => ({ id: it.id, productId: it.product_id, productName: it.product_name, quantity: Number(it.quantity) || 0, unitCost: Number(it.unit_cost) || 0, total: Number(it.total) || 0 })), notes: po.notes || "", expectedDate: po.expected_date ? new Date(po.expected_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0], orderDate: po.order_date ? new Date(po.order_date).toISOString() : new Date().toISOString() });
-                                setEditingPoId(po.id);
-                                setShowPurchaseForm(true);
-                              } catch (err: any) {
-                                Swal.fire({ icon: "error", title: "Gagal membuka edit", text: (err?.message || "") + (err?.details ? "\n" + err.details : "") });
-                              }
-                            }} className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"><Edit className="h-4 w-4" /></button>
-                            <button onClick={async () => {
-                              const confirm = await Swal.fire({ title: "Hapus Purchase Order?", text: "Tindakan ini akan menghapus transaksi pembelian dan mengembalikan stok produk.", icon: "warning", showCancelButton: true, confirmButtonColor: "#d33", cancelButtonColor: "#6b7280", confirmButtonText: "Ya, hapus", cancelButtonText: "Batal" });
-                              if (!confirm.isConfirmed) return;
-                              try { await db.purchases.delete(po.id); await Swal.fire({ icon: "success", title: "Berhasil", text: "Purchase Order telah dihapus dan stok dikembalikan." }); if ((window as any).refreshPurchases) { await (window as any).refreshPurchases(); } } catch (err: any) { await Swal.fire({ icon: "error", title: "Gagal menghapus", text: (err?.message || "") + (err?.details ? "\n" + err.details : "") }); }
-                            }} className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"><Trash2 className="h-4 w-4" /></button>
-                          </div>
-                        </td>
-                      </tr>
+                      <React.Fragment key={po.id}>
+                        <tr>
+                          <td className="px-4 py-3 font-mono text-xs text-gray-900">
+                            <button onClick={() => openPoDetail(po)} className="text-blue-600 hover:underline">{po.po_number}</button>
+                          </td>
+                          <td className="px-4 py-3">{po.order_date ? new Date(po.order_date).toLocaleDateString("id-ID") : "-"}</td>
+                          <td className="px-4 py-3">{supplier?.name || "-"}</td>
+                          <td className="px-4 py-3 font-semibold text-blue-700 text-right">Rp {Number(po.total_amount).toLocaleString("id-ID")}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <button onClick={async () => {
+                                try {
+                                  const items = await db.select("purchase_order_items", "*", { po_id: po.id });
+                                  setNewPurchase({ supplierId: po.supplier_id, items: (items || []).map((it: any) => ({ id: it.id, productId: it.product_id, productName: it.product_name, quantity: Number(it.quantity) || 0, unitCost: Number(it.unit_cost) || 0, total: Number(it.total) || 0 })), notes: po.notes || "", expectedDate: po.expected_date ? new Date(po.expected_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0], orderDate: po.order_date ? new Date(po.order_date).toISOString() : new Date().toISOString() });
+                                  setEditingPoId(po.id);
+                                  setShowPurchaseForm(true);
+                                } catch (err: any) {
+                                  Swal.fire({ icon: "error", title: "Gagal membuka edit", text: (err?.message || "") + (err?.details ? "\n" + err.details : "") });
+                                }
+                              }} className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"><Edit className="h-4 w-4" /></button>
+                              <button onClick={async () => {
+                                const confirm = await Swal.fire({ title: "Hapus Purchase Order?", text: "Tindakan ini akan menghapus transaksi pembelian dan mengembalikan stok produk.", icon: "warning", showCancelButton: true, confirmButtonColor: "#d33", cancelButtonColor: "#6b7280", confirmButtonText: "Ya, hapus", cancelButtonText: "Batal" });
+                                if (!confirm.isConfirmed) return;
+                                try { await db.purchases.delete(po.id); await Swal.fire({ icon: "success", title: "Berhasil", text: "Purchase Order telah dihapus dan stok dikembalikan." }); if ((window as any).refreshPurchases) { await (window as any).refreshPurchases(); } } catch (err: any) { await Swal.fire({ icon: "error", title: "Gagal menghapus", text: (err?.message || "") + (err?.details ? "\n" + err.details : "") }); }
+                              }} className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"><Trash2 className="h-4 w-4" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedPoId === po.id && poDetail && (
+                          <tr>
+                            <td colSpan={5} className="bg-gray-50 p-0">
+                              <div className="bg-white rounded-b-xl shadow-sm border border-t-0 border-gray-200 p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div>
+                                    <div className="text-sm text-gray-500">PO Number</div>
+                                    <div className="font-semibold text-gray-900">{poDetail.po_number}</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-sm text-gray-500">Tanggal Order</div>
+                                    <div className="font-semibold">{poDetail.order_date ? new Date(poDetail.order_date).toLocaleDateString('id-ID') : '-'}</div>
+                                  </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-100">
+                                      {((poDetail.items || []) as any[]).map((it:any) => (
+                                        <tr key={it.id}>
+                                          <td className="px-4 py-2">{it.product_name || it.productName || 'Unknown'}</td>
+                                          <td className="px-4 py-2 text-right">{Number(it.quantity||it.qty||0)}</td>
+                                          <td className="px-4 py-2 text-right">{it.unit_cost ? Number(it.unit_cost).toLocaleString('id-ID') : (it.unitPrice ? Number(it.unitPrice).toLocaleString('id-ID') : '-')}</td>
+                                          <td className="px-4 py-2 text-right">{Number(it.total||0).toLocaleString('id-ID')}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                                <div className="mt-4 text-right font-semibold">Total: Rp {Number(poDetail.total_amount || poDetail.subtotal || ((poDetail.items || []).reduce((s:any,it:any)=> s + (Number(it.total)||0),0))).toLocaleString('id-ID')}</div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} />
+                    <td className="px-4 py-3 font-semibold text-blue-700 text-right">Grand Total: Rp {Number(filteredPurchaseOrdersForDaftar.reduce((s:any, it:any) => s + (Number(it.total_amount) || 0), 0)).toLocaleString('id-ID')}</td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
-            <div className="mt-3 text-right text-sm text-gray-700 font-semibold">Grand Total: Rp {Number(filteredPurchaseOrdersForDaftar.reduce((s:any, it:any) => s + (Number(it.total_amount) || 0), 0)).toLocaleString('id-ID')}</div>
+            
           </>
         )}
 
@@ -2288,8 +2338,9 @@ const Products: React.FC = () => {
   const openPoDetail = async (po: any) => {
     try {
       const items = await db.select("purchase_order_items", "*", { po_id: po.id });
-      setPoDetail({ ...po, items: items || [] });
-      setShowPoDetail(true);
+      const detail = { ...po, items: items || [] };
+      setPoDetail(detail);
+      setExpandedPoId((prev) => (prev === po.id ? null : po.id));
     } catch (err: any) {
       Swal.fire({ icon: "error", title: "Gagal memuat detail PO", text: (err?.message || "") + (err?.details ? "\n" + err.details : "") });
     }
@@ -3563,47 +3614,7 @@ const Products: React.FC = () => {
           </div>
         )}
 
-        {/* Read-only PO Detail Modal (opened by clicking PO Number) */}
-        {showPoDetail && poDetail && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Detail Purchase Order</h2>
-                <div className="text-sm text-gray-600 mb-4">PO Number: <span className="font-medium">{poDetail.po_number}</span></div>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>Supplier: <strong>{suppliers.find((s:any)=> s.id === poDetail.supplier_id)?.name || '-'}</strong></div>
-                  <div>Tanggal Order: <strong>{poDetail.order_date ? new Date(poDetail.order_date).toLocaleDateString('id-ID') : '-'}</strong></div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
-                      {((poDetail.items || []) as any[]).map((it:any) => (
-                        <tr key={it.id}>
-                          <td className="px-4 py-2">{it.product_name || it.productName || 'Unknown'}</td>
-                          <td className="px-4 py-2 text-right">{Number(it.quantity||it.qty||0)}</td>
-                          <td className="px-4 py-2 text-right">{it.unit_cost ? Number(it.unit_cost).toLocaleString('id-ID') : (it.unitPrice ? Number(it.unitPrice).toLocaleString('id-ID') : '-')}</td>
-                          <td className="px-4 py-2 text-right">{Number(it.total||0).toLocaleString('id-ID')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mt-4 text-right font-semibold">Total: Rp {Number(poDetail.total_amount || poDetail.subtotal || ((poDetail.items || []).reduce((s:any,it:any)=> s + (Number(it.total)||0),0))).toLocaleString('id-ID')}</div>
-                <div className="mt-4 flex justify-end">
-                  <button onClick={() => { setShowPoDetail(false); setPoDetail(null); }} className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Tutup</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Inline PO Detail panel removed - details are shown as expanded row within the table */}
 
         {/* Add Supplier Modal */}
         {showSupplierForm && (
