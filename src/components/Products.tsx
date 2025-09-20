@@ -203,7 +203,8 @@ const Products: React.FC = () => {
           if (!map[orderDate].products[key]) map[orderDate].products[key] = { productId, name, qty: 0, total: 0, lines: [] };
           map[orderDate].products[key].qty += qty;
           map[orderDate].products[key].total += total;
-          map[orderDate].products[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0 });
+          const supplierName = suppliers.find((s: any) => s.id === po.supplier_id)?.name || '';
+          map[orderDate].products[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0, supplierName });
           map[orderDate].dateTotal += total;
         }
 
@@ -282,7 +283,8 @@ const Products: React.FC = () => {
           if (!map[key]) map[key] = { productId, name, qty: 0, total: 0, lines: [] };
           map[key].qty += qty;
           map[key].total += total;
-          map[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0, date: orderDate });
+          const supplierName = suppliers.find((s: any) => s.id === po.supplier_id)?.name || '';
+          map[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0, date: orderDate, supplierName });
         }
 
         setRekapPerBarangData(map);
@@ -319,41 +321,81 @@ const Products: React.FC = () => {
     if (dateKeys.length === 0) return <div className="text-sm text-gray-500">Belum ada data pembelian.</div>;
     return (
       <div className="space-y-4">
+        {/* Grand total for all dates */}
+        {(() => {
+          const grand = Object.keys(rekapTanggalData).reduce((s:any, dk:any) => s + (Number(rekapTanggalData[dk]?.dateTotal) || 0), 0);
+          return (
+            <div className="text-right text-sm text-gray-700">Grand Total: Rp {Number(grand).toLocaleString('id-ID')}</div>
+          );
+        })()}
         {dateKeys.map(dk => {
           const day = rekapTanggalData[dk];
           const productsArr = Object.values(day.products).sort((a:any,b:any) => b.total - a.total);
           return (
             <div key={dk} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-sm text-gray-500">{new Date(dk).toLocaleDateString('id-ID', { weekday: 'long' })}</div>
-                  <div className="font-semibold text-gray-900">{new Date(dk).toLocaleDateString('id-ID')}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm text-gray-500">Total</div>
-                  <div className="font-semibold text-green-700">Rp {Number(day.dateTotal||0).toLocaleString('id-ID')}</div>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {productsArr.map((p:any) => (
-                      <tr key={String(p.productId ?? p.name)}>
-                        <td className="px-4 py-2">{p.name}</td>
-                        <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
-                        <td className="px-4 py-2 text-right font-semibold">{Number(p.total||0).toLocaleString('id-ID')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    <div>
+                      <div className="text-sm text-gray-500">{new Date(dk).toLocaleDateString('id-ID', { weekday: 'long' })}</div>
+                      <button
+                        onClick={() => {
+                          const s = new Set(expandedDates);
+                          if (s.has(dk)) s.delete(dk);
+                          else s.add(dk);
+                          setExpandedDates(s);
+                        }}
+                        className="font-semibold text-left text-blue-600 hover:underline"
+                      >
+                        {new Date(dk).toLocaleDateString('id-ID')}
+                      </button>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500">Total</div>
+                      <div className="font-semibold text-green-700">Rp {Number(day.dateTotal||0).toLocaleString('id-ID')}</div>
+                    </div>
+                  </div>
+                  {expandedDates.has(dk) && (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-100">
+                          {productsArr.map((p:any) => (
+                            <tr key={String(p.productId ?? p.name)}>
+                              <td className="px-4 py-2">
+                                <div className="font-medium">{p.name}</div>
+                                {p.lines && p.lines.length > 0 && (
+                                  <div className="text-xs text-gray-500 mt-1">Supplier: {Array.from(new Set(p.lines.map((l:any)=> l.supplierName).filter(Boolean))).join(', ') || '-'}</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
+                              <td className="px-4 py-2 text-right font-medium">{p.qty ? Number(Math.round((p.total||0) / p.qty)).toLocaleString('id-ID') : '-'}</td>
+                              <td className="px-4 py-2 text-right font-semibold">{Number(p.total||0).toLocaleString('id-ID')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          {(() => {
+                            const totalQty = productsArr.reduce((s:any, it:any) => s + (Number(it.qty) || 0), 0);
+                            const totalAmount = productsArr.reduce((s:any, it:any) => s + (Number(it.total) || 0), 0);
+                            return (
+                              <tr className="bg-gray-50">
+                                <td className="px-4 py-2 text-left font-medium">Subtotal</td>
+                                <td className="px-4 py-2 text-right font-medium">{String(totalQty)}</td>
+                                <td className="px-4 py-2 text-right font-medium">-</td>
+                                <td className="px-4 py-2 text-right font-semibold">{String(Number(totalAmount).toLocaleString('id-ID'))}</td>
+                              </tr>
+                            );
+                          })()}
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
             </div>
           );
         })}
@@ -378,22 +420,45 @@ const Products: React.FC = () => {
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty Total</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {productKeys.map(k => {
                 const p = rekapPerBarangData[k];
+                const unitPrice = p.qty ? Math.round((Number(p.total) || 0) / p.qty) : 0;
                 return (
                   <tr key={k}>
-                    <td className="px-4 py-2">{p.name}</td>
+                    <td className="px-4 py-2">
+                      <div className="font-medium">{p.name}</div>
+                      {p.lines && p.lines.length > 0 && (
+                        <div className="text-xs text-gray-500 mt-1">Supplier: {Array.from(new Set(p.lines.map((l:any)=> l.supplierName).filter(Boolean))).join(', ') || '-'}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
+                    <td className="px-4 py-2 text-right font-medium">{unitPrice ? unitPrice.toLocaleString('id-ID') : '-'}</td>
                     <td className="px-4 py-2 text-right font-semibold">{Number(p.total||0).toLocaleString('id-ID')}</td>
                   </tr>
                 );
               })}
             </tbody>
+            <tfoot>
+              {(() => {
+                const totalQty = productKeys.reduce((s:any, k:any) => s + (Number(rekapPerBarangData[k].qty) || 0), 0);
+                const totalAmount = productKeys.reduce((s:any, k:any) => s + (Number(rekapPerBarangData[k].total) || 0), 0);
+                return (
+                  <tr className="bg-gray-50">
+                    <td className="px-4 py-2 text-left font-medium">Grand Total</td>
+                    <td className="px-4 py-2 text-right font-medium">{String(totalQty)}</td>
+                    <td className="px-4 py-2 text-right font-medium">-</td>
+                    <td className="px-4 py-2 text-right font-semibold">{String(Number(totalAmount).toLocaleString('id-ID'))}</td>
+                  </tr>
+                );
+              })()}
+            </tfoot>
           </table>
+          <div className="mt-3 text-right text-sm text-gray-600">Total Keseluruhan: Rp {Number(Object.keys(rekapPerBarangData).reduce((s:any,k)=> s + (Number(rekapPerBarangData[k].total)||0),0)).toLocaleString('id-ID')}</div>
         </div>
       </div>
     );
@@ -2187,6 +2252,18 @@ const Products: React.FC = () => {
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  {(() => {
+                    const totalAmount = filteredPurchaseOrdersForDaftar.reduce((s:any, it:any) => s + (Number(it.total_amount) || 0), 0);
+                    return (
+                      <tr className="bg-gray-50">
+                        <td className="px-4 py-3 text-left font-medium" colSpan={3}>Grand Total</td>
+                        <td className="px-4 py-3 text-left font-semibold">Rp {String(Number(totalAmount).toLocaleString('id-ID'))}</td>
+                        <td className="px-4 py-3"></td>
+                      </tr>
+                    );
+                  })()}
+                </tfoot>
               </table>
             </div>
           </>
