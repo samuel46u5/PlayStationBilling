@@ -27,6 +27,7 @@ const Consoles: React.FC = () => {
     purchase_date: "",
     warranty_expiry: "",
     ip_address: "",
+    ip_esp32: "",
     relay_command_on: "",
     relay_command_off: "",
     relay_command_status: "",
@@ -152,6 +153,7 @@ const Consoles: React.FC = () => {
         purchase_date: purchaseDateSafe,
         warranty_expiry: warrantyExpirySafe,
         ip_address: safe(addForm.ip_address),
+        ip_esp32: safe(addForm.ip_esp32),
         relay_command_on: safe(addForm.relay_command_on),
         relay_command_off: safe(addForm.relay_command_off),
         relay_command_status: safe(addForm.relay_command_status),
@@ -176,6 +178,7 @@ const Consoles: React.FC = () => {
         purchase_date: "",
         warranty_expiry: "",
         ip_address: "",
+        ip_esp32: "",
         relay_command_on: "",
         relay_command_off: "",
         relay_command_status: "",
@@ -207,6 +210,7 @@ const Consoles: React.FC = () => {
         purchase_date: safe(editConsoleData.purchase_date),
         warranty_expiry: safe(editConsoleData.warranty_expiry),
         ip_address: safe(editConsoleData.ip_address),
+        ip_esp32: safe(editConsoleData.ip_esp32),
         relay_command_on: safe(editConsoleData.relay_command_on),
         relay_command_off: safe(editConsoleData.relay_command_off),
         relay_command_status: safe(editConsoleData.relay_command_status),
@@ -950,6 +954,24 @@ const Consoles: React.FC = () => {
                       />
                     </div>
 
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        IP ESP32
+                      </label>
+                      <input
+                        id="add-ip-esp32"
+                        type="text"
+                        value={addForm.ip_esp32 || ""}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            ips_esp32: e.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1299,6 +1321,22 @@ const Consoles: React.FC = () => {
                               setEditConsoleData((prev: any) => ({
                                 ...prev,
                                 ip_address: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            IP ESP32
+                          </label>
+                          <input
+                            type="text"
+                            value={editConsoleData.ip_esp32 || ""}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                ip_esp32: e.target.value,
                               }))
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

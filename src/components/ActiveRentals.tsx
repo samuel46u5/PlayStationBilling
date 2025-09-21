@@ -5,6 +5,8 @@ import RealTimeClock from "./RealTimeClock";
 import Countdown from "./Countdown";
 import { printReceipt, printRentalProof } from "../utils/receipt";
 import { useTimer } from "../contexts/TimerContext";
+import { useRFIDReader } from "../hooks/useRFIDReader";
+// import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
 
 interface SaleItem {
   product_id: string;
@@ -162,17 +164,35 @@ const ActiveRentals: React.FC = () => {
   const [showStartRentalModal, setShowStartRentalModal] = useState<
     string | null
   >(null);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [customerType, setCustomerType] = useState<"member" | "non-member">(
-    "member"
-  );
-  const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
-  const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
+  // const [customers, setCustomers] = useState<any[]>([]);
   const [rentalType, setRentalType] = useState<
     "pay-as-you-go" | "prepaid" | "member-card"
   >("pay-as-you-go");
+  const [scannedCardUID, setScannedCardUID] = useState<string>("");
+  const [scannedCardData, setScannedCardData] = useState<any>(null);
+
+  // RFID Reader hook untuk member card mode
+  useRFIDReader((uid) => {
+    // if (rentalType === "member-card") {
+    setScannedCardUID(uid);
+    // Ambil data kartu
+    supabase
+      .from("rfid_cards")
+      .select("uid, balance_points, status")
+      .eq("uid", uid)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setScannedCardData(data);
+        } else {
+          setScannedCardData(null);
+        }
+      });
+    // }
+  });
+
+  // Member Card Billing hook
+  // useMemberCardBilling(activeSessions);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [voucherSearchTerm, setVoucherSearchTerm] = useState("");
   const [voucherList, setVoucherList] = useState<any[]>([]);
@@ -523,32 +543,17 @@ const ActiveRentals: React.FC = () => {
     [showStartRentalModal, consoles]
   );
 
-  const availableCustomers = React.useMemo(() => {
-    return customers.filter((customer) => {
-      // Cek apakah customer ini punya sesi aktif
-      const hasActiveSession = activeSessions.some(
-        (session) =>
-          session.customer_id === customer.id && session.status === "active"
-      );
+  // const availableCustomers = React.useMemo(() => {
+  //   return customers.filter((customer) => {
+  //     // Cek apakah customer ini punya sesi aktif
+  //     const hasActiveSession = activeSessions.some(
+  //       (session) =>
+  //         session.customer_id === customer.id && session.status === "active"
+  //     );
 
-      return !hasActiveSession;
-    });
-  }, [customers, activeSessions]);
-
-  useEffect(() => {
-    if (customerSearchTerm.trim() === "") {
-      setFilteredCustomers(availableCustomers);
-    } else {
-      const filtered = availableCustomers.filter(
-        (customer) =>
-          customer.name
-            .toLowerCase()
-            .includes(customerSearchTerm.toLowerCase()) ||
-          customer.phone.includes(customerSearchTerm)
-      );
-      setFilteredCustomers(filtered);
-    }
-  }, [customerSearchTerm, customers]);
+  //     return !hasActiveSession;
+  //   });
+  // }, [customers, activeSessions]);
 
   React.useEffect(() => {
     if (showStartRentalModal && selectedConsole?.perintah_cek_power_tv) {
@@ -629,8 +634,8 @@ const ActiveRentals: React.FC = () => {
       setRelayStatus("OFF");
     }
   }, [showStartRentalModal, consoles]);
-  const [nonMemberName, setNonMemberName] = useState<string>("");
-  const [nonMemberPhone, setNonMemberPhone] = useState<string>("");
+  // const [nonMemberName, setNonMemberName] = useState<string>("");
+  // const [nonMemberPhone, setNonMemberPhone] = useState<string>("");
   // const [countdownTimers, setCountdownTimers] = useState<
   //   Record<string, number>
   // >({});
@@ -907,7 +912,7 @@ const ActiveRentals: React.FC = () => {
       const endIdx = startIdx + 9;
       let query = supabase
         .from("rental_sessions")
-        .select(`*, customers(name, phone), consoles(name, location)`)
+        .select(`*, consoles(name, location)`)
         // .in("status", ["completed", "cancelled"])
         .order("start_time", { ascending: false })
         .range(startIdx, endIdx);
@@ -942,42 +947,42 @@ const ActiveRentals: React.FC = () => {
   }, []);
 
   // Listen for member card session ended events
-  useEffect(() => {
-    const handleMemberCardSessionEnded = async (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const { sessionId, reason } = customEvent.detail;
-      console.log(`Member card session ${sessionId} ended due to: ${reason}`);
+  // useEffect(() => {
+  //   const handleMemberCardSessionEnded = async (event: Event) => {
+  //     const customEvent = event as CustomEvent;
+  //     const { sessionId, reason } = customEvent.detail;
+  //     console.log(`Member card session ${sessionId} ended due to: ${reason}`);
 
-      // Refresh data to update UI
-      await loadData();
-      await refreshActiveSessions();
+  //     // Refresh data to update UI
+  //     await loadData();
+  //     await refreshActiveSessions();
 
-      // Show notification to user
-      if (reason === "insufficient_balance") {
-        Swal.fire({
-          toast: true,
-          position: "top-end",
-          title: "Session Diakhiri",
-          text: `Session rental diakhiri karena saldo member card habis`,
-          icon: "warning",
-          timer: 5000,
-          showConfirmButton: false,
-        });
-      }
-    };
+  //     // Show notification to user
+  //     if (reason === "insufficient_balance") {
+  //       Swal.fire({
+  //         toast: true,
+  //         position: "top-end",
+  //         title: "Session Diakhiri",
+  //         text: `Session rental diakhiri karena saldo member card habis`,
+  //         icon: "warning",
+  //         timer: 5000,
+  //         showConfirmButton: false,
+  //       });
+  //     }
+  //   };
 
-    window.addEventListener(
-      "memberCardSessionEnded",
-      handleMemberCardSessionEnded
-    );
+  //   window.addEventListener(
+  //     "memberCardSessionEnded",
+  //     handleMemberCardSessionEnded
+  //   );
 
-    return () => {
-      window.removeEventListener(
-        "memberCardSessionEnded",
-        handleMemberCardSessionEnded
-      );
-    };
-  }, [refreshActiveSessions]);
+  //   return () => {
+  //     window.removeEventListener(
+  //       "memberCardSessionEnded",
+  //       handleMemberCardSessionEnded
+  //     );
+  //   };
+  // }, [refreshActiveSessions]);
 
   // Sync with global timer context
   useEffect(() => {
@@ -1015,7 +1020,9 @@ const ActiveRentals: React.FC = () => {
       // Fetch rate profiles
       const { data: rateData, error: rateError } = await supabase
         .from("rate_profiles")
-        .select("id, name, hourly_rate");
+        .select(
+          "id, name, hourly_rate, minimum_minutes, minimum_minutes_member"
+        );
 
       if (rateError) throw rateError;
 
@@ -1034,12 +1041,12 @@ const ActiveRentals: React.FC = () => {
       }
 
       // Fetch customers
-      const { data: customerData, error: customerError } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("status", "active");
+      // const { data: customerData, error: customerError } = await supabase
+      //   .from("customers")
+      //   .select("*")
+      //   .eq("status", "active");
 
-      if (customerError) throw customerError;
+      // if (customerError) throw customerError;
 
       // Fetch total produk per session aktif
       let productsTotalMap: Record<string, number> = {};
@@ -1069,7 +1076,7 @@ const ActiveRentals: React.FC = () => {
       setRateProfiles(rateData || []);
       setActiveSessions(rentalData || []);
       setProducts(productData || []);
-      setCustomers(customerData || []);
+      // setCustomers(customerData || []);
       setProductsTotalMap(productsTotalMap);
 
       // Load auto shutdown states
@@ -1155,8 +1162,6 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
-  // handleSessionTimeout sudah tidak diperlukan karena ditangani oleh TimerContext
-
   const RealtimeCost: React.FC<{
     session: RentalSession;
     productsTotal?: number;
@@ -1174,55 +1179,56 @@ const ActiveRentals: React.FC = () => {
 
     // Untuk member-card, gunakan total_points_deducted dari database
     useEffect(() => {
-      if (session.is_voucher_used && !isPrepaid) {
-        // Fetch fresh data dari database untuk sinkronisasi dengan billing system
-        const fetchFreshSessionData = async () => {
-          try {
-            const { data: freshSession } = await supabase
-              .from("rental_sessions")
-              .select("total_points_deducted")
-              .eq("id", session.id)
-              .single();
+      // if (session.is_voucher_used && !isPrepaid) {
+      //   // Fetch fresh data dari database untuk sinkronisasi dengan billing system
+      //   const fetchFreshSessionData = async () => {
+      //     try {
+      //       const { data: freshSession } = await supabase
+      //         .from("rental_sessions")
+      //         .select("total_points_deducted")
+      //         .eq("id", session.id)
+      //         .single();
 
-            if (freshSession) {
-              setRealTimeCost(freshSession.total_points_deducted || 0);
-            } else {
-              // Fallback ke data session yang ada
-              setRealTimeCost(session.total_points_deducted || 0);
-            }
-          } catch (error) {
-            console.error("Error fetching fresh session data:", error);
-            // Fallback ke data session yang ada
-            setRealTimeCost(session.total_points_deducted || 0);
-          }
-        };
+      //       if (freshSession) {
+      //         setRealTimeCost(freshSession.total_points_deducted || 0);
+      //       } else {
+      //         // Fallback ke data session yang ada
+      //         setRealTimeCost(session.total_points_deducted || 0);
+      //       }
+      //     } catch (error) {
+      //       console.error("Error fetching fresh session data:", error);
+      //       // Fallback ke data session yang ada
+      //       setRealTimeCost(session.total_points_deducted || 0);
+      //     }
+      //   };
 
-        fetchFreshSessionData();
+      //   fetchFreshSessionData();
 
-        // Listen for billing updates
-        const handleBillingUpdate = (event: Event) => {
-          const customEvent = event as CustomEvent;
-          if (customEvent.detail?.sessionId === session.id) {
-            setRealTimeCost(customEvent.detail.newTotalDeducted);
-          }
-        };
+      //   // Listen for billing updates
+      //   const handleBillingUpdate = (event: Event) => {
+      //     const customEvent = event as CustomEvent;
+      //     if (customEvent.detail?.sessionId === session.id) {
+      //       setRealTimeCost(customEvent.detail.newTotalDeducted);
+      //     }
+      //   };
 
-        window.addEventListener("memberCardBillingUpdate", handleBillingUpdate);
+      //   window.addEventListener("memberCardBillingUpdate", handleBillingUpdate);
 
-        // Refresh setiap 30 detik untuk sinkronisasi dengan billing
-        const interval = setInterval(fetchFreshSessionData, 30000);
+      //   // Refresh setiap 30 detik untuk sinkronisasi dengan billing
+      //   const interval = setInterval(fetchFreshSessionData, 30000);
 
-        return () => {
-          clearInterval(interval);
-          window.removeEventListener(
-            "memberCardBillingUpdate",
-            handleBillingUpdate
-          );
-        };
-      } else {
-        // Untuk pay-as-you-go dan prepaid, gunakan perhitungan real-time
-        setRealTimeCost(calculateCurrentCost(session));
-      }
+      //   return () => {
+      //     clearInterval(interval);
+      //     window.removeEventListener(
+      //       "memberCardBillingUpdate",
+      //       handleBillingUpdate
+      //     );
+      //   };
+      // }
+      // else {
+      // Untuk pay-as-you-go dan prepaid, gunakan perhitungan real-time
+      setRealTimeCost(calculateCurrentCost(session));
+      // }
     }, [session.is_voucher_used, session.id, isPrepaid, tick]);
 
     return <>{(realTimeCost + (productsTotal || 0)).toLocaleString("id-ID")}</>;
@@ -1379,7 +1385,6 @@ const ActiveRentals: React.FC = () => {
   //         total_pause_minutes: totalPauseMinutes,
   //       },
   //     });
-
   //     await loadData();
   //     await refreshActiveSessions(); // Refresh global sessions
   //     Swal.fire("Berhasil", "Session berhasil di-resume", "success");
@@ -1446,170 +1451,138 @@ const ActiveRentals: React.FC = () => {
       }
 
       // Untuk MEMBER CARD (points), finalisasi sesi dan lakukan final delta deduction bila ada
-      if (session.is_voucher_used) {
-        const consoleObj = consoles.find((c) => c.id === session.console_id);
-        if (consoleObj?.power_tv_command) {
-          await fetch(consoleObj.power_tv_command).catch(() => {});
-        }
-        if (consoleObj?.relay_command_off) {
-          await fetch(consoleObj.relay_command_off).catch(() => {});
-        }
+      // if (session.is_voucher_used) {
+      //   const consoleObj = consoles.find((c) => c.id === session.console_id);
+      //   if (consoleObj?.power_tv_command) {
+      //     await fetch(consoleObj.power_tv_command).catch(() => {});
+      //   }
+      //   if (consoleObj?.relay_command_off) {
+      //     await fetch(consoleObj.relay_command_off).catch(() => {});
+      //   }
 
-        // Hitung menit yang terpakai
-        const startTime = session.start_time
-          ? new Date(session.start_time)
-          : new Date();
-        const endTime = new Date();
-        const elapsedMinutes = Math.ceil(
-          (endTime.getTime() - startTime.getTime()) / (1000 * 60)
-        );
+      //   // Hitung menit yang terpakai
+      //   const startTime = session.start_time
+      //     ? new Date(session.start_time)
+      //     : new Date();
+      //   const endTime = new Date();
+      //   const elapsedMinutes = Math.ceil(
+      //     (endTime.getTime() - startTime.getTime()) / (1000 * 60)
+      //   );
 
-        // Hitung total points yang seharusnya ditarik untuk durasi berjalan
-        // Gunakan snapshot tarif yang sudah disimpan saat start rental
-        const hourlyRateSnapshot = session.hourly_rate_snapshot || 15000;
-        // const perMinuteRateSnapshot =
-        //   Math.ceil(
-        //     (session.per_minute_rate_snapshot ||
-        //       (session.hourly_rate_snapshot || 15000) / 60) / 100
-        //   ) * 100;
-        const perMinuteRateSnapshot =
-          session.per_minute_rate_snapshot || hourlyRateSnapshot / 60;
-        const rp = rateProfiles.find(
-          (r) => r.id === consoleObj?.rate_profile_id
-        );
-        const minimumMinutes = rp?.minimum_minutes || 60;
+      //   // Hitung total points yang seharusnya ditarik untuk durasi berjalan
+      //   // Gunakan snapshot tarif yang sudah disimpan saat start rental
+      //   const hourlyRateSnapshot = session.hourly_rate_snapshot || 15000;
+      //   // const perMinuteRateSnapshot =
+      //   //   Math.ceil(
+      //   //     (session.per_minute_rate_snapshot ||
+      //   //       (session.hourly_rate_snapshot || 15000) / 60) / 100
+      //   //   ) * 100;
+      //   const perMinuteRateSnapshot =
+      //     session.per_minute_rate_snapshot || hourlyRateSnapshot / 60;
+      //   const rp = rateProfiles.find(
+      //     (r) => r.id === consoleObj?.rate_profile_id
+      //   );
+      //   const minimumMinutesMember = rp?.minimum_minutes_member || 60;
 
-        let totalPoints = 0;
-        if (elapsedMinutes <= minimumMinutes) {
-          totalPoints = hourlyRateSnapshot;
-        } else {
-          totalPoints =
-            hourlyRateSnapshot +
-            Math.ceil((elapsedMinutes - 60) * perMinuteRateSnapshot);
-        }
+      //   let totalPoints = 0;
+      //   if (minimumMinutesMember == 0) {
+      //     totalPoints = elapsedMinutes * perMinuteRateSnapshot;
+      //   } else if (elapsedMinutes <= minimumMinutesMember) {
+      //     totalPoints = hourlyRateSnapshot;
+      //   } else {
+      //     totalPoints =
+      //       hourlyRateSnapshot +
+      //       Math.ceil(
+      //         (elapsedMinutes - minimumMinutesMember) * perMinuteRateSnapshot
+      //       );
+      //   }
 
-        // Ambil total yang sudah dipotong dari session atau log
-        let alreadyDeducted = session.total_points_deducted || 0;
+      //   // Ambil total yang sudah dipotong dari session atau log
+      //   let alreadyDeducted = session.total_points_deducted || 0;
 
-        const needToDeduct = Math.max(0, totalPoints - alreadyDeducted);
+      //   const needToDeduct = Math.max(0, totalPoints - alreadyDeducted);
 
-        // Ambil data customer untuk final deduction
-        let customerRow = null;
-        let willDeduct = 0;
-        if (session.customer_id) {
-          const { data } = await supabase
-            .from("customers")
-            .select("balance_points")
-            .eq("id", session.customer_id)
-            .single();
-          customerRow = data;
-        }
+      //   // Final deduction berbasis kartu tidak dilakukan di sini; billing hook sudah melakukan delta-billing.
 
-        // Lakukan final deduction jika masih ada selisih dan saldo cukup
-        if (needToDeduct > 0 && session.customer_id) {
-          const currentPoints = Number(customerRow?.balance_points) || 0;
-          willDeduct = Math.min(currentPoints, needToDeduct);
-          if (willDeduct > 0) {
-            const newBalance = currentPoints - willDeduct;
-            await supabase
-              .from("customers")
-              .update({ balance_points: newBalance })
-              .eq("id", session.customer_id);
-            await supabase.from("point_usage_logs").insert({
-              session_id: session.id,
-              customer_id: session.customer_id,
-              points_deducted: willDeduct,
-              sisa_balance: newBalance,
-            });
-          }
-        }
+      //   // Update rental session
+      //   await supabase
+      //     .from("rental_sessions")
+      //     .update({
+      //       end_time: endTime.toISOString(),
+      //       status: "completed",
+      //       payment_status: "paid",
+      //       duration_minutes: elapsedMinutes,
+      //     })
+      //     .eq("id", session.id);
 
-        // Update rental session
-        await supabase
-          .from("rental_sessions")
-          .update({
-            end_time: endTime.toISOString(),
-            status: "completed",
-            payment_status: "paid",
-            duration_minutes: elapsedMinutes,
-          })
-          .eq("id", session.id);
+      //   // Update console status
+      //   await supabase
+      //     .from("consoles")
+      //     .update({ status: "available" })
+      //     .eq("id", session.console_id);
 
-        // Update console status
-        await supabase
-          .from("consoles")
-          .update({ status: "available" })
-          .eq("id", session.console_id);
+      //   await finalizeProductsAndStock(session.id);
 
-        await finalizeProductsAndStock(session.id);
+      //   // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
+      //   await logCashierTransaction({
+      //     type: "rental",
+      //     amount: 0,
+      //     paymentMethod: "cash",
+      //     referenceId: `MEMBER_CARD-${Date.now()}`,
+      //     description: `Rental (member card)`,
+      //     details: {
+      //       items: [
+      //         {
+      //           name: `Rental ${session.consoles?.name || "Console"}`,
+      //           type: "rental",
+      //           quantity: 1,
+      //           total: totalPoints,
+      //           description: `Member Card - ${elapsedMinutes} menit`,
+      //           qty: 1,
+      //           price: totalPoints,
+      //           product_name: `Rental ${session.consoles?.name || "Console"}`,
+      //         },
+      //       ],
+      //       breakdown: {
+      //         rental_cost: totalPoints,
+      //         products_total: 0,
+      //       },
+      //       customer: {
+      //         name: undefined,
+      //         id: null,
+      //       },
+      //       rental: {
+      //         session_id: session.id,
+      //         console: session.consoles?.name,
+      //         duration_minutes: elapsedMinutes,
+      //         start_time: session.start_time,
+      //         end_time: new Date().toISOString(),
+      //       },
+      //       member_card: {
+      //         points_used: totalPoints,
+      //         hourly_rate_snapshot: session.hourly_rate_snapshot,
+      //         per_minute_rate_snapshot: session.per_minute_rate_snapshot,
+      //       },
+      //       payment: {
+      //         method: "member_card",
+      //         amount: totalPoints,
+      //         change: 0,
+      //       },
+      //       customer_id: null,
+      //       console_id: session.console_id,
+      //       elapsed_minutes: elapsedMinutes,
+      //     },
+      //   });
 
-        // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
-        await logCashierTransaction({
-          type: "rental",
-          amount: 0,
-          paymentMethod: "cash",
-          referenceId: `MEMBER_CARD-${Date.now()}`,
-          description: `Rental (member card) - ${
-            session.customers?.name ?? "Tanpa Nama"
-          }`,
-          details: {
-            items: [
-              {
-                name: `Rental ${session.consoles?.name || "Console"}`,
-                type: "rental",
-                quantity: 1,
-                total: totalPoints,
-                description: `Member Card - ${elapsedMinutes} menit`,
-                qty: 1,
-                price: totalPoints,
-                product_name: `Rental ${session.consoles?.name || "Console"}`,
-              },
-            ],
-            breakdown: {
-              rental_cost: totalPoints,
-              products_total: 0,
-            },
-            customer: {
-              name: session.customers?.name ?? "Tanpa Nama",
-              id: session.customer_id,
-            },
-            rental: {
-              session_id: session.id,
-              console: session.consoles?.name,
-              duration_minutes: elapsedMinutes,
-              start_time: session.start_time,
-              end_time: new Date().toISOString(),
-            },
-            member_card: {
-              points_used: totalPoints,
-              points_remaining: Math.max(
-                0,
-                (Number(customerRow?.balance_points) || 0) - willDeduct
-              ),
-              points_deducted_final: willDeduct,
-              hourly_rate_snapshot: session.hourly_rate_snapshot,
-              per_minute_rate_snapshot: session.per_minute_rate_snapshot,
-            },
-            payment: {
-              method: "member_card",
-              amount: totalPoints,
-              change: 0,
-            },
-            customer_id: session.customer_id,
-            console_id: session.console_id,
-            elapsed_minutes: elapsedMinutes,
-          },
-        });
-
-        await loadData();
-        await refreshActiveSessions();
-        Swal.fire(
-          "Berhasil",
-          `Sesi rental (member card) berhasil diakhiri. Waktu terpakai: ${elapsedMinutes} menit`,
-          "success"
-        );
-        return;
-      }
+      //   await loadData();
+      //   await refreshActiveSessions();
+      //   Swal.fire(
+      //     "Berhasil",
+      //     `Sesi rental (member card) berhasil diakhiri. Waktu terpakai: ${elapsedMinutes} menit`,
+      //     "success"
+      //   );
+      //   return;
+      // }
 
       if (!ensureCashierActive()) return;
 
@@ -1927,7 +1900,6 @@ const ActiveRentals: React.FC = () => {
   //     setTimeout(doPrint, 200);
   //   }
   // };
-
   // Fungsi proses pembayaran kasir
   const handleProcessPayment = async () => {
     if (!showPaymentModal) return;
@@ -2182,7 +2154,7 @@ const ActiveRentals: React.FC = () => {
         amount: finalTotal,
         paymentMethod,
         referenceId: receiptData.id,
-        description: `Rental payment (${session.customers?.name})`,
+        description: `Rental payment (Pay-as-you-go)`,
         details,
       });
 
@@ -2214,7 +2186,6 @@ const ActiveRentals: React.FC = () => {
       Swal.fire("Error", "Gagal memproses pembayaran", "error");
     }
   };
-
   // PrepaidPaymentModal: Modal pembayaran untuk Bayar di Muka
   // const PrepaidPaymentModal = ({
   //   open,
@@ -2726,7 +2697,6 @@ const ActiveRentals: React.FC = () => {
       </div>
     );
   };
-
   // Handler konfirmasi Add Time
   const handleConfirmAddTime = async (
     paymentMethod: "cash" | "qris",
@@ -2777,7 +2747,7 @@ const ActiveRentals: React.FC = () => {
       const receiptData = {
         id: `ADD-TIME-${Date.now()}`,
         timestamp: new Date().toLocaleString("id-ID"),
-        customer: { name: session.customers?.name || "" },
+        customer: { name: session.customers?.name || "Customer" },
         items: [
           {
             name: `Rental ${consoleData.name}`,
@@ -3225,17 +3195,95 @@ const ActiveRentals: React.FC = () => {
     useState<PrepaidPaymentModalState>(null);
   const [prepaidPaymentLoading, setPrepaidPaymentLoading] = useState(false);
 
+  const handleSellVoucher = async () => {
+    try {
+      // Get selected voucher data
+      const selectedVoucher = voucherList.find(
+        (v) => v.id === selectedVoucherId
+      );
+      if (!selectedVoucher) {
+        alert("Voucher tidak ditemukan!");
+        return;
+      }
+
+      // Validate member card is scanned
+      if (!scannedCardUID || !scannedCardData) {
+        alert("Silakan scan kartu member terlebih dahulu!");
+        return;
+      }
+
+      // Get current balance
+      const { data: currentCardData, error: fetchError } = await supabase
+        .from("rfid_cards")
+        .select("balance_points")
+        .eq("uid", scannedCardUID)
+        .single();
+
+      if (fetchError || !currentCardData) {
+        alert("Gagal mengambil data kartu!");
+        return;
+      }
+
+      const newBalance =
+        currentCardData.balance_points + selectedVoucher.total_points;
+
+      // Update member card balance
+      const { error: updateError } = await supabase
+        .from("rfid_cards")
+        .update({ balance_points: newBalance })
+        .eq("uid", scannedCardUID);
+
+      if (updateError) {
+        alert("Gagal memperbarui saldo kartu!");
+        return;
+      }
+
+      // Log transaction
+      await logCashierTransaction({
+        type: "voucher",
+        amount: selectedVoucher.voucher_price || 0,
+        paymentMethod: paymentMethod,
+        referenceId: selectedVoucher.id,
+        description: `Penjualan voucher ${selectedVoucher.name} (${selectedVoucher.total_points} points)`,
+        details: {
+          voucher_id: selectedVoucher.id,
+          voucher_code: selectedVoucher.voucher_code,
+          points_added: selectedVoucher.total_points,
+          card_uid: scannedCardUID,
+          previous_balance: currentCardData.balance_points,
+          new_balance: newBalance,
+        },
+      });
+
+      // Refresh card data
+      const { data: updatedCardData } = await supabase
+        .from("rfid_cards")
+        .select("uid, balance_points, status")
+        .eq("uid", scannedCardUID)
+        .single();
+
+      if (updatedCardData) {
+        setScannedCardData(updatedCardData);
+      }
+
+      // Close modal and reset states
+      setShowSellVoucherModal(false);
+      setSelectedVoucherId("");
+      setPaymentMethod("cash");
+
+      // Show success message
+      alert(
+        `Voucher berhasil dijual! Saldo kartu bertambah ${selectedVoucher.total_points} points`
+      );
+    } catch (error) {
+      console.error("Error selling voucher:", error);
+      alert("Terjadi kesalahan saat menjual voucher!");
+    }
+  };
+
   // Ganti handleStartRental untuk prepaid agar memunculkan modal pembayaran
   const handleStartRental = async (consoleId: string) => {
     if (!ensureCashierActive()) return;
-    if (customerType === "member" && !selectedCustomerId) {
-      Swal.fire("Error", "Silakan pilih customer terlebih dahulu", "warning");
-      return;
-    }
-    if (customerType === "non-member" && !nonMemberName) {
-      Swal.fire("Error", "Nama wajib diisi untuk non-member", "warning");
-      return;
-    }
     try {
       // Pastikan tidak ada session aktif sebelumnya untuk console ini
       const { data: existingSessions, error: existingSessionsError } =
@@ -3266,6 +3314,9 @@ const ActiveRentals: React.FC = () => {
         Swal.fire("Error", "Gagal mengambil data console terbaru", "error");
         return;
       }
+      if (latestConsole.status !== "available") {
+        throw new Error("Console is not available");
+      }
       // --- Cek status TV dan relay sebelum mulai rental, matikan otomatis jika masih ON ---
       let tvStatusNow = tvStatusJson?.toUpperCase?.() || "";
       let relayStatusNow = relayStatus?.toUpperCase?.() || "";
@@ -3291,25 +3342,6 @@ const ActiveRentals: React.FC = () => {
         if (latestConsole.relay_command_on) {
           fetch(latestConsole.relay_command_on).catch(() => {});
         }
-      }
-      let customerId = selectedCustomerId;
-      // Jika non-member, buat customer baru
-      if (customerType === "non-member") {
-        const customerData: any = {
-          name: nonMemberName,
-          status: "active",
-          join_date: new Date().toISOString().split("T")[0],
-        };
-        if (nonMemberPhone) {
-          customerData.phone = nonMemberPhone;
-        }
-        const { data: insertedCustomer, error: insertError } = await supabase
-          .from("customers")
-          .insert(customerData)
-          .select()
-          .single();
-        if (insertError) throw insertError;
-        customerId = insertedCustomer.id;
       }
       // Hitung biaya jika prepaid
       let totalAmount = 0;
@@ -3346,101 +3378,156 @@ const ActiveRentals: React.FC = () => {
         return; // Tunggu konfirmasi modal
       }
 
-      // Member Card Mode - gunakan balance_points
-      if (rentalType === "member-card") {
-        if (customerType !== "member" || !customerId) {
-          Swal.fire("Error", "Mode member card hanya untuk member", "warning");
-          return;
-        }
+      // Member Card Mode - gunakan balance dari kartu RFID
+      // if (rentalType === "member-card") {
+      //   // Perlu scan kartu RFID untuk mendapatkan balance
+      //   if (!scannedCardUID) {
+      //     Swal.fire(
+      //       "Error",
+      //       "Silakan scan kartu RFID terlebih dahulu",
+      //       "warning"
+      //     );
+      //     return;
+      //   }
 
-        const customer = customers.find((c) => c.id === customerId);
-        const availableBalance = Math.max(0, customer?.balance_points || 0);
-        if (availableBalance <= 0) {
-          Swal.fire("Error", "Balance time member habis", "warning");
-          return;
-        }
+      //   // Ambil data kartu dan cek balance
+      //   const { data: cardData, error: cardError } = await supabase
+      //     .from("rfid_cards")
+      //     .select("uid, balance_points, status")
+      //     .eq("uid", scannedCardUID)
+      //     .single();
 
-        // Nyalakan perangkat (sama seperti pay-as-you-go)
-        if (latestConsole.power_tv_command) {
-          fetch(latestConsole.power_tv_command).catch(() => {});
-        }
-        if (latestConsole.relay_command_on) {
-          fetch(latestConsole.relay_command_on).catch(() => {});
-        }
+      //   if (cardError || !cardData) {
+      //     Swal.fire("Error", "Kartu tidak ditemukan", "error");
+      //     return;
+      //   }
 
-        // Ambil snapshot rate untuk konsistensi harga selama sesi
-        const rpForSnapshot = rateProfiles.find(
-          (r) => r.id === latestConsole.rate_profile_id
-        );
-        const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
-        const perMinuteRateSnapshot =
-          Math.ceil(hourlyRateSnapshot / 60 / 100) * 100;
+      //   if (cardData.status !== "active") {
+      //     Swal.fire("Error", "Kartu tidak aktif", "error");
+      //     return;
+      //   }
 
-        // Insert rental session dengan flag voucher dan snapshot rate
-        const { error: rentalError } = await supabase
-          .from("rental_sessions")
-          .insert({
-            customer_id: customerId,
-            console_id: consoleId,
-            status: "active",
-            payment_status: "pending",
-            total_amount: 0,
-            paid_amount: 0,
-            start_time: new Date(rentalStartTime).toISOString(),
-            duration_minutes: null, // Tidak ada durasi tetap
-            is_voucher_used: true, // Tandai menggunakan balance
-            hourly_rate_snapshot: hourlyRateSnapshot,
-            per_minute_rate_snapshot: perMinuteRateSnapshot,
-          });
+      //   const availableBalance = Math.max(0, cardData.balance_points || 0);
+      //   if (availableBalance <= 0) {
+      //     Swal.fire("Error", "Balance kartu habis", "warning");
+      //     return;
+      //   }
 
-        if (rentalError) throw rentalError;
+      //   // Nyalakan perangkat (sama seperti pay-as-you-go)
+      //   if (latestConsole.power_tv_command) {
+      //     fetch(latestConsole.power_tv_command).catch(() => {});
+      //   }
+      //   if (latestConsole.relay_command_on) {
+      //     fetch(latestConsole.relay_command_on).catch(() => {});
+      //   }
 
-        // Update console status
-        const { error: consoleError } = await supabase
-          .from("consoles")
-          .update({ status: "rented" })
-          .eq("id", consoleId);
-        if (consoleError) throw consoleError;
+      //   // Ambil snapshot rate untuk konsistensi harga selama sesi
+      //   const rpForSnapshot = rateProfiles.find(
+      //     (r) => r.id === latestConsole.rate_profile_id
+      //   );
+      //   const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
+      //   const perMinuteRateSnapshot =
+      //     Math.ceil(hourlyRateSnapshot / 60 / 100) * 100;
 
-        // Cetak bukti
-        let customerName = "";
-        if (customerType === "member" && customerId) {
-          const customerRow = customers.find((c) => c.id === customerId);
-          customerName = customerRow?.name || "Customer";
-        }
+      //   // Insert rental session dengan flag voucher dan snapshot rate
+      //   // const { error: rentalError } = await supabase
+      //   //   .from("rental_sessions")
+      //   //   .insert({
+      //   //     customer_id: null, // Optional - for tracking only
+      //   //     console_id: consoleId,
+      //   //     card_uid: scannedCardUID, // UID kartu yang digunakan
+      //   //     status: "active",
+      //   //     payment_status: "pending",
+      //   //     total_amount: 0,
+      //   //     paid_amount: 0,
+      //   //     start_time: new Date(rentalStartTime).toISOString(),
+      //   //     duration_minutes: null, // Tidak ada durasi tetap
+      //   //     is_voucher_used: true, // Tandai menggunakan balance
+      //   //     hourly_rate_snapshot: hourlyRateSnapshot,
+      //   //     per_minute_rate_snapshot: perMinuteRateSnapshot,
+      //   //   });
 
-        printRentalProof({
-          customerName: customerName,
-          unitNumber: latestConsole.name,
-          startTimestamp: new Date().toLocaleString("id-ID"),
-          mode: rentalType,
-        });
+      //   // if (!rentalError) {
+      //   //   await supabase
+      //   //     .from("consoles")
+      //   //     .update({ status: "rented" })
+      //   //     .eq("id", consoleId);
+      //   // }
 
-        setShowStartRentalModal(null);
-        setSelectedCustomerId("");
-        setCustomerType("member");
-        setRentalType("pay-as-you-go");
-        setRentalDurationHours(1);
-        setRentalDurationMinutes(0);
-        setRentalStartTime(getNowForDatetimeLocal());
-        setNonMemberName("");
-        setSearchConsole("");
-        setNonMemberPhone("");
-        await loadData();
-        await refreshActiveSessions();
-        Swal.fire(
-          "Berhasil",
-          "Sesi rental (member card) berhasil dimulai",
-          "success"
-        );
-        return;
-      }
+      //   const insertRentalSession = supabase.from("rental_sessions").insert({
+      //     customer_id: null,
+      //     console_id: consoleId,
+      //     card_uid: scannedCardUID,
+      //     status: "active",
+      //     payment_status: "pending",
+      //     total_amount: 0,
+      //     paid_amount: 0,
+      //     start_time: new Date(rentalStartTime).toISOString(),
+      //     duration_minutes: null,
+      //     is_voucher_used: true,
+      //     hourly_rate_snapshot: hourlyRateSnapshot,
+      //     per_minute_rate_snapshot: perMinuteRateSnapshot,
+      //   });
+
+      //   const updateConsoleStatus = insertRentalSession.then(({ error }) => {
+      //     if (!error) {
+      //       return supabase
+      //         .from("consoles")
+      //         .update({ status: "rented" })
+      //         .eq("id", consoleId);
+      //     } else {
+      //       // Kembalikan error jika insert gagal
+      //       return Promise.reject(error);
+      //     }
+      //   });
+
+      //   try {
+      //     await Promise.all([insertRentalSession, updateConsoleStatus]);
+      //   } catch (error) {
+      //     console.error(
+      //       "Error occurred during rental session or console update:",
+      //       error
+      //     );
+      //   }
+
+      //   // Update console status
+      //   // const { error: consoleError } = await supabase
+      //   //   .from("consoles")
+      //   //   .update({ status: "rented" })
+      //   //   .eq("id", consoleId);
+      //   // if (consoleError) throw consoleError;
+
+      //   // Cetak bukti
+      //   let customerName = "Customer";
+
+      //   printRentalProof({
+      //     customerName: customerName,
+      //     unitNumber: latestConsole.name,
+      //     startTimestamp: new Date().toLocaleString("id-ID"),
+      //     mode: rentalType,
+      //   });
+
+      //   setShowStartRentalModal(null);
+      //   setRentalType("pay-as-you-go");
+      //   setRentalDurationHours(1);
+      //   setRentalDurationMinutes(0);
+      //   setRentalStartTime(getNowForDatetimeLocal());
+      //   setSearchConsole("");
+      //   await loadData();
+      //   await refreshActiveSessions();
+      //   Swal.fire(
+      //     "Berhasil",
+      //     "Sesi rental (member card) berhasil dimulai",
+      //     "success"
+      //   );
+      //   return;
+      // }
 
       // Create new rental session (pay-as-you-go)
       const { error: rentalError } = await supabase
         .from("rental_sessions")
         .insert({
-          customer_id: customerId,
+          customer_id: null,
           console_id: consoleId,
           status: "active",
           payment_status: paymentStatus,
@@ -3459,13 +3546,7 @@ const ActiveRentals: React.FC = () => {
       if (consoleError) throw consoleError;
 
       // Get customer name
-      let customerName = "";
-      if (customerType === "member" && customerId) {
-        const customer = customers.find((c) => c.id === customerId);
-        customerName = customer?.name || "Customer";
-      } else if (customerType === "non-member") {
-        customerName = nonMemberName || "Non-Member";
-      }
+      let customerName = "Customer";
 
       printRentalProof({
         customerName: customerName,
@@ -3475,15 +3556,11 @@ const ActiveRentals: React.FC = () => {
       });
 
       setShowStartRentalModal(null);
-      setSelectedCustomerId("");
-      setCustomerType("member");
       setRentalType("pay-as-you-go");
       setRentalDurationHours(1);
       setRentalDurationMinutes(0);
       setRentalStartTime(getNowForDatetimeLocal());
-      setNonMemberName("");
       setSearchConsole("");
-      setNonMemberPhone("");
       await loadData();
       await refreshActiveSessions(); // Refresh global sessions
       Swal.fire("Berhasil", "Sesi rental berhasil dimulai", "success");
@@ -3492,20 +3569,11 @@ const ActiveRentals: React.FC = () => {
       Swal.fire("Error", "Gagal memulai sesi rental", "error");
     }
   };
-
   // Product cart functions
   const addToCart = (product: Product) => {
     const existingItem = cart.find((item) => item.productId === product.id);
     let newQuantity = 1;
     if (existingItem) {
-      // if (existingItem.quantity >= product.stock) {
-      //   Swal.fire(
-      //     "Stok Tidak Cukup",
-      //     `Stok ${product.name} hanya tersisa ${product.stock}`,
-      //     "warning"
-      //   );
-      //   return;
-      // }
       newQuantity = existingItem.quantity + 1;
       setCart(
         cart.map((item) =>
@@ -3532,62 +3600,6 @@ const ActiveRentals: React.FC = () => {
       };
       setCart([...cart, newItem]);
     }
-
-    // Simpan ke database sebagai pending jika sedang menambahkan produk pada sesi rental aktif
-    // if (showProductModal) {
-    //   const sessionId = showProductModal;
-    //   const cartItem = existingItem
-    //     ? {
-    //         ...existingItem,
-    //         quantity: newQuantity,
-    //         total: newQuantity * product.price,
-    //       }
-    //     : {
-    //         productId: product.id,
-    //         productName: product.name,
-    //         price: product.price,
-    //         quantity: 1,
-    //         total: product.price,
-    //       };
-
-    //   // Cek apakah sudah ada data untuk session_id dan product_id
-    //   supabase
-    //     .from("rental_session_products")
-    //     .select("id")
-    //     .eq("session_id", sessionId)
-    //     .eq("product_id", cartItem.productId)
-    //     .single()
-    //     .then(async ({ data, error }) => {
-    //       if (error && error.code !== "PGRST116") {
-    //         // Error selain not found
-    //         console.error("Error checking pending product:", error);
-    //         Swal.fire("Error", "Gagal cek produk pending", "error");
-    //         return;
-    //       }
-    //       if (data) {
-    //         // Sudah ada, update quantity dan total
-    //         const { id } = data;
-    //         const { quantity, total } = cartItem;
-    //         const { price, product_name } = cartItem;
-    //         const { productId } = cartItem;
-    //         await supabase
-    //           .from("rental_session_products")
-    //           .update({ quantity, total, price, product_name })
-    //           .eq("id", id);
-    //       } else {
-    //         // Belum ada, insert baru
-    //         await supabase.from("rental_session_products").insert({
-    //           session_id: sessionId,
-    //           product_id: cartItem.productId,
-    //           product_name: cartItem.productName,
-    //           price: cartItem.price,
-    //           quantity: cartItem.quantity,
-    //           total: cartItem.total,
-    //           status: "pending",
-    //         });
-    //       }
-    //     });
-    // }
   };
 
   const clearCart = () => {
@@ -4148,628 +4160,6 @@ const ActiveRentals: React.FC = () => {
         });
         break;
       }
-      // case "Persiapan": {
-      //   const confirmResult = await Swal.fire({
-      //     title: `Persiapan ${preparationMinutes} Menit`,
-      //     html: `
-      //       <p>Perintah ini akan:</p>
-      //       <ul style="text-align: left; margin: 10px 0;">
-      //         <li>Menyalakan TV dan nomor untuk ${preparationMinutes} menit</li>
-      //         <li>Mematikan semuanya secara otomatis setelah waktu habis</li>
-      //       </ul>
-      //       <p><strong>Console yang dipilih: ${selectedConsoles.length}</strong></p>
-      //     `,
-      //     icon: "question",
-      //     showCancelButton: true,
-      //     confirmButtonText: "Mulai Persiapan",
-      //     cancelButtonText: "Batal",
-      //   });
-
-      //   if (!confirmResult.isConfirmed) return;
-
-      //   // Tampilkan loading
-      //   const loadingAlert = Swal.fire({
-      //     title: "Memulai Persiapan...",
-      //     html: "Menyalakan TV dan nomor...",
-      //     allowOutsideClick: false,
-      //     didOpen: () => {
-      //       Swal.showLoading();
-      //     },
-      //   });
-
-      //   const originalAutoShutdownStates: { [key: string]: boolean } = {};
-
-      //   try {
-      //     for (const device of selectedConsoles) {
-      //       // Simpan nilai awal
-      //       originalAutoShutdownStates[device.id] =
-      //         device.auto_shutdown_enabled || false;
-
-      //       // Clear timeout lama jika ada
-      //       const existing = preparationMode[device.id];
-      //       if (existing?.timeoutId) {
-      //         clearTimeout(existing.timeoutId);
-      //       }
-
-      //       // Jika auto_shutdown masih true, update ke false
-      //       if (device.auto_shutdown_enabled) {
-      //         try {
-      //           await supabase
-      //             .from("consoles")
-      //             .update({ auto_shutdown_enabled: false })
-      //             .eq("id", device.id);
-
-      //           // Update local state juga
-      //           setConsoles((prev) =>
-      //             prev.map((c) =>
-      //               c.id === device.id
-      //                 ? { ...c, auto_shutdown_enabled: false }
-      //                 : c
-      //             )
-      //           );
-      //         } catch (error) {
-      //           console.error(
-      //             `Error updating auto_shutdown for ${device.name}:`,
-      //             error
-      //           );
-      //         }
-      //       }
-      //     }
-
-      //     const turnOnResults = await Promise.allSettled(
-      //       selectedConsoles.map(async (device) => {
-      //         const results = [];
-
-      //         // Nyalakan TV
-      //         try {
-      //           const tvRes = await fetch(device.power_tv_command);
-      //           if (tvRes.ok) {
-      //             results.push({ type: "tv", status: "success" });
-      //           } else {
-      //             results.push({ type: "tv", status: "failed" });
-      //           }
-      //         } catch (error) {
-      //           results.push({ type: "tv", status: "failed" });
-      //         }
-
-      //         // Nyalakan nomor/relay
-      //         // try {
-      //         //   const relayRes = await fetch(device.relay_command_on);
-      //         //   if (relayRes.ok) {
-      //         //     results.push({ type: "relay", status: "success" });
-      //         //   } else {
-      //         //     results.push({ type: "relay", status: "failed" });
-      //         //   }
-      //         // } catch (error) {
-      //         //   results.push({ type: "relay", status: "failed" });
-      //         // }
-
-      //         return { device, results };
-      //       })
-      //     );
-
-      //     // Hitung hasil
-      //     const successful = turnOnResults
-      //       .filter(
-      //         (
-      //           r
-      //         ): r is PromiseFulfilledResult<{ device: any; results: any[] }> =>
-      //           r.status === "fulfilled"
-      //       )
-      //       .map((r) => r.value);
-
-      //     const failed = turnOnResults
-      //       .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-      //       .map((_, i) => selectedConsoles[i]);
-
-      //     // Tampilkan hasil awal
-      //     await Swal.fire({
-      //       title: "Persiapan Dimulai",
-      //       html: `
-      //         <h4><strong>Berhasil Dinyalakan:</strong></h4>
-      //         <ul>
-      //           ${successful
-      //             .map((item) => `<li>${item.device.name}</li>`)
-      //             .join("")}
-      //         </ul>
-      //         ${
-      //           failed.length > 0
-      //             ? `
-      //         <h4><strong>Gagal:</strong></h4>
-      //         <ul>
-      //           ${failed.map((device) => `<li>${device.name}</li>`).join("")}
-      //         </ul>
-      //         `
-      //             : ""
-      //         }
-      //         <p><strong>Timer: ${preparationMinutes} menit</strong></p>
-      //       `,
-      //       icon: "success",
-      //       timer: 3000,
-      //       timerProgressBar: true,
-      //     });
-
-      //     setTimeout(async () => {
-      //       // Tampilkan notifikasi bahwa akan mematikan
-      //       await Swal.fire({
-      //         title: "Waktu Persiapan Habis",
-      //         text: "Mematikan TV dan nomor...",
-      //         icon: "info",
-      //         timer: 2000,
-      //         timerProgressBar: true,
-      //       });
-
-      //       // Matikan semua TV dan nomor
-      //       const turnOffResults = await Promise.allSettled(
-      //         selectedConsoles.map(async (device) => {
-      //           const results = [];
-
-      //           // Matikan TV
-      //           try {
-      //             const tvRes = await fetch(device.power_tv_command);
-      //             if (tvRes.ok) {
-      //               results.push({ type: "tv", status: "success" });
-      //             } else {
-      //               results.push({ type: "tv", status: "failed" });
-      //             }
-      //           } catch (error) {
-      //             results.push({ type: "tv", status: "failed" });
-      //           }
-
-      //           // Matikan nomor/relay
-      //           try {
-      //             const relayRes = await fetch(device.relay_command_off);
-      //             if (relayRes.ok) {
-      //               results.push({ type: "relay", status: "success" });
-      //             } else {
-      //               results.push({ type: "relay", status: "failed" });
-      //             }
-      //           } catch (error) {
-      //             results.push({ type: "relay", status: "failed" });
-      //           }
-
-      //           return { device, results };
-      //         })
-      //       );
-
-      //       // Hitung hasil akhir
-      //       const turnOffSuccessful = turnOffResults
-      //         .filter(
-      //           (
-      //             r
-      //           ): r is PromiseFulfilledResult<{
-      //             device: any;
-      //             results: any[];
-      //           }> => r.status === "fulfilled"
-      //         )
-      //         .map((r) => r.value);
-
-      //       const turnOffFailed = turnOffResults
-      //         .filter(
-      //           (r): r is PromiseRejectedResult => r.status === "rejected"
-      //         )
-      //         .map((_, i) => selectedConsoles[i]);
-
-      //       // Tampilkan hasil akhir
-      //       await Swal.fire({
-      //         title: "Persiapan Selesai",
-      //         html: `
-      //           <h4><strong>Berhasil Dimatikan:</strong></h4>
-      //           <ul>
-      //             ${turnOffSuccessful
-      //               .map((item) => `<li>${item.device.name}</li>`)
-      //               .join("")}
-      //           </ul>
-      //           ${
-      //             turnOffFailed.length > 0
-      //               ? `
-      //           <h4><strong>Gagal Dimatikan:</strong></h4>
-      //           <ul>
-      //             ${turnOffFailed
-      //               .map((device) => `<li>${device.name}</li>`)
-      //               .join("")}
-      //           </ul>
-      //           `
-      //               : ""
-      //           }
-      //         `,
-      //         icon: "success",
-      //         confirmButtonText: "OK",
-      //       });
-
-      //       for (const device of selectedConsoles) {
-      //         const originalValue = originalAutoShutdownStates[device.id];
-      //         if (originalValue !== undefined) {
-      //           try {
-      //             await supabase
-      //               .from("consoles")
-      //               .update({ auto_shutdown_enabled: originalValue })
-      //               .eq("id", device.id);
-
-      //             // Update local state juga
-      //             setConsoles((prev) =>
-      //               prev.map((c) =>
-      //                 c.id === device.id
-      //                   ? { ...c, auto_shutdown_enabled: originalValue }
-      //                   : c
-      //               )
-      //             );
-      //           } catch (error) {
-      //             console.error(
-      //               `Error restoring auto_shutdown for ${device.name}:`,
-      //               error
-      //             );
-      //           }
-      //         }
-      //       }
-      //     }, (preparationMinutes || 5) * 60 * 1000); // Konversi menit ke milidetik
-      //   } catch (error) {
-      //     console.error("Error during preparation:", error);
-
-      //     // Restore auto_shutdown values
-      //     for (const device of selectedConsoles) {
-      //       const originalValue = originalAutoShutdownStates[device.id];
-      //       if (originalValue !== undefined) {
-      //         try {
-      //           await supabase
-      //             .from("consoles")
-      //             .update({ auto_shutdown_enabled: originalValue })
-      //             .eq("id", device.id);
-
-      //           // Update local state juga
-      //           setConsoles((prev) =>
-      //             prev.map((c) =>
-      //               c.id === device.id
-      //                 ? { ...c, auto_shutdown_enabled: originalValue }
-      //                 : c
-      //             )
-      //           );
-      //         } catch (restoreError) {
-      //           console.error(
-      //             `Error restoring auto_shutdown for ${device.name}:`,
-      //             restoreError
-      //           );
-      //         }
-      //       }
-      //     }
-
-      //     await Swal.fire({
-      //       title: "Error",
-      //       text: "Terjadi kesalahan saat menjalankan persiapan",
-      //       icon: "error",
-      //     });
-      //   }
-      //   break;
-      // }
-    }
-  };
-
-  const handleSellVoucher = async () => {
-    const voucher = voucherList.find((v) => v.id === selectedVoucherId);
-    const customer = customers.find((c) => c.id === selectedCustomerId);
-    if (!voucher || !customer) return;
-
-    // 1. Insert ke cashier_transaction
-    // await db.insert("cashier_transaction", {
-    //   type: "voucher",
-    //   amount: voucher.voucher_price,
-    //   payment_method: paymentMethod,
-    //   reference_id: voucher.id,
-    //   description: `Penjualan voucher ${voucher.voucher_code} ke ${customer.name}`,
-    //   timestamp: new Date().toISOString(),
-    //   cashier_id: /* isi dengan id admin aktif */,
-    //   details: {
-    //     items: [
-    //       {
-    //         name: voucher.name,
-    //         type: "voucher",
-    //         total: voucher.voucher_price,
-    //         profit: voucher.voucher_price - voucher.capital,
-    //         capital: voucher.capital,
-    //         description: `Voucher Code: ${voucher.voucher_code}`,
-    //       },
-    //     ],
-    //     voucher: {
-    //       voucher_id: voucher.id,
-    //       voucher_code: voucher.voucher_code,
-    //       total_minutes: voucher.total_minutes,
-    //       hourly_rate: voucher.hourly_rate,
-    //     },
-    //     payment: {
-    //       amount: voucher.voucher_price,
-    //       method: paymentMethod,
-    //     },
-    //     customer: {
-    //       name: customer.name,
-    //       phone: customer.phone,
-    //     },
-    //     breakdown: {
-    //       voucher_price: voucher.voucher_price,
-    //     },
-    //   },
-    // });
-    await logCashierTransaction({
-      type: "voucher",
-      amount: voucher.voucher_price,
-      paymentMethod: paymentMethod,
-      referenceId: `VOUCHER-${Date.now()}`,
-      description: `Penjualan voucher ${voucher.voucher_code} ke ${customer.name}`,
-      details: {
-        items: [
-          {
-            name: voucher.name,
-            type: "voucher",
-            total: voucher.voucher_price,
-            profit: voucher.voucher_price - voucher.capital,
-            capital: voucher.capital,
-            description: `Voucher Code: ${voucher.voucher_code}`,
-          },
-        ],
-        voucher: {
-          voucher_id: voucher.id,
-          voucher_code: voucher.voucher_code,
-          total_points: voucher.total_points,
-          voucher_price: voucher.voucher_price,
-        },
-        payment: {
-          amount: voucher.voucher_price,
-          method: paymentMethod,
-        },
-        customer: {
-          name: customer.name,
-          phone: customer.phone,
-        },
-        breakdown: {
-          voucher_price: voucher.voucher_price,
-        },
-      },
-    });
-
-    // 2. Update balance_points customer
-    await db.update("customers", customer.id, {
-      balance_points: (customer.balance_points || 0) + voucher.total_points,
-    });
-
-    // 3. Notifikasi sukses
-    Swal.fire({
-      icon: "success",
-      title: "Berhasil",
-      text: "Voucher berhasil dijual dan points customer bertambah!",
-      confirmButtonText: "OK",
-    });
-    setShowSellVoucherModal(false);
-    setSelectedVoucherId("");
-    setSelectedCustomerId("");
-  };
-
-  // Handler konfirmasi pembayaran prepaid
-  const handleConfirmPrepaidPayment = async (
-    paymentMethod: "cash" | "qris",
-    paymentAmount: number,
-    discountAmount: number,
-    discountType: "amount" | "percentage",
-    discountValue: number
-  ) => {
-    if (!ensureCashierActive()) return;
-    if (!showPrepaidPaymentModal) return;
-
-    if (customerType === "non-member" && !nonMemberName?.trim()) {
-      Swal.fire("Error", "Nama customer harus diisi", "error");
-      return;
-    }
-
-    if (!selectedCustomerId && customerType === "member") {
-      Swal.fire("Error", "Customer harus dipilih", "error");
-      return;
-    }
-
-    const finalTotal = Math.max(
-      0,
-      showPrepaidPaymentModal.totalAmount - discountAmount
-    );
-
-    if (paymentAmount < finalTotal) {
-      Swal.fire("Error", "Nominal pembayaran kurang dari total", "warning");
-      return;
-    }
-
-    setPrepaidPaymentLoading(true);
-    let rentalSessionId: string | null = null;
-    try {
-      const {
-        console: latestConsole,
-        totalAmount,
-        duration,
-        rentalDurationHours,
-        rentalDurationMinutes,
-      } = showPrepaidPaymentModal;
-      let customerId = selectedCustomerId;
-      let customerName = "";
-
-      if (customerType === "non-member") {
-        const customerData: any = {
-          name: nonMemberName,
-          status: "active",
-          join_date: new Date().toISOString().split("T")[0],
-        };
-        if (nonMemberPhone) {
-          customerData.phone = nonMemberPhone;
-        }
-        const { data: insertedCustomer, error: insertError } = await supabase
-          .from("customers")
-          .insert(customerData)
-          .select()
-          .single();
-        if (insertError) throw insertError;
-        customerId = insertedCustomer.id;
-        customerName = nonMemberName;
-      } else {
-        const { data: customerData } = await supabase
-          .from("customers")
-          .select("name")
-          .eq("id", customerId)
-          .single();
-        customerName = customerData?.name || "";
-      }
-      // Create new rental session
-      const { data: rentalSession, error: rentalError } = await supabase
-        .from("rental_sessions")
-        .insert({
-          customer_id: customerId,
-          console_id: latestConsole.id,
-          status: "active",
-          payment_status: "paid",
-          total_amount: finalTotal,
-          paid_amount: paymentAmount,
-          start_time: new Date(rentalStartTime).toISOString(),
-          duration_minutes: duration,
-          payment_method: paymentMethod,
-        })
-        .select()
-        .single();
-      if (rentalError) throw rentalError;
-      rentalSessionId = rentalSession?.id;
-
-      // Update console status
-      const { error: consoleError } = await supabase
-        .from("consoles")
-        .update({ status: "rented" })
-        .eq("id", latestConsole.id);
-      if (consoleError) {
-        await supabase
-          .from("rental_sessions")
-          .delete()
-          .eq("id", rentalSessionId);
-        throw consoleError;
-      }
-
-      // Print receipt untuk pembayaran prepaid
-      const receiptData = {
-        id: `RENTAL-${Date.now()}`,
-        timestamp: new Date().toLocaleString("id-ID"),
-        customer: { name: customerName },
-        items: [
-          {
-            name: `Rental ${latestConsole.name}`,
-            type: "rental" as const,
-            capital: latestConsole?.rate_profiles?.capital ?? 0,
-            total: totalAmount,
-            profit: finalTotal - (latestConsole?.rate_profiles?.capital ?? 0),
-            description: `Durasi: ${rentalDurationHours} jam ${
-              rentalDurationMinutes > 0 ? `${rentalDurationMinutes} menit` : ""
-            } (Prepaid)`,
-          },
-        ],
-        subtotal: totalAmount,
-        tax: 0,
-        discount:
-          discountAmount > 0
-            ? {
-                type: discountType,
-                value: discountValue,
-                amount: discountAmount,
-              }
-            : undefined,
-        total: finalTotal,
-        paymentMethod: paymentMethod.toUpperCase(),
-        paymentAmount: paymentAmount,
-        change: paymentAmount - finalTotal,
-        cashier: "System", // Ambil dari user yang login
-      };
-
-      const details = {
-        items: receiptData.items,
-        breakdown: { rental_cost: finalTotal, products_total: 0 },
-        customer: receiptData.customer,
-        rental: {
-          session_id: rentalSessionId,
-          console: latestConsole.name,
-          prepaid: true,
-          duration_minutes: duration,
-        },
-        discount:
-          discountAmount > 0
-            ? {
-                type: discountType,
-                value: discountValue,
-                amount: discountAmount,
-              }
-            : undefined,
-        payment: {
-          method: paymentMethod,
-          amount: paymentAmount,
-          change: receiptData.change,
-        },
-      };
-
-      await logCashierTransaction({
-        type: "rental",
-        amount: finalTotal,
-        paymentMethod,
-        referenceId: receiptData.id,
-        description: `Prepaid rental (${latestConsole.name})`,
-        details,
-      });
-
-      printRentalProof({
-        customerName: customers.find((c) => c.id === customerId)?.name || "",
-        unitNumber: latestConsole.name,
-        startTimestamp: new Date().toLocaleString("id-ID"),
-        mode: rentalType,
-      });
-
-      const result = await Swal.fire({
-        title: "Berhasil",
-        text: "Sesi rental berhasil dimulai",
-        icon: "success",
-        showCancelButton: true,
-        confirmButtonText: "Print Receipt",
-        cancelButtonText: "Tutup",
-      });
-
-      if (result.isConfirmed) {
-        printReceipt(receiptData);
-      } else {
-        await loadData();
-      }
-
-      if (latestConsole.power_tv_command) {
-        fetch(latestConsole.power_tv_command).catch(() => {});
-      }
-      if (latestConsole.relay_command_on) {
-        fetch(latestConsole.relay_command_on).catch(() => {});
-      }
-
-      setSearchConsole("");
-      setShowPrepaidPaymentModal(null);
-      setShowStartRentalModal(null);
-      setSelectedCustomerId("");
-      setCustomerType("member");
-      setRentalType("pay-as-you-go");
-      setRentalDurationHours(1);
-      setRentalDurationMinutes(0);
-      setRentalStartTime(getNowForDatetimeLocal());
-      setNonMemberName("");
-      setNonMemberPhone("");
-
-      await loadData();
-      await refreshActiveSessions(); // Refresh global sessions
-    } catch (error) {
-      console.error("Error starting prepaid rental:", error);
-
-      if (rentalSessionId) {
-        try {
-          await supabase
-            .from("rental_sessions")
-            .delete()
-            .eq("id", rentalSessionId);
-        } catch (rollbackError) {
-          console.error("Rollback failed:", rollbackError);
-        }
-      }
-      Swal.fire("Error", "Gagal memulai sesi rental", "error");
-    } finally {
-      setPrepaidPaymentLoading(false);
     }
   };
 
@@ -4828,6 +4218,195 @@ const ActiveRentals: React.FC = () => {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelLoading, setCancelLoading] = useState(false);
 
+  // Handler konfirmasi pembayaran prepaid
+  const handleConfirmPrepaidPayment = async (
+    paymentMethod: "cash" | "qris",
+    paymentAmount: number,
+    discountAmount: number,
+    discountType: "amount" | "percentage",
+    discountValue: number
+  ) => {
+    if (!ensureCashierActive()) return;
+    if (!showPrepaidPaymentModal) return;
+
+    const finalTotal = Math.max(
+      0,
+      showPrepaidPaymentModal.totalAmount - discountAmount
+    );
+
+    if (paymentAmount < finalTotal) {
+      Swal.fire("Error", "Nominal pembayaran kurang dari total", "warning");
+      return;
+    }
+
+    setPrepaidPaymentLoading(true);
+    let rentalSessionId: string | null = null;
+    try {
+      const {
+        console: latestConsole,
+        totalAmount,
+        duration,
+        rentalDurationHours,
+        rentalDurationMinutes,
+      } = showPrepaidPaymentModal;
+
+      // Create new rental session (tanpa customer_id)
+      const { data: insertedRows, error: rentalError } = await supabase
+        .from("rental_sessions")
+        .insert({
+          console_id: latestConsole.id,
+          status: "active",
+          payment_status: "paid",
+          total_amount: finalTotal,
+          paid_amount: paymentAmount,
+          start_time: new Date(rentalStartTime).toISOString(),
+          duration_minutes: duration,
+          payment_method: paymentMethod,
+        })
+        .select("id")
+        .limit(1);
+      if (rentalError) throw rentalError;
+      rentalSessionId = insertedRows?.[0]?.id ?? null;
+
+      // Update console status
+      const { error: consoleError } = await supabase
+        .from("consoles")
+        .update({ status: "rented" })
+        .eq("id", latestConsole.id);
+      if (consoleError) {
+        if (rentalSessionId) {
+          await supabase
+            .from("rental_sessions")
+            .delete()
+            .eq("id", rentalSessionId);
+        }
+        throw consoleError;
+      }
+
+      // Print receipt untuk pembayaran prepaid (tanpa customer)
+      const receiptData = {
+        id: `RENTAL-${Date.now()}`,
+        timestamp: new Date().toLocaleString("id-ID"),
+        customer: { name: "Customer" },
+        items: [
+          {
+            name: `Rental ${latestConsole.name}`,
+            type: "rental" as const,
+            capital: latestConsole?.rate_profiles?.capital ?? 0,
+            total: totalAmount,
+            profit: finalTotal - (latestConsole?.rate_profiles?.capital ?? 0),
+            description: `Durasi: ${rentalDurationHours} jam ${
+              rentalDurationMinutes > 0 ? `${rentalDurationMinutes} menit` : ""
+            } (Prepaid)`,
+          },
+        ],
+        subtotal: totalAmount,
+        tax: 0,
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
+        total: finalTotal,
+        paymentMethod: paymentMethod.toUpperCase(),
+        paymentAmount: paymentAmount,
+        change: paymentAmount - finalTotal,
+        cashier: "System",
+      };
+
+      const details = {
+        items: receiptData.items,
+        breakdown: { rental_cost: finalTotal, products_total: 0 },
+        rental: {
+          session_id: rentalSessionId,
+          console: latestConsole.name,
+          prepaid: true,
+          duration_minutes: duration,
+        },
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
+        payment: {
+          method: paymentMethod,
+          amount: paymentAmount,
+          change: receiptData.change,
+        },
+      } as any;
+
+      await logCashierTransaction({
+        type: "rental",
+        amount: finalTotal,
+        paymentMethod,
+        referenceId: receiptData.id,
+        description: `Prepaid rental (${latestConsole.name})`,
+        details,
+      });
+
+      printRentalProof({
+        customerName: "",
+        unitNumber: latestConsole.name,
+        startTimestamp: new Date().toLocaleString("id-ID"),
+        mode: rentalType,
+      });
+
+      const result = await Swal.fire({
+        title: "Berhasil",
+        text: "Sesi rental berhasil dimulai",
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonText: "Print Receipt",
+        cancelButtonText: "Tutup",
+      });
+
+      if (result.isConfirmed) {
+        printReceipt(receiptData as any);
+      } else {
+        await loadData();
+      }
+
+      if (latestConsole.power_tv_command) {
+        fetch(latestConsole.power_tv_command).catch(() => {});
+      }
+      if (latestConsole.relay_command_on) {
+        fetch(latestConsole.relay_command_on).catch(() => {});
+      }
+
+      setSearchConsole("");
+      setShowPrepaidPaymentModal(null);
+      setShowStartRentalModal(null);
+      setRentalType("pay-as-you-go");
+      setRentalDurationHours(1);
+      setRentalDurationMinutes(0);
+      setRentalStartTime(getNowForDatetimeLocal());
+
+      await loadData();
+      await refreshActiveSessions();
+    } catch (error) {
+      console.error("Error starting prepaid rental:", error);
+
+      if (rentalSessionId) {
+        try {
+          await supabase
+            .from("rental_sessions")
+            .delete()
+            .eq("id", rentalSessionId);
+        } catch (rollbackError) {
+          console.error("Rollback failed:", rollbackError);
+        }
+      }
+      Swal.fire("Error", "Gagal memulai sesi rental", "error");
+    } finally {
+      setPrepaidPaymentLoading(false);
+    }
+  };
   // Fungsi pembatalan transaksi
   const handleCancelTransaction = async (session: RentalSession) => {
     if (!cancelReason.trim()) {
@@ -5012,50 +4591,6 @@ const ActiveRentals: React.FC = () => {
                 </div>
               </div>
 
-              {/* Individual Console Controls */}
-              {/* <div className="flex items-center gap-1">
-                <span className="text-xs text-gray-500">Per Console:</span>
-                <div className="flex gap-1">
-                  {consoles.slice(0, 3).map((console) => (
-                    <button
-                      key={console.id}
-                      onClick={() =>
-                        updateConsoleAutoShutdown(
-                          console.id,
-                          !consoleAutoShutdownStates[console.id]
-                        )
-                      }
-                      disabled={isUpdatingAutoShutdown}
-                      className={`w-6 h-6 text-xs font-medium rounded border transition-colors ${
-                        consoleAutoShutdownStates[console.id]
-                          ? "bg-green-500 text-white border-green-500 hover:bg-green-600"
-                          : "bg-gray-200 text-gray-600 border-gray-300 hover:bg-gray-300"
-                      } ${
-                        isUpdatingAutoShutdown
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
-                      title={`${console.name}: ${
-                        consoleAutoShutdownStates[console.id]
-                          ? "Protected"
-                          : "Not Protected"
-                      }`}
-                    >
-                      {console.name.charAt(0).toUpperCase()}
-                    </button>
-                  ))}
-                  {consoles.length > 3 && (
-                    <button
-                      onClick={() => setShowAutoShutdownModal(true)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium px-1"
-                      title="Manage all consoles"
-                    >
-                      +{consoles.length - 3} more
-                    </button>
-                  )}
-                </div>
-              </div> */}
-
               {/* Manage All Button */}
               <div className="flex items-center gap-2">
                 <button
@@ -5128,7 +4663,6 @@ const ActiveRentals: React.FC = () => {
           <button
             onClick={() => {
               setShowSellVoucherModal(true);
-              setSelectedCustomerId("");
             }}
             className=" bg-blue-500 hover:bg-blue-600 text-white py-3 px-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
@@ -5238,6 +4772,67 @@ const ActiveRentals: React.FC = () => {
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 Jual Voucher
               </h2>
+
+              {/* Member Card Status */}
+              {!scannedCardUID || !scannedCardData ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center">
+                    <div className="text-red-600">
+                      <svg
+                        className="h-5 w-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800">
+                        Kartu Member Belum Discan
+                      </h3>
+                      <p className="text-sm text-red-700 mt-1">
+                        Silakan scan kartu member terlebih dahulu sebelum
+                        menjual voucher.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center">
+                    <div className="text-green-600">
+                      <svg
+                        className="h-5 w-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-green-800">
+                        Kartu Member Terdeteksi
+                      </h3>
+                      <p className="text-sm text-green-700 mt-1">
+                        UID: {scannedCardUID}
+                      </p>
+                      <p className="text-sm text-green-700">
+                        Saldo Saat Ini:{" "}
+                        {scannedCardData.balance_points?.toLocaleString()}{" "}
+                        points
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               <form className="space-y-4">
                 {/* Pilih Voucher */}
                 <div>
@@ -5271,33 +4866,6 @@ const ActiveRentals: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Pilih Member
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomerModal(true)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50"
-                    >
-                      {selectedCustomerId
-                        ? customers.find((c) => c.id === selectedCustomerId)
-                            ?.name || "Pilih Member"
-                        : "Pilih Member"}
-                    </button>
-                    {selectedCustomerId && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCustomerId("")}
-                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Metode Pembayaran
                   </label>
                   <select
@@ -5314,38 +4882,69 @@ const ActiveRentals: React.FC = () => {
                   </select>
                 </div>
                 {/* Preview */}
-                {selectedVoucherId && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    {(() => {
-                      const v = voucherList.find(
-                        (v) => v.id === selectedVoucherId
-                      );
-                      if (!v) return null;
-                      return (
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span>Kode Voucher:</span>
-                            <span>{v.voucher_code}</span>
+                {selectedVoucherId &&
+                  scannedCardUID &&
+                  scannedCardData(
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      {(() => {
+                        const v = voucherList.find(
+                          (v) => v.id === selectedVoucherId
+                        );
+                        if (!v) return null;
+
+                        const currentBalance =
+                          scannedCardData.balance_points || 0;
+                        const newBalance = currentBalance + v.total_points;
+
+                        return (
+                          <div className="space-y-3">
+                            <h4 className="font-medium text-gray-900">
+                              Detail Transaksi
+                            </h4>
+
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span>Kode Voucher:</span>
+                                <span>{v.voucher_code}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Nama Voucher:</span>
+                                <span>{v.name}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Points Ditambahkan:</span>
+                                <span className="text-green-600 font-medium">
+                                  +{v.total_points} points
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="border-t border-gray-200 pt-2">
+                              <div className="flex justify-between items-center text-sm">
+                                <span>Saldo Saat Ini:</span>
+                                <span>
+                                  {currentBalance.toLocaleString()} points
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm font-medium text-green-600">
+                                <span>Saldo Setelah Penjualan:</span>
+                                <span>
+                                  {newBalance.toLocaleString()} points
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between font-medium border-t border-gray-200 pt-2">
+                              <span>Total Bayar:</span>
+                              <span>
+                                Rp {v.voucher_price?.toLocaleString("id-ID")}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Nama Voucher:</span>
-                            <span>{v.name}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Total Points:</span>
-                            <span>{v.total_points} points</span>
-                          </div>
-                          <div className="flex justify-between font-medium border-t border-gray-200 pt-2">
-                            <span>Total Bayar:</span>
-                            <span>
-                              Rp {v.voucher_price?.toLocaleString("id-ID")}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
+                        );
+                      })()}
+                    </div>
+                  )}
               </form>
               <div className="flex gap-3 mt-6">
                 <button
@@ -5356,8 +4955,8 @@ const ActiveRentals: React.FC = () => {
                 </button>
                 <button
                   onClick={async () => {
-                    if (!selectedVoucherId || !selectedCustomerId) {
-                      alert("Pilih voucher dan customer!");
+                    if (!selectedVoucherId) {
+                      alert("Pilih voucher!");
                       return;
                     }
                     setSelling(true);
@@ -5464,7 +5063,6 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* History Modal */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -5587,19 +5185,12 @@ const ActiveRentals: React.FC = () => {
                                   </span>
                                   <button
                                     onClick={() => {
-                                      const customer = customers.find(
-                                        (c) => c.id === session.customer_id
-                                      );
                                       const console = consoles.find(
                                         (c) => c.id === session.console_id
                                       );
-                                      if (
-                                        customer &&
-                                        console &&
-                                        session.start_time
-                                      ) {
+                                      if (console && session.start_time) {
                                         printRentalProof({
-                                          customerName: customer.name,
+                                          customerName: "Customer",
                                           unitNumber: console.name,
                                           startTimestamp: new Date(
                                             session.start_time
@@ -5773,7 +5364,6 @@ const ActiveRentals: React.FC = () => {
                     <option value="Nyalakan Nomor">Nyalakan Nomor</option>
                     <option value="Set volume TV">Set volume TV</option>
                     <option value="Set mute TV">Set mute TV</option>
-                    {/* <option value="Persiapan">Persiapan</option> */}
                   </select>
 
                   {selectedCommand === "Set volume TV" && (
@@ -5791,25 +5381,6 @@ const ActiveRentals: React.FC = () => {
                         }
                         className="w-20 px-3 py-2 border border-gray-200 rounded text-sm"
                         placeholder="0-100"
-                      />
-                    </>
-                  )}
-
-                  {selectedCommand === "Persiapan" && (
-                    <>
-                      <div className="text-sm font-semibold text-slate-700 flex items-center">
-                        Menit
-                      </div>
-                      <input
-                        type="number"
-                        min="1"
-                        max="60"
-                        value={preparationMinutes}
-                        onChange={(e) =>
-                          setPreparationMinutes(Number(e.target.value) || 5)
-                        }
-                        className="w-20 px-3 py-2 border border-gray-200 rounded text-sm"
-                        placeholder="1-60"
                       />
                     </>
                   )}
@@ -7489,95 +7060,6 @@ const ActiveRentals: React.FC = () => {
 
               <form className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Jenis Customer
-                  </label>
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <button
-                      type="button"
-                      onClick={() => setCustomerType("member")}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
-                        customerType === "member"
-                          ? "bg-blue-50 border-blue-500 text-blue-700"
-                          : "bg-white border-gray-300 text-gray-700"
-                      }`}
-                    >
-                      <Users className="h-5 w-5" />
-                      <span className="font-medium">Member</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomerType("non-member")}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
-                        customerType === "non-member"
-                          ? "bg-blue-50 border-blue-500 text-blue-700"
-                          : "bg-white border-gray-300 text-gray-700"
-                      }`}
-                    >
-                      <UserPlus className="h-5 w-5" />
-                      <span className="font-medium">Non-Member</span>
-                    </button>
-                  </div>
-
-                  {customerType === "member" ? (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Pilih Member
-                      </label>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowCustomerModal(true)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50"
-                        >
-                          {selectedCustomerId
-                            ? customers.find((c) => c.id === selectedCustomerId)
-                                ?.name || "Pilih Member"
-                            : "Pilih Member"}
-                        </button>
-                        {selectedCustomerId && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedCustomerId("")}
-                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Nama Non-Member
-                        </label>
-                        <input
-                          type="text"
-                          value={nonMemberName}
-                          onChange={(e) => setNonMemberName(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Masukkan nama customer"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Nomor Telepon
-                        </label>
-                        <input
-                          type="tel"
-                          value={nonMemberPhone}
-                          onChange={(e) => setNonMemberPhone(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Opsional"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Opsional</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Waktu Mulai Rental
                   </label>
@@ -7607,7 +7089,7 @@ const ActiveRentals: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Jenis Rental
                   </label>
-                  <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="grid grid-cols-2 gap-3 mb-4">
                     <button
                       type="button"
                       onClick={() => setRentalType("pay-as-you-go")}
@@ -7632,7 +7114,7 @@ const ActiveRentals: React.FC = () => {
                       <DollarSign className="h-5 w-5" />
                       <span className="font-medium">Bayar Dimuka</span>
                     </button>
-                    <button
+                    {/* <button
                       type="button"
                       onClick={() => setRentalType("member-card")}
                       className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
@@ -7643,7 +7125,7 @@ const ActiveRentals: React.FC = () => {
                     >
                       <CreditCard className="h-5 w-5" />
                       <span className="font-medium">Member Card</span>
-                    </button>
+                    </button> */}
                   </div>
 
                   {rentalType === "prepaid" && (
@@ -7691,20 +7173,20 @@ const ActiveRentals: React.FC = () => {
                   )}
 
                   {/* Member Card Mode */}
-                  {rentalType === "member-card" && (
+                  {/* {rentalType === "member-card" && (
                     <div>
-                      {customerType === "member" && selectedCustomerId ? (
+                      {scannedCardData ? (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                           <p className="text-sm font-medium text-blue-800">
-                            Sisa Balance:{" "}
-                            {customers.find((c) => c.id === selectedCustomerId)
-                              ?.balance_points ?? 0}{" "}
+                            Kartu: {scannedCardData.uid}
+                          </p>
+                          <p className="text-sm font-medium text-blue-800">
+                            Sisa Balance: {scannedCardData.balance_points}{" "}
                             points
                           </p>
                           {(() => {
-                            const customerBalance =
-                              customers.find((c) => c.id === selectedCustomerId)
-                                ?.balance_points ?? 0;
+                            const cardBalance =
+                              scannedCardData.balance_points ?? 0;
                             const consoleRateProfile =
                               selectedConsole?.rate_profile_id
                                 ? rateProfiles.find(
@@ -7715,7 +7197,7 @@ const ActiveRentals: React.FC = () => {
                             const hourlyRate =
                               consoleRateProfile?.hourly_rate ?? 0;
 
-                            return customerBalance < hourlyRate ? (
+                            return cardBalance < hourlyRate ? (
                               <p className="text-sm text-red-600 mt-2">
                                 ⚠️ Kurang points - Balance tidak cukup untuk
                                 minimal waktu rental
@@ -7726,17 +7208,45 @@ const ActiveRentals: React.FC = () => {
                             Points akan otomatis dipotong dari balance saat sesi
                             diakhiri. Sisa balance akan tetap tersimpan.
                           </p>
+                          <button
+                            onClick={() => {
+                              setScannedCardUID("");
+                              setScannedCardData(null);
+                            }}
+                            className="text-xs text-red-600 underline mt-1"
+                          >
+                            Reset Kartu
+                          </button>
                         </div>
                       ) : (
+                        // <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        //   <p className="text-sm text-yellow-800">
+                        //     Silakan tempelkan kartu RFID untuk menggunakan
+                        //     member card mode.
+                        //   </p>
+                        //   <p className="text-xs text-yellow-600 mt-1">
+                        //     Kartu akan otomatis terdeteksi saat di-tempel.
+                        //   </p>
+                        // </div>
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                           <p className="text-sm text-yellow-800">
-                            Mode ini hanya untuk member. Silakan pilih member
-                            terlebih dahulu.
+                            Silakan scan kartu RFID atau masukkan UID manual.
+                          </p>
+                          <input
+                            type="text"
+                            placeholder="Input UID kartu manual"
+                            value={scannedCardUID}
+                            onChange={(e) => setScannedCardUID(e.target.value)}
+                            className="mt-2 px-3 py-2 border border-gray-300 rounded-lg"
+                          />
+                          <p className="text-xs text-yellow-600 mt-1">
+                            Kartu akan otomatis terdeteksi saat di-scan, atau
+                            isi manual jika scanner bermasalah.
                           </p>
                         </div>
                       )}
                     </div>
-                  )}
+                  )} */}
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -8097,27 +7607,7 @@ const ActiveRentals: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleStartRental(showStartRentalModal)}
-                  disabled={
-                    (customerType === "member" && !selectedCustomerId) ||
-                    (customerType === "non-member" && !nonMemberName) ||
-                    (rentalType === "member-card" &&
-                      customerType === "member" &&
-                      selectedCustomerId &&
-                      (() => {
-                        const customerBalance =
-                          customers.find((c) => c.id === selectedCustomerId)
-                            ?.balance_points ?? 0;
-                        const consoleRateProfile =
-                          selectedConsole?.rate_profile_id
-                            ? rateProfiles.find(
-                                (r) => r.id === selectedConsole.rate_profile_id
-                              )
-                            : null;
-                        const hourlyRate = consoleRateProfile?.hourly_rate ?? 0;
-                        return customerBalance < hourlyRate;
-                      })())
-                  }
-                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
                   {rentalType === "prepaid" ? "Bayar" : "Mulai Rental"}
                 </button>
@@ -8126,152 +7616,6 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Customer Selection Modal */}
-      {showCustomerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex">
-            <div className="flex-1 p-6 overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  Pilih Member
-                </h3>
-                <button
-                  onClick={() => setShowCustomerModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-
-              {/* Search Bar */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Cari member berdasarkan nama atau nomor telepon..."
-                  value={customerSearchTerm}
-                  onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                  className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Info jumlah member available */}
-              <div className="flex items-center justify-between mt-2 mb-4">
-                <p className="text-sm text-gray-500">
-                  {filteredCustomers.length} member tersedia untuk rental
-                </p>
-                {availableCustomers.length !== customers.length && (
-                  <p className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
-                    {customers.length - availableCustomers.length} member sedang
-                    rental
-                  </p>
-                )}
-              </div>
-
-              {/* Customer List */}
-              <div className="max-h-96 overflow-y-auto">
-                {filteredCustomers.length === 0 ? (
-                  <div className="p-6 text-center text-gray-500">
-                    {customerSearchTerm
-                      ? "Tidak ada member yang ditemukan"
-                      : "Semua member sedang rental atau tidak ada member tersedia"}
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-200">
-                    {filteredCustomers.map((customer) => (
-                      <div
-                        key={customer.id}
-                        onClick={() => {
-                          setSelectedCustomerId(customer.id);
-                          setShowCustomerModal(false);
-                          setCustomerSearchTerm("");
-                        }}
-                        className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                <User className="h-5 w-5 text-green-600" />
-                              </div>
-                              <div>
-                                <h4 className="font-medium text-gray-900">
-                                  {customer.name}
-                                </h4>
-                                <p className="text-sm text-gray-500">
-                                  {customer.phone}
-                                </p>
-                                {customer.email && (
-                                  <p className="text-xs text-gray-400">
-                                    {customer.email}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded font-medium">
-                              Available
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">
-                              Member ID
-                            </div>
-                            <div className="text-sm font-mono text-gray-600">
-                              {customer.id}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <div className="flex justify-between items-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomerModal(false)}
-                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Batal
-                  </button>
-                  <div className="text-sm text-gray-500">
-                    {selectedCustomerId && (
-                      <>
-                        Member terpilih:{" "}
-                        <span className="font-medium text-gray-900">
-                          {
-                            customers.find((c) => c.id === selectedCustomerId)
-                              ?.name
-                          }
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Product Selection Modal */}
       {showProductModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden flex">
@@ -8652,7 +7996,6 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* Modal Pembayaran Kasir Style (Cashier) */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

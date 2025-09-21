@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
-import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
+// import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
 
 interface RentalSession {
   id: string;
@@ -26,10 +26,6 @@ interface RentalSession {
   total_points_deducted?: number;
   // pause_start_time?: string;
   // total_pause_minutes?: number;
-  customers?: {
-    name: string;
-    phone: string;
-  };
   consoles?: {
     name: string;
     location: string;
@@ -67,7 +63,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
   // Member card billing hook
-  useMemberCardBilling(activeSessions);
+  // useMemberCardBilling(activeSessions);
 
   // Fetch active sessions from database
   const fetchActiveSessions = useCallback(async () => {
@@ -77,7 +73,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
         .select(
           `
           *,
-          customers(name, phone),
           consoles(name, location, rate_profiles(capital))
         `
         )
@@ -133,7 +128,15 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
           }
 
           // Update rental session
-          await supabase
+          // await supabase
+          //   .from("rental_sessions")
+          //   .update({
+          //     end_time: now.toISOString(),
+          //     status: "completed",
+          //   })
+          //   .eq("id", session.id);
+
+          const updateRentalSession = supabase
             .from("rental_sessions")
             .update({
               end_time: now.toISOString(),
@@ -141,6 +144,12 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
             })
             .eq("id", session.id);
 
+          const updateConsoleStatus = supabase
+            .from("consoles")
+            .update({ status: "available" })
+            .eq("id", session.console_id);
+
+          await Promise.all([updateRentalSession, updateConsoleStatus]);
           // Update console status with guard: only if no other active sessions exist for this console
           const { data: otherActiveSessions, error: activeErr } = await supabase
             .from("rental_sessions")
@@ -252,10 +261,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
       (session) => session.duration_minutes && session.status === "active"
     );
 
-    // for (const session of prepaidSessions) {
-    //   await checkSessionTimeout(session.id);
-    // }
-
     await Promise.all(
       prepaidSessions.map((session) => checkSessionTimeout(session.id))
     );
@@ -339,17 +344,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
                 );
               }
             }
-            // if (c.relay_command_off) {
-            //   try {
-            //     await fetch(c.relay_command_off);
-            //     console.log(`Perintah relay OFF dikirim ke console ${c.id}`);
-            //     errorCount = 0; // reset jika berhasil
-            //   } catch (err) {
-            //     errorCount++;
-            //     errorHappened = true;
-            //     console.error(`Gagal mengirim relay OFF ke console ${c.id}`);
-            //   }
-            // }
             // Update error count state
             setShutdownErrorCount((prev) => ({ ...prev, [c.id]: errorCount }));
             // Tampilkan notifikasi jika error lebih dari 1 kali

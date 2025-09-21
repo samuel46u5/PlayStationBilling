@@ -5,7 +5,6 @@ export interface Customer {
   email?: string;
   address?: string;
   totalSpent: number;
-  balancePoints: number; // Saldo poin untuk member-card
   joinDate: string;
   status: "active" | "inactive";
 }
@@ -32,6 +31,8 @@ export interface RateProfile {
   dailyRate: number;
   weeklyRate: number;
   monthlyRate?: number;
+  minimumMinutes: number;
+  minimumMinutesMember: number;
   peakHourRate?: number; // Tarif jam sibuk
   peakHourStart?: string; // Jam mulai peak hour (HH:MM)
   peakHourEnd?: string; // Jam selesai peak hour (HH:MM)
@@ -260,13 +261,9 @@ export interface RFIDCard {
   id: string;
   uid: string;
   status: "active" | "blocked" | "lost";
-  assigned_customer_id?: string | null;
+  balance_points: number;
   is_admin: boolean;
   created_at: string;
-  customers?: {
-    name: string;
-    phone: string;
-  } | null;
 }
 
 export interface ConsoleMaintenanceBreakdown {
@@ -416,8 +413,9 @@ export interface VoucherUsage {
 
 export interface RentalSession {
   id: string;
-  customerId: string;
+  customerId?: string; // Optional - for tracking purposes only
   consoleId: string;
+  card_uid?: string; 
   startTime: string;
   endTime?: string;
   duration: number; // in minutes
@@ -437,8 +435,13 @@ export interface RentalSession {
     peakHourRate?: number;
     weekendMultiplier?: number;
   };
-  // Voucher fields
-  isVoucherUsed?: boolean;
+  // Member card billing fields
+  is_voucher_used?: boolean; // Renamed from isVoucherUsed for consistency
+  hourly_rate_snapshot?: number;
+  per_minute_rate_snapshot?: number;
+  last_billed_minutes?: number;
+  total_points_deducted?: number;
+  // Legacy voucher fields (deprecated)
   voucherId?: string;
   voucherCode?: string;
   voucherHoursUsed?: number;
@@ -674,4 +677,42 @@ export interface ActivityLog {
   metadata?: Record<string, any>;
   timestamp: string;
   ipAddress: string;
+}
+
+// Card Usage Logs - New interface for card-based system
+export interface CardUsageLog {
+  id: string;
+  card_uid: string;
+  session_id?: string;
+  used_by_name?: string; // Name of person using the card
+  used_by_phone?: string; // Phone number of person using the card
+  action_type:
+    | "rental_start"
+    | "rental_end"
+    | "balance_deduct"
+    | "balance_add"
+    | "card_unassigned"
+    | "customer_unlinked"
+    | "schema_migration"
+    | "balance_change";
+  points_amount: number;
+  balance_before: number;
+  balance_after: number;
+  timestamp: string;
+  notes?: string;
+}
+
+// Card Balance Summary - View interface
+export interface CardBalanceSummary {
+  uid: string;
+  alias?: string;
+  balance_points: number;
+  status: string;
+  issued_at: string;
+  last_seen_at?: string;
+  total_sessions: number;
+  total_points_used: number;
+  last_rental_end?: string;
+  sessions_last_7_days: number;
+  sessions_last_30_days: number;
 }

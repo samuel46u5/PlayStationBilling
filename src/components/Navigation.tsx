@@ -58,7 +58,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     "cashier-session": Wallet,
     rentals: Gamepad2,
     bookings: Calendar,
-    customers: Users,
+    // customers: Users,
     products: Package,
     sales: ShoppingCart,
     bookkeeping: Calculator,

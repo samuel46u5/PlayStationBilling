@@ -255,7 +255,6 @@ export const db = {
     async getActive() {
       return db.select('rental_sessions', `
         *,
-        customers(name, phone),
         consoles(name, location)
       `, { status: 'active' });
     },

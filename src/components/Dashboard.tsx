@@ -26,7 +26,6 @@ const Dashboard: React.FC = () => {
           .select(
             `
             *,
-            customers(name, phone),
             consoles(name)
             `
           )
@@ -52,7 +51,7 @@ const Dashboard: React.FC = () => {
       }
 
       try {
-        const { data: sales } = await supabase
+        const { data: trxRows } = await supabase
           .from("cashier_transactions")
           .select(
             `
@@ -65,7 +64,7 @@ const Dashboard: React.FC = () => {
             )
           `
           )
-          .gt("details->breakdown->products_total", 0)
+          .eq("type", "sale")
           .gte(
             "timestamp",
             new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
@@ -75,76 +74,53 @@ const Dashboard: React.FC = () => {
             new Date(new Date().setHours(23, 59, 59, 999)).toISOString()
           )
           .order("timestamp", { ascending: false });
-        setSales(sales || []);
-      } catch {
-        setSales([]);
-      }
 
-      try {
-        const start = new Date(
-          new Date().getFullYear(),
-          new Date().getMonth(),
-          1
-        );
-        const end = new Date(
-          new Date().getFullYear(),
-          new Date().getMonth() + 1,
-          0,
-          23,
-          59,
-          59
-        );
-
-        const { data: sales, error: salesErr } = await supabase
-          .from("cashier_transactions")
-          .select("id, timestamp, details, type")
-          .eq("type", "sale")
-          .gte("timestamp", start.toISOString())
-          .lte("timestamp", end.toISOString());
-
-        if (salesErr) throw salesErr;
-
-        const map = new Map<
-          string,
-          {
-            product_id: string;
-            product_name: string;
-            quantity_sum: number;
-            total_sum: number;
+        // Normalize details (handle both JSON and string)
+        const normalized = (trxRows || []).map((row: any) => {
+          let details = row?.details;
+          if (typeof details === "string") {
+            try {
+              details = JSON.parse(details);
+            } catch {
+              details = {};
+            }
           }
-        >();
-
-        (sales || []).forEach((sale: any) => {
-          const details = sale?.details || {};
-          const items = details.items || [];
-          if (Array.isArray(items)) {
-            items.forEach((it: any) => {
-              const product_id = it.name ?? "unknown";
-              const name = it.name ?? "Produk";
-              const qty = Number(it.quantity ?? 0) || 0;
-              const total = Number(it.total) || 0;
-
-              if (!map.has(product_id)) {
-                map.set(product_id, {
-                  product_id: product_id,
-                  product_name: name,
-                  quantity_sum: 0,
-                  total_sum: 0,
-                });
-              }
-              const row = map.get(product_id)!;
-              row.quantity_sum += qty;
-              row.total_sum += total;
-            });
-          }
+          return { ...row, details: details || {} };
         });
 
-        const top = Array.from(map.values())
-          .sort((a, b) => b.quantity_sum - a.quantity_sum)
-          .slice(0, 5);
+        setSales(normalized);
 
+        // Hitung top products dari details.items (type === 'product')
+        const productAgg: Record<
+          string,
+          { product_name: string; quantity_sum: number; total_sum: number }
+        > = {};
+        for (const sale of normalized) {
+          const items = sale?.details?.items || [];
+          for (const item of items) {
+            if (!item || item.type !== "product") continue;
+            const name: string = item.product_name || item.name || "";
+            if (!name) continue;
+            const qty: number = Number(item.quantity ?? 1) || 1;
+            const total: number =
+              Number(item.total ?? (item.price ?? 0) * qty) || 0;
+            if (!productAgg[name]) {
+              productAgg[name] = {
+                product_name: name,
+                quantity_sum: 0,
+                total_sum: 0,
+              };
+            }
+            productAgg[name].quantity_sum += qty;
+            productAgg[name].total_sum += total;
+          }
+        }
+        const top = Object.values(productAgg)
+          .sort((a, b) => b.quantity_sum - a.quantity_sum)
+          .slice(0, 10);
         setTopProducts(top);
       } catch {
+        setSales([]);
         setTopProducts([]);
       }
 
@@ -167,7 +143,7 @@ const Dashboard: React.FC = () => {
   );
   const cafeRevenue = sales.reduce(
     (sum: number, sale: any) =>
-      sum + (sale.details.breakdown.products_total ?? 0),
+      sum + (sale?.details?.breakdown?.products_total ?? 0),
     0
   );
   const totalRevenue = rentalRevenue + cafeRevenue;
@@ -331,8 +307,8 @@ const Dashboard: React.FC = () => {
                         {sale.cashier_sessions.cashier_name}
                       </p>
                       <p className="text-sm text-gray-600">
-                        {sale.details.items.filter(
-                          (item) => item.type === "product"
+                        {sale.details?.items?.filter(
+                          (item: any) => item.type === "product"
                         ).length || 0}{" "}
                         item -{" "}
                         {sale.timestamp
@@ -354,19 +330,19 @@ const Dashboard: React.FC = () => {
                     <p className="font-semibold text-gray-900">
                       Rp{" "}
                       {(
-                        sale.details.breakdown.products_total ?? 0
+                        sale.details?.breakdown?.products_total ?? 0
                       ).toLocaleString("id-ID")}
                     </p>
                     <span
                       className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                        sale.details.payment.method === "cash"
+                        sale.details?.payment?.method === "cash"
                           ? "bg-green-100 text-green-800"
-                          : sale.details.payment.method === "card"
+                          : sale.details?.payment?.method === "card"
                           ? "bg-blue-100 text-blue-800"
                           : "bg-purple-100 text-purple-800"
                       }`}
                     >
-                      {(sale.details.payment.method ?? "cash").toUpperCase()}
+                      {(sale.details?.payment?.method ?? "cash").toUpperCase()}
                     </span>
                   </div>
                 </div>
@@ -376,123 +352,61 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Console Status */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
-            Status Konsol
-          </h2>
-          <div className="space-y-4 max-h-screen overflow-y-auto">
-            {consoles.map((console: any) => {
-              const hourlyRate = console.rate_profiles?.hourly_rate ?? 0;
-              return (
-                <div
-                  key={console.id}
-                  className="flex items-center justify-between p-4 border border-gray-100 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        console.status === "available"
-                          ? "bg-green-100"
-                          : console.status === "rented"
-                          ? "bg-blue-100"
-                          : "bg-red-100"
-                      }`}
-                    >
-                      <Gamepad2
-                        className={`h-5 w-5 ${
-                          console.status === "available"
-                            ? "text-green-600"
-                            : console.status === "rented"
-                            ? "text-blue-600"
-                            : "text-red-600"
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {console.name}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Rp {hourlyRate?.toLocaleString("id-ID") || "0"}/jam
-                      </p>
-                    </div>
-                  </div>
-                  <span
-                    className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                      console.status === "available"
-                        ? "bg-green-100 text-green-800"
-                        : console.status === "rented"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {console.status}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          Produk Terlaris
+        </h2>
+        <div className="space-y-4">
+          {topProducts.map((top_product: any, index: number) => {
+            const matched = products.find(
+              (product: any) =>
+                (product?.name ?? "").toLowerCase() ===
+                (top_product?.product_name ?? "").toLowerCase()
+            );
+            const stock = matched?.stock ?? 0;
+            const minStock = matched?.min_stock ?? matched?.minStock ?? 0;
+            const price = matched?.price;
 
-        {/* Top Products */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
-            Produk Terlaris
-          </h2>
-          <div className="space-y-4">
-            {topProducts.map((top_product: any, index: number) => {
-              const matched = products.find(
-                (product: any) =>
-                  (product?.name ?? "").toLowerCase() ===
-                  (top_product?.product_name ?? "").toLowerCase()
-              );
-              const stock = matched?.stock ?? 0;
-              const minStock = matched?.min_stock ?? matched?.minStock ?? 0;
-              const price = matched?.price;
-
-              return (
-                <div
-                  key={top_product.pid}
-                  className="flex items-center justify-between p-4 border border-gray-100 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-bold text-purple-600">
-                        {index + 1}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {top_product.product_name}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Terjual: {top_product.quantity_sum} • Total: Rp{" "}
-                        {(Number(top_product.total_sum) || 0).toLocaleString(
-                          "id-ID"
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-900">
-                      Rp {(price ?? 0).toLocaleString("id-ID")}
-                    </p>
-                    <span
-                      className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                        stock <= minStock
-                          ? "bg-red-100 text-red-800"
-                          : "bg-green-100 text-green-800"
-                      }`}
-                    >
-                      {stock <= minStock ? "Low Stock" : "In Stock"}
+            return (
+              <div
+                key={`${top_product.product_name}-${index}`}
+                className="flex items-center justify-between p-4 border border-gray-100 rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-bold text-purple-600">
+                      {index + 1}
                     </span>
                   </div>
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {top_product.product_name}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Terjual: {top_product.quantity_sum} • Total: Rp{" "}
+                      {(Number(top_product.total_sum) || 0).toLocaleString(
+                        "id-ID"
+                      )}
+                    </p>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900">
+                    Rp {(price ?? 0).toLocaleString("id-ID")}
+                  </p>
+                  <span
+                    className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                      stock <= minStock
+                        ? "bg-red-100 text-red-800"
+                        : "bg-green-100 text-green-800"
+                    }`}
+                  >
+                    {stock <= minStock ? "Low Stock" : "In Stock"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

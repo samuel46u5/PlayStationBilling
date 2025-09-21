@@ -4,8 +4,9 @@ import { getTabLockManager } from '../utils/tabLock';
 
 interface MemberCardSession {
   id: string;
-  customer_id: string;
+  customer_id?: string; // Optional - for tracking only
   console_id: string;
+  card_uid?: string; 
   start_time: string;
   hourly_rate_snapshot: number;
   per_minute_rate_snapshot: number;
@@ -46,7 +47,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
             session.status === 'active' && 
             session.is_voucher_used && 
             session.start_time &&
-            session.customer_id
+            session.card_uid 
         ) as MemberCardSession[];
 
         if (memberCardSessions.length === 0) {
@@ -112,12 +113,12 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       return; // Tidak ada yang perlu dipotong
     }
 
-    // Ambil saldo customer saat ini (guarded) & current session counters (fresh)
-    const [{ data: customerData, error: customerError }, { data: freshSessionRows, error: freshSessErr }] = await Promise.all([
+    // Ambil saldo kartu saat ini (guarded) & current session counters (fresh)
+    const [{ data: cardData, error: cardError }, { data: freshSessionRows, error: freshSessErr }] = await Promise.all([
       supabase
-        .from('customers')
-        .select('balance_points')
-        .eq('id', session.customer_id)
+        .from('rfid_cards')
+        .select('balance_points, status')
+        .eq('uid', session.card_uid)
         .single(),
       supabase
         .from('rental_sessions')
@@ -126,8 +127,13 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         .limit(1)
     ]);
 
-    if (customerError || !customerData) {
-      console.error(`Error fetching customer balance for session ${session.id}:`, customerError);
+    if (cardError || !cardData) {
+      console.error(`Error fetching card balance for session ${session.id}:`, cardError);
+      return;
+    }
+
+    if (cardData.status !== 'active') {
+      console.error(`Card ${session.card_uid} is not active for session ${session.id}`);
       return;
     }
     if (freshSessErr || !freshSessionRows || freshSessionRows.length === 0) {
@@ -136,7 +142,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     }
     const freshSession = freshSessionRows[0] as { total_points_deducted: number };
 
-    const currentBalance = Number(customerData.balance_points) || 0;
+    const currentBalance = Number(cardData.balance_points) || 0;
     const currentTotal = Number(freshSession.total_points_deducted) || 0;
     const computedDelta = expectedPoints - currentTotal;
     if (computedDelta <= 0) {
@@ -144,28 +150,18 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       return;
     }
 
-    // Cek apakah saldo cukup
-    if (currentBalance < computedDelta) {
-      // Jika belum mencapai minimum, jangan akhiri sesi. Biarkan berjalan hingga minimum.
-      if (minimumMinutes > 0 && elapsedMinutes < minimumMinutes) {
-        return; // tunggu hingga minimum tercapai untuk evaluasi ulang
-      }
-      // Setelah melewati minimum dan saldo tetap kurang untuk selisih yang dibutuhkan, akhiri sesi
-      await endSessionDueToInsufficientBalance(session);
-      return;
-    }
-
     // Lakukan pemotongan points
     const newBalance = currentBalance - computedDelta;
 
     // Guarded balance update (only if balance_points still >= computedDelta)
-    const { data: updatedCustRows, error: updateBalanceError } = await supabase
-      .from('customers')
+    const { data: updatedCardRows, error: updateBalanceError } = await supabase
+      .from('rfid_cards')
       .update({ balance_points: newBalance })
-      .eq('id', session.customer_id)
+      .eq('uid', session.card_uid)
+      .eq('status', 'active')
       .gte('balance_points', computedDelta)
       .select('id');
-    if (updateBalanceError || !updatedCustRows || updatedCustRows.length === 0) {
+    if (updateBalanceError || !updatedCardRows || updatedCardRows.length === 0) {
       // Guard gagal karena race condition/saldo berubah. Re-evaluate secara konservatif tanpa mengakhiri sesi.
       // Hanya akhiri jika sudah melewati minimum dan tetap tidak cukup di iterasi berikutnya.
       return;
@@ -184,21 +180,23 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     if (updateSessionError || !updatedSessRows || updatedSessRows.length === 0) {
       // Session sudah diupdate pihak lain → rollback saldo
       await supabase
-        .from('customers')
+        .from('rfid_cards')
         .update({ balance_points: currentBalance })
-        .eq('id', session.customer_id);
+        .eq('uid', session.card_uid);
       return;
     }
 
-    // Log pemotongan points
+    // Log pemotongan points ke card_usage_logs
     const { error: logError } = await supabase
-      .from('point_usage_logs')
+      .from('card_usage_logs')
       .insert({
+        card_uid: session.card_uid,
         session_id: session.id,
-        customer_id: session.customer_id,
-        points_deducted: computedDelta,
-        sisa_balance: newBalance,
-        minutes_billed: computedDelta / (session.per_minute_rate_snapshot || (session.hourly_rate_snapshot / 60))
+        action_type: 'balance_deduct',
+        points_amount: computedDelta,
+        balance_before: currentBalance,
+        balance_after: newBalance,
+        notes: `Automatic deduction for rental session - ${computedDelta / (session.per_minute_rate_snapshot || (session.hourly_rate_snapshot / 60))} minutes`
       });
 
     if (logError) {
@@ -211,9 +209,10 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     window.dispatchEvent(new CustomEvent('memberCardBillingUpdate', {
       detail: { 
         sessionId: session.id, 
+        cardUid: session.card_uid,
         pointsDeducted: computedDelta,
         newTotalDeducted: currentTotal + computedDelta,
-        customerBalance: newBalance
+        cardBalance: newBalance
       }
     }));
   };
@@ -279,14 +278,12 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       
       const totalPoints = freshSessionData?.total_points_deducted || 0;
       
-      
-
-      // Ambil data customer dan console untuk details
-      const [{ data: customerData }, { data: consoleData }] = await Promise.all([
+      // Ambil data kartu dan console untuk details
+      const [{ data: cardData }, { data: consoleData }] = await Promise.all([
         supabase
-          .from('customers')
-          .select('name, balance_points')
-          .eq('id', session.customer_id)
+          .from('rfid_cards')
+          .select('uid, alias, balance_points')
+          .eq('uid', session.card_uid)
           .single(),
         supabase
           .from('consoles')
@@ -320,7 +317,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         }
       }
 
-      const originalBalance = Number(customerData?.balance_points) || 0;
+      const originalBalance = Number(cardData?.balance_points) || 0;
       const correctRemainingBalance = originalBalance - (totalPoints - session.hourly_rate_snapshot);
 
       // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
@@ -329,7 +326,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         amount: 0,
         paymentMethod: 'cash',
         referenceId: `AUTO_END-${session.id}-${Date.now()}`,
-        description: `Auto end (member card) - saldo habis - ${customerData?.name || 'Unknown'}`,
+        description: `Auto end (member card) - saldo habis - Card: ${cardData?.uid || 'Unknown'}`,
         details: {
           items: [
             {
@@ -348,8 +345,8 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
             products_total: 0,
           },
           customer: {
-            name: customerData?.name || "Unknown",
-            id: session.customer_id,
+            name: cardData?.alias || `Card ${cardData?.uid}` || "Unknown",
+            id: null,
           },
           rental: {
             session_id: session.id,
@@ -372,7 +369,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
             change: 0,
           },
           action: 'auto_end_insufficient_balance',
-          customer_id: session.customer_id,
+          customer_id: null,
           console_id: session.console_id,
           elapsed_minutes: elapsedMinutes,
         },

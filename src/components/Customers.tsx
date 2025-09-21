@@ -127,7 +127,6 @@ const Customers: React.FC = () => {
           email: c.email,
           address: c.address,
           totalSpent: c.total_spent ?? 0,
-          balancePoints: c.balance_points ?? 0,
           joinDate: c.join_date ? c.join_date : c.created_at,
           status: c.status ?? "active",
         }))
@@ -784,12 +783,12 @@ const Customers: React.FC = () => {
           <span className="text-gray-600">Total Kunjungan:</span>
           <span className="font-medium">{stats.totalKunjungan} sesi</span>
         </div>
-        <div className="flex justify-between">
+        {/* <div className="flex justify-between">
           <span className="text-gray-600">Total Points:</span>
-          <span className="font-medium text-green-600">
-            {customers.find((c) => c.id === customerId)?.balancePoints}
+          <span className="font-medium text-gray-400">
+            N/A (Points sekarang tersimpan di kartu RFID)
           </span>
-        </div>
+        </div> */}
         <div className="flex justify-between">
           <span className="text-gray-600">Rata-rata Sesi:</span>
           <span className="font-medium">{stats.rataSesi.toFixed(2)} jam</span>
@@ -985,22 +984,6 @@ const Customers: React.FC = () => {
                           : "-"}
                       </span>
                     </div>
-                    <span
-                      className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
-                        customersWithCard.has(customer.id)
-                          ? "bg-emerald-500 text-white"
-                          : "bg-gray-300 text-gray-700"
-                      }`}
-                      title={
-                        customersWithCard.has(customer.id)
-                          ? "Customer sudah memiliki kartu"
-                          : "Customer belum memiliki kartu"
-                      }
-                    >
-                      {customersWithCard.has(customer.id)
-                        ? "ADA KARTU"
-                        : "NO KARTU"}
-                    </span>
                   </div>
                 </div>
 

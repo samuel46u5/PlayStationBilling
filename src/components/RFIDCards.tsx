@@ -35,17 +35,12 @@ const RFIDCards: React.FC = () => {
       .from("rfid_cards")
       .select(
         `
-        *,
-        customers!primary_card_id(name, phone)
+        is_admin, uid, status, created_at, balance_points
       `
       )
       .order("created_at", { ascending: false });
     if (!error && Array.isArray(data)) {
-      setCards(
-        data as (RFIDCard & {
-          customers?: { name: string; phone: string } | null;
-        })[]
-      );
+      setCards(data as RFIDCard[]);
     }
     setLoading(false);
   };
@@ -228,26 +223,26 @@ const RFIDCards: React.FC = () => {
           <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Users className="h-6 w-6 text-purple-600" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
+          {/* <h3 className="text-2xl font-bold text-gray-900 mb-1">
             {
               cards.filter(
                 (c) => Array.isArray(c.customers) && c.customers.length > 0
               ).length
             }
-          </h3>
+          </h3> */}
           <p className="text-gray-600 text-sm">Kartu Ter-assign</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
           <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Settings className="h-6 w-6 text-orange-600" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-1">
+          {/* <h3 className="text-2xl font-bold text-gray-900 mb-1">
             {
               cards.filter(
                 (c) => Array.isArray(c.customers) && c.status === "active"
               ).length
             }
-          </h3>
+          </h3> */}
           <p className="text-gray-600 text-sm">Kartu Aktif</p>
         </div>
       </div>
@@ -285,9 +280,9 @@ const RFIDCards: React.FC = () => {
           {/* Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((card) => {
-              const assigned =
-                Array.isArray(card.customers) && card.customers.length > 0;
-              const customer = assigned ? card.customers[0] : null;
+              // const assigned =
+              //   Array.isArray(card.customers) && card.customers.length > 0;
+              // const customer = assigned ? card.customers[0] : null;
               return (
                 <div
                   key={card.id}
@@ -310,11 +305,11 @@ const RFIDCards: React.FC = () => {
                           <h3 className="font-semibold text-lg font-mono">
                             {card.uid}
                           </h3>
-                          <span className="text-sm opacity-90">
+                          {/* <span className="text-sm opacity-90">
                             {assigned
                               ? "Ter-assign ke customer"
                               : "Belum ter-assign"}
-                          </span>
+                          </span> */}
                         </div>
                       </div>
                     </div>
@@ -348,48 +343,28 @@ const RFIDCards: React.FC = () => {
                           <Users className="h-4 w-4" />
                           Informasi Customer
                         </h4>
-                        {assigned ? (
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">
-                                Nama
-                              </span>
-                              <span className="font-semibold text-blue-600">
-                                {customer.name}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">
-                                Phone
-                              </span>
-                              <span className="font-medium text-gray-700">
-                                {customer.phone}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">
-                                Status
-                              </span>
-                              <span className="font-medium text-green-600">
-                                Sudah ter-assign ke customer
-                              </span>
-                            </div>
+                        <div className="flex flex-col gap-1 text-md text-gray-700">
+                          <div className="flex justify-between">
+                            <span className="font-medium">Points:</span>
+                            <span className="font-mono">
+                              {card.balance_points}
+                            </span>
                           </div>
-                        ) : (
-                          <div>
-                            <p className="text-sm text-gray-500 italic">
-                              Kartu belum ter-assign ke customer
-                            </p>
-                            <div className="flex justify-between items-center mt-2">
-                              <span className="text-sm text-gray-600">
-                                Status
-                              </span>
-                              <span className="font-medium text-red-600">
-                                Belum ter-assign
-                              </span>
-                            </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium">Status:</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-sm font-semibold ${
+                                card.status === "active"
+                                  ? "bg-green-100 text-green-700"
+                                  : card.status === "blocked"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}
+                            >
+                              {card.status.toUpperCase()}
+                            </span>
                           </div>
-                        )}
+                        </div>
                       </div>
 
                       {/* Actions */}

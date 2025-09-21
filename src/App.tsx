@@ -62,8 +62,8 @@ const AppLayout: React.FC = () => {
         return <ActiveRentals />;
       case "bookings":
         return <ScheduledBookings />;
-      case "customers":
-        return <Customers />;
+      // case "customers":
+      //   return <Customers />;
       case "products":
         return <Products />;
       case "sales":
