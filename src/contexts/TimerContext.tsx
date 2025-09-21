@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
-// import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
+import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
 
 interface RentalSession {
   id: string;
@@ -63,7 +63,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
   // Member card billing hook
-  // useMemberCardBilling(activeSessions);
+  useMemberCardBilling(activeSessions);
 
   // Fetch active sessions from database
   const fetchActiveSessions = useCallback(async () => {

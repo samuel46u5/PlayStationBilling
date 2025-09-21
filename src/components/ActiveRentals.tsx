@@ -173,22 +173,22 @@ const ActiveRentals: React.FC = () => {
 
   // RFID Reader hook untuk member card mode
   useRFIDReader((uid) => {
-    // if (rentalType === "member-card") {
-    setScannedCardUID(uid);
-    // Ambil data kartu
-    supabase
-      .from("rfid_cards")
-      .select("uid, balance_points, status")
-      .eq("uid", uid)
-      .single()
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setScannedCardData(data);
-        } else {
-          setScannedCardData(null);
-        }
-      });
-    // }
+    if (rentalType === "member-card") {
+      setScannedCardUID(uid);
+      // Ambil data kartu
+      supabase
+        .from("rfid_cards")
+        .select("uid, balance_points, status")
+        .eq("uid", uid)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setScannedCardData(data);
+          } else {
+            setScannedCardData(null);
+          }
+        });
+    }
   });
 
   // Member Card Billing hook
@@ -947,42 +947,42 @@ const ActiveRentals: React.FC = () => {
   }, []);
 
   // Listen for member card session ended events
-  // useEffect(() => {
-  //   const handleMemberCardSessionEnded = async (event: Event) => {
-  //     const customEvent = event as CustomEvent;
-  //     const { sessionId, reason } = customEvent.detail;
-  //     console.log(`Member card session ${sessionId} ended due to: ${reason}`);
+  useEffect(() => {
+    const handleMemberCardSessionEnded = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { sessionId, reason } = customEvent.detail;
+      console.log(`Member card session ${sessionId} ended due to: ${reason}`);
 
-  //     // Refresh data to update UI
-  //     await loadData();
-  //     await refreshActiveSessions();
+      // Refresh data to update UI
+      await loadData();
+      await refreshActiveSessions();
 
-  //     // Show notification to user
-  //     if (reason === "insufficient_balance") {
-  //       Swal.fire({
-  //         toast: true,
-  //         position: "top-end",
-  //         title: "Session Diakhiri",
-  //         text: `Session rental diakhiri karena saldo member card habis`,
-  //         icon: "warning",
-  //         timer: 5000,
-  //         showConfirmButton: false,
-  //       });
-  //     }
-  //   };
+      // Show notification to user
+      if (reason === "insufficient_balance") {
+        Swal.fire({
+          toast: true,
+          position: "top-end",
+          title: "Session Diakhiri",
+          text: `Session rental diakhiri karena saldo member card habis`,
+          icon: "warning",
+          timer: 5000,
+          showConfirmButton: false,
+        });
+      }
+    };
 
-  //   window.addEventListener(
-  //     "memberCardSessionEnded",
-  //     handleMemberCardSessionEnded
-  //   );
+    window.addEventListener(
+      "memberCardSessionEnded",
+      handleMemberCardSessionEnded
+    );
 
-  //   return () => {
-  //     window.removeEventListener(
-  //       "memberCardSessionEnded",
-  //       handleMemberCardSessionEnded
-  //     );
-  //   };
-  // }, [refreshActiveSessions]);
+    return () => {
+      window.removeEventListener(
+        "memberCardSessionEnded",
+        handleMemberCardSessionEnded
+      );
+    };
+  }, [refreshActiveSessions]);
 
   // Sync with global timer context
   useEffect(() => {
@@ -1131,8 +1131,8 @@ const ActiveRentals: React.FC = () => {
       (r) => r.id === console?.rate_profile_id
     );
     const hourlyRate = rateProfile?.hourly_rate || 15000;
-    const minimumMinutes = rateProfile?.minimum_minutes || 60;
-    const minimumMinutesMember = rateProfile?.minimum_minutes_member || 60;
+    const minimumMinutes = rateProfile?.minimum_minutes ?? 60;
+    const minimumMinutesMember = rateProfile?.minimum_minutes_member ?? 60;
 
     // Untuk member-card, gunakan logika yang sama dengan useMemberCardBilling
     if (session.is_voucher_used) {
@@ -1179,56 +1179,55 @@ const ActiveRentals: React.FC = () => {
 
     // Untuk member-card, gunakan total_points_deducted dari database
     useEffect(() => {
-      // if (session.is_voucher_used && !isPrepaid) {
-      //   // Fetch fresh data dari database untuk sinkronisasi dengan billing system
-      //   const fetchFreshSessionData = async () => {
-      //     try {
-      //       const { data: freshSession } = await supabase
-      //         .from("rental_sessions")
-      //         .select("total_points_deducted")
-      //         .eq("id", session.id)
-      //         .single();
+      if (session.is_voucher_used && !isPrepaid) {
+        // Fetch fresh data dari database untuk sinkronisasi dengan billing system
+        const fetchFreshSessionData = async () => {
+          try {
+            const { data: freshSession } = await supabase
+              .from("rental_sessions")
+              .select("total_points_deducted")
+              .eq("id", session.id)
+              .single();
 
-      //       if (freshSession) {
-      //         setRealTimeCost(freshSession.total_points_deducted || 0);
-      //       } else {
-      //         // Fallback ke data session yang ada
-      //         setRealTimeCost(session.total_points_deducted || 0);
-      //       }
-      //     } catch (error) {
-      //       console.error("Error fetching fresh session data:", error);
-      //       // Fallback ke data session yang ada
-      //       setRealTimeCost(session.total_points_deducted || 0);
-      //     }
-      //   };
+            if (freshSession) {
+              setRealTimeCost(freshSession.total_points_deducted || 0);
+            } else {
+              // Fallback ke data session yang ada
+              setRealTimeCost(session.total_points_deducted || 0);
+            }
+          } catch (error) {
+            console.error("Error fetching fresh session data:", error);
+            // Fallback ke data session yang ada
+            setRealTimeCost(session.total_points_deducted || 0);
+          }
+        };
 
-      //   fetchFreshSessionData();
+        fetchFreshSessionData();
 
-      //   // Listen for billing updates
-      //   const handleBillingUpdate = (event: Event) => {
-      //     const customEvent = event as CustomEvent;
-      //     if (customEvent.detail?.sessionId === session.id) {
-      //       setRealTimeCost(customEvent.detail.newTotalDeducted);
-      //     }
-      //   };
+        // Listen for billing updates
+        const handleBillingUpdate = (event: Event) => {
+          const customEvent = event as CustomEvent;
+          if (customEvent.detail?.sessionId === session.id) {
+            setRealTimeCost(customEvent.detail.newTotalDeducted);
+          }
+        };
 
-      //   window.addEventListener("memberCardBillingUpdate", handleBillingUpdate);
+        window.addEventListener("memberCardBillingUpdate", handleBillingUpdate);
 
-      //   // Refresh setiap 30 detik untuk sinkronisasi dengan billing
-      //   const interval = setInterval(fetchFreshSessionData, 30000);
+        // Refresh setiap 30 detik untuk sinkronisasi dengan billing
+        const interval = setInterval(fetchFreshSessionData, 30000);
 
-      //   return () => {
-      //     clearInterval(interval);
-      //     window.removeEventListener(
-      //       "memberCardBillingUpdate",
-      //       handleBillingUpdate
-      //     );
-      //   };
-      // }
-      // else {
-      // Untuk pay-as-you-go dan prepaid, gunakan perhitungan real-time
-      setRealTimeCost(calculateCurrentCost(session));
-      // }
+        return () => {
+          clearInterval(interval);
+          window.removeEventListener(
+            "memberCardBillingUpdate",
+            handleBillingUpdate
+          );
+        };
+      } else {
+        // Untuk pay-as-you-go dan prepaid, gunakan perhitungan real-time
+        setRealTimeCost(calculateCurrentCost(session));
+      }
     }, [session.is_voucher_used, session.id, isPrepaid, tick]);
 
     return <>{(realTimeCost + (productsTotal || 0)).toLocaleString("id-ID")}</>;
@@ -1451,138 +1450,138 @@ const ActiveRentals: React.FC = () => {
       }
 
       // Untuk MEMBER CARD (points), finalisasi sesi dan lakukan final delta deduction bila ada
-      // if (session.is_voucher_used) {
-      //   const consoleObj = consoles.find((c) => c.id === session.console_id);
-      //   if (consoleObj?.power_tv_command) {
-      //     await fetch(consoleObj.power_tv_command).catch(() => {});
-      //   }
-      //   if (consoleObj?.relay_command_off) {
-      //     await fetch(consoleObj.relay_command_off).catch(() => {});
-      //   }
+      if (session.is_voucher_used) {
+        const consoleObj = consoles.find((c) => c.id === session.console_id);
+        if (consoleObj?.power_tv_command) {
+          await fetch(consoleObj.power_tv_command).catch(() => {});
+        }
+        if (consoleObj?.relay_command_off) {
+          await fetch(consoleObj.relay_command_off).catch(() => {});
+        }
 
-      //   // Hitung menit yang terpakai
-      //   const startTime = session.start_time
-      //     ? new Date(session.start_time)
-      //     : new Date();
-      //   const endTime = new Date();
-      //   const elapsedMinutes = Math.ceil(
-      //     (endTime.getTime() - startTime.getTime()) / (1000 * 60)
-      //   );
+        // Hitung menit yang terpakai
+        const startTime = session.start_time
+          ? new Date(session.start_time)
+          : new Date();
+        const endTime = new Date();
+        const elapsedMinutes = Math.ceil(
+          (endTime.getTime() - startTime.getTime()) / (1000 * 60)
+        );
 
-      //   // Hitung total points yang seharusnya ditarik untuk durasi berjalan
-      //   // Gunakan snapshot tarif yang sudah disimpan saat start rental
-      //   const hourlyRateSnapshot = session.hourly_rate_snapshot || 15000;
-      //   // const perMinuteRateSnapshot =
-      //   //   Math.ceil(
-      //   //     (session.per_minute_rate_snapshot ||
-      //   //       (session.hourly_rate_snapshot || 15000) / 60) / 100
-      //   //   ) * 100;
-      //   const perMinuteRateSnapshot =
-      //     session.per_minute_rate_snapshot || hourlyRateSnapshot / 60;
-      //   const rp = rateProfiles.find(
-      //     (r) => r.id === consoleObj?.rate_profile_id
-      //   );
-      //   const minimumMinutesMember = rp?.minimum_minutes_member || 60;
+        // Hitung total points yang seharusnya ditarik untuk durasi berjalan
+        // Gunakan snapshot tarif yang sudah disimpan saat start rental
+        const hourlyRateSnapshot = session.hourly_rate_snapshot || 15000;
+        // const perMinuteRateSnapshot =
+        //   Math.ceil(
+        //     (session.per_minute_rate_snapshot ||
+        //       (session.hourly_rate_snapshot || 15000) / 60) / 100
+        //   ) * 100;
+        const perMinuteRateSnapshot =
+          session.per_minute_rate_snapshot || hourlyRateSnapshot / 60;
+        const rp = rateProfiles.find(
+          (r) => r.id === consoleObj?.rate_profile_id
+        );
+        const minimumMinutesMember = rp?.minimum_minutes_member ?? 60;
 
-      //   let totalPoints = 0;
-      //   if (minimumMinutesMember == 0) {
-      //     totalPoints = elapsedMinutes * perMinuteRateSnapshot;
-      //   } else if (elapsedMinutes <= minimumMinutesMember) {
-      //     totalPoints = hourlyRateSnapshot;
-      //   } else {
-      //     totalPoints =
-      //       hourlyRateSnapshot +
-      //       Math.ceil(
-      //         (elapsedMinutes - minimumMinutesMember) * perMinuteRateSnapshot
-      //       );
-      //   }
+        let totalPoints = 0;
+        if (minimumMinutesMember == 0) {
+          totalPoints = elapsedMinutes * perMinuteRateSnapshot;
+        } else if (elapsedMinutes <= minimumMinutesMember) {
+          totalPoints = hourlyRateSnapshot;
+        } else {
+          totalPoints =
+            hourlyRateSnapshot +
+            Math.ceil(
+              (elapsedMinutes - minimumMinutesMember) * perMinuteRateSnapshot
+            );
+        }
 
-      //   // Ambil total yang sudah dipotong dari session atau log
-      //   let alreadyDeducted = session.total_points_deducted || 0;
+        // Ambil total yang sudah dipotong dari session atau log
+        let alreadyDeducted = session.total_points_deducted || 0;
 
-      //   const needToDeduct = Math.max(0, totalPoints - alreadyDeducted);
+        const needToDeduct = Math.max(0, totalPoints - alreadyDeducted);
 
-      //   // Final deduction berbasis kartu tidak dilakukan di sini; billing hook sudah melakukan delta-billing.
+        // Final deduction berbasis kartu tidak dilakukan di sini; billing hook sudah melakukan delta-billing.
 
-      //   // Update rental session
-      //   await supabase
-      //     .from("rental_sessions")
-      //     .update({
-      //       end_time: endTime.toISOString(),
-      //       status: "completed",
-      //       payment_status: "paid",
-      //       duration_minutes: elapsedMinutes,
-      //     })
-      //     .eq("id", session.id);
+        // Update rental session
+        await supabase
+          .from("rental_sessions")
+          .update({
+            end_time: endTime.toISOString(),
+            status: "completed",
+            payment_status: "paid",
+            duration_minutes: elapsedMinutes,
+          })
+          .eq("id", session.id);
 
-      //   // Update console status
-      //   await supabase
-      //     .from("consoles")
-      //     .update({ status: "available" })
-      //     .eq("id", session.console_id);
+        // Update console status
+        await supabase
+          .from("consoles")
+          .update({ status: "available" })
+          .eq("id", session.console_id);
 
-      //   await finalizeProductsAndStock(session.id);
+        await finalizeProductsAndStock(session.id);
 
-      //   // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
-      //   await logCashierTransaction({
-      //     type: "rental",
-      //     amount: 0,
-      //     paymentMethod: "cash",
-      //     referenceId: `MEMBER_CARD-${Date.now()}`,
-      //     description: `Rental (member card)`,
-      //     details: {
-      //       items: [
-      //         {
-      //           name: `Rental ${session.consoles?.name || "Console"}`,
-      //           type: "rental",
-      //           quantity: 1,
-      //           total: totalPoints,
-      //           description: `Member Card - ${elapsedMinutes} menit`,
-      //           qty: 1,
-      //           price: totalPoints,
-      //           product_name: `Rental ${session.consoles?.name || "Console"}`,
-      //         },
-      //       ],
-      //       breakdown: {
-      //         rental_cost: totalPoints,
-      //         products_total: 0,
-      //       },
-      //       customer: {
-      //         name: undefined,
-      //         id: null,
-      //       },
-      //       rental: {
-      //         session_id: session.id,
-      //         console: session.consoles?.name,
-      //         duration_minutes: elapsedMinutes,
-      //         start_time: session.start_time,
-      //         end_time: new Date().toISOString(),
-      //       },
-      //       member_card: {
-      //         points_used: totalPoints,
-      //         hourly_rate_snapshot: session.hourly_rate_snapshot,
-      //         per_minute_rate_snapshot: session.per_minute_rate_snapshot,
-      //       },
-      //       payment: {
-      //         method: "member_card",
-      //         amount: totalPoints,
-      //         change: 0,
-      //       },
-      //       customer_id: null,
-      //       console_id: session.console_id,
-      //       elapsed_minutes: elapsedMinutes,
-      //     },
-      //   });
+        // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
+        await logCashierTransaction({
+          type: "rental",
+          amount: 0,
+          paymentMethod: "cash",
+          referenceId: `MEMBER_CARD-${Date.now()}`,
+          description: `Rental (member card)`,
+          details: {
+            items: [
+              {
+                name: `Rental ${session.consoles?.name || "Console"}`,
+                type: "rental",
+                quantity: 1,
+                total: totalPoints,
+                description: `Member Card - ${elapsedMinutes} menit`,
+                qty: 1,
+                price: totalPoints,
+                product_name: `Rental ${session.consoles?.name || "Console"}`,
+              },
+            ],
+            breakdown: {
+              rental_cost: totalPoints,
+              products_total: 0,
+            },
+            customer: {
+              name: undefined,
+              id: null,
+            },
+            rental: {
+              session_id: session.id,
+              console: session.consoles?.name,
+              duration_minutes: elapsedMinutes,
+              start_time: session.start_time,
+              end_time: new Date().toISOString(),
+            },
+            member_card: {
+              points_used: totalPoints,
+              hourly_rate_snapshot: session.hourly_rate_snapshot,
+              per_minute_rate_snapshot: session.per_minute_rate_snapshot,
+            },
+            payment: {
+              method: "member_card",
+              amount: totalPoints,
+              change: 0,
+            },
+            customer_id: null,
+            console_id: session.console_id,
+            elapsed_minutes: elapsedMinutes,
+          },
+        });
 
-      //   await loadData();
-      //   await refreshActiveSessions();
-      //   Swal.fire(
-      //     "Berhasil",
-      //     `Sesi rental (member card) berhasil diakhiri. Waktu terpakai: ${elapsedMinutes} menit`,
-      //     "success"
-      //   );
-      //   return;
-      // }
+        await loadData();
+        await refreshActiveSessions();
+        Swal.fire(
+          "Berhasil",
+          `Sesi rental (member card) berhasil diakhiri. Waktu terpakai: ${elapsedMinutes} menit`,
+          "success"
+        );
+        return;
+      }
 
       if (!ensureCashierActive()) return;
 
@@ -3379,149 +3378,149 @@ const ActiveRentals: React.FC = () => {
       }
 
       // Member Card Mode - gunakan balance dari kartu RFID
-      // if (rentalType === "member-card") {
-      //   // Perlu scan kartu RFID untuk mendapatkan balance
-      //   if (!scannedCardUID) {
-      //     Swal.fire(
-      //       "Error",
-      //       "Silakan scan kartu RFID terlebih dahulu",
-      //       "warning"
-      //     );
-      //     return;
-      //   }
+      if (rentalType === "member-card") {
+        // Perlu scan kartu RFID untuk mendapatkan balance
+        if (!scannedCardUID) {
+          Swal.fire(
+            "Error",
+            "Silakan scan kartu RFID terlebih dahulu",
+            "warning"
+          );
+          return;
+        }
 
-      //   // Ambil data kartu dan cek balance
-      //   const { data: cardData, error: cardError } = await supabase
-      //     .from("rfid_cards")
-      //     .select("uid, balance_points, status")
-      //     .eq("uid", scannedCardUID)
-      //     .single();
+        // Ambil data kartu dan cek balance
+        const { data: cardData, error: cardError } = await supabase
+          .from("rfid_cards")
+          .select("uid, balance_points, status")
+          .eq("uid", scannedCardUID)
+          .single();
 
-      //   if (cardError || !cardData) {
-      //     Swal.fire("Error", "Kartu tidak ditemukan", "error");
-      //     return;
-      //   }
+        if (cardError || !cardData) {
+          Swal.fire("Error", "Kartu tidak ditemukan", "error");
+          return;
+        }
 
-      //   if (cardData.status !== "active") {
-      //     Swal.fire("Error", "Kartu tidak aktif", "error");
-      //     return;
-      //   }
+        if (cardData.status !== "active") {
+          Swal.fire("Error", "Kartu tidak aktif", "error");
+          return;
+        }
 
-      //   const availableBalance = Math.max(0, cardData.balance_points || 0);
-      //   if (availableBalance <= 0) {
-      //     Swal.fire("Error", "Balance kartu habis", "warning");
-      //     return;
-      //   }
+        const availableBalance = Math.max(0, cardData.balance_points || 0);
+        if (availableBalance <= 0) {
+          Swal.fire("Error", "Balance kartu habis", "warning");
+          return;
+        }
 
-      //   // Nyalakan perangkat (sama seperti pay-as-you-go)
-      //   if (latestConsole.power_tv_command) {
-      //     fetch(latestConsole.power_tv_command).catch(() => {});
-      //   }
-      //   if (latestConsole.relay_command_on) {
-      //     fetch(latestConsole.relay_command_on).catch(() => {});
-      //   }
+        // Nyalakan perangkat (sama seperti pay-as-you-go)
+        if (latestConsole.power_tv_command) {
+          fetch(latestConsole.power_tv_command).catch(() => {});
+        }
+        if (latestConsole.relay_command_on) {
+          fetch(latestConsole.relay_command_on).catch(() => {});
+        }
 
-      //   // Ambil snapshot rate untuk konsistensi harga selama sesi
-      //   const rpForSnapshot = rateProfiles.find(
-      //     (r) => r.id === latestConsole.rate_profile_id
-      //   );
-      //   const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
-      //   const perMinuteRateSnapshot =
-      //     Math.ceil(hourlyRateSnapshot / 60 / 100) * 100;
+        // Ambil snapshot rate untuk konsistensi harga selama sesi
+        const rpForSnapshot = rateProfiles.find(
+          (r) => r.id === latestConsole.rate_profile_id
+        );
+        const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
+        const perMinuteRateSnapshot =
+          Math.ceil(hourlyRateSnapshot / 60 / 100) * 100;
 
-      //   // Insert rental session dengan flag voucher dan snapshot rate
-      //   // const { error: rentalError } = await supabase
-      //   //   .from("rental_sessions")
-      //   //   .insert({
-      //   //     customer_id: null, // Optional - for tracking only
-      //   //     console_id: consoleId,
-      //   //     card_uid: scannedCardUID, // UID kartu yang digunakan
-      //   //     status: "active",
-      //   //     payment_status: "pending",
-      //   //     total_amount: 0,
-      //   //     paid_amount: 0,
-      //   //     start_time: new Date(rentalStartTime).toISOString(),
-      //   //     duration_minutes: null, // Tidak ada durasi tetap
-      //   //     is_voucher_used: true, // Tandai menggunakan balance
-      //   //     hourly_rate_snapshot: hourlyRateSnapshot,
-      //   //     per_minute_rate_snapshot: perMinuteRateSnapshot,
-      //   //   });
+        // Insert rental session dengan flag voucher dan snapshot rate
+        // const { error: rentalError } = await supabase
+        //   .from("rental_sessions")
+        //   .insert({
+        //     customer_id: null, // Optional - for tracking only
+        //     console_id: consoleId,
+        //     card_uid: scannedCardUID, // UID kartu yang digunakan
+        //     status: "active",
+        //     payment_status: "pending",
+        //     total_amount: 0,
+        //     paid_amount: 0,
+        //     start_time: new Date(rentalStartTime).toISOString(),
+        //     duration_minutes: null, // Tidak ada durasi tetap
+        //     is_voucher_used: true, // Tandai menggunakan balance
+        //     hourly_rate_snapshot: hourlyRateSnapshot,
+        //     per_minute_rate_snapshot: perMinuteRateSnapshot,
+        //   });
 
-      //   // if (!rentalError) {
-      //   //   await supabase
-      //   //     .from("consoles")
-      //   //     .update({ status: "rented" })
-      //   //     .eq("id", consoleId);
-      //   // }
+        // if (!rentalError) {
+        //   await supabase
+        //     .from("consoles")
+        //     .update({ status: "rented" })
+        //     .eq("id", consoleId);
+        // }
 
-      //   const insertRentalSession = supabase.from("rental_sessions").insert({
-      //     customer_id: null,
-      //     console_id: consoleId,
-      //     card_uid: scannedCardUID,
-      //     status: "active",
-      //     payment_status: "pending",
-      //     total_amount: 0,
-      //     paid_amount: 0,
-      //     start_time: new Date(rentalStartTime).toISOString(),
-      //     duration_minutes: null,
-      //     is_voucher_used: true,
-      //     hourly_rate_snapshot: hourlyRateSnapshot,
-      //     per_minute_rate_snapshot: perMinuteRateSnapshot,
-      //   });
+        const insertRentalSession = supabase.from("rental_sessions").insert({
+          customer_id: null,
+          console_id: consoleId,
+          card_uid: scannedCardUID,
+          status: "active",
+          payment_status: "pending",
+          total_amount: 0,
+          paid_amount: 0,
+          start_time: new Date(rentalStartTime).toISOString(),
+          duration_minutes: null,
+          is_voucher_used: true,
+          hourly_rate_snapshot: hourlyRateSnapshot,
+          per_minute_rate_snapshot: perMinuteRateSnapshot,
+        });
 
-      //   const updateConsoleStatus = insertRentalSession.then(({ error }) => {
-      //     if (!error) {
-      //       return supabase
-      //         .from("consoles")
-      //         .update({ status: "rented" })
-      //         .eq("id", consoleId);
-      //     } else {
-      //       // Kembalikan error jika insert gagal
-      //       return Promise.reject(error);
-      //     }
-      //   });
+        const updateConsoleStatus = insertRentalSession.then(({ error }) => {
+          if (!error) {
+            return supabase
+              .from("consoles")
+              .update({ status: "rented" })
+              .eq("id", consoleId);
+          } else {
+            // Kembalikan error jika insert gagal
+            return Promise.reject(error);
+          }
+        });
 
-      //   try {
-      //     await Promise.all([insertRentalSession, updateConsoleStatus]);
-      //   } catch (error) {
-      //     console.error(
-      //       "Error occurred during rental session or console update:",
-      //       error
-      //     );
-      //   }
+        try {
+          await Promise.all([insertRentalSession, updateConsoleStatus]);
+        } catch (error) {
+          console.error(
+            "Error occurred during rental session or console update:",
+            error
+          );
+        }
 
-      //   // Update console status
-      //   // const { error: consoleError } = await supabase
-      //   //   .from("consoles")
-      //   //   .update({ status: "rented" })
-      //   //   .eq("id", consoleId);
-      //   // if (consoleError) throw consoleError;
+        // Update console status
+        // const { error: consoleError } = await supabase
+        //   .from("consoles")
+        //   .update({ status: "rented" })
+        //   .eq("id", consoleId);
+        // if (consoleError) throw consoleError;
 
-      //   // Cetak bukti
-      //   let customerName = "Customer";
+        // Cetak bukti
+        let customerName = "Customer";
 
-      //   printRentalProof({
-      //     customerName: customerName,
-      //     unitNumber: latestConsole.name,
-      //     startTimestamp: new Date().toLocaleString("id-ID"),
-      //     mode: rentalType,
-      //   });
+        printRentalProof({
+          customerName: customerName,
+          unitNumber: latestConsole.name,
+          startTimestamp: new Date().toLocaleString("id-ID"),
+          mode: rentalType,
+        });
 
-      //   setShowStartRentalModal(null);
-      //   setRentalType("pay-as-you-go");
-      //   setRentalDurationHours(1);
-      //   setRentalDurationMinutes(0);
-      //   setRentalStartTime(getNowForDatetimeLocal());
-      //   setSearchConsole("");
-      //   await loadData();
-      //   await refreshActiveSessions();
-      //   Swal.fire(
-      //     "Berhasil",
-      //     "Sesi rental (member card) berhasil dimulai",
-      //     "success"
-      //   );
-      //   return;
-      // }
+        setShowStartRentalModal(null);
+        setRentalType("pay-as-you-go");
+        setRentalDurationHours(1);
+        setRentalDurationMinutes(0);
+        setRentalStartTime(getNowForDatetimeLocal());
+        setSearchConsole("");
+        await loadData();
+        await refreshActiveSessions();
+        Swal.fire(
+          "Berhasil",
+          "Sesi rental (member card) berhasil dimulai",
+          "success"
+        );
+        return;
+      }
 
       // Create new rental session (pay-as-you-go)
       const { error: rentalError } = await supabase
@@ -7089,7 +7088,7 @@ const ActiveRentals: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Jenis Rental
                   </label>
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="grid grid-cols-3 gap-3 mb-4">
                     <button
                       type="button"
                       onClick={() => setRentalType("pay-as-you-go")}
@@ -7114,7 +7113,7 @@ const ActiveRentals: React.FC = () => {
                       <DollarSign className="h-5 w-5" />
                       <span className="font-medium">Bayar Dimuka</span>
                     </button>
-                    {/* <button
+                    <button
                       type="button"
                       onClick={() => setRentalType("member-card")}
                       className={`flex items-center justify-center gap-2 p-3 rounded-lg border ${
@@ -7125,7 +7124,7 @@ const ActiveRentals: React.FC = () => {
                     >
                       <CreditCard className="h-5 w-5" />
                       <span className="font-medium">Member Card</span>
-                    </button> */}
+                    </button>
                   </div>
 
                   {rentalType === "prepaid" && (
@@ -7173,7 +7172,7 @@ const ActiveRentals: React.FC = () => {
                   )}
 
                   {/* Member Card Mode */}
-                  {/* {rentalType === "member-card" && (
+                  {rentalType === "member-card" && (
                     <div>
                       {scannedCardData ? (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -7246,7 +7245,7 @@ const ActiveRentals: React.FC = () => {
                         </div>
                       )}
                     </div>
-                  )} */}
+                  )}
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-4">
