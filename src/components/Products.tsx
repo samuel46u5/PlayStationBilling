@@ -89,7 +89,8 @@ const Products: React.FC = () => {
   // Tambah state untuk daftar PO, filter tanggal, dan status
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   // purchaseDateRange removed - use daftarDateRange instead
-  const [purchaseStatus, _setPurchaseStatus] = useState<string>("all");
+  // keep purchaseStatus available for filtering but we don't need the setter here
+  const [purchaseStatus] = useState<string>("all");
   // State untuk periode filter pada laporan penjualan
   const [salesPeriod, setSalesPeriod] = useState<string>("week");
   const [salesDateRange, setSalesDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
@@ -340,9 +341,11 @@ const Products: React.FC = () => {
                           else s.add(dk);
                           setExpandedDates(s);
                         }}
-                        className="font-semibold text-left text-blue-600 hover:underline"
+                        className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
+                        aria-expanded={expandedDates.has(dk)}
                       >
-                        {new Date(dk).toLocaleDateString('id-ID')}
+                        <span>{dk === 'unknown' ? '-' : new Date(dk).toLocaleDateString('id-ID')}</span>
+                        <svg className={`h-4 w-4 transform ${expandedDates.has(dk) ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                       </button>
                     </div>
                     <div className="text-right">
@@ -589,6 +592,8 @@ const Products: React.FC = () => {
 
   // State and fetch for sales (cashier transactions of type 'sale')
   const [sales, setSales] = useState<any[]>([]);
+  // expanded product in Sales Summary (moved to top-level to avoid hook order mismatch)
+  const [expandedSalesProductKey, setExpandedSalesProductKey] = useState<string | null>(null);
   // expanded products within date-based report (key = `${dateKey}::${productKey}`)
   const [expandedDateProducts, setExpandedDateProducts] = useState<Set<string>>(new Set());
   // expanded dates for per-date report (key = dateKey)
@@ -2617,8 +2622,10 @@ const Products: React.FC = () => {
                                     else s.add(compoundKey);
                                     return s;
                                   });
-                                }} className="text-left text-blue-600 hover:underline">
-                                  {p.name} <span className="text-xs text-gray-500">({detailCount})</span>
+                                }} className="text-left text-blue-600 hover:underline flex items-center gap-2" aria-expanded={expandedDateProducts.has(compoundKey)}>
+                                  <span>{p.name}</span>
+                                  <span className="text-xs text-gray-500">({detailCount})</span>
+                                  <svg className={`h-4 w-4 transform ${expandedDateProducts.has(compoundKey) ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                                 </button>
                               </td>
                               <td className="px-4 py-2 text-right">{unit ? Number(unit).toLocaleString('id-ID') : '-'}</td>
@@ -2792,17 +2799,123 @@ const Products: React.FC = () => {
             <tr>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-            {keys.map(k => (
-              <tr key={k}>
-                <td className="px-4 py-2">{map[k].name}</td>
-                <td className="px-4 py-2 text-right font-medium">{map[k].qty}</td>
-                <td className="px-4 py-2 text-right font-semibold">{Number(map[k].total||0).toLocaleString('id-ID')}</td>
-              </tr>
-            ))}
+            {keys.map(k => {
+              const item = map[k];
+              const unitPrice = item.qty ? Math.round((Number(item.total) || 0) / item.qty) : 0;
+              const isExpanded = expandedSalesProductKey === k;
+              return (
+                <React.Fragment key={k}>
+                  <tr>
+                    <td className="px-4 py-2">
+                      <button onClick={() => setExpandedSalesProductKey(isExpanded ? null : k)} className="text-blue-600 hover:underline text-left flex items-center gap-2" aria-expanded={isExpanded}><span>{item.name}</span><svg className={`h-4 w-4 transform ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg></button>
+                    </td>
+                    <td className="px-4 py-2 text-right font-medium">{item.qty}</td>
+                    <td className="px-4 py-2 text-right font-medium">{unitPrice ? unitPrice.toLocaleString('id-ID') : '-'}</td>
+                    <td className="px-4 py-2 text-right font-semibold">{Number(item.total||0).toLocaleString('id-ID')}</td>
+                  </tr>
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={4} className="bg-gray-50 p-0">
+                        <div className="p-4">
+                          <div className="text-sm text-gray-600 mb-2">Detail penjualan per tanggal</div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-white">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs text-gray-500">Tanggal</th>
+                                  <th className="px-4 py-2 text-right text-xs text-gray-500">Harga (Rp)</th>
+                                  <th className="px-4 py-2 text-right text-xs text-gray-500">Qty</th>
+                                  <th className="px-4 py-2 text-right text-xs text-gray-500">Total (Rp)</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-100">
+                                {(() => {
+                                  // compute per-date breakdown for product key k
+                                  const perDate: Record<string, { qty: number; total: number }> = {};
+                                  for (const txn of sales) {
+                                    const tsVal = txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
+                                    const txnDate = tsVal ? new Date(tsVal) : null;
+                                    if (txnDate) {
+                                      if (ssStart && txnDate < ssStart) continue;
+                                      if (ssEnd && txnDate > ssEnd) continue;
+                                    }
+                                    const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
+                                    for (const it of items) {
+                                      const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? null;
+                                      let name = productId ? (products.find((p) => String(p.id) === String(productId))?.name) ?? it.product_name ?? it.name : it.product_name || it.name || String(it.sku || it.code || productId || '-');
+                                      name = String(name || '').trim();
+                                      // build the same key used in the sales-summary map: String(productId ?? name)
+                                      const keyMatch = String(productId ?? name);
+                                      if (keyMatch !== k) continue;
+                                      const qty = Number(it.quantity ?? it.qty ?? 0) || 0;
+                                      const ttl = Number(it.total ?? it.subtotal ?? it.amount ?? (it.unit_price ? qty * Number(it.unit_price) : 0)) || 0;
+                                      const dkey = txnDate ? txnDate.toISOString().slice(0,10) : 'unknown';
+                                      if (!perDate[dkey]) perDate[dkey] = { qty: 0, total: 0 };
+                                      perDate[dkey].qty += qty;
+                                      perDate[dkey].total += ttl;
+                                    }
+                                  }
+                                  const dateKeys = Object.keys(perDate).sort((a,b) => a < b ? 1 : -1);
+                                  if (dateKeys.length === 0) return <tr><td colSpan={3} className="text-sm text-gray-500 py-3">Tidak ada data.</td></tr>;
+                                  const rows = dateKeys.map(dk => {
+                                    const qty = perDate[dk].qty || 0;
+                                    const totalAmt = perDate[dk].total || 0;
+                                    const unit = qty ? Math.round(totalAmt / qty) : 0;
+                                    return (
+                                    <tr key={dk}>
+                                      <td className="px-4 py-2">{new Date(dk).toLocaleDateString('id-ID')}</td>
+                                      <td className="px-4 py-2 text-right">{unit ? Number(unit).toLocaleString('id-ID') : '-'}</td>
+                                      <td className="px-4 py-2 text-right font-medium">{qty}</td>
+                                      <td className="px-4 py-2 text-right font-semibold">{Number(totalAmt||0).toLocaleString('id-ID')}</td>
+                                    </tr>
+                                  );
+                                  });
+
+                                  // compute footer totals for this product across dates
+                                  const footerQty = dateKeys.reduce((s, dk) => s + (perDate[dk].qty || 0), 0);
+                                  const footerAmount = dateKeys.reduce((s, dk) => s + (perDate[dk].total || 0), 0);
+                                  // Better transaction count: count number of sales lines across all sales that match key k
+                                  let realTxCount = 0;
+                                  for (const txn of sales) {
+                                    const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
+                                    for (const it of items) {
+                                      const pid = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? null;
+                                      const nm = pid ? (products.find((pp) => String(pp.id) === String(pid))?.name) ?? it.product_name ?? it.name : it.product_name || it.name || String(it.sku || it.code || pid || '-');
+                                      const keyMatch2 = String(pid ?? String(nm || '').trim());
+                                      if (keyMatch2 === k) realTxCount++;
+                                    }
+                                  }
+
+                                  return (
+                                    <>
+                                      {rows}
+                                      <tr className="bg-gray-50 font-semibold">
+                                        <td className="px-4 py-2">Subtotal</td>
+                                        <td className="px-4 py-2 text-right">-</td>
+                                        <td className="px-4 py-2 text-right">{String(footerQty)}</td>
+                                        <td className="px-4 py-2 text-right">Rp {Number(footerAmount).toLocaleString('id-ID')}</td>
+                                      </tr>
+                                      <tr className="bg-white">
+                                        <td colSpan={4} className="px-4 py-2 text-sm text-gray-600">Jumlah transaksi: {realTxCount}</td>
+                                      </tr>
+                                    </>
+                                  );
+                                })()}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
