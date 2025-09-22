@@ -35,7 +35,7 @@ const RFIDCards: React.FC = () => {
       .from("rfid_cards")
       .select(
         `
-        is_admin, uid, status, created_at, balance_points
+        id, is_admin, uid, status, created_at, balance_points
       `
       )
       .order("created_at", { ascending: false });
@@ -59,7 +59,6 @@ const RFIDCards: React.FC = () => {
       supabase.removeChannel(channel);
     };
   }, []);
-  console.log(cards);
 
   const addCard = async () => {
     if (!uidInput.trim()) return;
@@ -141,9 +140,9 @@ const RFIDCards: React.FC = () => {
         .from("rfid_cards")
         .update({ is_admin: editIsAdmin })
         .eq("id", editCard.id);
-      setEditCard(null);
       Swal.fire("Berhasil", "Kartu berhasil diperbarui", "success");
       load();
+      setEditCard(null);
     } catch (e: any) {
       Swal.fire("Gagal", e?.message || String(e), "error");
     } finally {
@@ -278,7 +277,10 @@ const RFIDCards: React.FC = () => {
       {!loading && cards.length > 0 && (
         <>
           {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            key={cards.map((c) => c.id).join(",")}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
             {filtered.map((card) => {
               // const assigned =
               //   Array.isArray(card.customers) && card.customers.length > 0;

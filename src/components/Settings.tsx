@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { printReceipt } from "../utils/receipt";
 import Swal from "sweetalert2";
+import DeviceAuthorizationSettings from "./DeviceAuthorizationSettings";
 import {
   Settings as SettingsIcon,
   Bell,
@@ -43,19 +44,7 @@ import {
   Activity,
   BarChart3,
   UserCheck,
-  MessageSquare,
-  PhoneCall,
-  Target,
-  TrendingUp,
-  Filter,
-  Tag,
-  Star,
-  Heart,
-  Gift,
   Megaphone,
-  Headphones,
-  PlayCircle,
-  PauseCircle,
   Link,
   Code,
   Layers,
@@ -69,7 +58,6 @@ import {
   CreditCard,
 } from "lucide-react";
 import { db } from "../lib/supabase";
-
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     | "general"
@@ -80,6 +68,7 @@ const Settings: React.FC = () => {
     | "backup"
     | "whatsapp-crm"
     | "system"
+    | "authorized device"
   >("general");
   const [showPassword, setShowPassword] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
@@ -561,6 +550,50 @@ const Settings: React.FC = () => {
     alert(`Test ${apiType} API berhasil!`);
   };
 
+  // const handleSetCurrentDeviceAsAuthorized = async () => {
+  //   try {
+  //     ensureFingerprintReady();
+  //     const currentDeviceId = getCurrentDeviceId();
+  //     if (!currentDeviceId) {
+  //       Swal.fire({
+  //         icon: "error",
+  //         title: "Error",
+  //         text: "Tidak dapat mendapatkan Device ID saat ini",
+  //       });
+  //       return;
+  //     }
+
+  //     const success = await setAuthorizedDevice(currentDeviceId);
+
+  //     if (success) {
+  //       setGeneralSettings({
+  //         ...generalSettings,
+  //         authorized_device_id: currentDeviceId,
+  //       });
+
+  //       Swal.fire({
+  //         icon: "success",
+  //         title: "Berhasil",
+  //         text: "Device ini telah diatur sebagai device yang authorized",
+  //         timer: 2000,
+  //       });
+  //     } else {
+  //       Swal.fire({
+  //         icon: "error",
+  //         title: "Error",
+  //         text: "Gagal mengatur device sebagai authorized",
+  //       });
+  //     }
+  //   } catch (error) {
+  //     console.error("Error setting authorized device:", error);
+  //     Swal.fire({
+  //       icon: "error",
+  //       title: "Error",
+  //       text: "Terjadi kesalahan saat mengatur device",
+  //     });
+  //   }
+  // };
+
   const handleBackupNow = async () => {
     setIsBackingUp(true);
     setBackupProgress(0);
@@ -588,6 +621,7 @@ const Settings: React.FC = () => {
         backup: backupSettings,
         system: systemSettings,
       });
+
       Swal.fire({
         icon: "success",
         title: "Berhasil!",
@@ -4798,6 +4832,7 @@ const Settings: React.FC = () => {
     { id: "security", label: "Security", icon: Shield },
     { id: "backup", label: "Backup", icon: Database },
     { id: "system", label: "System", icon: Monitor },
+    { id: "authorized device", label: "Authorized Device", icon: UserCheck },
   ];
 
   return (
@@ -4844,6 +4879,7 @@ const Settings: React.FC = () => {
         {activeTab === "security" && renderSecuritySettings()}
         {activeTab === "backup" && renderBackupSettings()}
         {activeTab === "system" && renderSystemSettings()}
+        {activeTab === "authorized device" && <DeviceAuthorizationSettings />}
       </div>
 
       {/* Save Button */}

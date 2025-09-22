@@ -8,6 +8,7 @@ import React, {
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
 import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
+import { isAuthorizedDeviceForBilling } from "../utils/deviceFingerprint.ts";
 
 interface RentalSession {
   id: string;
@@ -41,6 +42,7 @@ interface TimerContextType {
   refreshActiveSessions: () => Promise<void>;
   isTimerRunning: boolean;
   triggerUnusedConsolesCheck: () => Promise<void>;
+  isAuthorizedDevice: boolean;
 }
 
 const TimerContext = createContext<TimerContextType | undefined>(undefined);
@@ -61,6 +63,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   const [activeSessions, setActiveSessions] = useState<RentalSession[]>([]);
   const [isCheckingSessions, setIsCheckingSessions] = useState(false);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [isAuthorizedDevice, setIsAuthorizedDevice] = useState(false);
 
   // Member card billing hook
   useMemberCardBilling(activeSessions);
@@ -252,6 +255,18 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     }
   };
 
+  // Check authorization status
+  const checkAuthorization = useCallback(async () => {
+    try {
+      const authorized = await isAuthorizedDeviceForBilling();
+      setIsAuthorizedDevice(authorized);
+      console.log("Device authorization status:", authorized);
+    } catch (error) {
+      console.error("Error checking authorization:", error);
+      setIsAuthorizedDevice(false);
+    }
+  }, []);
+
   // Check all active sessions for timeout
   const checkAllSessions = useCallback(async () => {
     if (isCheckingSessions) return;
@@ -292,6 +307,12 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
 
   // Fungsi pengecekan TV yang tidak rented
   const checkAndShutdownUnusedConsoles = useCallback(async () => {
+    // Hanya device yang authorized yang boleh melakukan shutdown
+    if (!isAuthorizedDevice) {
+      console.log("Device tidak authorized untuk melakukan shutdown console");
+      return;
+    }
+
     try {
       const { data: consoles, error } = await supabase
         .from("consoles")
@@ -365,12 +386,22 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     } catch (err) {
       console.error("Error checkAndShutdownUnusedConsoles:", err);
     }
-  }, [shutdownErrorCount, showShutdownErrorNotification]);
+  }, [shutdownErrorCount, showShutdownErrorNotification, isAuthorizedDevice]);
 
   // Initialize timer on mount
   useEffect(() => {
     fetchActiveSessions();
-  }, [fetchActiveSessions]);
+    checkAuthorization(); // Check authorization saat mount
+  }, [fetchActiveSessions, checkAuthorization]);
+
+  // Set up interval untuk check authorization setiap 2 menit
+  useEffect(() => {
+    const authInterval = setInterval(() => {
+      checkAuthorization();
+    }, 120000); // Check setiap 2 menit
+
+    return () => clearInterval(authInterval);
+  }, [checkAuthorization]);
 
   // Realtime sync for rental_sessions changes across devices
   useEffect(() => {
@@ -421,6 +452,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     refreshActiveSessions,
     isTimerRunning,
     triggerUnusedConsolesCheck: checkAndShutdownUnusedConsoles,
+    isAuthorizedDevice,
   };
 
   return (

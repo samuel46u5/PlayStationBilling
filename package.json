@@ -11,6 +11,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^4.6.2",
     "@supabase/supabase-js": "^2.50.4",
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.344.0",

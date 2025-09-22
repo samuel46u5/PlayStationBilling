@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { getTabLockManager } from '../utils/tabLock';
+import { isAuthorizedDeviceForBilling, ensureFingerprintReady } from '../utils/deviceFingerprint.ts';
 
 interface MemberCardSession {
   id: string;
@@ -31,16 +31,19 @@ async function getMinimumMinutesByConsole(consoleIds: string[]) {
 
 export const useMemberCardBilling = (activeSessions: any[]) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const tabLock = getTabLockManager();
 
   useEffect(() => {
-    // Hanya leader tab yang menjalankan billing
-    if (!tabLock.isCurrentLeader()) {
-      return;
-    }
-
+    ensureFingerprintReady();
     const processMemberCardBilling = async () => {
       try {
+        // Check apakah device ini yang authorized untuk melakukan billing
+        const isAuthorized = await isAuthorizedDeviceForBilling();
+        
+        if (!isAuthorized) {
+          console.log('Device tidak authorized untuk melakukan billing, skip...');
+          return;
+        }
+
         // Ambil semua sesi member-card aktif
         const memberCardSessions = activeSessions.filter(
           (session) => 
@@ -75,7 +78,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       }
     };
 
-    // Jalankan billing setiap 60 detik
+    // Jalankan billing setiap 30 detik
     intervalRef.current = setInterval(processMemberCardBilling, 30000);
 
     // Jalankan sekali saat mount
