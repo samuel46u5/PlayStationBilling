@@ -170,6 +170,12 @@ const ActiveRentals: React.FC = () => {
   >("pay-as-you-go");
   const [scannedCardUID, setScannedCardUID] = useState<string>("");
   const [scannedCardData, setScannedCardData] = useState<any>(null);
+  const [startRentalLoading, setStartRentalLoading] = useState<boolean>(false);
+  const [processPaymentLoading, setProcessPaymentLoading] =
+    useState<boolean>(false);
+  const [endingSessionIds, setEndingSessionIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // RFID Reader hook untuk member card mode
   useRFIDReader((uid) => {
@@ -1146,7 +1152,7 @@ const ActiveRentals: React.FC = () => {
       } else if (totalMinutes <= minimumMinutesMember) {
         return hourlyRateSnapshot;
       } else {
-        const extraMinutes = totalMinutes - minimumMinutesMember;
+        const extraMinutes = totalMinutes - 60;
         return hourlyRateSnapshot + extraMinutes * perMinuteRateSnapshot;
       }
     }
@@ -1394,6 +1400,8 @@ const ActiveRentals: React.FC = () => {
   // };
 
   const handleEndSession = async (sessionId: string) => {
+    if (endingSessionIds.has(sessionId)) return;
+    setEndingSessionIds((prev) => new Set(prev).add(sessionId));
     try {
       const session = activeSessions.find((s) => s.id === sessionId);
       if (!session) return;
@@ -1419,7 +1427,6 @@ const ActiveRentals: React.FC = () => {
           })
           .eq("id", session.id);
 
-        // Update console status with guard: only if no other active sessions exist for this console
         const { data: otherActiveSessions, error: activeErr } = await supabase
           .from("rental_sessions")
           .select("id")
@@ -1615,6 +1622,12 @@ const ActiveRentals: React.FC = () => {
     } catch (error) {
       console.error("Error ending session:", error);
       Swal.fire("Error", "Gagal mengakhiri sesi rental", "error");
+    } finally {
+      setEndingSessionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
     }
   };
   const handleConfirmMoveSession = async () => {
@@ -1903,6 +1916,8 @@ const ActiveRentals: React.FC = () => {
   const handleProcessPayment = async () => {
     if (!showPaymentModal) return;
     if (!ensureCashierActive()) return;
+    if (processPaymentLoading) return;
+    setProcessPaymentLoading(true);
     const { session, productsTotal } = showPaymentModal;
     const totalCost = session ? calculateCurrentCost(session) : 0;
     const subtotal = totalCost + (productsTotal ?? 0);
@@ -2183,6 +2198,8 @@ const ActiveRentals: React.FC = () => {
     } catch (error) {
       console.error("Error processing payment:", error);
       Swal.fire("Error", "Gagal memproses pembayaran", "error");
+    } finally {
+      setProcessPaymentLoading(false);
     }
   };
   // PrepaidPaymentModal: Modal pembayaran untuk Bayar di Muka
@@ -3283,6 +3300,8 @@ const ActiveRentals: React.FC = () => {
   // Ganti handleStartRental untuk prepaid agar memunculkan modal pembayaran
   const handleStartRental = async (consoleId: string) => {
     if (!ensureCashierActive()) return;
+    if (startRentalLoading) return; // prevent re-entry
+    setStartRentalLoading(true);
     try {
       // Pastikan tidak ada session aktif sebelumnya untuk console ini
       const { data: existingSessions, error: existingSessionsError } =
@@ -3333,15 +3352,7 @@ const ActiveRentals: React.FC = () => {
         // Tunggu beberapa detik agar benar-benar OFF
         await new Promise((res) => setTimeout(res, 2000));
       }
-      // Jalankan power_tv_command dan relay_command_on hanya untuk pay-as-you-go
-      if (rentalType !== "prepaid") {
-        if (latestConsole.power_tv_command) {
-          fetch(latestConsole.power_tv_command).catch(() => {});
-        }
-        if (latestConsole.relay_command_on) {
-          fetch(latestConsole.relay_command_on).catch(() => {});
-        }
-      }
+      // Untuk pay-as-you-go, kita nyalakan perangkat setelah reservasi sukses (lihat di bawah)
       // Hitung biaya jika prepaid
       let totalAmount = 0;
       let paidAmount = 0;
@@ -3412,14 +3423,6 @@ const ActiveRentals: React.FC = () => {
           return;
         }
 
-        // Nyalakan perangkat (sama seperti pay-as-you-go)
-        if (latestConsole.power_tv_command) {
-          fetch(latestConsole.power_tv_command).catch(() => {});
-        }
-        if (latestConsole.relay_command_on) {
-          fetch(latestConsole.relay_command_on).catch(() => {});
-        }
-
         // Ambil snapshot rate untuk konsistensi harga selama sesi
         const rpForSnapshot = rateProfiles.find(
           (r) => r.id === latestConsole.rate_profile_id
@@ -3427,66 +3430,51 @@ const ActiveRentals: React.FC = () => {
         const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
         const perMinuteRateSnapshot =
           Math.ceil(hourlyRateSnapshot / 60 / 100) * 100;
+        // Atomic reservation: update console status hanya jika masih available
+        const { data: reservedRows, error: reserveErr } = await supabase
+          .from("consoles")
+          .update({ status: "rented" })
+          .eq("id", consoleId)
+          .eq("status", "available")
+          .select("id");
+        if (reserveErr || !reservedRows || reservedRows.length === 0) {
+          Swal.fire("Gagal", "Console sudah digunakan. Coba lagi.", "warning");
+          return;
+        }
 
         // Insert rental session dengan flag voucher dan snapshot rate
-        // const { error: rentalError } = await supabase
-        //   .from("rental_sessions")
-        //   .insert({
-        //     customer_id: null, // Optional - for tracking only
-        //     console_id: consoleId,
-        //     card_uid: scannedCardUID, // UID kartu yang digunakan
-        //     status: "active",
-        //     payment_status: "pending",
-        //     total_amount: 0,
-        //     paid_amount: 0,
-        //     start_time: new Date(rentalStartTime).toISOString(),
-        //     duration_minutes: null, // Tidak ada durasi tetap
-        //     is_voucher_used: true, // Tandai menggunakan balance
-        //     hourly_rate_snapshot: hourlyRateSnapshot,
-        //     per_minute_rate_snapshot: perMinuteRateSnapshot,
-        //   });
+        const { error: insertErr } = await supabase
+          .from("rental_sessions")
+          .insert({
+            customer_id: null,
+            console_id: consoleId,
+            card_uid: scannedCardUID,
+            status: "active",
+            payment_status: "pending",
+            total_amount: 0,
+            paid_amount: 0,
+            start_time: new Date(rentalStartTime).toISOString(),
+            duration_minutes: null,
+            is_voucher_used: true,
+            hourly_rate_snapshot: hourlyRateSnapshot,
+            per_minute_rate_snapshot: perMinuteRateSnapshot,
+          });
 
-        // if (!rentalError) {
-        //   await supabase
-        //     .from("consoles")
-        //     .update({ status: "rented" })
-        //     .eq("id", consoleId);
-        // }
+        if (insertErr) {
+          // Rollback reservation
+          await supabase
+            .from("consoles")
+            .update({ status: "available" })
+            .eq("id", consoleId);
+          throw insertErr;
+        }
 
-        const insertRentalSession = supabase.from("rental_sessions").insert({
-          customer_id: null,
-          console_id: consoleId,
-          card_uid: scannedCardUID,
-          status: "active",
-          payment_status: "pending",
-          total_amount: 0,
-          paid_amount: 0,
-          start_time: new Date(rentalStartTime).toISOString(),
-          duration_minutes: null,
-          is_voucher_used: true,
-          hourly_rate_snapshot: hourlyRateSnapshot,
-          per_minute_rate_snapshot: perMinuteRateSnapshot,
-        });
-
-        const updateConsoleStatus = insertRentalSession.then(({ error }) => {
-          if (!error) {
-            return supabase
-              .from("consoles")
-              .update({ status: "rented" })
-              .eq("id", consoleId);
-          } else {
-            // Kembalikan error jika insert gagal
-            return Promise.reject(error);
-          }
-        });
-
-        try {
-          await Promise.all([insertRentalSession, updateConsoleStatus]);
-        } catch (error) {
-          console.error(
-            "Error occurred during rental session or console update:",
-            error
-          );
+        // Nyalakan perangkat setelah reservasi & insert sukses
+        if (latestConsole.power_tv_command) {
+          fetch(latestConsole.power_tv_command).catch(() => {});
+        }
+        if (latestConsole.relay_command_on) {
+          fetch(latestConsole.relay_command_on).catch(() => {});
         }
 
         // Update console status
@@ -3523,6 +3511,18 @@ const ActiveRentals: React.FC = () => {
       }
 
       // Create new rental session (pay-as-you-go)
+      // Untuk pay-as-you-go: reserve console atomically, lalu buat session
+      const { data: reservedRows2, error: reserveErr2 } = await supabase
+        .from("consoles")
+        .update({ status: "rented" })
+        .eq("id", consoleId)
+        .eq("status", "available")
+        .select("id");
+      if (reserveErr2 || !reservedRows2 || reservedRows2.length === 0) {
+        Swal.fire("Gagal", "Console sudah digunakan. Coba lagi.", "warning");
+        return;
+      }
+
       const { error: rentalError } = await supabase
         .from("rental_sessions")
         .insert({
@@ -3536,13 +3536,22 @@ const ActiveRentals: React.FC = () => {
           duration_minutes:
             rentalType === "prepaid" ? totalDurationMinutes : null,
         });
-      if (rentalError) throw rentalError;
-      // Update console status
-      const { error: consoleError } = await supabase
-        .from("consoles")
-        .update({ status: "rented" })
-        .eq("id", consoleId);
-      if (consoleError) throw consoleError;
+      if (rentalError) {
+        // Rollback reservation
+        await supabase
+          .from("consoles")
+          .update({ status: "available" })
+          .eq("id", consoleId);
+        throw rentalError;
+      }
+
+      // Nyalakan perangkat setelah reservasi & insert sukses (pay-as-you-go)
+      if (latestConsole.power_tv_command) {
+        fetch(latestConsole.power_tv_command).catch(() => {});
+      }
+      if (latestConsole.relay_command_on) {
+        fetch(latestConsole.relay_command_on).catch(() => {});
+      }
 
       // Get customer name
       let customerName = "Customer";
@@ -3566,6 +3575,8 @@ const ActiveRentals: React.FC = () => {
     } catch (error) {
       console.error("Error starting rental:", error);
       Swal.fire("Error", "Gagal memulai sesi rental", "error");
+    } finally {
+      setStartRentalLoading(false);
     }
   };
   // Product cart functions
@@ -4227,6 +4238,7 @@ const ActiveRentals: React.FC = () => {
   ) => {
     if (!ensureCashierActive()) return;
     if (!showPrepaidPaymentModal) return;
+    if (prepaidPaymentLoading) return;
 
     const finalTotal = Math.max(
       0,
@@ -5965,8 +5977,13 @@ const ActiveRentals: React.FC = () => {
                           {/* Tombol End Rental */}
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
-                            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-1 rounded flex items-center justify-center text-xs"
+                            className={`flex-1 bg-red-600 hover:bg-red-700 text-white py-1 rounded flex items-center justify-center text-xs ${
+                              endingSessionIds.has(activeSession.id)
+                                ? "opacity-60 cursor-not-allowed"
+                                : ""
+                            }`}
                             title="End Rental"
+                            disabled={endingSessionIds.has(activeSession.id)}
                           >
                             <Square className="h-4 w-4" />
                           </button>
@@ -6296,8 +6313,9 @@ const ActiveRentals: React.FC = () => {
                           ) : (
                             <button
                               onClick={() => handleEndSession(activeSession.id)}
-                              className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                              className={`bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${endingSessionIds.has(activeSession.id) ? "opacity-60 cursor-not-allowed" : ""}`}
                               title="Resume Session"
+                              disabled={endingSessionIds.has(activeSession.id)}
                             >
                               <Play className="h-5 w-5" />
                               Resume Sesi
@@ -6329,8 +6347,13 @@ const ActiveRentals: React.FC = () => {
                           )}
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
-                            className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                            className={`bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                              endingSessionIds.has(activeSession.id)
+                                ? "opacity-60 cursor-not-allowed"
+                                : ""
+                            }`}
                             title="Akhiri Sesi"
+                            disabled={endingSessionIds.has(activeSession.id)}
                           >
                             <Square className="h-5 w-5" />
                             Akhiri Sesi
@@ -6871,7 +6894,12 @@ const ActiveRentals: React.FC = () => {
 
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
-                            className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                            className={`w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2 ${
+                              endingSessionIds.has(activeSession.id)
+                                ? "opacity-60 cursor-not-allowed"
+                                : ""
+                            }`}
+                            disabled={endingSessionIds.has(activeSession.id)}
                           >
                             <Square className="h-5 w-5" />
                             End Rental
@@ -7606,9 +7634,18 @@ const ActiveRentals: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleStartRental(showStartRentalModal)}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
+                    startRentalLoading ? "opacity-60 cursor-not-allowed" : ""
+                  }`}
+                  disabled={startRentalLoading}
                 >
-                  {rentalType === "prepaid" ? "Bayar" : "Mulai Rental"}
+                  {startRentalLoading
+                    ? rentalType === "prepaid"
+                      ? "Memproses..."
+                      : "Memulai..."
+                    : rentalType === "prepaid"
+                    ? "Bayar"
+                    : "Mulai Rental"}
                 </button>
               </div>
             </div>
@@ -8345,7 +8382,9 @@ const ActiveRentals: React.FC = () => {
                 </button>
                 <button
                   onClick={handleProcessPayment}
-                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${(() => {
+                  className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
+                    processPaymentLoading ? "opacity-60 cursor-not-allowed" : ""
+                  } ${(() => {
                     const rentalCost = showPaymentModal.session
                       ? calculateCurrentCost(showPaymentModal.session)
                       : 0;
@@ -8356,17 +8395,20 @@ const ActiveRentals: React.FC = () => {
                       ? "opacity-50 cursor-not-allowed"
                       : "";
                   })()}`}
-                  disabled={(() => {
-                    const rentalCost = showPaymentModal.session
-                      ? calculateCurrentCost(showPaymentModal.session)
-                      : 0;
-                    const total =
-                      rentalCost + (showPaymentModal.productsTotal ?? 0);
-                    const finalTotal = Math.max(0, total - discountAmount);
-                    return paymentAmount < finalTotal;
-                  })()}
+                  disabled={
+                    processPaymentLoading ||
+                    (() => {
+                      const rentalCost = showPaymentModal.session
+                        ? calculateCurrentCost(showPaymentModal.session)
+                        : 0;
+                      const total =
+                        rentalCost + (showPaymentModal.productsTotal ?? 0);
+                      const finalTotal = Math.max(0, total - discountAmount);
+                      return paymentAmount < finalTotal;
+                    })()
+                  }
                 >
-                  Bayar
+                  {processPaymentLoading ? "Memproses..." : "Bayar"}
                 </button>
               </div>
             </div>
