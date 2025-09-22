@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-case-declarations */
 import React, { useState, useEffect } from "react";
 import {
   Plus,
@@ -14,8 +15,9 @@ import {
   XCircle,
   Printer,
   DollarSign,
+  List as ListIcon,
+  LayoutGrid,
 } from "lucide-react";
-import { List as ListIcon, LayoutGrid } from "lucide-react";
 import { db } from "../lib/supabase"; // Hanya import db
 import { printPriceList, ProductPriceList } from "../utils/receipt";
 import Swal from "sweetalert2";
@@ -324,6 +326,25 @@ const Products: React.FC = () => {
     if (rekapTanggalError) return <div className="text-sm text-red-500">{rekapTanggalError}</div>;
     const dateKeys = Object.keys(rekapTanggalData).sort((a,b) => a < b ? 1 : -1);
     if (dateKeys.length === 0) return <div className="text-sm text-gray-500">Belum ada data pembelian.</div>;
+    const rtPeriodLabel = (() => {
+      if (rekapTanggalPeriod === 'range') {
+        if (rekapTanggalDateRange.start && rekapTanggalDateRange.end) {
+          const s = new Date(rekapTanggalDateRange.start).toLocaleDateString();
+          const e = new Date(rekapTanggalDateRange.end).toLocaleDateString();
+          return `${s} - ${e}`;
+        }
+        if (rekapTanggalDateRange.start) return `Mulai ${new Date(rekapTanggalDateRange.start).toLocaleDateString()}`;
+        return 'Rentang waktu (tidak lengkap)';
+      }
+      switch (rekapTanggalPeriod) {
+        case 'today': { const d = new Date(); return `Hari Ini (${d.toLocaleDateString()})`; }
+        case 'yesterday': { const d = new Date(); d.setDate(d.getDate()-1); return `Kemarin (${d.toLocaleDateString()})`; }
+        case 'week': { const d0 = new Date(); const dd = new Date(d0); const day = dd.getDay(); const diff = (day === 0 ? -6 : 1) - day; dd.setDate(dd.getDate() + diff); return `Minggu Ini (${dd.toLocaleDateString()} - ${new Date().toLocaleDateString()})`; }
+        case 'month': { const now = new Date(); const start = new Date(now.getFullYear(), now.getMonth(), 1); const end = new Date(now.getFullYear(), now.getMonth()+1, 0); return `Bulan Ini (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`; }
+        default: return 'Semua Waktu';
+      }
+    })();
+
     return (
       <div className="space-y-4">
   {dateKeys.map(dk => {
@@ -384,12 +405,18 @@ const Products: React.FC = () => {
                             const totalQty = productsArr.reduce((s:any, it:any) => s + (Number(it.qty) || 0), 0);
                             const totalAmount = productsArr.reduce((s:any, it:any) => s + (Number(it.total) || 0), 0);
                             return (
-                              <tr className="bg-gray-50">
-                                <td className="px-4 py-2 text-left font-medium">Subtotal</td>
-                                <td className="px-4 py-2 text-right font-medium">{String(totalQty)}</td>
-                                <td className="px-4 py-2 text-right font-medium">-</td>
-                                <td className="px-4 py-2 text-right font-semibold">{String(Number(totalAmount).toLocaleString('id-ID'))}</td>
-                              </tr>
+                              <>
+                                <tr className="bg-gray-50">
+                                  <td className="px-4 py-2 text-left font-medium">Subtotal</td>
+                                  <td className="px-4 py-2 text-right font-medium">{String(totalQty)}</td>
+                                  <td className="px-4 py-2 text-right font-medium">-</td>
+                                  <td className="px-4 py-2 text-right font-semibold">{String(Number(totalAmount).toLocaleString('id-ID'))}</td>
+                                </tr>
+                                <tr>
+                                  <td colSpan={3} className="px-4 py-2 text-right font-semibold">Grand Total</td>
+                                  <td className="px-4 py-2 text-right font-semibold">Rp {Number(totalAmount).toLocaleString('id-ID')}</td>
+                                </tr>
+                              </>
                             );
                           })()}
                         </tfoot>
@@ -400,11 +427,28 @@ const Products: React.FC = () => {
           );
         })}
 
-        {/* Grand total for all dates - consistent placement */}
+        {/* Grand total for all dates - shown as a footer inside the container */}
         {(() => {
           const grand = Object.keys(rekapTanggalData).reduce((s:any, dk:any) => s + (Number(rekapTanggalData[dk]?.dateTotal) || 0), 0);
+          // compute days and average per day if possible
+          const dateKeys = Object.keys(rekapTanggalData).filter((k) => k !== null && k !== undefined && String(k).trim() !== '');
+          const days = dateKeys.length || 1;
+          const avg = days ? Math.round((grand || 0) / days) : 0;
           return (
-            <div className="mt-3 text-right text-sm text-gray-700 font-semibold">Grand Total: Rp {Number(grand).toLocaleString('id-ID')}</div>
+            <div className="mt-3">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-gray-500">Total {days}-Hari</div>
+                  <div className="font-semibold text-gray-900">{rtPeriodLabel}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">Grand Total</div>
+                  <div className="font-semibold text-green-700">Rp {Number(grand).toLocaleString('id-ID')}</div>
+                  <div className="text-sm text-gray-500 mt-2">Rata-rata / hari</div>
+                  <div className="font-medium text-gray-900">Rp {Number(avg).toLocaleString('id-ID')}</div>
+                </div>
+              </div>
+            </div>
           );
         })()}
       </div>
@@ -414,6 +458,44 @@ const Products: React.FC = () => {
   const renderRekapPerBarangTab = () => {
     if (rekapPerBarangLoading) return <div className="text-sm text-gray-500">Memuat rekap per barang...</div>;
     if (rekapPerBarangError) return <div className="text-sm text-red-500">{rekapPerBarangError}</div>;
+    // Compute period label for this tab
+    const periodLabel = (() => {
+      if (rekapPerBarangPeriod === 'range') {
+        if (rekapPerBarangDateRange.start && rekapPerBarangDateRange.end) {
+          const s = new Date(rekapPerBarangDateRange.start).toLocaleDateString();
+          const e = new Date(rekapPerBarangDateRange.end).toLocaleDateString();
+          return `${s} s.d. ${e}`;
+        }
+        if (rekapPerBarangDateRange.start) return `Mulai ${new Date(rekapPerBarangDateRange.start).toLocaleDateString()}`;
+        return 'Rentang waktu (tidak lengkap)';
+      }
+      switch (rekapPerBarangPeriod) {
+        case 'today': {
+          const d = new Date();
+          return `Hari Ini (${d.toLocaleDateString()})`;
+        }
+        case 'yesterday': {
+          const d = new Date(); d.setDate(d.getDate() - 1);
+          return `Kemarin (${d.toLocaleDateString()})`;
+        }
+        case 'week': {
+          const d0 = new Date();
+          const dd = new Date(d0);
+          const day = dd.getDay();
+          const diff = (day === 0 ? -6 : 1) - day;
+          dd.setDate(dd.getDate() + diff);
+          return `Minggu Ini (${dd.toLocaleDateString()} - ${new Date().toLocaleDateString()})`;
+        }
+        case 'month': {
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth(), 1);
+          const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          return `Bulan Ini (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`;
+        }
+        default:
+          return 'Semua Waktu';
+      }
+    })();
     const productKeys = Object.keys(rekapPerBarangData).sort((a,b) => {
       const A = rekapPerBarangData[a];
       const B = rekapPerBarangData[b];
@@ -452,7 +534,30 @@ const Products: React.FC = () => {
               })}
             </tbody>
           </table>
-          <div className="mt-3 text-right text-sm text-gray-700 font-semibold">Grand Total: Rp {Number(Object.keys(rekapPerBarangData).reduce((s:any,k)=> s + (Number(rekapPerBarangData[k].total)||0),0)).toLocaleString('id-ID')}</div>
+          {(() => {
+            const grandPerBarang = Object.keys(rekapPerBarangData).reduce((s:any,k)=> s + (Number(rekapPerBarangData[k].total)||0),0);
+            const keys = Object.keys(rekapPerBarangData);
+            const daysCount = keys.length || 1;
+            const avgPer = daysCount ? Math.round((grandPerBarang || 0) / daysCount) : 0;
+            return (
+              <div className="mt-3">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-gray-500">Total {keys.length}-Item</div>
+                      <div className="font-semibold text-gray-900">{periodLabel}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500">Grand Total</div>
+                      <div className="font-semibold text-green-700">Rp {Number(grandPerBarang).toLocaleString('id-ID')}</div>
+                      <div className="flex items-center justify-end gap-4 mt-2 text-sm text-gray-600">
+                        <div className="text-gray-500">Rata-rata / item</div>
+                        <div className="font-medium text-gray-900">Rp {Number(avgPer).toLocaleString('id-ID')}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            );
+          })()}
         </div>
       </div>
     );
@@ -2694,8 +2799,10 @@ const Products: React.FC = () => {
                 <div className="text-right">
                   <div className="text-sm text-gray-500">Grand Total</div>
                   <div className="font-semibold text-green-700">Rp {Number(footerTotals.amount).toLocaleString('id-ID')}</div>
-                  <div className="text-sm text-gray-500 mt-2">Rata-rata / hari</div>
-                  <div className="font-medium text-gray-900">Rp {Number(averagePerDay).toLocaleString('id-ID')}</div>
+                  <div className="flex items-center justify-end gap-4 mt-2 text-sm text-gray-600">
+                    <div className="text-gray-500">Rata-rata / hari</div>
+                    <div className="font-medium text-gray-900">Rp {Number(averagePerDay).toLocaleString('id-ID')}</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3700,7 +3807,7 @@ const Products: React.FC = () => {
                             (error?.message || "") +
                             (error?.details ? "\n" + error.details : ""),
                         });
-                        // eslint-disable-next-line no-console
+                         
                         console.error("PO Error:", error);
                       } finally {
                         setIsSavingPurchase(false);
