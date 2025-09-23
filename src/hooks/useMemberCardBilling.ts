@@ -323,6 +323,22 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       const originalBalance = Number(cardData?.balance_points) || 0;
       const correctRemainingBalance = originalBalance - (totalPoints - session.hourly_rate_snapshot);
 
+      const { error: finalLogError } = await supabase
+        .from('card_usage_logs')
+        .insert({
+          card_uid: session.card_uid,
+          session_id: session.id,
+          action_type: 'session_end_auto',
+          points_amount: 0,
+          balance_before: originalBalance,
+          balance_after: correctRemainingBalance,
+          notes: `Auto session end - insufficient balance - ${elapsedMinutes} minutes total - Console: ${consoleData?.name || 'Unknown'}`
+        });
+
+      if (finalLogError) {
+        console.error(`Error logging final session end for ${session.id}:`, finalLogError);
+      }
+
       // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
       await logCashierTransaction({
         type: 'rental',

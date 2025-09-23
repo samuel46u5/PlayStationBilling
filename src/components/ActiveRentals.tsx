@@ -72,6 +72,7 @@ interface RateProfile {
 
 interface RentalSession {
   id: string;
+  card_uid?: string;
   customer_id?: string;
   console_id?: string;
   start_time?: string;
@@ -992,9 +993,8 @@ const ActiveRentals: React.FC = () => {
 
   // Sync with global timer context
   useEffect(() => {
-    if (globalActiveSessions.length > 0) {
-      setActiveSessions(globalActiveSessions);
-    }
+    // Always sync with global sessions, even when empty
+    setActiveSessions(globalActiveSessions);
     // loadData();
 
     // Fetch consoles
@@ -1011,6 +1011,25 @@ const ActiveRentals: React.FC = () => {
 
     fetchConsoles();
   }, [globalActiveSessions]);
+
+  // Additional realtime listener for immediate UI updates
+  useEffect(() => {
+    const channel = supabase
+      .channel("active_rentals_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rental_sessions" },
+        async () => {
+          // Trigger refresh from TimerContext
+          await refreshActiveSessions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refreshActiveSessions]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1528,6 +1547,27 @@ const ActiveRentals: React.FC = () => {
           .eq("id", session.console_id);
 
         await finalizeProductsAndStock(session.id);
+
+        // const { error: manualEndLogError } = await supabase
+        //   .from("card_usage_logs")
+        //   .insert({
+        //     card_uid: session.card_uid,
+        //     session_id: session.id,
+        //     action_type: "session_end_manual",
+        //     points_amount: 0, // No additional deduction, already deducted during billing
+        //     balance_before: alreadyDeducted, // Points already deducted
+        //     balance_after: alreadyDeducted, // No change in balance
+        //     notes: `Manual session end - ${elapsedMinutes} minutes total - Console: ${
+        //       session.consoles?.name || "Unknown"
+        //     }`,
+        //   });
+
+        // if (manualEndLogError) {
+        //   console.error(
+        //     `Error logging manual session end for ${session.id}:`,
+        //     manualEndLogError
+        //   );
+        // }
 
         // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
         await logCashierTransaction({
@@ -3252,6 +3292,22 @@ const ActiveRentals: React.FC = () => {
       if (updateError) {
         alert("Gagal memperbarui saldo kartu!");
         return;
+      }
+
+      const { error: logError } = await supabase
+        .from("card_usage_logs")
+        .insert({
+          card_uid: scannedCardUID,
+          session_id: null,
+          action_type: "balance_add",
+          points_amount: selectedVoucher.total_points,
+          balance_before: currentCardData.balance_points,
+          balance_after: newBalance,
+          notes: `Voucher purchase: ${selectedVoucher.name} (${selectedVoucher.voucher_code}) - Payment: ${paymentMethod}`,
+        });
+
+      if (logError) {
+        console.error("Error logging voucher purchase:", logError);
       }
 
       // Log transaction

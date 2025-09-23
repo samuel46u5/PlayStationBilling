@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabase } from "../lib/supabase";
 import type { RFIDCard } from "../types";
+import type { CardUsageLog } from "../types";
 import {
   Plus,
   CreditCard,
@@ -12,6 +13,7 @@ import {
   UserX,
   Trash2,
   Edit,
+  History,
 } from "lucide-react";
 
 const RFIDCards: React.FC = () => {
@@ -124,6 +126,32 @@ const RFIDCards: React.FC = () => {
   >(null);
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // History modal state
+  const [historyCard, setHistoryCard] = useState<RFIDCard | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLogs, setHistoryLogs] = useState<CardUsageLog[]>([]);
+
+  const openHistory = async (card: RFIDCard) => {
+    setHistoryCard(card);
+    setHistoryLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("card_usage_logs")
+        .select(
+          "id, card_uid, session_id, action_type, points_amount, balance_before, balance_after, timestamp, notes"
+        )
+        .eq("card_uid", card.uid)
+        .order("timestamp", { ascending: false });
+      if (error) throw error;
+      setHistoryLogs((data || []) as unknown as CardUsageLog[]);
+    } catch (e) {
+      console.error("load card history error", e);
+      setHistoryLogs([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const openEdit = (
     card: RFIDCard & { customers?: { name: string; phone: string } | null }
@@ -410,6 +438,12 @@ const RFIDCards: React.FC = () => {
                             <Edit className="h-4 w-4" />
                           </button>
                           <button
+                            onClick={() => openHistory(card)}
+                            className="p-2 border border-blue-300 hover:border-blue-400 text-blue-600 rounded-lg transition-colors flex items-center justify-center"
+                          >
+                            <History className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => deleteCard(card as any)}
                             className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
                           >
@@ -540,6 +574,106 @@ const RFIDCards: React.FC = () => {
                       {savingEdit ? "Menyimpan..." : "Simpan"}
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* History Modal */}
+          {historyCard && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Riwayat Points - UID {historyCard.uid}
+                    </h2>
+                    <button
+                      onClick={() => {
+                        setHistoryCard(null);
+                        setHistoryLogs([]);
+                      }}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {historyLoading ? (
+                    <div className="text-gray-500">Memuat riwayat...</div>
+                  ) : historyLogs.length === 0 ? (
+                    <div className="text-gray-500">
+                      Tidak ada riwayat untuk kartu ini.
+                    </div>
+                  ) : (
+                    <div className="max-h-[60vh] overflow-auto divide-y divide-gray-100">
+                      {historyLogs.map((log) => {
+                        const isAdd = log.action_type === "balance_add";
+                        const isDeduct = log.action_type === "balance_deduct";
+                        return (
+                          <div
+                            key={log.id}
+                            className="py-3 flex items-start gap-3"
+                          >
+                            <div
+                              className={`mt-1 w-2 h-2 rounded-full ${
+                                isAdd
+                                  ? "bg-green-500"
+                                  : isDeduct
+                                  ? "bg-red-500"
+                                  : "bg-gray-400"
+                              }`}
+                            ></div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {isAdd
+                                    ? "Penambahan"
+                                    : isDeduct
+                                    ? "Pemakaian"
+                                    : log.action_type}
+                                </div>
+                                <div
+                                  className={`text-sm font-mono ${
+                                    isAdd
+                                      ? "text-green-600"
+                                      : isDeduct
+                                      ? "text-red-600"
+                                      : "text-gray-600"
+                                  }`}
+                                >
+                                  {isAdd ? "+" : isDeduct ? "-" : ""}
+                                  {Number(
+                                    log.points_amount || 0
+                                  ).toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(log.timestamp).toLocaleString()}
+                                {log.session_id
+                                  ? ` · Session ${log.session_id}`
+                                  : ""}
+                              </div>
+                              <div className="text-xs text-gray-600 mt-1">
+                                Saldo:{" "}
+                                {Number(
+                                  log.balance_before || 0
+                                ).toLocaleString()}{" "}
+                                →{" "}
+                                {Number(
+                                  log.balance_after || 0
+                                ).toLocaleString()}
+                              </div>
+                              {log.notes && (
+                                <div className="text-xs text-gray-700 mt-1">
+                                  {log.notes}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
