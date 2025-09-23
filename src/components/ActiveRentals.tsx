@@ -3484,8 +3484,7 @@ const ActiveRentals: React.FC = () => {
           (r) => r.id === latestConsole.rate_profile_id
         );
         const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
-        const perMinuteRateSnapshot =
-          Math.ceil(hourlyRateSnapshot / 60 / 100) * 100;
+        const perMinuteRateSnapshot = Math.ceil(hourlyRateSnapshot / 60);
         // Atomic reservation: update console status hanya jika masih available
         const { data: reservedRows, error: reserveErr } = await supabase
           .from("consoles")

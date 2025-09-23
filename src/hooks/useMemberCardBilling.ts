@@ -154,70 +154,141 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     }
 
     // Lakukan pemotongan points
-    const newBalance = currentBalance - computedDelta;
+    if (computedDelta <= currentBalance) {
+      // Cukup saldo: kurangi sebesar computedDelta seperti biasa
+      const newBalance = currentBalance - computedDelta;
 
-    // Guarded balance update (only if balance_points still >= computedDelta)
-    const { data: updatedCardRows, error: updateBalanceError } = await supabase
-      .from('rfid_cards')
-      .update({ balance_points: newBalance })
-      .eq('uid', session.card_uid)
-      .eq('status', 'active')
-      .gte('balance_points', computedDelta)
-      .select('id');
-    if (updateBalanceError || !updatedCardRows || updatedCardRows.length === 0) {
-      // Guard gagal karena race condition/saldo berubah. Re-evaluate secara konservatif tanpa mengakhiri sesi.
-      // Hanya akhiri jika sudah melewati minimum dan tetap tidak cukup di iterasi berikutnya.
-      return;
-    }
-
-    // Guarded session counters update (optimistic concurrency)
-    const { data: updatedSessRows, error: updateSessionError } = await supabase
-      .from('rental_sessions')
-      .update({
-        total_points_deducted: currentTotal + computedDelta
-      })
-      .eq('id', session.id)
-      .eq('total_points_deducted', currentTotal)
-      .select('id');
-
-    if (updateSessionError || !updatedSessRows || updatedSessRows.length === 0) {
-      // Session sudah diupdate pihak lain → rollback saldo
-      await supabase
+      // Guarded balance update (only if balance_points still >= computedDelta)
+      const { data: updatedCardRows, error: updateBalanceError } = await supabase
         .from('rfid_cards')
-        .update({ balance_points: currentBalance })
-        .eq('uid', session.card_uid);
-      return;
-    }
-
-    // Log pemotongan points ke card_usage_logs
-    const { error: logError } = await supabase
-      .from('card_usage_logs')
-      .insert({
-        card_uid: session.card_uid,
-        session_id: session.id,
-        action_type: 'balance_deduct',
-        points_amount: computedDelta,
-        balance_before: currentBalance,
-        balance_after: newBalance,
-        notes: `Automatic deduction for rental session - ${computedDelta / (session.per_minute_rate_snapshot || (session.hourly_rate_snapshot / 60))} minutes`
-      });
-
-    if (logError) {
-      console.error(`Error logging point usage for session ${session.id}:`, logError);
-    }
-
-    console.log(`Deducted ${deltaPoints} points for session ${session.id}. New balance: ${newBalance}`);
-    
-    // Trigger UI update untuk sinkronisasi real-time
-    window.dispatchEvent(new CustomEvent('memberCardBillingUpdate', {
-      detail: { 
-        sessionId: session.id, 
-        cardUid: session.card_uid,
-        pointsDeducted: computedDelta,
-        newTotalDeducted: currentTotal + computedDelta,
-        cardBalance: newBalance
+        .update({ balance_points: newBalance })
+        .eq('uid', session.card_uid)
+        .eq('status', 'active')
+        .gte('balance_points', computedDelta)
+        .select('id');
+      if (updateBalanceError || !updatedCardRows || updatedCardRows.length === 0) {
+        // Guard gagal karena race condition/saldo berubah.
+        return;
       }
-    }));
+
+      // Guarded session counters update (optimistic concurrency)
+      const { data: updatedSessRows, error: updateSessionError } = await supabase
+        .from('rental_sessions')
+        .update({
+          total_points_deducted: currentTotal + computedDelta
+        })
+        .eq('id', session.id)
+        .eq('total_points_deducted', currentTotal)
+        .select('id');
+
+      if (updateSessionError || !updatedSessRows || updatedSessRows.length === 0) {
+        // Session sudah diupdate pihak lain → rollback saldo
+        await supabase
+          .from('rfid_cards')
+          .update({ balance_points: currentBalance })
+          .eq('uid', session.card_uid);
+        return;
+      }
+
+      // Log pemotongan points ke card_usage_logs
+      const { error: logError } = await supabase
+        .from('card_usage_logs')
+        .insert({
+          card_uid: session.card_uid,
+          session_id: session.id,
+          action_type: 'balance_deduct',
+          points_amount: computedDelta,
+          balance_before: currentBalance,
+          balance_after: newBalance,
+          notes: `Automatic deduction for rental session - ${computedDelta / (session.per_minute_rate_snapshot || (session.hourly_rate_snapshot / 60))} minutes`
+        });
+
+      if (logError) {
+        console.error(`Error logging point usage for session ${session.id}:`, logError);
+      }
+
+      console.log(`Deducted ${computedDelta} points for session ${session.id}. New balance: ${newBalance}`);
+      
+      // Trigger UI update untuk sinkronisasi real-time
+      window.dispatchEvent(new CustomEvent('memberCardBillingUpdate', {
+        detail: { 
+          sessionId: session.id, 
+          cardUid: session.card_uid,
+          pointsDeducted: computedDelta,
+          newTotalDeducted: currentTotal + computedDelta,
+          cardBalance: newBalance
+        }
+      }));
+    } else {
+      // Saldo tidak cukup: kurangi semua saldo yang tersisa hingga 0 dan akhiri sesi
+      const partialDelta = currentBalance;
+      if (partialDelta <= 0) {
+        return;
+      }
+
+      // Guarded: set balance ke 0 hanya jika masih sama dengan currentBalance
+      const { data: updatedCardRows2, error: updateBalanceError2 } = await supabase
+        .from('rfid_cards')
+        .update({ balance_points: 0 })
+        .eq('uid', session.card_uid)
+        .eq('status', 'active')
+        .eq('balance_points', currentBalance)
+        .select('id');
+      if (updateBalanceError2 || !updatedCardRows2 || updatedCardRows2.length === 0) {
+        return;
+      }
+
+      // Update counters dengan partialDelta (optimistic concurrency)
+      const { data: updatedSessRows2, error: updateSessionError2 } = await supabase
+        .from('rental_sessions')
+        .update({
+          total_points_deducted: currentTotal + partialDelta
+        })
+        .eq('id', session.id)
+        .eq('total_points_deducted', currentTotal)
+        .select('id');
+
+      if (updateSessionError2 || !updatedSessRows2 || updatedSessRows2.length === 0) {
+        // Rollback saldo jika gagal update session
+        await supabase
+          .from('rfid_cards')
+          .update({ balance_points: currentBalance })
+          .eq('uid', session.card_uid);
+        return;
+      }
+
+      // Log partial deduction
+      const { error: logError2 } = await supabase
+        .from('card_usage_logs')
+        .insert({
+          card_uid: session.card_uid,
+          session_id: session.id,
+          action_type: 'balance_deduct',
+          points_amount: partialDelta,
+          balance_before: currentBalance,
+          balance_after: 0,
+          notes: 'Partial deduction due to insufficient balance; auto ending session'
+        });
+      if (logError2) {
+        console.error(`Error logging partial point usage for session ${session.id}:`, logError2);
+      }
+
+      console.log(`Partially deducted ${partialDelta} points (to zero) for session ${session.id}. New balance: 0`);
+
+      // Trigger UI update
+      window.dispatchEvent(new CustomEvent('memberCardBillingUpdate', {
+        detail: {
+          sessionId: session.id,
+          cardUid: session.card_uid,
+          pointsDeducted: partialDelta,
+          newTotalDeducted: currentTotal + partialDelta,
+          cardBalance: 0
+        }
+      }));
+
+      // Akhiri sesi karena saldo habis
+      await endSessionDueToInsufficientBalance(session);
+    }
   };
 
   async function logCashierTransaction(params: {
@@ -328,7 +399,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         .insert({
           card_uid: session.card_uid,
           session_id: session.id,
-          action_type: 'session_end_auto',
+          action_type: 'balance_deduct',
           points_amount: 0,
           balance_before: originalBalance,
           balance_after: correctRemainingBalance,
