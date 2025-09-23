@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   Plus,
   Search,
@@ -9,12 +10,12 @@ import {
   Eye,
   Edit,
   ShoppingCart,
+  Package,
   TrendingUp,
   CheckCircle,
   XCircle,
   Printer,
   QrCode,
-  CreditCard,
   AlertCircle,
   Trash2,
 } from "lucide-react";
@@ -56,9 +57,9 @@ const parseDetails = (raw: unknown): CashierDetails => {
 };
 
 const VoucherManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"vouchers" | "purchase-history">(
-    "vouchers"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "master-paket" | "vouchers" | "purchase-history"
+  >("master-paket");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [showCreateVoucherForm, setShowCreateVoucherForm] = useState(false);
@@ -77,6 +78,31 @@ const VoucherManagement: React.FC = () => {
     voucherPrice: 50000,
   });
 
+  // Modal-scoped Hari & Jam state used inside the Create Paket modal
+  const [showAddHariJamModal, setShowAddHariJamModal] = useState(false);
+  const [hariJamDraft, setHariJamDraft] = useState<{ day: string; startTime: string; endTime: string }>({ day: "Rabu", startTime: "09:00", endTime: "18:00" });
+  // when editing an existing entry, hold its id here
+  const [editHariJamId, setEditHariJamId] = useState<string | null>(null);
+  // modal to select consoles for paket draft
+  const [showSelectConsoleModal, setShowSelectConsoleModal] = useState(false);
+  // staged selection inside the console modal; applied on 'Selesai'
+  const [selectConsoleDraft, setSelectConsoleDraft] = useState<string[]>([]);
+  const [selectConsoleModalTab, setSelectConsoleModalTab] = useState<"list" | "dipilih">("list");
+  const [selectConsoleSearch, setSelectConsoleSearch] = useState("");
+
+  // close select-console modal on Escape and discard staged changes
+  useEffect(() => {
+    if (!showSelectConsoleModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSelectConsoleModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showSelectConsoleModal]);
+  const hariOptions = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+
   const [sellVoucher, setSellVoucher] = useState({
     voucherId: "",
     customerId: "",
@@ -88,6 +114,91 @@ const VoucherManagement: React.FC = () => {
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [voucherUsages, setVoucherUsages] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  
+  type Paket = {
+    id: string;
+    name: string;
+    status: string;
+    description?: string;
+    durationHours: number;
+    durationMinutes: number;
+    pricePerHour: number;
+    discountAmount?: number; // fixed amount in IDR to subtract per hour
+  };
+
+  type DaySpec = {
+    key: string;
+    label: string;
+    enabled: boolean;
+    startTime: string; // HH:MM
+    endTime: string; // HH:MM
+  };
+
+  const defaultDays: DaySpec[] = [
+    { key: "mon", label: "Senin", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "tue", label: "Selasa", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "wed", label: "Rabu", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "thu", label: "Kamis", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "fri", label: "Jumat", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "sat", label: "Sabtu", enabled: false, startTime: "09:00", endTime: "23:59" },
+    { key: "sun", label: "Minggu", enabled: false, startTime: "09:00", endTime: "21:00" },
+  ];
+
+  const [pakets, setPakets] = useState<Paket[]>([
+    {
+      id: "pkg-1",
+      name: "Paket 2 Jam",
+      status: "active",
+      description: "Paket standar 2 jam",
+      durationHours: 2,
+      durationMinutes: 0,
+      pricePerHour: 30000,
+      discountAmount: 0,
+    },
+  ]);
+  const [mockConsoles] = useState<{ id: string; name: string }[]>([
+    { id: "c1", name: "Console 1 - PS5" },
+    { id: "c2", name: "Console 2 - PS4" },
+    { id: "c3", name: "Console 3 - Xbox Series" },
+  ]);
+  const [showCreatePaketForm, setShowCreatePaketForm] = useState(false);
+  const [createActiveTab, setCreateActiveTab] = useState<"info" | "hari" | "durasi" | "console">("info");
+  const [newPaketDraft, setNewPaketDraft] = useState<Partial<Paket> & {
+    discountAmount?: number;
+    days?: DaySpec[];
+    selectedConsoles?: string[];
+    hariJamList?: { id: string; day: string; startTime: string; endTime: string }[];
+  }>({
+    name: "",
+    durationHours: 1,
+    durationMinutes: 0,
+    pricePerHour: 50000,
+    status: "active",
+    discountAmount: 0,
+    days: defaultDays,
+    hariJamList: [],
+  });
+
+  const handleCreatePaketDraft = () => {
+    if (!newPaketDraft.name) return alert("Nama paket wajib diisi");
+    const payload: Paket = {
+      id: `pkg-${Date.now()}`,
+      name: String(newPaketDraft.name),
+      status: String(newPaketDraft.status || "active"),
+      description: String(newPaketDraft.description || ""),
+      durationHours: Number(newPaketDraft.durationHours || 0),
+      durationMinutes: Number(newPaketDraft.durationMinutes || 0),
+      pricePerHour: Number(newPaketDraft.pricePerHour || 0),
+      discountAmount: Number(newPaketDraft.discountAmount || 0),
+    };
+    // attach days & consoles as extras (kept in-memory on client)
+    const fullPayload = { ...payload } as any;
+    (fullPayload as any).days = newPaketDraft.days || defaultDays;
+    (fullPayload as any).consoles = newPaketDraft.selectedConsoles || [];
+    setPakets([fullPayload, ...pakets]);
+    setShowCreatePaketForm(false);
+    setNewPaketDraft({ name: "", durationHours: 1, durationMinutes: 0, pricePerHour: 50000, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [] });
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -199,11 +310,11 @@ const VoucherManagement: React.FC = () => {
   //   };
   // };
 
-  const generateVoucherCode = () => {
-    const lastVoucher = vouchers[vouchers.length - 1];
-    const lastNumber = parseInt(lastVoucher.voucherCode.replace("VCH", ""));
-    return `VCH${(lastNumber + 1).toString().padStart(3, "0")}`;
-  };
+  // const generateVoucherCode = () => {
+  //   const lastVoucher = vouchers[vouchers.length - 1];
+  //   const lastNumber = parseInt(lastVoucher.voucherCode.replace("VCH", ""));
+  //   return `VCH${(lastNumber + 1).toString().padStart(3, "0")}`;
+  // };
 
   // const handleCreateVoucher = () => {
   //   if (
@@ -353,29 +464,9 @@ const VoucherManagement: React.FC = () => {
   //   );
   // };
 
-  const handleUseVoucher = async (voucherId: string, hoursToUse: number) => {
-    const voucher = vouchers.find((v) => v.id === voucherId);
-    if (!voucher) return;
-
-    if (hoursToUse > voucher.remainingHours) {
-      alert("Jam yang digunakan melebihi sisa jam voucher");
-      return;
-    }
-
-    try {
-      const ok = await db.vouchers.use(voucherId, hoursToUse);
-      if (ok) {
-        alert(
-          `Voucher ${voucher.voucherCode} berhasil digunakan untuk ${hoursToUse} jam.`
-        );
-        (window as any).refreshVouchers?.();
-      } else {
-        alert("Gagal menggunakan voucher");
-      }
-    } catch (e: any) {
-      alert(e?.message || "Gagal menggunakan voucher");
-    }
-  };
+  // const handleUseVoucher = async (voucherId: string, hoursToUse: number) => {
+  //   // kept for future - disabled because it's unused here
+  // };
 
   const renderPrintableVoucher = (voucher: any) => (
     <div className="w-[5.5cm] h-[9cm] bg-white border-2 border-dashed border-gray-400 p-3 text-xs font-mono relative overflow-hidden">
@@ -475,6 +566,355 @@ const VoucherManagement: React.FC = () => {
       </div>
     </div>
   );
+
+  // Create Paket Modal (tabbed)
+  const renderCreatePaketModal = () => {
+
+    const priceAfterDiscountPerHour = () => {
+      const price = Number(newPaketDraft.pricePerHour || 0);
+      const discount = Number(newPaketDraft.discountAmount || 0);
+      // fixed discount in IDR per hour
+      return Math.max(0, price - discount);
+    };
+
+    const totalPriceForDuration = () => {
+      const hours = Number(newPaketDraft.durationHours || 0);
+      const minutes = Number(newPaketDraft.durationMinutes || 0);
+      const durationHours = hours + minutes / 60;
+      return priceAfterDiscountPerHour() * durationHours;
+    };
+
+    if (!showCreatePaketForm) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Buat Paket</h2>
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-gray-500">Form: </div>
+                <button onClick={() => setShowCreatePaketForm(false)} className="text-gray-400 hover:text-gray-600"><XCircle className="h-6 w-6" /></button>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="mb-4">
+              <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-8">
+                  {[
+                    { id: "info", label: "Informasi" },
+                    { id: "hari", label: "Hari & Jam" },
+                    { id: "durasi", label: "Durasi & Harga" },
+                    { id: "console", label: `Console${(newPaketDraft.selectedConsoles || []).length > 0 ? ` (${(newPaketDraft.selectedConsoles || []).length})` : ''}` },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setCreateActiveTab(t.id as any)}
+                      className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${createActiveTab === t.id ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </div>
+
+            <div>
+              {createActiveTab === "info" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Paket *</label>
+                    <input type="text" value={newPaketDraft.name} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select value={newPaketDraft.status} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, status: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi (opsional)</label>
+                    <textarea value={newPaketDraft.description} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" rows={3} />
+                  </div>
+                </div>
+              )}
+              {createActiveTab === "hari" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">Atur Hari & Jam berlaku untuk paket ini.</p>
+                    <button onClick={() => { setEditHariJamId(null); setHariJamDraft({ day: 'Rabu', startTime: '09:00', endTime: '18:00' }); setShowAddHariJamModal(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm">+ Hari & Jam</button>
+                  </div>
+
+                  {/* List of hari-jam saved in the paket draft */}
+                  {(newPaketDraft.hariJamList || []).length === 0 ? (
+                    <div className="text-gray-500">Belum ada data Hari & Jam. Klik "+ Hari & Jam" untuk menambah.</div>
+                  ) : (
+                    <div className="overflow-x-auto bg-white rounded-lg p-3 border border-gray-100">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Hari</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Jam Berlaku</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {(newPaketDraft.hariJamList || []).map((h) => (
+                              <tr key={h.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-sm font-medium text-gray-900">{h.day}</td>
+                                <td className="px-4 py-3 text-sm text-gray-700">{h.startTime} sd {h.endTime}</td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => {
+                                      // open modal in edit mode
+                                      setEditHariJamId(h.id);
+                                      setHariJamDraft({ day: h.day, startTime: h.startTime, endTime: h.endTime });
+                                      setShowAddHariJamModal(true);
+                                    }} className="text-sm px-2 py-1 border border-gray-200 rounded hover:bg-gray-50">Edit</button>
+                                    <button onClick={() => {
+                                      if (!confirm('Hapus entry Hari & Jam ini?')) return;
+                                      const next = (newPaketDraft.hariJamList || []).filter((it) => it.id !== h.id);
+                                      setNewPaketDraft({ ...newPaketDraft, hariJamList: next });
+                                    }} className="text-sm px-2 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50">Hapus</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Modal for adding Hari & Jam to paket draft (modal-scoped state declared below) */}
+                  {showAddHariJamModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+                        <div className="p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">Tambah Hari & Jam</h3>
+                            <button onClick={() => setShowAddHariJamModal(false)} className="text-gray-400 hover:text-gray-600"><XCircle className="h-6 w-6" /></button>
+                          </div>
+
+                            <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Hari</label>
+                              <select value={hariJamDraft.day} onChange={(e) => setHariJamDraft({ ...hariJamDraft, day: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                {hariOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Jam berlaku</label>
+                              <div className="flex items-center gap-2">
+                                <input type="time" value={hariJamDraft.startTime} onChange={(e) => setHariJamDraft({ ...hariJamDraft, startTime: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg" />
+                                <span className="text-sm text-gray-500">sd</span>
+                                <input type="time" value={hariJamDraft.endTime} onChange={(e) => setHariJamDraft({ ...hariJamDraft, endTime: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg" />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3 mt-6">
+                            <button onClick={() => { setShowAddHariJamModal(false); setEditHariJamId(null); }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg">Batal</button>
+                            <button onClick={() => {
+                              // validate and save into paket draft (add or update)
+                              if (!hariJamDraft.day) return alert('Pilih hari terlebih dahulu');
+                              if (!hariJamDraft.startTime || !hariJamDraft.endTime) return alert('Isi jam mulai dan selesai');
+                              // basic validation: end must be after start
+                              const start = hariJamDraft.startTime;
+                              const end = hariJamDraft.endTime;
+                              if (end <= start) return alert('Jam selesai harus lebih besar dari jam mulai');
+
+                              if (editHariJamId) {
+                                // update existing
+                                const next = (newPaketDraft.hariJamList || []).map((it) => it.id === editHariJamId ? { ...it, day: hariJamDraft.day, startTime: hariJamDraft.startTime, endTime: hariJamDraft.endTime } : it);
+                                setNewPaketDraft({ ...newPaketDraft, hariJamList: next });
+                              } else {
+                                const entry = { id: `hj-${Date.now()}`, day: hariJamDraft.day, startTime: hariJamDraft.startTime, endTime: hariJamDraft.endTime };
+                                setNewPaketDraft({ ...newPaketDraft, hariJamList: [entry, ...(newPaketDraft.hariJamList || [])] });
+                              }
+
+                              setShowAddHariJamModal(false);
+                              setHariJamDraft({ day: 'Rabu', startTime: '09:00', endTime: '18:00' });
+                              setEditHariJamId(null);
+                            }} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">{editHariJamId ? 'Simpan' : 'Tambahkan'}</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {createActiveTab === "durasi" && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Durasi (jam)</label>
+                      <input type="number" min={0} value={newPaketDraft.durationHours} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, durationHours: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Durasi (menit)</label>
+                      <input type="number" min={0} max={59} value={newPaketDraft.durationMinutes} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, durationMinutes: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Harga per jam</label>
+                      <input type="number" min={0} value={newPaketDraft.pricePerHour} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, pricePerHour: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Discount (Rp per jam)</label>
+                      <input type="number" min={0} value={newPaketDraft.discountAmount} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, discountAmount: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Harga per jam setelah discount</label>
+                      <div className="px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">Rp {priceAfterDiscountPerHour().toLocaleString('id-ID')}</div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Harga Paket (durasi × harga setelah discount)</label>
+                    <div className="px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">Rp {totalPriceForDuration().toLocaleString('id-ID')}</div>
+                  </div>
+                </div>
+              )}
+
+              {createActiveTab === "console" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">Pilih console yang berlaku untuk paket ini.</p>
+                    <button onClick={() => {
+                      // initialize staged draft from current draft selections
+                      setSelectConsoleDraft([...(newPaketDraft.selectedConsoles || [])]);
+                      setSelectConsoleModalTab("list");
+                      setShowSelectConsoleModal(true);
+                    }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm">+ Console</button>
+                  </div>
+
+                  {/* Selected consoles preview/list in draft */}
+                  {(newPaketDraft.selectedConsoles || []).length === 0 ? (
+                    <div className="text-gray-500">Belum ada console dipilih. Klik "+ Console" untuk menambah.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(newPaketDraft.selectedConsoles || []).map((id) => {
+                        const c = mockConsoles.find((m) => m.id === id);
+                        return (
+                          <div key={id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                            <div className="text-sm">{c?.name || id}</div>
+                            <button onClick={() => {
+                              const next = (newPaketDraft.selectedConsoles || []).filter((x) => x !== id);
+                              setNewPaketDraft({ ...newPaketDraft, selectedConsoles: next });
+                            }} className="text-sm text-red-600 px-2 py-1 rounded hover:bg-red-50">Hapus</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Modal to select consoles */}
+                  {showSelectConsoleModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
+                        <div className="p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">Pilih Console</h3>
+                            <button onClick={() => setShowSelectConsoleModal(false)} className="text-gray-400 hover:text-gray-600"><XCircle className="h-6 w-6" /></button>
+                          </div>
+
+                          {/* Tabs inside modal */}
+                          <div className="mb-4">
+                            <nav className="-mb-px flex space-x-8">
+                              <button onClick={() => setSelectConsoleModalTab("list")} className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${selectConsoleModalTab === "list" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>
+                                Daftar Console
+                              </button>
+                              <button onClick={() => setSelectConsoleModalTab("dipilih")} className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${selectConsoleModalTab === "dipilih" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>
+                                Dipilih
+                              </button>
+                            </nav>
+                          </div>
+
+                          {selectConsoleModalTab === "list" && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <input value={selectConsoleSearch} onChange={(e) => setSelectConsoleSearch(e.target.value)} placeholder="Cari console..." className="flex-1 px-3 py-2 border border-gray-200 rounded" />
+                                <button onClick={() => {
+                                  // select all in filtered list
+                                  const filtered = mockConsoles.filter((c) => (c.name + ' ' + c.id).toLowerCase().includes(selectConsoleSearch.toLowerCase())).map((c) => c.id);
+                                  setSelectConsoleDraft(Array.from(new Set([...(selectConsoleDraft || []), ...filtered])));
+                                }} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Pilih Semua</button>
+                                <button onClick={() => setSelectConsoleDraft([])} className="px-3 py-2 border border-gray-200 rounded">Bersihkan</button>
+                              </div>
+
+                              {mockConsoles.filter((c) => (c.name + ' ' + c.id).toLowerCase().includes(selectConsoleSearch.toLowerCase())).map((c) => {
+                                const checked = selectConsoleDraft.includes(c.id);
+                                return (
+                                  <label key={c.id} className="flex items-center justify-between p-2 border border-gray-100 rounded">
+                                    <div className="flex items-center gap-3">
+                                      <input type="checkbox" checked={checked} onChange={(e) => {
+                                        const prev = selectConsoleDraft || [];
+                                        const next = e.target.checked ? Array.from(new Set([...prev, c.id])) : prev.filter((id) => id !== c.id);
+                                        setSelectConsoleDraft(next);
+                                      }} />
+                                      <div className="text-sm">{c.name}</div>
+                                    </div>
+                                    <div className="text-sm text-gray-500">ID: {c.id}</div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {selectConsoleModalTab === "dipilih" && (
+                            <div className="space-y-2">
+                              {selectConsoleDraft.length === 0 ? (
+                                <div className="text-gray-500">Belum ada console dipilih.</div>
+                              ) : (
+                                selectConsoleDraft.map((id) => {
+                                  const c = mockConsoles.find((m) => m.id === id);
+                                  return (
+                                    <div key={id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                      <div className="text-sm">{c?.name || id}</div>
+                                      <button onClick={() => setSelectConsoleDraft((prev) => prev.filter((x) => x !== id))} className="text-sm text-red-600 px-2 py-1 rounded hover:bg-red-50">Hapus</button>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-3 mt-6">
+                            <button onClick={() => {
+                              // Cancel: close modal and discard staged changes
+                              setShowSelectConsoleModal(false);
+                            }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg">Batal</button>
+                            <button onClick={() => {
+                              // Apply staged draft to paket draft
+                              setNewPaketDraft({ ...newPaketDraft, selectedConsoles: selectConsoleDraft });
+                              setShowSelectConsoleModal(false);
+                            }} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Selesai</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowCreatePaketForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg">Batal</button>
+              <button onClick={handleCreatePaketDraft} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Buat Paket</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Tab Riwayat Pembelian
   const renderPurchaseHistoryTab = () => (
@@ -882,6 +1322,55 @@ const VoucherManagement: React.FC = () => {
     </div>
   );
 
+  const renderMasterPaketTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Master Paket</h2>
+          <p className="text-gray-600">Daftar paket master (pengelolaan utama)</p>
+        </div>
+        <div>
+          <button onClick={() => setShowCreatePaketForm(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Buat Paket
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-6">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama Paket</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Durasi</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Harga / jam</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {pakets.map((p) => (
+                <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <div className="text-sm font-medium text-gray-900">{p.name}</div>
+                    <div className="text-sm text-gray-500">{p.description}</div>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{p.durationHours} jam {p.durationMinutes} menit</td>
+                  <td className="px-4 py-3 text-sm">Rp {Number(p.pricePerHour).toLocaleString('id-ID')}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                      {p.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   // const renderUsageHistoryTab = () => (
   //   <div className="space-y-6">
   //     <div>
@@ -1211,6 +1700,7 @@ const VoucherManagement: React.FC = () => {
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
             {[
+              { id: "master-paket", label: "Master Paket", icon: Package },
               { id: "vouchers", label: "Voucher Aktif", icon: Ticket },
               // { id: "usage-history", label: "Riwayat Penggunaan", icon: Clock },
               // { id: "expired", label: "Expired/Habis", icon: XCircle },
@@ -1240,11 +1730,15 @@ const VoucherManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Tab Content */}
-      {activeTab === "vouchers" && renderVouchersTab()}
-      {/* {activeTab === "usage-history" && renderUsageHistoryTab()} */}
-      {/* {activeTab === "expired" && renderExpiredTab()} */}
-      {activeTab === "purchase-history" && renderPurchaseHistoryTab()}
+  {/* Tab Content */}
+  {activeTab === "master-paket" && renderMasterPaketTab()}
+  {activeTab === "vouchers" && renderVouchersTab()}
+  {/* {activeTab === "usage-history" && renderUsageHistoryTab()} */}
+  {/* {activeTab === "expired" && renderExpiredTab()} */}
+  {/* paket tab renderer not present in this version */}
+  {activeTab === "purchase-history" && renderPurchaseHistoryTab()}
+
+  {renderCreatePaketModal()}
 
       {/* Create Voucher Modal */}
       {showCreateVoucherForm && (
