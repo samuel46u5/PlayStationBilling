@@ -118,6 +118,7 @@ const VoucherManagement: React.FC = () => {
   type Paket = {
     id: string;
     name: string;
+    code?: string;
     status: string;
     description?: string;
     durationHours: number;
@@ -169,6 +170,7 @@ const VoucherManagement: React.FC = () => {
     hargaNormal?: number;
   }>({
     name: "",
+    code: undefined,
     durationHours: 1,
     durationMinutes: 0,
     pricePerHour: 50000,
@@ -185,6 +187,7 @@ const VoucherManagement: React.FC = () => {
     const payload: Paket = {
       id: `pkg-${Date.now()}`,
       name: String(newPaketDraft.name),
+      code: String((newPaketDraft as any).code || ''),
       status: String(newPaketDraft.status || "active"),
       description: String(newPaketDraft.description || ""),
       durationHours: Number(newPaketDraft.durationHours || 0),
@@ -205,7 +208,7 @@ const VoucherManagement: React.FC = () => {
     }
     setPakets([fullPayload, ...pakets]);
     setShowCreatePaketForm(false);
-    setNewPaketDraft({ name: "", durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
+    setNewPaketDraft({ name: "", code: undefined, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
   };
 
   // fetch consoles from DB once
@@ -651,6 +654,10 @@ const VoucherManagement: React.FC = () => {
             <div>
               {createActiveTab === "info" && (
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kode Paket</label>
+                    <input type="text" value={(newPaketDraft as any).code || ''} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, code: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Nama Paket *</label>
                     <input type="text" value={newPaketDraft.name} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
@@ -1414,8 +1421,17 @@ const VoucherManagement: React.FC = () => {
         </div>
         <div>
           <button onClick={() => {
+            // generate next PKT code (PKT###) based on existing pakets
+            const existingNumbers = pakets.map((pp) => {
+              const code = (pp as any).code || '';
+              const m = code.match(/PKT(\d{1,})$/i);
+              return m ? Number(m[1]) : 0;
+            });
+            const maxNum = existingNumbers.length ? Math.max(...existingNumbers) : 0;
+            const next = (maxNum + 1).toString().padStart(3, '0');
+            const defaultCode = `PKT${next}`;
             // reset draft to zeros/empty when opening form
-            setNewPaketDraft({ name: "", durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
+            setNewPaketDraft({ name: "", code: defaultCode, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
             setShowCreatePaketForm(true);
           }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
             <Plus className="h-4 w-4" />
@@ -1429,15 +1445,18 @@ const VoucherManagement: React.FC = () => {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kode Paket</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama Paket</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Durasi</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Harga / jam</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {pakets.map((p) => (
                 <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{(p as any).code || ''}</td>
                   <td className="px-4 py-3">
                     <div className="text-sm font-medium text-gray-900">{p.name}</div>
                     <div className="text-sm text-gray-500">{p.description}</div>
@@ -1448,6 +1467,32 @@ const VoucherManagement: React.FC = () => {
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                       {p.status}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <button onClick={() => {
+                        // populate draft for editing and open modal
+                        setNewPaketDraft({
+                          name: p.name,
+                          status: p.status,
+                          description: p.description,
+                          durationHours: p.durationHours,
+                          durationMinutes: p.durationMinutes,
+                          pricePerHour: p.pricePerHour,
+                          discountAmount: p.discountAmount || 0,
+                          days: (p as any).days || defaultDays,
+                          selectedConsoles: (p as any).consoles || [],
+                          hariJamList: (p as any).hariJamList || [],
+                          packagePrice: (p as any).packagePrice,
+                          hargaNormal: (p as any).hargaNormal ?? p.pricePerHour,
+                        });
+                        setShowCreatePaketForm(true);
+                      }} className="text-blue-600 hover:text-blue-700 p-1 rounded"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => {
+                        if (!confirm(`Hapus paket ${p.name}?`)) return;
+                        setPakets((prev) => prev.filter((it) => it.id !== p.id));
+                      }} className="text-red-600 hover:text-red-700 p-1 rounded"><Trash2 className="h-4 w-4" /></button>
+                    </div>
                   </td>
                 </tr>
               ))}
