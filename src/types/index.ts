@@ -695,7 +695,8 @@ export interface CardUsageLog {
     | "customer_unlinked"
     | "schema_migration"
     | "balance_change"
-    |'session_end_manual' | 'session_end_auto';
+    | "session_end_manual"
+    | "session_end_auto";
   points_amount: number;
   balance_before: number;
   balance_after: number;

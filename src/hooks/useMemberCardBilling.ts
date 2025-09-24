@@ -356,7 +356,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       const [{ data: cardData }, { data: consoleData }] = await Promise.all([
         supabase
           .from('rfid_cards')
-          .select('uid, alias, balance_points')
+          .select('uid, balance_points')
           .eq('uid', session.card_uid)
           .single(),
         supabase
@@ -367,19 +367,19 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       ]);
 
       // Update session status
-      await supabase
-        .from('rental_sessions')
-        .update({ 
-          status: 'completed', 
-          end_time: endTime 
-        })
-        .eq('id', session.id);
+      // await supabase
+      //   .from('rental_sessions')
+      //   .update({ 
+      //     status: 'completed', 
+      //     end_time: endTime 
+      //   })
+      //   .eq('id', session.id);
 
       // Set console available
-      await supabase
-        .from('consoles')
-        .update({ status: 'available' })
-        .eq('id', session.console_id);
+      // await supabase
+      //   .from('consoles')
+      //   .update({ status: 'available' })
+      //   .eq('id', session.console_id);
 
       // Matikan console jika ada perintah
       if (consoleData) {
@@ -391,24 +391,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         }
       }
 
-      const originalBalance = Number(cardData?.balance_points) || 0;
-      const correctRemainingBalance = originalBalance - (totalPoints - session.hourly_rate_snapshot);
-
-      const { error: finalLogError } = await supabase
-        .from('card_usage_logs')
-        .insert({
-          card_uid: session.card_uid,
-          session_id: session.id,
-          action_type: 'balance_deduct',
-          points_amount: 0,
-          balance_before: originalBalance,
-          balance_after: correctRemainingBalance,
-          notes: `Auto session end - insufficient balance - ${elapsedMinutes} minutes total - Console: ${consoleData?.name || 'Unknown'}`
-        });
-
-      if (finalLogError) {
-        console.error(`Error logging final session end for ${session.id}:`, finalLogError);
-      }
+      // Note: Final logging removed - already handled by partial deduction logging above
 
       // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
       await logCashierTransaction({
@@ -416,7 +399,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         amount: 0,
         paymentMethod: 'cash',
         referenceId: `AUTO_END-${session.id}-${Date.now()}`,
-        description: `Auto end (member card) - saldo habis - Card: ${cardData?.uid || 'Unknown'}`,
+        description: `Auto end (member card) - saldo habis}`,
         details: {
           items: [
             {
@@ -435,7 +418,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
             products_total: 0,
           },
           customer: {
-            name: cardData?.alias || `Card ${cardData?.uid}` || "Unknown",
+            name: `Card ${cardData?.uid}` || "Unknown",
             id: null,
           },
           rental: {
@@ -447,7 +430,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
           },
           member_card: {
             points_used: totalPoints,
-            points_remaining: correctRemainingBalance,
+            points_remaining: 0, // Balance is 0 after partial deduction
             points_deducted_final: totalPoints,
             hourly_rate_snapshot: session.hourly_rate_snapshot,
             per_minute_rate_snapshot: session.per_minute_rate_snapshot,

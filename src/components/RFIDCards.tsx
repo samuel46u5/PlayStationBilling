@@ -136,15 +136,41 @@ const RFIDCards: React.FC = () => {
     setHistoryCard(card);
     setHistoryLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("card_usage_logs")
+      // Ambil riwayat per sesi rental
+      const { data: sessions, error } = await supabase
+        .from("rental_sessions")
         .select(
-          "id, card_uid, session_id, action_type, points_amount, balance_before, balance_after, timestamp, notes"
+          "id, start_time, end_time, duration_minutes, total_points_deducted, is_voucher_used"
         )
         .eq("card_uid", card.uid)
-        .order("timestamp", { ascending: false });
+        .eq("is_voucher_used", true)
+        .order("start_time", { ascending: false });
       if (error) throw error;
-      setHistoryLogs((data || []) as unknown as CardUsageLog[]);
+
+      const aggregated = (sessions || [])
+        .map((s: any) => {
+          const total = Number(s.total_points_deducted) || 0;
+          const when = s.end_time || s.start_time;
+          const dur =
+            s.duration_minutes != null ? Number(s.duration_minutes) : undefined;
+          return {
+            id: s.id,
+            card_uid: card.uid,
+            session_id: s.id,
+            action_type: "balance_deduct" as const,
+            points_amount: total,
+            balance_before: undefined as unknown as number,
+            balance_after: undefined as unknown as number,
+            timestamp: when,
+            notes:
+              dur != null
+                ? `Pemotongan points (member-card) - ${dur} menit`
+                : "Pemotongan points (member-card) - Sesi",
+          } as unknown as CardUsageLog;
+        })
+        .filter((row) => (Number(row.points_amount) || 0) > 0);
+
+      setHistoryLogs(aggregated as CardUsageLog[]);
     } catch (e) {
       console.error("load card history error", e);
       setHistoryLogs([]);
@@ -653,7 +679,7 @@ const RFIDCards: React.FC = () => {
                                   ? ` · Session ${log.session_id}`
                                   : ""}
                               </div>
-                              <div className="text-xs text-gray-600 mt-1">
+                              {/* <div className="text-xs text-gray-600 mt-1">
                                 Saldo:{" "}
                                 {Number(
                                   log.balance_before || 0
@@ -662,7 +688,7 @@ const RFIDCards: React.FC = () => {
                                 {Number(
                                   log.balance_after || 0
                                 ).toLocaleString()}
-                              </div>
+                              </div> */}
                               {log.notes && (
                                 <div className="text-xs text-gray-700 mt-1">
                                   {log.notes}
