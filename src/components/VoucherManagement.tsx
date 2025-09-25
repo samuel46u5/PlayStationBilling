@@ -14,6 +14,7 @@ import {
   TrendingUp,
   CheckCircle,
   XCircle,
+  ChevronDown,
   Printer,
   QrCode,
   AlertCircle,
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { db } from "../lib/supabase";
+import paketService from '../lib/paketService';
 import Swal from "sweetalert2";
 
 type CashierDetailItem = {
@@ -181,47 +183,104 @@ const VoucherManagement: React.FC = () => {
     packagePrice: undefined,
     hargaNormal: 50000,
   });
+  const [editingPaketId, setEditingPaketId] = useState<string | null>(null);
+  // viewPaketId not needed; we store full data in viewPaketData
+  const [viewPaketData, setViewPaketData] = useState<any | null>(null);
+  const [expandedHariFor, setExpandedHariFor] = useState<string | null>(null);
+  const [expandedConsolesFor, setExpandedConsolesFor] = useState<string | null>(null);
 
   const handleCreatePaketDraft = () => {
     if (!newPaketDraft.name) return alert("Nama paket wajib diisi");
-    const payload: Paket = {
-      id: `pkg-${Date.now()}`,
+    const fullPayload: any = {
       name: String(newPaketDraft.name),
       code: String((newPaketDraft as any).code || ''),
       status: String(newPaketDraft.status || "active"),
       description: String(newPaketDraft.description || ""),
       durationHours: Number(newPaketDraft.durationHours || 0),
       durationMinutes: Number(newPaketDraft.durationMinutes || 0),
-      pricePerHour: Number(newPaketDraft.pricePerHour || 0),
+      hargaNormal: Number((newPaketDraft as any).hargaNormal || 0),
+      packagePrice: (newPaketDraft as any).packagePrice === undefined ? undefined : Number((newPaketDraft as any).packagePrice),
       discountAmount: Number(newPaketDraft.discountAmount || 0),
+      days: newPaketDraft.days || defaultDays,
+      consoles: newPaketDraft.selectedConsoles || [],
+      hariJamList: newPaketDraft.hariJamList || [],
     };
-    // attach days & consoles as extras (kept in-memory on client)
-    const fullPayload = { ...payload } as any;
-    (fullPayload as any).days = newPaketDraft.days || defaultDays;
-    (fullPayload as any).consoles = newPaketDraft.selectedConsoles || [];
-    // include packagePrice if provided
-    if ((newPaketDraft as any).packagePrice !== undefined) {
-      (fullPayload as any).packagePrice = Number((newPaketDraft as any).packagePrice || 0);
-    }
-    if ((newPaketDraft as any).hargaNormal !== undefined) {
-      (fullPayload as any).hargaNormal = Number((newPaketDraft as any).hargaNormal || 0);
-    }
-    setPakets([fullPayload, ...pakets]);
+
+    (async () => {
+      try {
+        if (editingPaketId) {
+          await paketService.updatePackage(editingPaketId, {
+            name: fullPayload.name,
+            code: fullPayload.code,
+            description: fullPayload.description,
+            status: fullPayload.status,
+            durationHours: fullPayload.durationHours,
+            durationMinutes: fullPayload.durationMinutes,
+            hargaNormal: fullPayload.hargaNormal,
+            packagePrice: fullPayload.packagePrice,
+            discountAmount: fullPayload.discountAmount,
+            selectedConsoles: fullPayload.consoles,
+            hariJamList: fullPayload.hariJamList,
+          });
+        } else {
+          await paketService.createPackage({
+            name: fullPayload.name,
+            code: fullPayload.code,
+            description: fullPayload.description,
+            status: fullPayload.status,
+            durationHours: fullPayload.durationHours,
+            durationMinutes: fullPayload.durationMinutes,
+            hargaNormal: fullPayload.hargaNormal,
+            packagePrice: fullPayload.packagePrice,
+            discountAmount: fullPayload.discountAmount,
+            selectedConsoles: fullPayload.consoles,
+            hariJamList: fullPayload.hariJamList,
+          });
+        }
+        (window as any).refreshPakets?.();
+      } catch (err: any) {
+        alert(err?.message || 'Gagal menyimpan paket');
+      }
+    })();
+
     setShowCreatePaketForm(false);
     setNewPaketDraft({ name: "", code: undefined, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
+    setEditingPaketId(null);
   };
 
-  // fetch consoles from DB once
+  // fetch consoles from DB once (and provide paket refresh)
   useEffect(() => {
     const load = async () => {
       try {
-        const rows = await db.select('consoles', 'id,name');
-        setConsoles((rows || []).map((r: any) => ({ id: r.id, name: r.name })));
+        const rows = await paketService.loadConsoles();
+        setConsoles(rows || []);
       } catch {
         setConsoles([]);
       }
     };
     load();
+
+    // expose paket refresh and load initial pakets
+    (window as any).refreshPakets = async () => {
+      try {
+        const rows = await paketService.loadPakets();
+        const mapped = (rows || []).map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          code: r.code,
+          status: r.status || 'active',
+          description: r.description,
+          durationHours: r.durationHours || 0,
+          durationMinutes: r.durationMinutes || 0,
+          pricePerHour: r.hargaNormal ?? r.packagePrice ?? 0,
+          discountAmount: r.discountAmount ?? 0,
+        }));
+        setPakets(mapped as Paket[]);
+      } catch {
+        setPakets([]);
+      }
+    };
+    (window as any).refreshPakets();
   }, []);
 
   useEffect(() => {
@@ -998,7 +1057,7 @@ const VoucherManagement: React.FC = () => {
 
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowCreatePaketForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg">Batal</button>
-              <button onClick={handleCreatePaketDraft} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Buat Paket</button>
+              <button onClick={handleCreatePaketDraft} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">{editingPaketId ? 'Simpan Paket' : 'Buat Paket'}</button>
             </div>
           </div>
         </div>
@@ -1412,96 +1471,7 @@ const VoucherManagement: React.FC = () => {
     </div>
   );
 
-  const renderMasterPaketTab = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Master Paket</h2>
-          <p className="text-gray-600">Daftar paket master (pengelolaan utama)</p>
-        </div>
-        <div>
-          <button onClick={() => {
-            // generate next PKT code (PKT###) based on existing pakets
-            const existingNumbers = pakets.map((pp) => {
-              const code = (pp as any).code || '';
-              const m = code.match(/PKT(\d{1,})$/i);
-              return m ? Number(m[1]) : 0;
-            });
-            const maxNum = existingNumbers.length ? Math.max(...existingNumbers) : 0;
-            const next = (maxNum + 1).toString().padStart(3, '0');
-            const defaultCode = `PKT${next}`;
-            // reset draft to zeros/empty when opening form
-            setNewPaketDraft({ name: "", code: defaultCode, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
-            setShowCreatePaketForm(true);
-          }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Buat Paket
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-6">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kode Paket</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama Paket</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Durasi</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Harga / jam</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {pakets.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{(p as any).code || ''}</td>
-                  <td className="px-4 py-3">
-                    <div className="text-sm font-medium text-gray-900">{p.name}</div>
-                    <div className="text-sm text-gray-500">{p.description}</div>
-                  </td>
-                  <td className="px-4 py-3 text-sm">{p.durationHours} jam {p.durationMinutes} menit</td>
-                  <td className="px-4 py-3 text-sm">Rp {Number(p.pricePerHour).toLocaleString('id-ID')}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-right">
-                    <div className="inline-flex items-center gap-2">
-                      <button onClick={() => {
-                        // populate draft for editing and open modal
-                        setNewPaketDraft({
-                          name: p.name,
-                          status: p.status,
-                          description: p.description,
-                          durationHours: p.durationHours,
-                          durationMinutes: p.durationMinutes,
-                          pricePerHour: p.pricePerHour,
-                          discountAmount: p.discountAmount || 0,
-                          days: (p as any).days || defaultDays,
-                          selectedConsoles: (p as any).consoles || [],
-                          hariJamList: (p as any).hariJamList || [],
-                          packagePrice: (p as any).packagePrice,
-                          hargaNormal: (p as any).hargaNormal ?? p.pricePerHour,
-                        });
-                        setShowCreatePaketForm(true);
-                      }} className="text-blue-600 hover:text-blue-700 p-1 rounded"><Edit className="h-4 w-4" /></button>
-                      <button onClick={() => {
-                        if (!confirm(`Hapus paket ${p.name}?`)) return;
-                        setPakets((prev) => prev.filter((it) => it.id !== p.id));
-                      }} className="text-red-600 hover:text-red-700 p-1 rounded"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
+  
 
   // const renderUsageHistoryTab = () => (
   //   <div className="space-y-6">
@@ -1597,6 +1567,221 @@ const VoucherManagement: React.FC = () => {
   //     </div>
   //   </div>
   // );
+
+  const renderMasterPaketTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Master Paket</h2>
+          <p className="text-gray-600">Daftar paket master (pengelolaan utama)</p>
+        </div>
+        <div>
+          <button onClick={() => {
+            // generate next PKT code (PKT###) based on existing pakets
+            const existingNumbers = pakets.map((pp) => {
+              const code = (pp as any).code || '';
+              const m = code.match(/PKT(\d{1,})$/i);
+              return m ? Number(m[1]) : 0;
+            });
+            const maxNum = existingNumbers.length ? Math.max(...existingNumbers) : 0;
+            const next = (maxNum + 1).toString().padStart(3, '0');
+            const defaultCode = `PKT${next}`;
+            // reset draft to zeros/empty when opening form
+            setNewPaketDraft({ name: "", code: defaultCode, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
+            setShowCreatePaketForm(true);
+          }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Buat Paket
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-6">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kode Paket</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama Paket</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Durasi</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Harga / jam</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {pakets.map((p) => (
+                <React.Fragment key={p.id}>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      <button onClick={async () => {
+                        try {
+                          // toggle: if already viewing this paket, close it
+                          if (viewPaketData && viewPaketData.id === p.id) {
+                            setViewPaketData(null);
+                            return;
+                          }
+                          const full = await paketService.getPackageById(p.id);
+                          setViewPaketData(full);
+                        } catch (err: any) {
+                          alert(err?.message || 'Gagal memuat detail paket');
+                        }
+                      }} className="text-blue-600 hover:underline">{(p as any).code || ''}</button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-gray-900">{p.name}</div>
+                      <div className="text-sm text-gray-500">{p.description}</div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">{p.durationHours} jam {p.durationMinutes} menit</td>
+                    <td className="px-4 py-3 text-sm">Rp {Number((p as any).hargaNormal ?? p.pricePerHour ?? 0).toLocaleString('id-ID')}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {p.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right">
+                      <div className="inline-flex items-center gap-2">
+                        <button onClick={async () => {
+                          // load package details and populate draft for editing
+                          try {
+                            const full = await paketService.getPackageById(p.id);
+                            if (full) {
+                              setNewPaketDraft({
+                                name: full.name,
+                                status: full.status,
+                                description: full.description,
+                                durationHours: full.durationHours,
+                                durationMinutes: full.durationMinutes,
+                                pricePerHour: full.hargaNormal ?? full.packagePrice ?? 0,
+                                discountAmount: full.discountAmount ?? 0,
+                                days: defaultDays,
+                                selectedConsoles: full.selectedConsoles || [],
+                                hariJamList: full.hariJamList || [],
+                                packagePrice: full.packagePrice,
+                                hargaNormal: full.hargaNormal ?? full.packagePrice ?? 0,
+                                code: full.code,
+                              });
+                              setEditingPaketId(p.id);
+                              setShowCreatePaketForm(true);
+                            } else {
+                              alert('Paket tidak ditemukan');
+                            }
+                          } catch (err: any) {
+                            alert(err?.message || 'Gagal mengambil paket');
+                          }
+                        }} className="text-blue-600 hover:text-blue-700 p-1 rounded"><Edit className="h-4 w-4" /></button>
+                        <button onClick={async () => {
+                          if (!confirm(`Hapus paket ${p.name}?`)) return;
+                          try {
+                            await paketService.deletePackage(p.id);
+                            (window as any).refreshPakets?.();
+                          } catch (err: any) {
+                            alert(err?.message || 'Gagal menghapus paket');
+                          }
+                        }} className="text-red-600 hover:text-red-700 p-1 rounded"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                  {viewPaketData && viewPaketData.id === p.id && (
+                    <tr key={`detail-${p.id}`} className="bg-white">
+                      <td colSpan={6} className="px-4 py-4">
+                        <div className="bg-gray-50 rounded-lg p-4 relative">
+                          <button onClick={() => setViewPaketData(null)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600" aria-label="Tutup detail paket"><XCircle className="h-5 w-5" /></button>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <div className="text-sm text-gray-500">Kode Paket</div>
+                              <div className="font-medium">{viewPaketData.code}</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-500">Nama Paket</div>
+                              <div className="font-medium">{viewPaketData.name}</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-500">Status</div>
+                              <div className="font-medium">{viewPaketData.status}</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-500">Durasi</div>
+                              <div className="font-medium">{viewPaketData.durationHours} jam {viewPaketData.durationMinutes} menit</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-500">Harga Normal (Rp)</div>
+                              <div className="font-medium">Rp {Number(viewPaketData.hargaNormal ?? viewPaketData.packagePrice ?? 0).toLocaleString('id-ID')}</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-500">Harga Paket (Rp)</div>
+                              <div className="font-medium">Rp {Number(viewPaketData.packagePrice ?? 0).toLocaleString('id-ID')}</div>
+                            </div>
+                            <div className="md:col-span-2">
+                              <div className="text-sm text-gray-500">Deskripsi</div>
+                              <div className="mt-1 text-sm text-gray-700">{viewPaketData.description || '-'}</div>
+                            </div>
+                            <div className="md:col-span-2">
+                              <div>
+                                <button onClick={() => setExpandedHariFor(expandedHariFor === p.id ? null : p.id)} className="w-full flex items-center justify-between bg-white p-2 rounded border">
+                                  <div className="text-sm font-medium text-blue-600 hover:underline">Hari & Jam Berlaku</div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="text-sm text-gray-500">{(viewPaketData.hariJamList || []).length}</div>
+                                    <ChevronDown className={`h-4 w-4 text-gray-500 transform transition-transform duration-150 ease-in-out ${expandedHariFor === p.id ? 'rotate-180' : 'rotate-0'}`} />
+                                  </div>
+                                </button>
+                                {expandedHariFor === p.id && (
+                                  <div className="mt-2 space-y-2">
+                                    {(viewPaketData.hariJamList || []).length === 0 ? (
+                                      <div className="text-sm text-gray-500">Tidak ada hari/jam yang diatur.</div>
+                                    ) : (
+                                      (viewPaketData.hariJamList || []).map((hj: any) => (
+                                        <div key={hj.id || (hj.day + hj.startTime)} className="flex items-center justify-between bg-white p-2 rounded border">
+                                          <div className="font-medium">{hj.day}</div>
+                                          <div className="text-sm text-gray-600">{hj.startTime} - {hj.endTime}</div>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="md:col-span-2">
+                              <div>
+                                <button onClick={() => setExpandedConsolesFor(expandedConsolesFor === p.id ? null : p.id)} className="w-full flex items-center justify-between bg-white p-2 rounded border">
+                                  <div className="text-sm font-medium text-blue-600 hover:underline">Consoles</div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="text-sm text-gray-500">{(viewPaketData.selectedConsoles || []).length}</div>
+                                    <ChevronDown className={`h-4 w-4 text-gray-500 transform transition-transform duration-150 ease-in-out ${expandedConsolesFor === p.id ? 'rotate-180' : 'rotate-0'}`} />
+                                  </div>
+                                </button>
+                                {expandedConsolesFor === p.id && (
+                                  <div className="mt-2 space-y-2">
+                                    {(viewPaketData.selectedConsoles || []).length === 0 ? (
+                                      <div className="text-sm text-gray-500">Tidak ada console terkait.</div>
+                                    ) : (
+                                      (viewPaketData.selectedConsoles || []).map((cid: any) => {
+                                        const c = consoles.find((x) => x.id === cid);
+                                        return (
+                                          <div key={cid} className="flex items-center justify-between bg-white p-2 rounded border">
+                                            <div className="font-medium">{c?.name ?? cid}</div>
+                                            <div className="text-sm text-gray-600">ID: {cid}</div>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 
   // const renderExpiredTab = () => (
   //   <div className="space-y-6">
@@ -1871,6 +2056,8 @@ const VoucherManagement: React.FC = () => {
   {activeTab === "purchase-history" && renderPurchaseHistoryTab()}
 
   {renderCreatePaketModal()}
+
+  {/* inline paket details are rendered directly under the paket row; modal removed */}
 
       {/* Create Voucher Modal */}
       {showCreateVoucherForm && (
