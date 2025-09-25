@@ -188,6 +188,8 @@ const VoucherManagement: React.FC = () => {
   const [viewPaketData, setViewPaketData] = useState<any | null>(null);
   const [expandedHariFor, setExpandedHariFor] = useState<string | null>(null);
   const [expandedConsolesFor, setExpandedConsolesFor] = useState<string | null>(null);
+  // local sub-tab state inside Master Paket
+  const [masterPaketSubTab, setMasterPaketSubTab] = useState<'management' | 'history'>('management');
 
   const handleCreatePaketDraft = () => {
     if (!newPaketDraft.name) return alert("Nama paket wajib diisi");
@@ -1596,188 +1598,199 @@ const VoucherManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-6">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kode Paket</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama Paket</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Durasi</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Harga / jam</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {pakets.map((p) => (
-                <React.Fragment key={p.id}>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      <button onClick={async () => {
-                        try {
-                          // toggle: if already viewing this paket, close it
-                          if (viewPaketData && viewPaketData.id === p.id) {
-                            setViewPaketData(null);
-                            return;
-                          }
-                          const full = await paketService.getPackageById(p.id);
-                          setViewPaketData(full);
-                        } catch (err: any) {
-                          alert(err?.message || 'Gagal memuat detail paket');
-                        }
-                      }} className="text-blue-600 hover:underline">{(p as any).code || ''}</button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-gray-900">{p.name}</div>
-                      <div className="text-sm text-gray-500">{p.description}</div>
-                    </td>
-                    <td className="px-4 py-3 text-sm">{p.durationHours} jam {p.durationMinutes} menit</td>
-                    <td className="px-4 py-3 text-sm">Rp {Number((p as any).hargaNormal ?? p.pricePerHour ?? 0).toLocaleString('id-ID')}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right">
-                      <div className="inline-flex items-center gap-2">
-                        <button onClick={async () => {
-                          // load package details and populate draft for editing
-                          try {
-                            const full = await paketService.getPackageById(p.id);
-                            if (full) {
-                              setNewPaketDraft({
-                                name: full.name,
-                                status: full.status,
-                                description: full.description,
-                                durationHours: full.durationHours,
-                                durationMinutes: full.durationMinutes,
-                                pricePerHour: full.hargaNormal ?? full.packagePrice ?? 0,
-                                discountAmount: full.discountAmount ?? 0,
-                                days: defaultDays,
-                                selectedConsoles: full.selectedConsoles || [],
-                                hariJamList: full.hariJamList || [],
-                                packagePrice: full.packagePrice,
-                                hargaNormal: full.hargaNormal ?? full.packagePrice ?? 0,
-                                code: full.code,
-                              });
-                              setEditingPaketId(p.id);
-                              setShowCreatePaketForm(true);
-                            } else {
-                              alert('Paket tidak ditemukan');
-                            }
-                          } catch (err: any) {
-                            alert(err?.message || 'Gagal mengambil paket');
-                          }
-                        }} className="text-blue-600 hover:text-blue-700 p-1 rounded"><Edit className="h-4 w-4" /></button>
-                        <button onClick={async () => {
-                          if (!confirm(`Hapus paket ${p.name}?`)) return;
-                          try {
-                            await paketService.deletePackage(p.id);
-                            (window as any).refreshPakets?.();
-                          } catch (err: any) {
-                            alert(err?.message || 'Gagal menghapus paket');
-                          }
-                        }} className="text-red-600 hover:text-red-700 p-1 rounded"><Trash2 className="h-4 w-4" /></button>
-                      </div>
-                    </td>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <nav className="flex space-x-4">
+            <button onClick={() => setMasterPaketSubTab('management')} className={`py-2 px-3 rounded-md font-medium ${masterPaketSubTab === 'management' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}>Management Paket</button>
+            <button onClick={() => setMasterPaketSubTab('history')} className={`py-2 px-3 rounded-md font-medium ${masterPaketSubTab === 'history' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}>History Pengunaan Paket</button>
+          </nav>
+        </div>
+
+        <div className="p-6">
+          {masterPaketSubTab === 'management' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kode Paket</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama Paket</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Durasi</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Harga / jam</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
                   </tr>
-                  {viewPaketData && viewPaketData.id === p.id && (
-                    <tr key={`detail-${p.id}`} className="bg-white">
-                      <td colSpan={6} className="px-4 py-4">
-                        <div className="bg-gray-50 rounded-lg p-4 relative">
-                          <button onClick={() => setViewPaketData(null)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600" aria-label="Tutup detail paket"><XCircle className="h-5 w-5" /></button>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <div className="text-sm text-gray-500">Kode Paket</div>
-                              <div className="font-medium">{viewPaketData.code}</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-gray-500">Nama Paket</div>
-                              <div className="font-medium">{viewPaketData.name}</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-gray-500">Status</div>
-                              <div className="font-medium">{viewPaketData.status}</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-gray-500">Durasi</div>
-                              <div className="font-medium">{viewPaketData.durationHours} jam {viewPaketData.durationMinutes} menit</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-gray-500">Harga Normal (Rp)</div>
-                              <div className="font-medium">Rp {Number(viewPaketData.hargaNormal ?? viewPaketData.packagePrice ?? 0).toLocaleString('id-ID')}</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-gray-500">Harga Paket (Rp)</div>
-                              <div className="font-medium">Rp {Number(viewPaketData.packagePrice ?? 0).toLocaleString('id-ID')}</div>
-                            </div>
-                            <div className="md:col-span-2">
-                              <div className="text-sm text-gray-500">Deskripsi</div>
-                              <div className="mt-1 text-sm text-gray-700">{viewPaketData.description || '-'}</div>
-                            </div>
-                            <div className="md:col-span-2">
-                              <div>
-                                <button onClick={() => setExpandedHariFor(expandedHariFor === p.id ? null : p.id)} className="w-full flex items-center justify-between bg-white p-2 rounded border">
-                                  <div className="text-sm font-medium text-blue-600 hover:underline">Hari & Jam Berlaku</div>
-                                  <div className="flex items-center gap-3">
-                                    <div className="text-sm text-gray-500">{(viewPaketData.hariJamList || []).length}</div>
-                                    <ChevronDown className={`h-4 w-4 text-gray-500 transform transition-transform duration-150 ease-in-out ${expandedHariFor === p.id ? 'rotate-180' : 'rotate-0'}`} />
-                                  </div>
-                                </button>
-                                {expandedHariFor === p.id && (
-                                  <div className="mt-2 space-y-2">
-                                    {(viewPaketData.hariJamList || []).length === 0 ? (
-                                      <div className="text-sm text-gray-500">Tidak ada hari/jam yang diatur.</div>
-                                    ) : (
-                                      (viewPaketData.hariJamList || []).map((hj: any) => (
-                                        <div key={hj.id || (hj.day + hj.startTime)} className="flex items-center justify-between bg-white p-2 rounded border">
-                                          <div className="font-medium">{hj.day}</div>
-                                          <div className="text-sm text-gray-600">{hj.startTime} - {hj.endTime}</div>
-                                        </div>
-                                      ))
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className="md:col-span-2">
-                              <div>
-                                <button onClick={() => setExpandedConsolesFor(expandedConsolesFor === p.id ? null : p.id)} className="w-full flex items-center justify-between bg-white p-2 rounded border">
-                                  <div className="text-sm font-medium text-blue-600 hover:underline">Consoles</div>
-                                  <div className="flex items-center gap-3">
-                                    <div className="text-sm text-gray-500">{(viewPaketData.selectedConsoles || []).length}</div>
-                                    <ChevronDown className={`h-4 w-4 text-gray-500 transform transition-transform duration-150 ease-in-out ${expandedConsolesFor === p.id ? 'rotate-180' : 'rotate-0'}`} />
-                                  </div>
-                                </button>
-                                {expandedConsolesFor === p.id && (
-                                  <div className="mt-2 space-y-2">
-                                    {(viewPaketData.selectedConsoles || []).length === 0 ? (
-                                      <div className="text-sm text-gray-500">Tidak ada console terkait.</div>
-                                    ) : (
-                                      (viewPaketData.selectedConsoles || []).map((cid: any) => {
-                                        const c = consoles.find((x) => x.id === cid);
-                                        return (
-                                          <div key={cid} className="flex items-center justify-between bg-white p-2 rounded border">
-                                            <div className="font-medium">{c?.name ?? cid}</div>
-                                            <div className="text-sm text-gray-600">ID: {cid}</div>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {pakets.map((p) => (
+                    <React.Fragment key={p.id}>
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          <button onClick={async () => {
+                            try {
+                              if (viewPaketData && viewPaketData.id === p.id) {
+                                setViewPaketData(null);
+                                return;
+                              }
+                              const full = await paketService.getPackageById(p.id);
+                              setViewPaketData(full);
+                            } catch (err: any) {
+                              alert(err?.message || 'Gagal memuat detail paket');
+                            }
+                          }} className="text-blue-600 hover:underline">{(p as any).code || ''}</button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-medium text-gray-900">{p.name}</div>
+                          <div className="text-sm text-gray-500">{p.description}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{p.durationHours} jam {p.durationMinutes} menit</td>
+                        <td className="px-4 py-3 text-sm">Rp {Number((p as any).hargaNormal ?? p.pricePerHour ?? 0).toLocaleString('id-ID')}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <button onClick={async () => {
+                              try {
+                                const full = await paketService.getPackageById(p.id);
+                                if (full) {
+                                  setNewPaketDraft({
+                                    name: full.name,
+                                    status: full.status,
+                                    description: full.description,
+                                    durationHours: full.durationHours,
+                                    durationMinutes: full.durationMinutes,
+                                    pricePerHour: full.hargaNormal ?? full.packagePrice ?? 0,
+                                    discountAmount: full.discountAmount ?? 0,
+                                    days: defaultDays,
+                                    selectedConsoles: full.selectedConsoles || [],
+                                    hariJamList: full.hariJamList || [],
+                                    packagePrice: full.packagePrice,
+                                    hargaNormal: full.hargaNormal ?? full.packagePrice ?? 0,
+                                    code: full.code,
+                                  });
+                                  setEditingPaketId(p.id);
+                                  setShowCreatePaketForm(true);
+                                } else {
+                                  alert('Paket tidak ditemukan');
+                                }
+                              } catch (err: any) {
+                                alert(err?.message || 'Gagal mengambil paket');
+                              }
+                            }} className="text-blue-600 hover:text-blue-700 p-1 rounded"><Edit className="h-4 w-4" /></button>
+                            <button onClick={async () => {
+                              if (!confirm(`Hapus paket ${p.name}?`)) return;
+                              try {
+                                await paketService.deletePackage(p.id);
+                                (window as any).refreshPakets?.();
+                              } catch (err: any) {
+                                alert(err?.message || 'Gagal menghapus paket');
+                              }
+                            }} className="text-red-600 hover:text-red-700 p-1 rounded"><Trash2 className="h-4 w-4" /></button>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+                        </td>
+                      </tr>
+                      {viewPaketData && viewPaketData.id === p.id && (
+                        <tr key={`detail-${p.id}`} className="bg-white">
+                          <td colSpan={6} className="px-4 py-4">
+                            <div className="bg-gray-50 rounded-lg p-4 relative">
+                              <button onClick={() => setViewPaketData(null)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600" aria-label="Tutup detail paket"><XCircle className="h-5 w-5" /></button>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <div className="text-sm text-gray-500">Kode Paket</div>
+                                  <div className="font-medium">{viewPaketData.code}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Nama Paket</div>
+                                  <div className="font-medium">{viewPaketData.name}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Status</div>
+                                  <div className="font-medium">{viewPaketData.status}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Durasi</div>
+                                  <div className="font-medium">{viewPaketData.durationHours} jam {viewPaketData.durationMinutes} menit</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Harga Normal (Rp)</div>
+                                  <div className="font-medium">Rp {Number(viewPaketData.hargaNormal ?? viewPaketData.packagePrice ?? 0).toLocaleString('id-ID')}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Harga Paket (Rp)</div>
+                                  <div className="font-medium">Rp {Number(viewPaketData.packagePrice ?? 0).toLocaleString('id-ID')}</div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <div className="text-sm text-gray-500">Deskripsi</div>
+                                  <div className="mt-1 text-sm text-gray-700">{viewPaketData.description || '-'}</div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <div>
+                                    <button onClick={() => setExpandedHariFor(expandedHariFor === p.id ? null : p.id)} className="w-full flex items-center justify-between bg-white p-2 rounded border">
+                                      <div className="text-sm font-medium text-blue-600 hover:underline">Hari & Jam Berlaku</div>
+                                      <div className="flex items-center gap-3">
+                                        <div className="text-sm text-gray-500">{(viewPaketData.hariJamList || []).length}</div>
+                                        <ChevronDown className={`h-4 w-4 text-gray-500 transform transition-transform duration-150 ease-in-out ${expandedHariFor === p.id ? 'rotate-180' : 'rotate-0'}`} />
+                                      </div>
+                                    </button>
+                                    {expandedHariFor === p.id && (
+                                      <div className="mt-2 space-y-2">
+                                        {(viewPaketData.hariJamList || []).length === 0 ? (
+                                          <div className="text-sm text-gray-500">Tidak ada hari/jam yang diatur.</div>
+                                        ) : (
+                                          (viewPaketData.hariJamList || []).map((hj: any) => (
+                                            <div key={hj.id || (hj.day + hj.startTime)} className="flex items-center justify-between bg-white p-2 rounded border">
+                                              <div className="font-medium">{hj.day}</div>
+                                              <div className="text-sm text-gray-600">{hj.startTime} - {hj.endTime}</div>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <div>
+                                    <button onClick={() => setExpandedConsolesFor(expandedConsolesFor === p.id ? null : p.id)} className="w-full flex items-center justify-between bg-white p-2 rounded border">
+                                      <div className="text-sm font-medium text-blue-600 hover:underline">Consoles</div>
+                                      <div className="flex items-center gap-3">
+                                        <div className="text-sm text-gray-500">{(viewPaketData.selectedConsoles || []).length}</div>
+                                        <ChevronDown className={`h-4 w-4 text-gray-500 transform transition-transform duration-150 ease-in-out ${expandedConsolesFor === p.id ? 'rotate-180' : 'rotate-0'}`} />
+                                      </div>
+                                    </button>
+                                    {expandedConsolesFor === p.id && (
+                                      <div className="mt-2 space-y-2">
+                                        {(viewPaketData.selectedConsoles || []).length === 0 ? (
+                                          <div className="text-sm text-gray-500">Tidak ada console terkait.</div>
+                                        ) : (
+                                          (viewPaketData.selectedConsoles || []).map((cid: any) => {
+                                            const c = consoles.find((x) => x.id === cid);
+                                            return (
+                                              <div key={cid} className="flex items-center justify-between bg-white p-2 rounded border">
+                                                <div className="font-medium">{c?.name ?? cid}</div>
+                                                <div className="text-sm text-gray-600">ID: {cid}</div>
+                                              </div>
+                                            );
+                                          })
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">History Pengunaan Paket masih kosong. Saya akan menunggu desain Anda untuk mengisinya.</div>
+          )}
         </div>
       </div>
     </div>
