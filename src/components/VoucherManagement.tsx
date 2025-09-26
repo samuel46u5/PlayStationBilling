@@ -191,7 +191,7 @@ const VoucherManagement: React.FC = () => {
   // local sub-tab state inside Master Paket
   const [masterPaketSubTab, setMasterPaketSubTab] = useState<'management' | 'history'>('management');
 
-  const handleCreatePaketDraft = () => {
+  const handleCreatePaketDraft = async () => {
     if (!newPaketDraft.name) return alert("Nama paket wajib diisi");
     const fullPayload: any = {
       name: String(newPaketDraft.name),
@@ -208,46 +208,82 @@ const VoucherManagement: React.FC = () => {
       hariJamList: newPaketDraft.hariJamList || [],
     };
 
-    (async () => {
-      try {
-        if (editingPaketId) {
-          await paketService.updatePackage(editingPaketId, {
-            name: fullPayload.name,
-            code: fullPayload.code,
-            description: fullPayload.description,
-            status: fullPayload.status,
-            durationHours: fullPayload.durationHours,
-            durationMinutes: fullPayload.durationMinutes,
-            hargaNormal: fullPayload.hargaNormal,
-            packagePrice: fullPayload.packagePrice,
-            discountAmount: fullPayload.discountAmount,
-            selectedConsoles: fullPayload.consoles,
-            hariJamList: fullPayload.hariJamList,
-          });
-        } else {
-          await paketService.createPackage({
-            name: fullPayload.name,
-            code: fullPayload.code,
-            description: fullPayload.description,
-            status: fullPayload.status,
-            durationHours: fullPayload.durationHours,
-            durationMinutes: fullPayload.durationMinutes,
-            hargaNormal: fullPayload.hargaNormal,
-            packagePrice: fullPayload.packagePrice,
-            discountAmount: fullPayload.discountAmount,
-            selectedConsoles: fullPayload.consoles,
-            hariJamList: fullPayload.hariJamList,
-          });
-        }
-        (window as any).refreshPakets?.();
-      } catch (err: any) {
-        alert(err?.message || 'Gagal menyimpan paket');
-      }
-    })();
+    try {
+      if (editingPaketId) {
+        await paketService.updatePackage(editingPaketId, {
+          name: fullPayload.name,
+          code: fullPayload.code,
+          description: fullPayload.description,
+          status: fullPayload.status,
+          durationHours: fullPayload.durationHours,
+          durationMinutes: fullPayload.durationMinutes,
+          hargaNormal: fullPayload.hargaNormal,
+          packagePrice: fullPayload.packagePrice,
+          discountAmount: fullPayload.discountAmount,
+          selectedConsoles: fullPayload.consoles,
+          hariJamList: fullPayload.hariJamList,
+        });
 
+    // close modal first, give React a tick to settle, then refresh and show toast
     setShowCreatePaketForm(false);
-    setNewPaketDraft({ name: "", code: undefined, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
-    setEditingPaketId(null);
+    await sleep(40);
+  await reloadPakets();
+  await refreshOpenDetail(editingPaketId);
+
+        await Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Paket berhasil diperbarui',
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      } else {
+        const created = await paketService.createPackage({
+          name: fullPayload.name,
+          code: fullPayload.code,
+          description: fullPayload.description,
+          status: fullPayload.status,
+          durationHours: fullPayload.durationHours,
+          durationMinutes: fullPayload.durationMinutes,
+          hargaNormal: fullPayload.hargaNormal,
+          packagePrice: fullPayload.packagePrice,
+          discountAmount: fullPayload.discountAmount,
+          selectedConsoles: fullPayload.consoles,
+          hariJamList: fullPayload.hariJamList,
+        });
+
+    // close modal first, give React a tick to settle, then refresh and show toast
+    setShowCreatePaketForm(false);
+    await sleep(40);
+        await reloadPakets();
+        const createdId = (created && (created.id || created.package_id || created.packageId)) ? (created.id ?? created.package_id ?? created.packageId) : undefined;
+        await refreshOpenDetail(createdId);
+
+        await Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Paket berhasil dibuat',
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      }
+
+      // reset draft & editing state after success
+      setNewPaketDraft({ name: "", code: undefined, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
+      setEditingPaketId(null);
+    } catch (err: any) {
+      // keep modal open so user can correct input; show error toast
+      await Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'error',
+        title: err?.message || 'Gagal menyimpan paket',
+        showConfirmButton: false,
+        timer: 2500,
+      });
+    }
   };
 
   // fetch consoles from DB once (and provide paket refresh)
@@ -284,6 +320,46 @@ const VoucherManagement: React.FC = () => {
     };
     (window as any).refreshPakets();
   }, []);
+
+  // helper to reload pakets and set local state immediately
+  const reloadPakets = async () => {
+    try {
+      const rows = await paketService.loadPakets();
+      const mapped = (rows || []).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        code: r.code,
+        status: r.status || 'active',
+        description: r.description,
+        durationHours: r.durationHours || 0,
+        durationMinutes: r.durationMinutes || 0,
+        pricePerHour: r.hargaNormal ?? r.packagePrice ?? 0,
+        discountAmount: r.discountAmount ?? 0,
+      }));
+      setPakets(mapped as Paket[]);
+    } catch {
+      setPakets([]);
+    }
+  };
+
+  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+  // refresh the currently open paket detail (if any). If deletedId is provided and
+  // matches the open detail, clear the detail panel.
+  const refreshOpenDetail = async (deletedId?: string) => {
+    try {
+      if (deletedId && viewPaketData && viewPaketData.id === deletedId) {
+        setViewPaketData(null);
+        return;
+      }
+      if (viewPaketData && viewPaketData.id) {
+        const fresh = await paketService.getPackageById(viewPaketData.id);
+        setViewPaketData(fresh);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -1683,9 +1759,25 @@ const VoucherManagement: React.FC = () => {
                               if (!confirm(`Hapus paket ${p.name}?`)) return;
                               try {
                                 await paketService.deletePackage(p.id);
-                                (window as any).refreshPakets?.();
+                                await reloadPakets();
+                                await refreshOpenDetail(p.id);
+                                await Swal.fire({
+                                  toast: true,
+                                  position: 'top-end',
+                                  icon: 'success',
+                                  title: 'Paket berhasil dihapus',
+                                  showConfirmButton: false,
+                                  timer: 2000,
+                                });
                               } catch (err: any) {
-                                alert(err?.message || 'Gagal menghapus paket');
+                                await Swal.fire({
+                                  toast: true,
+                                  position: 'top-end',
+                                  icon: 'error',
+                                  title: err?.message || 'Gagal menghapus paket',
+                                  showConfirmButton: false,
+                                  timer: 2500,
+                                });
                               }
                             }} className="text-red-600 hover:text-red-700 p-1 rounded"><Trash2 className="h-4 w-4" /></button>
                           </div>
