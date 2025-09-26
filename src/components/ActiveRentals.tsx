@@ -178,34 +178,56 @@ const ActiveRentals: React.FC = () => {
     new Set()
   );
 
-  // RFID Reader hook untuk member card mode
-  useRFIDReader((uid) => {
-    if (rentalType === "member-card") {
-      setScannedCardUID(uid);
-      // Ambil data kartu
-      supabase
+  const fetchCardData = async (uid: string) => {
+    if (!uid) {
+      setScannedCardData(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
         .from("rfid_cards")
         .select("uid, balance_points, status")
         .eq("uid", uid)
-        .single()
-        .then(({ data, error }) => {
-          if (!error && data) {
-            setScannedCardData(data);
-          } else {
-            setScannedCardData(null);
-          }
-        });
+        .single();
+
+      if (!error && data) {
+        setScannedCardData(data);
+        console.log("Card data fetched:", data);
+      } else {
+        setScannedCardData(null);
+        console.error("Error fetching card data:", error);
+      }
+    } catch (error) {
+      console.error("Error fetching card data:", error);
+      setScannedCardData(null);
     }
+  };
+  // RFID Reader hook
+  useRFIDReader((uid) => {
+    setScannedCardUID(uid);
+    fetchCardData(uid);
   });
+
+  // Auto-fetch card data when scannedCardUID changes
+  // useEffect(() => {
+  //   if (scannedCardUID) {
+  //     fetchCardData(scannedCardUID);
+  //   } else {
+  //     setScannedCardData(null);
+  //   }
+  // }, [scannedCardUID]);
 
   // Member Card Billing hook
   // useMemberCardBilling(activeSessions);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [showCheckBalanceModal, setShowCheckBalanceModal] = useState(false);
   const [voucherSearchTerm, setVoucherSearchTerm] = useState("");
   const [voucherList, setVoucherList] = useState<any[]>([]);
   const [showSellVoucherModal, setShowSellVoucherModal] = useState(false);
   const [selectedVoucherId, setSelectedVoucherId] = useState("");
   const [selling, setSelling] = useState(false);
+  const [voucherQuantity, setVoucherQuantity] = useState<number>(1);
 
   const [showAddTimeModal, setShowAddTimeModal] =
     useState<AddTimeModalState>(null);
@@ -3280,8 +3302,11 @@ const ActiveRentals: React.FC = () => {
         return;
       }
 
-      const newBalance =
-        currentCardData.balance_points + selectedVoucher.total_points;
+      const qty = Math.max(1, Number(voucherQuantity) || 1);
+      const pointsToAdd = (selectedVoucher.total_points || 0) * qty;
+      const priceToPay = (selectedVoucher.voucher_price || 0) * qty;
+
+      const newBalance = currentCardData.balance_points + pointsToAdd;
 
       // Update member card balance
       const { error: updateError } = await supabase
@@ -3300,7 +3325,7 @@ const ActiveRentals: React.FC = () => {
           card_uid: scannedCardUID,
           session_id: null,
           action_type: "balance_add",
-          points_amount: selectedVoucher.total_points,
+          points_amount: pointsToAdd,
           balance_before: currentCardData.balance_points,
           balance_after: newBalance,
           notes: `Voucher purchase: ${selectedVoucher.name} (${selectedVoucher.voucher_code}) - Payment: ${paymentMethod}`,
@@ -3313,17 +3338,37 @@ const ActiveRentals: React.FC = () => {
       // Log transaction
       await logCashierTransaction({
         type: "voucher",
-        amount: selectedVoucher.voucher_price || 0,
+        amount: priceToPay,
         paymentMethod: paymentMethod,
         referenceId: selectedVoucher.id,
-        description: `Penjualan voucher ${selectedVoucher.name} (${selectedVoucher.total_points} points)`,
+        description: `Penjualan voucher ${selectedVoucher.name} (${pointsToAdd} points) x ${qty}`,
         details: {
           voucher_id: selectedVoucher.id,
           voucher_code: selectedVoucher.voucher_code,
-          points_added: selectedVoucher.total_points,
+          points_added: pointsToAdd,
+          quantity: qty,
           card_uid: scannedCardUID,
           previous_balance: currentCardData.balance_points,
           new_balance: newBalance,
+          items: [
+            {
+              name: selectedVoucher.name,
+              product_name: selectedVoucher.name,
+              title: `Voucher ${selectedVoucher.voucher_code}`,
+              qty: qty,
+              quantity: qty,
+              price: selectedVoucher.voucher_price || 0,
+              total: priceToPay,
+              description: `Voucher ${pointsToAdd} points`,
+              type: "voucher",
+            },
+          ],
+          // Payment block used by receipt converter
+          payment: {
+            method: paymentMethod,
+            amount: priceToPay,
+            change: 0,
+          },
         },
       });
 
@@ -3342,11 +3387,15 @@ const ActiveRentals: React.FC = () => {
       setShowSellVoucherModal(false);
       setSelectedVoucherId("");
       setPaymentMethod("cash");
+      setVoucherQuantity(1);
 
       // Show success message
-      alert(
-        `Voucher berhasil dijual! Saldo kartu bertambah ${selectedVoucher.total_points} points`
-      );
+      Swal.fire({
+        icon: "success",
+        title: "Voucher berhasil dijual!",
+        text: `Saldo kartu bertambah ${pointsToAdd} points`,
+        confirmButtonColor: "#22c55e",
+      });
     } catch (error) {
       console.error("Error selling voucher:", error);
       alert("Terjadi kesalahan saat menjual voucher!");
@@ -4729,11 +4778,21 @@ const ActiveRentals: React.FC = () => {
           <button
             onClick={() => {
               setShowSellVoucherModal(true);
+              setVoucherQuantity(1);
             }}
             className=" bg-blue-500 hover:bg-blue-600 text-white py-3 px-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Ticket className="h-5 w-5" />
             Jual Voucher
+          </button>
+          <button
+            onClick={() => {
+              setShowCheckBalanceModal(true);
+            }}
+            className="bg-green-500 hover:bg-green-600 text-white py-3 px-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <CreditCard className="h-5 w-5" />
+            Cek Saldo Kartu
           </button>
         </div>
 
@@ -4892,7 +4951,7 @@ const ActiveRentals: React.FC = () => {
                       </p>
                       <p className="text-sm text-green-700">
                         Saldo Saat Ini:{" "}
-                        {scannedCardData.balance_points?.toLocaleString()}{" "}
+                        {scannedCardData?.balance_points?.toLocaleString()}{" "}
                         points
                       </p>
                     </div>
@@ -4902,32 +4961,56 @@ const ActiveRentals: React.FC = () => {
               <form className="space-y-4">
                 {/* Pilih Voucher */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Pilih Voucher
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowVoucherModal(true);
-                        setVoucherSearchTerm("");
-                      }}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50"
-                    >
-                      {selectedVoucherId
-                        ? voucherList.find((v) => v.id === selectedVoucherId)
-                            ?.name || "Pilih Voucher"
-                        : "Pilih Voucher"}
-                    </button>
-                    {selectedVoucherId && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedVoucherId("")}
-                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
+                  <div className="flex justify-between gap-4 items-end">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Pilih Voucher
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowVoucherModal(true);
+                            setVoucherSearchTerm("");
+                          }}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50"
+                        >
+                          {selectedVoucherId
+                            ? voucherList.find(
+                                (v) => v.id === selectedVoucherId
+                              )?.name || "Pilih Voucher"
+                            : "Pilih Voucher"}
+                        </button>
+                        {selectedVoucherId && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedVoucherId("")}
+                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Quantity */}
+                    <div className="w-28">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Quantity
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={voucherQuantity}
+                        onChange={(e) => {
+                          const val = Math.max(
+                            1,
+                            parseInt(e.target.value) || 1
+                          );
+                          setVoucherQuantity(val);
+                        }}
+                        className="w-28 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -4948,73 +5031,82 @@ const ActiveRentals: React.FC = () => {
                   </select>
                 </div>
                 {/* Preview */}
-                {selectedVoucherId &&
-                  scannedCardUID &&
-                  scannedCardData(
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      {(() => {
-                        const v = voucherList.find(
-                          (v) => v.id === selectedVoucherId
-                        );
-                        if (!v) return null;
+                {selectedVoucherId && scannedCardUID && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {(() => {
+                      const v = voucherList.find(
+                        (v) => v.id === selectedVoucherId
+                      );
+                      if (!v) return null;
 
-                        const currentBalance =
-                          scannedCardData.balance_points || 0;
-                        const newBalance = currentBalance + v.total_points;
+                      const currentBalance =
+                        scannedCardData?.balance_points || 0;
+                      const qty = Math.max(1, Number(voucherQuantity) || 1);
+                      const pointsToAdd = (v.total_points || 0) * qty;
+                      const priceToPay = (v.voucher_price || 0) * qty;
+                      const newBalance = currentBalance + pointsToAdd;
 
-                        return (
-                          <div className="space-y-3">
-                            <h4 className="font-medium text-gray-900">
-                              Detail Transaksi
-                            </h4>
+                      return (
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-gray-900">
+                            Detail Transaksi
+                          </h4>
 
-                            <div className="space-y-1 text-sm">
-                              <div className="flex justify-between">
-                                <span>Kode Voucher:</span>
-                                <span>{v.voucher_code}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Nama Voucher:</span>
-                                <span>{v.name}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Points Ditambahkan:</span>
-                                <span className="text-green-600 font-medium">
-                                  +{v.total_points} points
-                                </span>
-                              </div>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span>Kode Voucher:</span>
+                              <span>{v.voucher_code}</span>
                             </div>
-
-                            <div className="border-t border-gray-200 pt-2">
-                              <div className="flex justify-between items-center text-sm">
-                                <span>Saldo Saat Ini:</span>
-                                <span>
-                                  {currentBalance.toLocaleString()} points
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center text-sm font-medium text-green-600">
-                                <span>Saldo Setelah Penjualan:</span>
-                                <span>
-                                  {newBalance.toLocaleString()} points
-                                </span>
-                              </div>
+                            <div className="flex justify-between">
+                              <span>Nama Voucher:</span>
+                              <span>{v.name}</span>
                             </div>
-
-                            <div className="flex justify-between font-medium border-t border-gray-200 pt-2">
-                              <span>Total Bayar:</span>
-                              <span>
-                                Rp {v.voucher_price?.toLocaleString("id-ID")}
+                            <div className="flex justify-between">
+                              <span>Quantity:</span>
+                              <span className="font-medium">{qty}x</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Points Ditambahkan:</span>
+                              <span className="text-green-600 font-medium">
+                                +{pointsToAdd} points
                               </span>
                             </div>
                           </div>
-                        );
-                      })()}
-                    </div>
-                  )}
+
+                          <div className="border-t border-gray-200 pt-2">
+                            <div className="flex justify-between items-center text-sm">
+                              <span>Saldo Saat Ini:</span>
+                              <span>
+                                {currentBalance.toLocaleString()} points
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm font-medium text-green-600">
+                              <span>Saldo Setelah Penjualan:</span>
+                              <span>{newBalance.toLocaleString()} points</span>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between font-medium border-t border-gray-200 pt-2">
+                            <span>Total Bayar:</span>
+                            <span>
+                              Rp {priceToPay?.toLocaleString("id-ID")}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </form>
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowSellVoucherModal(false)}
+                  onClick={() => {
+                    setShowSellVoucherModal(false);
+                    setSelectedVoucherId("");
+                    setScannedCardUID("");
+                    setScannedCardData(null);
+                    setVoucherQuantity(1);
+                  }}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   Batal
@@ -5033,6 +5125,159 @@ const ActiveRentals: React.FC = () => {
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
                   {selling ? "Memproses..." : "Jual Voucher"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Check Balance Modal - Tambahkan modal baru */}
+      {showCheckBalanceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Cek Saldo Kartu
+              </h2>
+
+              {/* Member Card Status */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-yellow-600 pt-1">
+                    <svg
+                      className="h-5 w-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Scan Kartu Member
+                    </h3>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      Silakan scan kartu RFID atau masukkan UID manual.
+                    </p>
+
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Input UID kartu manual"
+                        value={scannedCardUID}
+                        onChange={(e) => setScannedCardUID(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (e.currentTarget.value.trim()) {
+                              fetchCardData(e.currentTarget.value.trim());
+                            }
+                          }
+                        }}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (scannedCardUID.trim()) {
+                            fetchCardData(scannedCardUID.trim());
+                          }
+                        }}
+                        className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+                      >
+                        Cek Kartu
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status */}
+              {scannedCardUID && (
+                <>
+                  {
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-start gap-3">
+                        <div className="text-green-600 pt-1">
+                          <svg
+                            className="h-5 w-5"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-green-800">
+                            Kartu Member Terdeteksi
+                          </h3>
+                          <p className="text-sm text-green-700 mt-1">
+                            UID: {scannedCardUID}
+                          </p>
+                          <p
+                            className={`text-sm font-medium ${
+                              scannedCardData?.status === "active"
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            Status:{" "}
+                            {scannedCardData?.status === "active"
+                              ? "✅ Aktif"
+                              : "❌ Tidak Aktif"}
+                          </p>
+                          <button
+                            onClick={() => {
+                              setScannedCardData(null);
+                              setScannedCardUID("");
+                            }}
+                            className="text-sm text-green-600 underline mt-2"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </>
+              )}
+
+              {/* Balance Information */}
+              {scannedCardData && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-600 mb-2">
+                      {scannedCardData?.balance_points?.toLocaleString(
+                        "id-ID"
+                      ) || 0}{" "}
+                      Points
+                    </div>
+                    <div className="text-sm text-blue-700">Saldo Tersedia</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowCheckBalanceModal(false);
+                    setScannedCardUID("");
+                    setScannedCardData(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Tutup
                 </button>
               </div>
             </div>
@@ -6120,7 +6365,8 @@ const ActiveRentals: React.FC = () => {
                       {/* Tombol Add Products - hanya tampil jika console rented */}
                       {activeSession &&
                         console.status === "rented" &&
-                        !activeSession.duration_minutes && (
+                        !activeSession.duration_minutes &&
+                        !activeSession.is_voucher_used && (
                           <button
                             onClick={() => {
                               if (!ensureCashierActive()) return;
@@ -6128,7 +6374,8 @@ const ActiveRentals: React.FC = () => {
                                 console.status === "rented" &&
                                 activeSession &&
                                 activeSession.status === "active" &&
-                                !activeSession?.duration_minutes
+                                !activeSession?.duration_minutes &&
+                                !activeSession.is_voucher_used
                               ) {
                                 setShowProductModal(activeSession.id);
                               } else {
@@ -6988,7 +7235,8 @@ const ActiveRentals: React.FC = () => {
                     {/* Add Products Button - hanya tampil jika console rented */}
                     {activeSession &&
                       console.status === "rented" &&
-                      !activeSession.duration_minutes && (
+                      !activeSession.duration_minutes &&
+                      !activeSession.is_voucher_used && (
                         <button
                           onClick={() => {
                             if (!ensureCashierActive()) return;
@@ -7263,12 +7511,12 @@ const ActiveRentals: React.FC = () => {
                             Kartu: {scannedCardData.uid}
                           </p>
                           <p className="text-sm font-medium text-blue-800">
-                            Sisa Balance: {scannedCardData.balance_points}{" "}
+                            Sisa Balance: {scannedCardData?.balance_points}{" "}
                             points
                           </p>
                           {(() => {
                             const cardBalance =
-                              scannedCardData.balance_points ?? 0;
+                              scannedCardData?.balance_points ?? 0;
                             const consoleRateProfile =
                               selectedConsole?.rate_profile_id
                                 ? rateProfiles.find(
@@ -7310,21 +7558,41 @@ const ActiveRentals: React.FC = () => {
                         //     Kartu akan otomatis terdeteksi saat di-tempel.
                         //   </p>
                         // </div>
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                          <p className="text-sm text-yellow-800">
-                            Silakan scan kartu RFID atau masukkan UID manual.
-                          </p>
-                          <input
-                            type="text"
-                            placeholder="Input UID kartu manual"
-                            value={scannedCardUID}
-                            onChange={(e) => setScannedCardUID(e.target.value)}
-                            className="mt-2 px-3 py-2 border border-gray-300 rounded-lg"
-                          />
-                          <p className="text-xs text-yellow-600 mt-1">
-                            Kartu akan otomatis terdeteksi saat di-scan, atau
-                            isi manual jika scanner bermasalah.
-                          </p>
+                        <div className="flex flex-col gap-2">
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                            <p className="text-sm text-yellow-800">
+                              Silakan scan kartu RFID atau masukkan UID manual.
+                            </p>
+                            <input
+                              type="text"
+                              placeholder="Input UID kartu manual"
+                              value={scannedCardUID}
+                              onChange={(e) =>
+                                setScannedCardUID(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                }
+                              }}
+                              className="mt-2 px-3 py-2 border border-gray-300 rounded-lg"
+                            />
+                            <p className="text-xs text-yellow-600 mt-1">
+                              Kartu akan otomatis terdeteksi saat di-scan, atau
+                              isi manual jika scanner bermasalah.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (scannedCardUID.trim()) {
+                                fetchCardData(scannedCardUID.trim());
+                              }
+                            }}
+                            className="mt-2 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+                          >
+                            Cek Kartu
+                          </button>
                         </div>
                       )}
                     </div>
@@ -7682,7 +7950,11 @@ const ActiveRentals: React.FC = () => {
 
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowStartRentalModal(null)}
+                  onClick={() => {
+                    setShowStartRentalModal(null);
+                    setScannedCardUID("");
+                    setScannedCardData(null);
+                  }}
                   className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   Batal

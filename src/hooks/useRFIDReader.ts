@@ -3,22 +3,26 @@ import { useEffect } from 'react';
 export function useRFIDReader(onUID: (uid: string) => void, terminator: string = 'Enter') {
   useEffect(() => {
     let buffer = '';
-    let lastTime = 0;
+    let timeoutId: number | undefined;
+
+    const resetBuffer = () => {
+      buffer = '';
+    };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const now = Date.now();
-      const isScannerBurst = now - lastTime < 50; // ketikan cepat dari scanner
-      lastTime = now;
-
       if (e.key === terminator) {
         const uid = buffer.trim();
         if (uid) onUID(uid);
-        buffer = '';
+        resetBuffer();
         return;
       }
 
-      if (isScannerBurst && e.key.length === 1 && /[0-9a-zA-Z]/.test(e.key)) {
+      if (e.key.length === 1 && /[0-9a-zA-Z]/.test(e.key)) {
         buffer += e.key;
+
+        // Reset buffer jika tidak ada input baru dalam 500ms
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(resetBuffer, 500);
       }
     };
 
@@ -26,5 +30,3 @@ export function useRFIDReader(onUID: (uid: string) => void, terminator: string =
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onUID, terminator]);
 }
-
-

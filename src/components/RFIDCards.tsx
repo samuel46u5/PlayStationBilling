@@ -132,45 +132,76 @@ const RFIDCards: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLogs, setHistoryLogs] = useState<CardUsageLog[]>([]);
 
+  function groupDeductLogsBySession(logs: CardUsageLog[]) {
+    const grouped: Record<
+      string,
+      {
+        total_points: number;
+        firstTimestamp: string;
+        lastTimestamp: string;
+        session_id: string;
+        balance_before?: number;
+        balance_after?: number;
+        notes?: string;
+      }
+    > = {};
+
+    logs.forEach((log) => {
+      if (log.action_type !== "balance_deduct") return;
+
+      const sid = log.session_id || "no-session";
+
+      if (!grouped[sid]) {
+        grouped[sid] = {
+          total_points: log.points_amount,
+          firstTimestamp: log.timestamp,
+          lastTimestamp: log.timestamp,
+          session_id: sid,
+          balance_before: log.balance_before,
+          balance_after: log.balance_after,
+          notes: log.notes,
+        };
+      } else {
+        grouped[sid].total_points += log.points_amount;
+
+        // Update waktu awal dan akhir sesi
+        if (new Date(log.timestamp) < new Date(grouped[sid].firstTimestamp)) {
+          grouped[sid].firstTimestamp = log.timestamp;
+          grouped[sid].balance_before = log.balance_before;
+        }
+        if (new Date(log.timestamp) > new Date(grouped[sid].lastTimestamp)) {
+          grouped[sid].lastTimestamp = log.timestamp;
+          grouped[sid].balance_after = log.balance_after;
+        }
+      }
+    });
+
+    Object.values(grouped).forEach((session) => {
+      const start = new Date(session.firstTimestamp);
+      const end = new Date(session.lastTimestamp);
+      const diffMs = end.getTime() - start.getTime();
+      const diffMinutes = Math.ceil(diffMs / 60000);
+      session.notes = `Automatic deduction for rental session - ${diffMinutes} minutes`;
+    });
+
+    return Object.values(grouped);
+  }
+
   const openHistory = async (card: RFIDCard) => {
     setHistoryCard(card);
     setHistoryLoading(true);
     try {
-      // Ambil riwayat per sesi rental
-      const { data: sessions, error } = await supabase
-        .from("rental_sessions")
+      const { data, error } = await supabase
+        .from("card_usage_logs")
         .select(
-          "id, start_time, end_time, duration_minutes, total_points_deducted, is_voucher_used"
+          "id, card_uid, session_id, action_type, points_amount, balance_before, balance_after, timestamp, notes"
         )
         .eq("card_uid", card.uid)
-        .eq("is_voucher_used", true)
-        .order("start_time", { ascending: false });
+        .order("timestamp", { ascending: false });
       if (error) throw error;
 
-      const aggregated = (sessions || [])
-        .map((s: any) => {
-          const total = Number(s.total_points_deducted) || 0;
-          const when = s.end_time || s.start_time;
-          const dur =
-            s.duration_minutes != null ? Number(s.duration_minutes) : undefined;
-          return {
-            id: s.id,
-            card_uid: card.uid,
-            session_id: s.id,
-            action_type: "balance_deduct" as const,
-            points_amount: total,
-            balance_before: undefined as unknown as number,
-            balance_after: undefined as unknown as number,
-            timestamp: when,
-            notes:
-              dur != null
-                ? `Pemotongan points (member-card) - ${dur} menit`
-                : "Pemotongan points (member-card) - Sesi",
-          } as unknown as CardUsageLog;
-        })
-        .filter((row) => (Number(row.points_amount) || 0) > 0);
-
-      setHistoryLogs(aggregated as CardUsageLog[]);
+      setHistoryLogs((data || []) as unknown as CardUsageLog[]);
+      console.log(data);
     } catch (e) {
       console.error("load card history error", e);
       setHistoryLogs([]);
@@ -276,26 +307,18 @@ const RFIDCards: React.FC = () => {
           <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Users className="h-6 w-6 text-purple-600" />
           </div>
-          {/* <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {
-              cards.filter(
-                (c) => Array.isArray(c.customers) && c.customers.length > 0
-              ).length
-            }
-          </h3> */}
-          <p className="text-gray-600 text-sm">Kartu Ter-assign</p>
+          <h3 className="text-2xl font-bold text-gray-900 mb-1">
+            {cards.filter((c) => !c.is_admin).length}
+          </h3>
+          <p className="text-gray-600 text-sm">Kartu Member</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
           <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Settings className="h-6 w-6 text-orange-600" />
           </div>
-          {/* <h3 className="text-2xl font-bold text-gray-900 mb-1">
-            {
-              cards.filter(
-                (c) => Array.isArray(c.customers) && c.status === "active"
-              ).length
-            }
-          </h3> */}
+          <h3 className="text-2xl font-bold text-gray-900 mb-1">
+            {cards.filter((c) => c.status === "active").length}
+          </h3>
           <p className="text-gray-600 text-sm">Kartu Aktif</p>
         </div>
       </div>
@@ -632,72 +655,112 @@ const RFIDCards: React.FC = () => {
                     </div>
                   ) : (
                     <div className="max-h-[60vh] overflow-auto divide-y divide-gray-100">
-                      {historyLogs.map((log) => {
-                        const isAdd = log.action_type === "balance_add";
-                        const isDeduct = log.action_type === "balance_deduct";
-                        return (
-                          <div
-                            key={log.id}
-                            className="py-3 flex items-start gap-3"
-                          >
-                            <div
-                              className={`mt-1 w-2 h-2 rounded-full ${
-                                isAdd
-                                  ? "bg-green-500"
-                                  : isDeduct
-                                  ? "bg-red-500"
-                                  : "bg-gray-400"
-                              }`}
-                            ></div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {isAdd
-                                    ? "Penambahan"
-                                    : isDeduct
-                                    ? "Pemakaian"
-                                    : log.action_type}
-                                </div>
-                                <div
-                                  className={`text-sm font-mono ${
-                                    isAdd
-                                      ? "text-green-600"
-                                      : isDeduct
-                                      ? "text-red-600"
-                                      : "text-gray-600"
-                                  }`}
-                                >
-                                  {isAdd ? "+" : isDeduct ? "-" : ""}
-                                  {Number(
-                                    log.points_amount || 0
-                                  ).toLocaleString()}
-                                </div>
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {new Date(log.timestamp).toLocaleString()}
-                                {log.session_id
-                                  ? ` · Session ${log.session_id}`
-                                  : ""}
-                              </div>
-                              {/* <div className="text-xs text-gray-600 mt-1">
-                                Saldo:{" "}
-                                {Number(
-                                  log.balance_before || 0
-                                ).toLocaleString()}{" "}
-                                →{" "}
-                                {Number(
-                                  log.balance_after || 0
-                                ).toLocaleString()}
-                              </div> */}
-                              {log.notes && (
-                                <div className="text-xs text-gray-700 mt-1">
-                                  {log.notes}
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                      {(() => {
+                        // Filter logs penambahan dan group pemakaian
+                        const addLogs = historyLogs.filter(
+                          (log) => log.action_type === "balance_add"
                         );
-                      })}
+                        const deductGrouped =
+                          groupDeductLogsBySession(historyLogs);
+
+                        // Gabungkan dan urutkan semua logs
+                        const combined = [
+                          ...addLogs.map((log) => ({
+                            type: "balance_add" as const,
+                            id: log.id,
+                            timestamp: log.timestamp,
+                            points: log.points_amount,
+                            notes: log.notes,
+                            used_by_name: log.used_by_name,
+                            balance_before: log.balance_before,
+                            balance_after: log.balance_after,
+                          })),
+                          ...deductGrouped.map((g) => ({
+                            type: "balance_deduct" as const,
+                            session_id: g.session_id,
+                            points: g.total_points,
+                            timestamp: g.firstTimestamp,
+                            balance_before: g.balance_before,
+                            balance_after: g.balance_after,
+                            notes: g.notes,
+                          })),
+                        ].sort(
+                          (a, b) =>
+                            new Date(b.timestamp).getTime() -
+                            new Date(a.timestamp).getTime()
+                        );
+
+                        if (combined.length === 0) {
+                          return (
+                            <div className="text-gray-500">
+                              Tidak ada riwayat poin.
+                            </div>
+                          );
+                        }
+
+                        return combined.map((item) =>
+                          item.type === "balance_add" ? (
+                            <div
+                              key={item.id}
+                              className="py-3 flex items-start gap-3"
+                            >
+                              <div className="mt-1 w-2 h-2 rounded-full bg-green-500"></div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    Penambahan Poin
+                                  </div>
+                                  <div className="text-sm font-mono text-green-600">
+                                    +{item.points.toLocaleString()} points
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {new Date(item.timestamp).toLocaleString()}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Saldo: {item.balance_before?.toLocaleString()}{" "}
+                                  → {item.balance_after?.toLocaleString()}
+                                </div>
+                                {item.notes && (
+                                  <div className="text-xs text-gray-700 mt-1">
+                                    {item.notes}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              key={item.session_id}
+                              className="py-3 flex items-start gap-3"
+                              title={`Sesi ID: ${item.session_id}`}
+                            >
+                              <div className="mt-1 w-2 h-2 rounded-full bg-red-500"></div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    Pemakaian Poin
+                                  </div>
+                                  <div className="text-sm font-mono text-red-600">
+                                    -{item.points.toLocaleString()} points
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {new Date(item.timestamp).toLocaleString()}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Saldo: {item.balance_before?.toLocaleString()}{" "}
+                                  → {item.balance_after?.toLocaleString()}
+                                </div>
+                                {item.notes && (
+                                  <div className="text-xs text-gray-700 mt-1">
+                                    {item.notes}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
