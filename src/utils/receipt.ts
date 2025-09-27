@@ -1,4 +1,4 @@
-import { db } from '../lib/supabase';
+import { db } from "../lib/supabase";
 
 export interface ReceiptData {
   id: string;
@@ -6,13 +6,13 @@ export interface ReceiptData {
   customer?: { name: string };
   items: Array<{
     name: string;
-    type: "rental" | "product";
+    type: "rental" | "product" | "voucher";
     quantity?: number;
     total: number;
     description?: string;
   }>;
   subtotal: number;
-  tax: number;
+  tax?: number;
   discount?: {
     type: "amount" | "percentage";
     value: number;
@@ -29,10 +29,10 @@ export interface RentalProofData {
   customerName: string;
   unitNumber: string;
   startTimestamp: string;
-  mode:string
+  mode: string;
 }
 
-export interface ProductPriceList { 
+export interface ProductPriceList {
   id: string;
   name: string;
   category: string;
@@ -46,7 +46,11 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
 
   const lineWidth = printerSettings.receiptWidth || 40;
 
-  const pad = (text: string, width: number, align: "left" | "right" = "left") => {
+  const pad = (
+    text: string,
+    width: number,
+    align: "left" | "right" = "left"
+  ) => {
     if (align === "right") return text.toString().padStart(width);
     return text.toString().padEnd(width);
   };
@@ -58,25 +62,35 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
 
   const center = (text: string) => {
     const space = Math.max(0, Math.floor((lineWidth - text.length) / 2));
-    return ' '.repeat(space) + text;
+    return " ".repeat(space) + text;
   };
 
   // HEADER
-  lines.push('='.repeat(lineWidth));
-  lines.push(center(generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"));
-  if (generalSettings.businessAddress) lines.push(center(generalSettings.businessAddress));
-  if (generalSettings.businessPhone) lines.push(center(`Telp: ${generalSettings.businessPhone}`));
-  if (generalSettings.businessEmail) lines.push(center(`Email: ${generalSettings.businessEmail}`));
-  lines.push('='.repeat(lineWidth));
+  lines.push("=".repeat(lineWidth));
+  lines.push(
+    center(
+      generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"
+    )
+  );
+  if (generalSettings.businessAddress)
+    lines.push(center(generalSettings.businessAddress));
+  if (generalSettings.businessPhone)
+    lines.push(center(`Telp: ${generalSettings.businessPhone}`));
+  if (generalSettings.businessEmail)
+    lines.push(center(`Email: ${generalSettings.businessEmail}`));
+  lines.push("=".repeat(lineWidth));
   lines.push(pad(`RECEIPT ID : ${tx.id}`, lineWidth));
   lines.push(pad(`TANGGAL    : ${tx.timestamp}`, lineWidth));
-  if (tx.customer) lines.push(pad(`CUSTOMER   : ${tx.customer.name}`, lineWidth));
+  if (tx.customer)
+    lines.push(pad(`CUSTOMER   : ${tx.customer.name}`, lineWidth));
   lines.push(pad(`KASIR      : ${tx.cashier}`, lineWidth));
-  lines.push('-'.repeat(lineWidth));
+  lines.push("-".repeat(lineWidth));
 
   // ITEMS HEADER
-  lines.push(pad("ITEM", 20) + pad("QTY", 5, "right") + pad("TOTAL", 15, "right"));
-  lines.push('-'.repeat(lineWidth));
+  lines.push(
+    pad("ITEM", 20) + pad("QTY", 5, "right") + pad("TOTAL", 15, "right")
+  );
+  lines.push("-".repeat(lineWidth));
 
   // ITEMS LIST
   tx.items.forEach((item, index) => {
@@ -86,12 +100,13 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
     lines.push(pad(name, 20) + pad(qty, 5, "right") + pad(total, 15, "right"));
 
     if (item.description) {
-      const descLines = item.description.match(new RegExp(`.{1,${lineWidth - 4}}`, 'g')) || [];
-      descLines.forEach(dl => lines.push("  - " + dl));
+      const descLines =
+        item.description.match(new RegExp(`.{1,${lineWidth - 4}}`, "g")) || [];
+      descLines.forEach((dl) => lines.push("  - " + dl));
     }
   });
 
-  lines.push('-'.repeat(lineWidth));
+  lines.push("-".repeat(lineWidth));
 
   // TAX / DISCOUNT / TOTAL
   if (tx.tax > 0) {
@@ -100,21 +115,32 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
 
   if (tx.discount) {
     const beforeDiscount = tx.total + tx.discount.amount;
-    lines.push(pad("SUBTOTAL:", 25) + pad(formatMoney(beforeDiscount), 15, "right"));
-    const discLabel = tx.discount.type === "amount"
-      ? `DISKON (Rp${tx.discount.value})`
-      : `DISKON (${tx.discount.value}%)`;
-    lines.push(pad(discLabel + ":", 25) + pad("-" + formatMoney(tx.discount.amount), 15, "right"));
+    lines.push(
+      pad("SUBTOTAL:", 25) + pad(formatMoney(beforeDiscount), 15, "right")
+    );
+    const discLabel =
+      tx.discount.type === "amount"
+        ? `DISKON (Rp${tx.discount.value})`
+        : `DISKON (${tx.discount.value}%)`;
+    lines.push(
+      pad(discLabel + ":", 25) +
+        pad("-" + formatMoney(tx.discount.amount), 15, "right")
+    );
   }
 
-  lines.push('='.repeat(lineWidth));
+  lines.push("=".repeat(lineWidth));
   lines.push(pad("TOTAL :", 25) + pad(formatMoney(tx.total), 15, "right"));
-  lines.push(pad(`BAYAR (${tx.paymentMethod.toUpperCase()}):`, 25) + pad(formatMoney(tx.paymentAmount), 15, "right"));
+  lines.push(
+    pad(`BAYAR (${tx.paymentMethod.toUpperCase()}):`, 25) +
+      pad(formatMoney(tx.paymentAmount), 15, "right")
+  );
 
   if (tx.change > 0) {
-    lines.push(pad("KEMBALIAN :", 25) + pad(formatMoney(tx.change), 15, "right"));
+    lines.push(
+      pad("KEMBALIAN :", 25) + pad(formatMoney(tx.change), 15, "right")
+    );
   }
-  lines.push('='.repeat(lineWidth));
+  lines.push("=".repeat(lineWidth));
 
   // FOOTER
   lines.push(center("TERIMA KASIH"));
@@ -165,28 +191,38 @@ export const generateRentalProofHTML = async (data: RentalProofData) => {
 
   const lineWidth = printerSettings.receiptWidth || 40;
 
-  const pad = (text: string, width: number, align: "left" | "right" = "left") => {
+  const pad = (
+    text: string,
+    width: number,
+    align: "left" | "right" = "left"
+  ) => {
     if (align === "right") return text.toString().padStart(width);
     return text.toString().padEnd(width);
   };
 
   const center = (text: string) => {
     const space = Math.max(0, Math.floor((lineWidth - text.length) / 2));
-    return ' '.repeat(space) + text;
+    return " ".repeat(space) + text;
   };
 
   const lines: string[] = [];
 
   // HEADER
-  lines.push('='.repeat(lineWidth));
-  lines.push(center(generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"));
-  if (generalSettings.businessAddress) lines.push(center(generalSettings.businessAddress));
-  if (generalSettings.businessPhone) lines.push(center(`Telp: ${generalSettings.businessPhone}`));
-  lines.push('='.repeat(lineWidth));
+  lines.push("=".repeat(lineWidth));
+  lines.push(
+    center(
+      generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"
+    )
+  );
+  if (generalSettings.businessAddress)
+    lines.push(center(generalSettings.businessAddress));
+  if (generalSettings.businessPhone)
+    lines.push(center(`Telp: ${generalSettings.businessPhone}`));
+  lines.push("=".repeat(lineWidth));
 
   // TITLE
   lines.push(center("BUKTI RENTAL"));
-  lines.push('-'.repeat(lineWidth));
+  lines.push("-".repeat(lineWidth));
 
   // DATA RENTAL
   lines.push(pad(`Customer : ${data.customerName}`, lineWidth));
@@ -194,7 +230,7 @@ export const generateRentalProofHTML = async (data: RentalProofData) => {
   lines.push(pad(`No Unit  : ${data.unitNumber}`, lineWidth));
   lines.push(pad(`Mulai    : ${data.startTimestamp}`, lineWidth));
 
-  lines.push('='.repeat(lineWidth));
+  lines.push("=".repeat(lineWidth));
 
   // FOOTER
   lines.push(center("HARAP SIMPAN BUKTI INI"));
@@ -237,23 +273,30 @@ export const generateRentalProofHTML = async (data: RentalProofData) => {
   </html>`;
 };
 
-export const generatePriceListHTMLTextMode = async (products: ProductPriceList[]) => {
+export const generatePriceListHTMLTextMode = async (
+  products: ProductPriceList[]
+) => {
   const settings = await db.settings.get();
   const generalSettings = settings?.general || {};
   const printerSettings = settings?.printer || {};
   const lineWidth = printerSettings.receiptWidth || 40;
 
-  const pad = (text: string, width: number, align: "left" | "right" = "left") => {
+  const pad = (
+    text: string,
+    width: number,
+    align: "left" | "right" = "left"
+  ) => {
     if (align === "right") return text.toString().padStart(width);
     return text.toString().padEnd(width);
   };
 
   const center = (text: string) => {
     const space = Math.max(0, Math.floor((lineWidth - text.length) / 2));
-    return ' '.repeat(space) + text;
+    return " ".repeat(space) + text;
   };
 
-  const formatMoney = (amount: number) => "Rp " + amount.toLocaleString("id-ID");
+  const formatMoney = (amount: number) =>
+    "Rp " + amount.toLocaleString("id-ID");
 
   const lines: string[] = [];
 
@@ -266,9 +309,15 @@ export const generatePriceListHTMLTextMode = async (products: ProductPriceList[]
   // HEADER
   lines.push("=".repeat(lineWidth));
   lines.push(center("DAFTAR HARGA PRODUK"));
-  lines.push(center(generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"));
-  if (generalSettings.businessAddress) lines.push(center(generalSettings.businessAddress));
-  if (generalSettings.businessPhone) lines.push(center(`Telp: ${generalSettings.businessPhone}`));
+  lines.push(
+    center(
+      generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"
+    )
+  );
+  if (generalSettings.businessAddress)
+    lines.push(center(generalSettings.businessAddress));
+  if (generalSettings.businessPhone)
+    lines.push(center(`Telp: ${generalSettings.businessPhone}`));
   lines.push(center(`Tanggal: ${currentDate}`));
   lines.push("=".repeat(lineWidth));
 
@@ -278,7 +327,8 @@ export const generatePriceListHTMLTextMode = async (products: ProductPriceList[]
 
   // PRODUCT LIST
   products.forEach((product: ProductPriceList) => {
-    const name = product.name.length > 20 ? product.name.slice(0, 20) : product.name;
+    const name =
+      product.name.length > 20 ? product.name.slice(0, 20) : product.name;
     // const category = product.category?.length > 10 ? product.category.slice(0, 10) : product.category;
     const price = formatMoney(product.price);
     lines.push(pad(name, 20) + pad(price, 20, "right"));
@@ -355,7 +405,7 @@ export const printReceipt = async (tx: ReceiptData) => {
   }
 };
 
-export const printRentalProof = async(data: RentalProofData) => {
+export const printRentalProof = async (data: RentalProofData) => {
   const html = await generateRentalProofHTML(data);
   const win = window.open("", "_blank");
   if (!win) return;
@@ -409,13 +459,10 @@ export const printPriceList = async (products: ProductPriceList[]) => {
   }
 };
 
-
-
-
 // export const printReceipt = async (tx: ReceiptData) => {
 //   try {
 //     const html = await generateReceiptHTML(tx);
-    
+
 //     const win = window.open("", "_blank");
 //     if (!win) return;
 
@@ -431,7 +478,7 @@ export const printPriceList = async (products: ProductPriceList[]) => {
 //         /* opsional: win.close(); */
 //       }
 //     };
-    
+
 //     if ("onload" in win) {
 //       win.onload = () => setTimeout(doPrint, 100);
 //     } else {

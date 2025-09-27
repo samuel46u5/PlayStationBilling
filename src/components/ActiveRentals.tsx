@@ -177,6 +177,7 @@ const ActiveRentals: React.FC = () => {
   const [endingSessionIds, setEndingSessionIds] = useState<Set<string>>(
     new Set()
   );
+  const [showVoucherPaymentModal, setShowVoucherPaymentModal] = useState(false);
 
   const fetchCardData = async (uid: string) => {
     if (!uid) {
@@ -208,15 +209,6 @@ const ActiveRentals: React.FC = () => {
     setScannedCardUID(uid);
     fetchCardData(uid);
   });
-
-  // Auto-fetch card data when scannedCardUID changes
-  // useEffect(() => {
-  //   if (scannedCardUID) {
-  //     fetchCardData(scannedCardUID);
-  //   } else {
-  //     setScannedCardData(null);
-  //   }
-  // }, [scannedCardUID]);
 
   // Member Card Billing hook
   // useMemberCardBilling(activeSessions);
@@ -2915,6 +2907,367 @@ const ActiveRentals: React.FC = () => {
       setAddTimeLoading(false);
     }
   };
+
+  //Modal pembayaran voucher
+  const VoucherPaymentModal = ({
+    open,
+    onClose,
+    onConfirm,
+    loading,
+    voucher,
+    quantity,
+    subtotal,
+    currentBalance,
+    newBalance,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onConfirm: (
+      paymentMethod: "cash" | "qris",
+      paymentAmount: number,
+      discountAmount: number,
+      discountType: "amount" | "percentage",
+      discountValue: number
+    ) => void;
+    loading: boolean;
+    voucher: any;
+    quantity: number;
+    subtotal: number;
+    currentBalance: number;
+    newBalance: number;
+  }) => {
+    const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris">("cash");
+    const [isManualInput, setIsManualInput] = useState(false);
+    const [paymentAmount, setPaymentAmount] = useState(subtotal);
+    const [localDiscountType, setLocalDiscountType] = useState<
+      "amount" | "percentage"
+    >("amount");
+    const [localDiscountValue, setLocalDiscountValue] = useState<number>(0);
+    const [localDiscountAmount, setLocalDiscountAmount] = useState<number>(0);
+
+    // Reset state saat modal dibuka
+    useEffect(() => {
+      if (open) {
+        setPaymentAmount(subtotal);
+        setLocalDiscountValue(0);
+        setLocalDiscountAmount(0);
+        setLocalDiscountType("amount");
+      }
+    }, [open, subtotal]);
+
+    if (!open) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="text-xl font-bold text-gray-700">Total:</div>
+              <div className="text-right">
+                {localDiscountAmount > 0 && (
+                  <div className="text-sm text-gray-500 line-through">
+                    Rp {subtotal.toLocaleString("id-ID")}
+                  </div>
+                )}
+                <div className="text-2xl font-bold text-blue-700">
+                  Rp{" "}
+                  {Math.max(0, subtotal - localDiscountAmount).toLocaleString(
+                    "id-ID"
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Info Voucher */}
+            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <h3 className="font-medium text-blue-800 mb-2">Detail Voucher</h3>
+              <div className="space-y-1 text-sm text-blue-700">
+                <div className="flex justify-between">
+                  <span>Nama Voucher:</span>
+                  <span className="font-medium">{voucher?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Kode:</span>
+                  <span className="font-medium">{voucher?.voucher_code}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Points:</span>
+                  <span className="font-medium">
+                    {voucher?.total_points} × {quantity}
+                  </span>
+                </div>
+                <div className="border-t border-blue-200 mt-2 pt-2">
+                  <div className="flex justify-between">
+                    <span>Balance Awal:</span>
+                    <span className="font-medium">{currentBalance} points</span>
+                  </div>
+                  <div className="flex justify-between text-green-700 font-medium">
+                    <span>Balance Akhir:</span>
+                    <span>{newBalance} points</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Metode Pembayaran */}
+            <div className="mb-4">
+              <div className="mb-2 font-medium text-gray-700">
+                Metode Pembayaran
+              </div>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${
+                    paymentMethod === "cash"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                  }`}
+                  onClick={() => setPaymentMethod("cash")}
+                  disabled={loading}
+                >
+                  <span className="inline-block mr-1">💵</span> Cash
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 py-2 rounded-md font-semibold border text-base transition-colors flex items-center justify-center gap-2 ${
+                    paymentMethod === "qris"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                  }`}
+                  onClick={() => setPaymentMethod("qris")}
+                  disabled={loading}
+                >
+                  <span className="inline-block mr-1">🏧</span> QRIS
+                </button>
+              </div>
+            </div>
+
+            {/* DISKON SECTION */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-gray-700">Diskon</div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      localDiscountType === "amount"
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setLocalDiscountType("amount");
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    Rp
+                  </button>
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      localDiscountType === "percentage"
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setLocalDiscountType("percentage");
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    %
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                    onClick={() => {
+                      setLocalDiscountValue(0);
+                      setLocalDiscountAmount(0);
+                    }}
+                  >
+                    × Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max={localDiscountType === "percentage" ? 100 : undefined}
+                  value={localDiscountValue}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setLocalDiscountValue(val);
+
+                    if (localDiscountType === "percentage") {
+                      const maxPercentage = Math.min(100, val);
+                      setLocalDiscountAmount((subtotal * maxPercentage) / 100);
+                    } else {
+                      setLocalDiscountAmount(Math.min(val, subtotal));
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+                  placeholder={localDiscountType === "percentage" ? "0" : "0"}
+                />
+                <span className="self-center text-gray-600 font-medium">
+                  {localDiscountType === "percentage" ? "%" : "Rp"}
+                </span>
+              </div>
+
+              {localDiscountAmount > 0 && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-700">Diskon:</span>
+                    <span className="font-bold text-green-800">
+                      - Rp {localDiscountAmount.toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                  {localDiscountType === "percentage" && (
+                    <div className="text-xs text-green-600 text-center">
+                      ({localDiscountValue}% dari total)
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Jumlah Bayar */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-gray-700">Jumlah Bayar</div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      !isManualInput
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => setIsManualInput(false)}
+                  >
+                    Quick
+                  </button>
+                  <button
+                    type="button"
+                    className={`text-xs px-2 py-1 rounded border ${
+                      isManualInput
+                        ? "bg-blue-100 border-blue-300 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700"
+                    }`}
+                    onClick={() => setIsManualInput(true)}
+                  >
+                    Manual
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
+                    onClick={() => setPaymentAmount(0)}
+                  >
+                    × Clear
+                  </button>
+                </div>
+              </div>
+              {!isManualInput ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {[1000, 5000, 10000, 20000, 50000, 100000].map((nom) => (
+                      <button
+                        key={nom}
+                        type="button"
+                        className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100"
+                        onClick={() => setPaymentAmount((prev) => prev + nom)}
+                      >
+                        {nom >= 1000 ? `${nom / 1000}K` : nom}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
+                    onClick={() =>
+                      setPaymentAmount(
+                        Math.max(0, subtotal - localDiscountAmount)
+                      )
+                    }
+                  >
+                    LUNAS (Rp{" "}
+                    {Math.max(0, subtotal - localDiscountAmount).toLocaleString(
+                      "id-ID"
+                    )}
+                    )
+                  </button>
+                </>
+              ) : (
+                <input
+                  type="number"
+                  min={0}
+                  value={paymentAmount}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setPaymentAmount(val);
+                  }}
+                  className="w-full px-3 py-3 border rounded text-center text-2xl font-mono mb-2"
+                  placeholder="Masukkan nominal bayar"
+                />
+              )}
+              <div className="text-center text-3xl font-mono font-bold py-2 border-b border-gray-200 mb-2">
+                Rp {paymentAmount.toLocaleString("id-ID")}
+              </div>
+            </div>
+
+            {/* Kembalian */}
+            <div className="mb-4">
+              <div className="font-medium text-gray-700 mb-1">Kembalian</div>
+              <div className="text-2xl font-mono font-bold text-green-700 text-center">
+                Rp{" "}
+                {(() => {
+                  const finalTotal = Math.max(
+                    0,
+                    subtotal - localDiscountAmount
+                  );
+                  const change = paymentAmount - finalTotal;
+                  return change > 0 ? change.toLocaleString("id-ID") : 0;
+                })()}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() =>
+                  onConfirm(
+                    paymentMethod,
+                    paymentAmount,
+                    localDiscountAmount,
+                    localDiscountType,
+                    localDiscountValue
+                  )
+                }
+                className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
+                  paymentAmount < Math.max(0, subtotal - localDiscountAmount)
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
+                disabled={
+                  loading ||
+                  paymentAmount < Math.max(0, subtotal - localDiscountAmount)
+                }
+              >
+                {loading ? "Memproses..." : "Bayar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Modal pembayaran prepaid, UI sama dengan kasir (end rental), tapi logic tetap prepaid
   const PrepaidPaymentModal2 = ({
     open,
@@ -3273,7 +3626,142 @@ const ActiveRentals: React.FC = () => {
     useState<PrepaidPaymentModalState>(null);
   const [prepaidPaymentLoading, setPrepaidPaymentLoading] = useState(false);
 
-  const handleSellVoucher = async () => {
+  // const handleSellVoucher = async () => {
+  //   try {
+  //     // Get selected voucher data
+  //     const selectedVoucher = voucherList.find(
+  //       (v) => v.id === selectedVoucherId
+  //     );
+  //     if (!selectedVoucher) {
+  //       alert("Voucher tidak ditemukan!");
+  //       return;
+  //     }
+
+  //     // Validate member card is scanned
+  //     if (!scannedCardUID || !scannedCardData) {
+  //       alert("Silakan scan kartu member terlebih dahulu!");
+  //       return;
+  //     }
+
+  //     // Get current balance
+  //     const { data: currentCardData, error: fetchError } = await supabase
+  //       .from("rfid_cards")
+  //       .select("balance_points")
+  //       .eq("uid", scannedCardUID)
+  //       .single();
+
+  //     if (fetchError || !currentCardData) {
+  //       alert("Gagal mengambil data kartu!");
+  //       return;
+  //     }
+
+  //     const qty = Math.max(1, Number(voucherQuantity) || 1);
+  //     const pointsToAdd = (selectedVoucher.total_points || 0) * qty;
+  //     const priceToPay = (selectedVoucher.voucher_price || 0) * qty;
+
+  //     const newBalance = currentCardData.balance_points + pointsToAdd;
+
+  //     // Update member card balance
+  //     const { error: updateError } = await supabase
+  //       .from("rfid_cards")
+  //       .update({ balance_points: newBalance })
+  //       .eq("uid", scannedCardUID);
+
+  //     if (updateError) {
+  //       alert("Gagal memperbarui saldo kartu!");
+  //       return;
+  //     }
+
+  //     const { error: logError } = await supabase
+  //       .from("card_usage_logs")
+  //       .insert({
+  //         card_uid: scannedCardUID,
+  //         session_id: null,
+  //         action_type: "balance_add",
+  //         points_amount: pointsToAdd,
+  //         balance_before: currentCardData.balance_points,
+  //         balance_after: newBalance,
+  //         notes: `Voucher purchase: ${selectedVoucher.name} (${selectedVoucher.voucher_code}) - Payment: ${paymentMethod}`,
+  //       });
+
+  //     if (logError) {
+  //       console.error("Error logging voucher purchase:", logError);
+  //     }
+
+  //     // Log transaction
+  //     await logCashierTransaction({
+  //       type: "voucher",
+  //       amount: priceToPay,
+  //       paymentMethod: paymentMethod,
+  //       referenceId: selectedVoucher.id,
+  //       description: `Penjualan voucher ${selectedVoucher.name} (${pointsToAdd} points) x ${qty}`,
+  //       details: {
+  //         voucher_id: selectedVoucher.id,
+  //         voucher_code: selectedVoucher.voucher_code,
+  //         points_added: pointsToAdd,
+  //         quantity: qty,
+  //         card_uid: scannedCardUID,
+  //         previous_balance: currentCardData.balance_points,
+  //         new_balance: newBalance,
+  //         items: [
+  //           {
+  //             name: selectedVoucher.name,
+  //             product_name: selectedVoucher.name,
+  //             title: `Voucher ${selectedVoucher.voucher_code}`,
+  //             qty: qty,
+  //             quantity: qty,
+  //             price: selectedVoucher.voucher_price || 0,
+  //             total: priceToPay,
+  //             description: `Voucher ${pointsToAdd} points`,
+  //             type: "voucher",
+  //           },
+  //         ],
+  //         // Payment block used by receipt converter
+  //         payment: {
+  //           method: paymentMethod,
+  //           amount: priceToPay,
+  //           change: 0,
+  //         },
+  //       },
+  //     });
+
+  //     // Refresh card data
+  //     const { data: updatedCardData } = await supabase
+  //       .from("rfid_cards")
+  //       .select("uid, balance_points, status")
+  //       .eq("uid", scannedCardUID)
+  //       .single();
+
+  //     if (updatedCardData) {
+  //       setScannedCardData(updatedCardData);
+  //     }
+
+  //     // Close modal and reset states
+  //     setShowSellVoucherModal(false);
+  //     setSelectedVoucherId("");
+  //     setPaymentMethod("cash");
+  //     setVoucherQuantity(1);
+
+  //     // Show success message
+  //     Swal.fire({
+  //       icon: "success",
+  //       title: "Voucher berhasil dijual!",
+  //       text: `Saldo kartu bertambah ${pointsToAdd} points`,
+  //       confirmButtonColor: "#22c55e",
+  //     });
+  //   } catch (error) {
+  //     console.error("Error selling voucher:", error);
+  //     alert("Terjadi kesalahan saat menjual voucher!");
+  //   }
+  // };
+
+  const handleSellVoucher = async (
+    paymentMethod: "cash" | "qris",
+    paymentAmount: number,
+    discountAmount: number,
+    discountType: "amount" | "percentage",
+    discountValue: number
+  ) => {
     try {
       // Get selected voucher data
       const selectedVoucher = voucherList.find(
@@ -3305,6 +3793,13 @@ const ActiveRentals: React.FC = () => {
       const qty = Math.max(1, Number(voucherQuantity) || 1);
       const pointsToAdd = (selectedVoucher.total_points || 0) * qty;
       const priceToPay = (selectedVoucher.voucher_price || 0) * qty;
+      const finalAmount = Math.max(0, priceToPay - discountAmount);
+
+      // Validate payment amount
+      if (paymentAmount < finalAmount) {
+        Swal.fire("Error", "Jumlah pembayaran kurang dari total", "error");
+        return;
+      }
 
       const newBalance = currentCardData.balance_points + pointsToAdd;
 
@@ -3335,11 +3830,11 @@ const ActiveRentals: React.FC = () => {
         console.error("Error logging voucher purchase:", logError);
       }
 
-      // Log transaction
+      // Log transaction with discount details
       await logCashierTransaction({
         type: "voucher",
-        amount: priceToPay,
-        paymentMethod: paymentMethod,
+        amount: finalAmount,
+        paymentMethod,
         referenceId: selectedVoucher.id,
         description: `Penjualan voucher ${selectedVoucher.name} (${pointsToAdd} points) x ${qty}`,
         details: {
@@ -3363,11 +3858,18 @@ const ActiveRentals: React.FC = () => {
               type: "voucher",
             },
           ],
-          // Payment block used by receipt converter
+          discount:
+            discountAmount > 0
+              ? {
+                  type: discountType,
+                  value: discountValue,
+                  amount: discountAmount,
+                }
+              : undefined,
           payment: {
             method: paymentMethod,
-            amount: priceToPay,
-            change: 0,
+            amount: paymentAmount,
+            change: paymentAmount - finalAmount,
           },
         },
       });
@@ -3383,22 +3885,60 @@ const ActiveRentals: React.FC = () => {
         setScannedCardData(updatedCardData);
       }
 
+      // Generate receipt data
+      const receiptData = {
+        id: `VOUCHER-${Date.now()}`,
+        timestamp: new Date().toLocaleString("id-ID"),
+        customer: { name: "Customer" },
+        items: [
+          {
+            name: selectedVoucher.name,
+            type: "voucher" as const,
+            quantity: qty,
+            price: selectedVoucher.voucher_price || 0,
+            total: priceToPay,
+            description: `Voucher ${pointsToAdd} points`,
+          },
+        ],
+        subtotal: priceToPay,
+        discount:
+          discountAmount > 0
+            ? {
+                type: discountType,
+                value: discountValue,
+                amount: discountAmount,
+              }
+            : undefined,
+        total: finalAmount,
+        paymentMethod: paymentMethod.toUpperCase(),
+        paymentAmount: paymentAmount,
+        change: paymentAmount - finalAmount,
+        cashier: "System",
+      };
+
       // Close modal and reset states
+      setShowVoucherPaymentModal(false);
       setShowSellVoucherModal(false);
       setSelectedVoucherId("");
-      setPaymentMethod("cash");
       setVoucherQuantity(1);
 
-      // Show success message
-      Swal.fire({
+      // Show success message with print option
+      const result = await Swal.fire({
         icon: "success",
         title: "Voucher berhasil dijual!",
         text: `Saldo kartu bertambah ${pointsToAdd} points`,
+        showCancelButton: true,
+        confirmButtonText: "Print Receipt",
+        cancelButtonText: "Tutup",
         confirmButtonColor: "#22c55e",
       });
+
+      if (result.isConfirmed) {
+        printReceipt(receiptData);
+      }
     } catch (error) {
       console.error("Error selling voucher:", error);
-      alert("Terjadi kesalahan saat menjual voucher!");
+      Swal.fire("Error", "Terjadi kesalahan saat menjual voucher!", "error");
     }
   };
 
@@ -5118,7 +5658,15 @@ const ActiveRentals: React.FC = () => {
                       return;
                     }
                     setSelling(true);
-                    await handleSellVoucher();
+                    // await handleSellVoucher();
+                    const selectedVoucher = voucherList.find(
+                      (v) => v.id === selectedVoucherId
+                    );
+                    const qty = Math.max(1, Number(voucherQuantity) || 1);
+                    const subtotal =
+                      (selectedVoucher?.voucher_price || 0) * qty;
+
+                    setShowVoucherPaymentModal(true);
                     setSelling(false);
                   }}
                   disabled={selling}
@@ -8742,6 +9290,26 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       )}
+
+      <VoucherPaymentModal
+        open={showVoucherPaymentModal}
+        onClose={() => setShowVoucherPaymentModal(false)}
+        onConfirm={handleSellVoucher}
+        loading={selling}
+        voucher={voucherList.find((v) => v.id === selectedVoucherId)}
+        quantity={voucherQuantity}
+        subtotal={
+          (voucherList.find((v) => v.id === selectedVoucherId)?.voucher_price ||
+            0) * voucherQuantity
+        }
+        currentBalance={scannedCardData?.balance_points || 0}
+        newBalance={
+          (scannedCardData?.balance_points || 0) +
+          (voucherList.find((v) => v.id === selectedVoucherId)?.total_points ||
+            0) *
+            voucherQuantity
+        }
+      />
 
       {/* Prepaid Payment Modal - render di root, bukan di dalam loop/grid/list/detail */}
       <PrepaidPaymentModal2

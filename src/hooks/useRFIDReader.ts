@@ -20,7 +20,6 @@ export function useRFIDReader(onUID: (uid: string) => void, terminator: string =
       if (e.key.length === 1 && /[0-9a-zA-Z]/.test(e.key)) {
         buffer += e.key;
 
-        // Reset buffer jika tidak ada input baru dalam 500ms
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = window.setTimeout(resetBuffer, 500);
       }
