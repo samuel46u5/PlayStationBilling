@@ -8062,7 +8062,7 @@ const ActiveRentals: React.FC = () => {
                             Sisa Balance: {scannedCardData?.balance_points}{" "}
                             points
                           </p>
-                          {(() => {
+                          {/* {(() => {
                             const cardBalance =
                               scannedCardData?.balance_points ?? 0;
                             const consoleRateProfile =
@@ -8081,7 +8081,7 @@ const ActiveRentals: React.FC = () => {
                                 minimal waktu rental
                               </p>
                             ) : null;
-                          })()}
+                          })()} */}
                           <p className="text-xs text-blue-600 mt-1">
                             Points akan otomatis dipotong dari balance saat sesi
                             diakhiri. Sisa balance akan tetap tersimpan.

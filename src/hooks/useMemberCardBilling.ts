@@ -367,19 +367,19 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       ]);
 
       // Update session status
-      // await supabase
-      //   .from('rental_sessions')
-      //   .update({ 
-      //     status: 'completed', 
-      //     end_time: endTime 
-      //   })
-      //   .eq('id', session.id);
+      await supabase
+        .from('rental_sessions')
+        .update({ 
+          status: 'completed', 
+          end_time: endTime 
+        })
+        .eq('id', session.id);
 
       // Set console available
-      // await supabase
-      //   .from('consoles')
-      //   .update({ status: 'available' })
-      //   .eq('id', session.console_id);
+      await supabase
+        .from('consoles')
+        .update({ status: 'available' })
+        .eq('id', session.console_id);
 
       // Matikan console jika ada perintah
       if (consoleData) {
