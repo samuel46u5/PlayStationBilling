@@ -92,6 +92,39 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     }
   }, []);
 
+  const retryFetch = async (
+    url: string,
+    maxRetries: number = 3,
+    delayMs: number = 1000
+  ): Promise<boolean> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          console.log(
+            `Berhasil mengirim perintah ke ${url} pada percobaan ${attempt}`
+          );
+          return true;
+        } else {
+          console.warn(
+            `Percobaan ${attempt} gagal untuk ${url}: HTTP ${response.status}`
+          );
+        }
+      } catch (error) {
+        console.warn(`Percobaan ${attempt} gagal untuk ${url}:`, error);
+      }
+
+      // Jangan tunggu setelah percobaan terakhir
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    console.error(
+      `Gagal mengirim perintah ke ${url} setelah ${maxRetries} percobaan`
+    );
+    return false;
+  };
+
   // Check if a session has expired and end it automatically
   const checkSessionTimeout = useCallback(
     async (sessionId: string) => {
@@ -121,12 +154,21 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
             .single();
 
           // Execute relay commands if available
+          // if (consoleData) {
+          //   if (consoleData.power_tv_command) {
+          //     fetch(consoleData.power_tv_command).catch(() => {});
+          //   }
+          //   if (consoleData.relay_command_off) {
+          //     fetch(consoleData.relay_command_off).catch(() => {});
+          //   }
+          // }
+
           if (consoleData) {
             if (consoleData.power_tv_command) {
-              fetch(consoleData.power_tv_command).catch(() => {});
+              await retryFetch(consoleData.power_tv_command, 3, 2000);
             }
             if (consoleData.relay_command_off) {
-              fetch(consoleData.relay_command_off).catch(() => {});
+              await retryFetch(consoleData.relay_command_off, 3, 2000);
             }
           }
 

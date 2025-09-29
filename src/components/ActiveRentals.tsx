@@ -6670,21 +6670,28 @@ const ActiveRentals: React.FC = () => {
                           ? rateProfile.hourly_rate.toLocaleString("id-ID")
                           : "0"}
                       </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          console.status === "available"
-                            ? "bg-green-500 text-white"
+                      <div className="flex items-center gap-1">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            console.status === "available"
+                              ? "bg-green-500 text-white"
+                              : console.status === "rented"
+                              ? "bg-blue-500 text-white"
+                              : "bg-red-500 text-white"
+                          }`}
+                        >
+                          {console.status === "available"
+                            ? "READY"
                             : console.status === "rented"
-                            ? "bg-blue-500 text-white"
-                            : "bg-red-500 text-white"
-                        }`}
-                      >
-                        {console.status === "available"
-                          ? "READY"
-                          : console.status === "rented"
-                          ? "ACTIVE"
-                          : "MAINT."}
-                      </span>
+                            ? "ACTIVE"
+                            : "MAINT."}
+                        </span>
+                        {console.auto_shutdown_enabled ? (
+                          <Lock className="h-4 w-4 text-green-700" />
+                        ) : (
+                          <Unlock className="h-4 w-4 text-red-700" />
+                        )}
+                      </div>
                     </div>
 
                     {/* Active Session Info (simple) */}
@@ -7080,6 +7087,11 @@ const ActiveRentals: React.FC = () => {
                       <h3 className="text-lg font-semibold text-gray-900 truncate">
                         {console.name}
                       </h3>
+                      {console.auto_shutdown_enabled ? (
+                        <Lock className="h-4 w-4 text-green-700" />
+                      ) : (
+                        <Unlock className="h-4 w-4 text-red-700" />
+                      )}
                     </div>
                     <div className="text-sm text-gray-600 flex flex-wrap gap-4">
                       <div className="flex items-center gap-1">
@@ -7408,6 +7420,11 @@ const ActiveRentals: React.FC = () => {
                           <span className="text-sm opacity-80">
                             {console.location}
                           </span>
+                        )}
+                        {console.auto_shutdown_enabled ? (
+                          <Lock className="h-4 w-4 " />
+                        ) : (
+                          <Unlock className="h-4 w-4" />
                         )}
                       </div>
                       {/* Total Rp. */}
