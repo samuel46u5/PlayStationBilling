@@ -105,21 +105,21 @@ const RFIDCards: React.FC = () => {
   //   }
   // };
 
-  // const blockCard = async (card: RFIDCard) => {
-  //   await supabase
-  //     .from("rfid_cards")
-  //     .update({ status: card.status === "active" ? "blocked" : "active" })
-  //     .eq("id", card.id);
-  //   Swal.fire(
-  //     "Berhasil",
-  //     `Kartu berhasil diubah menjadi status "${
-  //       card.status === "active" ? "blocked" : "active".toUpperCase()
-  //     }"`,
-  //     "success"
-  //   );
+  const blockCard = async (card: RFIDCard) => {
+    await supabase
+      .from("rfid_cards")
+      .update({ status: card.status === "active" ? "blocked" : "active" })
+      .eq("id", card.id);
+    Swal.fire(
+      "Berhasil",
+      `Kartu berhasil diubah menjadi status "${
+        card.status === "active" ? "blocked" : "active".toUpperCase()
+      }"`,
+      "success"
+    );
 
-  //   load();
-  // };
+    load();
+  };
 
   // Edit/Delete state & handlers
   const [editCard, setEditCard] = useState<
@@ -467,7 +467,7 @@ const RFIDCards: React.FC = () => {
                             <Shield className="h-4 w-4" />
                             {card.is_admin ? "Remove Admin" : "Make Admin"}
                           </button> */}
-                          {/* <button
+                          <button
                             onClick={() => blockCard(card)}
                             className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                               card.status === "active"
@@ -486,7 +486,7 @@ const RFIDCards: React.FC = () => {
                                 Unblock
                               </>
                             )}
-                          </button> */}
+                          </button>
                           <button
                             onClick={() => openEdit(card as any)}
                             className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
