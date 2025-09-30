@@ -260,6 +260,7 @@ export interface MaintenanceReport {
 export interface RFIDCard {
   id: string;
   uid: string;
+  alias?: string;
   status: "active" | "blocked" | "lost";
   balance_points: number;
   is_admin: boolean;
@@ -415,7 +416,7 @@ export interface RentalSession {
   id: string;
   customerId?: string; // Optional - for tracking purposes only
   consoleId: string;
-  card_uid?: string; 
+  card_uid?: string;
   startTime: string;
   endTime?: string;
   duration: number; // in minutes

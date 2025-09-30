@@ -19,6 +19,7 @@ import {
 const RFIDCards: React.FC = () => {
   const [cards, setCards] = useState<RFIDCard[]>([]);
   const [loading, setLoading] = useState(false);
+  const [editAlias, setEditAlias] = useState("");
   const [uidInput, setUidInput] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [onlyAdmin, setOnlyAdmin] = useState<"all" | "admin" | "customer">(
@@ -37,7 +38,7 @@ const RFIDCards: React.FC = () => {
       .from("rfid_cards")
       .select(
         `
-        id, is_admin, uid, status, created_at, balance_points
+        id, alias, is_admin, uid, status, created_at, balance_points
       `
       )
       .order("created_at", { ascending: false });
@@ -215,6 +216,7 @@ const RFIDCards: React.FC = () => {
   ) => {
     setEditCard(card);
     setEditIsAdmin(card.is_admin);
+    setEditAlias(card.alias || "");
   };
 
   const saveEdit = async () => {
@@ -223,7 +225,7 @@ const RFIDCards: React.FC = () => {
     try {
       await supabase
         .from("rfid_cards")
-        .update({ is_admin: editIsAdmin })
+        .update({ is_admin: editIsAdmin, alias: editAlias.trim() || null })
         .eq("id", editCard.id);
       Swal.fire("Berhasil", "Kartu berhasil diperbarui", "success");
       load();
@@ -384,6 +386,11 @@ const RFIDCards: React.FC = () => {
                           <h3 className="font-semibold text-lg font-mono">
                             {card.uid}
                           </h3>
+                          {card.alias && (
+                            <span className="text-sm opacity-90">
+                              {card.alias}
+                            </span>
+                          )}
                           {/* <span className="text-sm opacity-90">
                             {assigned
                               ? "Ter-assign ke customer"
@@ -590,6 +597,20 @@ const RFIDCards: React.FC = () => {
                         disabled
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Alias / Nama Kartu
+                      </label>
+                      <input
+                        value={editAlias}
+                        onChange={(e) => setEditAlias(e.target.value)}
+                        placeholder="Contoh: Kartu Admin Utama"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p className="mt-1 text-sm text-gray-500">
+                        Alias memudahkan identifikasi kartu
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <input

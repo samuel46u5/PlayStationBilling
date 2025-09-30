@@ -3836,7 +3836,7 @@ const ActiveRentals: React.FC = () => {
         amount: finalAmount,
         paymentMethod,
         referenceId: selectedVoucher.id,
-        description: `Penjualan voucher ${selectedVoucher.name} (${pointsToAdd} points) x ${qty}`,
+        description: `Penjualan voucher ${selectedVoucher.name} (${pointsToAdd} points) x ${qty} | UID: ${scannedCardUID}`,
         details: {
           voucher_id: selectedVoucher.id,
           voucher_code: selectedVoucher.voucher_code,
