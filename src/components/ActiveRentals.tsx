@@ -5909,9 +5909,10 @@ const ActiveRentals: React.FC = () => {
                           setShowHistoryPointModal(true);
                         }
                       }}
-                      className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                      className="mx-auto mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center justify-center gap-2"
                     >
-                      <History className="h-4 w-4 mr-2" /> History Points
+                      <History className="h-5 w-5 mr-2" />
+                      History Points
                     </button>
                   </div>
                 </div>
@@ -6244,7 +6245,7 @@ const ActiveRentals: React.FC = () => {
                         <tr className="bg-gray-100">
                           <th className="px-3 py-2 border">Waktu Mulai</th>
                           <th className="px-3 py-2 border">Waktu Selesai</th>
-                          <th className="px-3 py-2 border">Customer</th>
+                          <th className="px-3 py-2 border">UID Card</th>
                           <th className="px-3 py-2 border">Console</th>
                           <th className="px-3 py-2 border">Durasi</th>
                           <th className="px-3 py-2 border">Total</th>
@@ -6319,7 +6320,7 @@ const ActiveRentals: React.FC = () => {
                                   : "-"}
                               </td>
                               <td className="px-3 py-2 border">
-                                {session.customers?.name || "-"}
+                                {session.card_uid || "-"}
                               </td>
                               <td className="px-3 py-2 border">
                                 {session.consoles?.name || "-"}
@@ -6332,8 +6333,21 @@ const ActiveRentals: React.FC = () => {
                                   : "-"}
                               </td>
                               <td className="px-3 py-2 border">
-                                Rp{" "}
-                                {session.total_amount.toLocaleString("id-ID")}
+                                {session.total_amount !== 0 ? (
+                                  <>
+                                    Rp{" "}
+                                    {session.total_amount.toLocaleString(
+                                      "id-ID"
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    {session.total_points_deducted?.toLocaleString(
+                                      "id-ID"
+                                    )}{" "}
+                                    points
+                                  </>
+                                )}
                               </td>
                               <td className="px-3 py-2 border">
                                 {session.status.toUpperCase()}
@@ -7157,6 +7171,39 @@ const ActiveRentals: React.FC = () => {
                         <Power className="h-4 w-4" />
                       </button>
 
+                      {/* Tombol Tambah Saldo (member-card) */}
+                      {activeSession &&
+                        activeSession.status === "active" &&
+                        activeSession.is_voucher_used &&
+                        activeSession.card_uid && (
+                          <button
+                            onClick={async () => {
+                              if (!ensureCashierActive()) return;
+                              try {
+                                setSelectedVoucherId("");
+                                setVoucherQuantity(1);
+                                setScannedCardUID(activeSession.card_uid!);
+                                await fetchCardData(activeSession.card_uid!);
+                                setShowSellVoucherModal(true);
+                              } catch (e) {
+                                window.console.error(
+                                  "Open Sell Voucher error:",
+                                  e
+                                );
+                                Swal.fire(
+                                  "Error",
+                                  "Gagal membuka penjualan voucher",
+                                  "error"
+                                );
+                              }
+                            }}
+                            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-1 rounded flex items-center justify-center text-xs"
+                            title="Tambah Saldo Points"
+                          >
+                            <CreditCard className="h-4 w-4" />
+                          </button>
+                        )}
+
                       {/* Tombol Add Products - hanya tampil jika console rented */}
                       {activeSession &&
                         console.status === "rented" &&
@@ -7476,6 +7523,42 @@ const ActiveRentals: React.FC = () => {
                             <ArrowRightLeft className="h-5 w-5" />
                             Pindah
                           </button>
+
+                          {/* Tombol Tambah Saldo (member-card) */}
+                          {activeSession &&
+                            activeSession.status === "active" &&
+                            activeSession.is_voucher_used &&
+                            activeSession.card_uid && (
+                              <button
+                                onClick={async () => {
+                                  if (!ensureCashierActive()) return;
+                                  try {
+                                    setSelectedVoucherId("");
+                                    setVoucherQuantity(1);
+                                    setScannedCardUID(activeSession.card_uid!);
+                                    await fetchCardData(
+                                      activeSession.card_uid!
+                                    );
+                                    setShowSellVoucherModal(true);
+                                  } catch (e) {
+                                    window.console.error(
+                                      "Open Sell Voucher error:",
+                                      e
+                                    );
+                                    Swal.fire(
+                                      "Error",
+                                      "Gagal membuka penjualan voucher",
+                                      "error"
+                                    );
+                                  }
+                                }}
+                                className="bg-teal-500 hover:bg-teal-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2"
+                                title="Tambah Saldo Points"
+                              >
+                                <CreditCard className="h-5 w-5" />
+                                Tambah Points
+                              </button>
+                            )}
                         </div>
                       </div>
                     ) : (
@@ -8036,6 +8119,40 @@ const ActiveRentals: React.FC = () => {
                         </button>
                       )}
                     </div>
+
+                    {/* Tombol Tambah Saldo (member-card) */}
+                    {activeSession &&
+                      activeSession.status === "active" &&
+                      activeSession.is_voucher_used &&
+                      activeSession.card_uid && (
+                        <button
+                          onClick={async () => {
+                            if (!ensureCashierActive()) return;
+                            try {
+                              setSelectedVoucherId("");
+                              setVoucherQuantity(1);
+                              setScannedCardUID(activeSession.card_uid!);
+                              await fetchCardData(activeSession.card_uid!);
+                              setShowSellVoucherModal(true);
+                            } catch (e) {
+                              window.console.error(
+                                "Open Sell Voucher error:",
+                                e
+                              );
+                              Swal.fire(
+                                "Error",
+                                "Gagal membuka penjualan voucher",
+                                "error"
+                              );
+                            }
+                          }}
+                          className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                          title="Tambah Saldo Points"
+                        >
+                          <CreditCard className="h-5 w-5" />
+                          Tambah Points
+                        </button>
+                      )}
 
                     {/* Add Products Button - hanya tampil jika console rented */}
                     {activeSession &&
