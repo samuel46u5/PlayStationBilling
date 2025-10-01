@@ -1,4 +1,11 @@
-import { CreditCard, Pause, Power, Printer, Ticket } from "lucide-react";
+import {
+  CreditCard,
+  Pause,
+  Power,
+  Printer,
+  Ticket,
+  History,
+} from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
 import RealTimeClock from "./RealTimeClock";
@@ -6,6 +13,7 @@ import Countdown from "./Countdown";
 import { printReceipt, printRentalProof } from "../utils/receipt";
 import { useTimer } from "../contexts/TimerContext";
 import { useRFIDReader } from "../hooks/useRFIDReader";
+import type { CardUsageLog } from "../types";
 // import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
 
 interface SaleItem {
@@ -131,6 +139,62 @@ type AddTimeModalState = {
   hourlyRate: number;
 } | null;
 
+function groupDeductLogsBySession(logs: CardUsageLog[]) {
+  const grouped: Record<
+    string,
+    {
+      total_points: number;
+      firstTimestamp: string;
+      lastTimestamp: string;
+      session_id: string;
+      balance_before?: number;
+      balance_after?: number;
+      notes?: string;
+    }
+  > = {};
+
+  logs.forEach((log) => {
+    if (log.action_type !== "balance_deduct") return;
+
+    const sid = log.session_id || "no-session";
+
+    if (!grouped[sid]) {
+      grouped[sid] = {
+        total_points: log.points_amount,
+        firstTimestamp: log.timestamp,
+        lastTimestamp: log.timestamp,
+        session_id: sid,
+        balance_before: log.balance_before,
+        balance_after: log.balance_after,
+        notes: log.notes,
+      };
+    } else {
+      grouped[sid].total_points += log.points_amount;
+
+      // Update waktu awal dan akhir sesi
+      if (new Date(log.timestamp) < new Date(grouped[sid].firstTimestamp)) {
+        grouped[sid].firstTimestamp = log.timestamp;
+        grouped[sid].balance_before = log.balance_before;
+      }
+      if (new Date(log.timestamp) > new Date(grouped[sid].lastTimestamp)) {
+        grouped[sid].lastTimestamp = log.timestamp;
+        grouped[sid].balance_after = log.balance_after;
+      }
+    }
+  });
+
+  // Hitung durasi sesi dan update notes
+  Object.values(grouped).forEach((session) => {
+    const start = new Date(session.firstTimestamp);
+    const end = new Date(session.lastTimestamp);
+    const diffMs = end.getTime() - start.getTime();
+    const diffMinutes = Math.ceil(diffMs / 60000);
+    session.notes = `Automatic deduction for rental session - ${diffMinutes} minutes`;
+  });
+
+  return Object.values(grouped);
+}
+
 const ActiveRentals: React.FC = () => {
   // Timer context untuk global timer
   const {
@@ -166,6 +230,9 @@ const ActiveRentals: React.FC = () => {
     string | null
   >(null);
   // const [customers, setCustomers] = useState<any[]>([]);
+  const [historyLogs, setHistoryLogs] = useState<CardUsageLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [showHistoryPointModal, setShowHistoryPointModal] = useState(false);
   const [rentalType, setRentalType] = useState<
     "pay-as-you-go" | "prepaid" | "member-card"
   >("pay-as-you-go");
@@ -204,6 +271,29 @@ const ActiveRentals: React.FC = () => {
       setScannedCardData(null);
     }
   };
+
+  const fetchCardHistory = async (cardUID: string) => {
+    setHistoryLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("card_usage_logs")
+        .select(
+          "id, card_uid, session_id, action_type, points_amount, balance_before, balance_after, timestamp, notes"
+        )
+        .eq("card_uid", cardUID)
+        .order("timestamp", { ascending: false });
+
+      if (error) throw error;
+      setHistoryLogs((data || []) as unknown as CardUsageLog[]);
+    } catch (e) {
+      console.error("Error loading card history:", e);
+      setHistoryLogs([]);
+      Swal.fire("Error", "Gagal memuat riwayat kartu", "error");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   // RFID Reader hook
   useRFIDReader((uid) => {
     setScannedCardUID(uid);
@@ -5680,7 +5770,7 @@ const ActiveRentals: React.FC = () => {
         </div>
       )}
 
-      {/* Check Balance Modal - Tambahkan modal baru */}
+      {/* Check Balance Modal */}
       {showCheckBalanceModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
@@ -5812,6 +5902,17 @@ const ActiveRentals: React.FC = () => {
                       Points
                     </div>
                     <div className="text-sm text-blue-700">Saldo Tersedia</div>
+                    <button
+                      onClick={() => {
+                        if (scannedCardUID) {
+                          fetchCardHistory(scannedCardUID);
+                          setShowHistoryPointModal(true);
+                        }
+                      }}
+                      className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                    >
+                      <History className="h-4 w-4 mr-2" /> History Points
+                    </button>
                   </div>
                 </div>
               )}
@@ -5828,6 +5929,145 @@ const ActiveRentals: React.FC = () => {
                   Tutup
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Point Modal */}
+      {showHistoryPointModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Riwayat Points - UID {scannedCardUID}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowHistoryPointModal(false);
+                    setHistoryLogs([]);
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ×
+                </button>
+              </div>
+              {historyLoading ? (
+                <div className="text-gray-500">Memuat riwayat...</div>
+              ) : historyLogs.length === 0 ? (
+                <div className="text-gray-500">
+                  Tidak ada riwayat untuk kartu ini.
+                </div>
+              ) : (
+                <div className="max-h-[60vh] overflow-auto divide-y divide-gray-100">
+                  {(() => {
+                    // Filter logs penambahan dan group pemakaian
+                    const addLogs = historyLogs.filter(
+                      (log) => log.action_type === "balance_add"
+                    );
+                    const deductGrouped = groupDeductLogsBySession(historyLogs);
+
+                    // Gabungkan dan urutkan semua logs
+                    const combined = [
+                      ...addLogs.map((log) => ({
+                        type: "balance_add" as const,
+                        id: log.id,
+                        timestamp: log.timestamp,
+                        points: log.points_amount,
+                        notes: log.notes,
+                        used_by_name: log.used_by_name,
+                        balance_before: log.balance_before,
+                        balance_after: log.balance_after,
+                      })),
+                      ...deductGrouped.map((g) => ({
+                        type: "balance_deduct" as const,
+                        session_id: g.session_id,
+                        points: g.total_points,
+                        timestamp: g.firstTimestamp,
+                        balance_before: g.balance_before,
+                        balance_after: g.balance_after,
+                        notes: g.notes,
+                      })),
+                    ].sort(
+                      (a, b) =>
+                        new Date(b.timestamp).getTime() -
+                        new Date(a.timestamp).getTime()
+                    );
+
+                    if (combined.length === 0) {
+                      return (
+                        <div className="text-gray-500">
+                          Tidak ada riwayat poin.
+                        </div>
+                      );
+                    }
+
+                    return combined.map((item) =>
+                      item.type === "balance_add" ? (
+                        <div
+                          key={item.id}
+                          className="py-3 flex items-start gap-3"
+                        >
+                          <div className="mt-1 w-2 h-2 rounded-full bg-green-500"></div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium text-gray-900">
+                                Penambahan Poin
+                              </div>
+                              <div className="text-sm font-mono text-green-600">
+                                +{item.points.toLocaleString()} points
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(item.timestamp).toLocaleString()}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Saldo: {item.balance_before?.toLocaleString()} →{" "}
+                              {item.balance_after?.toLocaleString()}
+                            </div>
+                            {item.notes && (
+                              <div className="text-xs text-gray-700 mt-1">
+                                {item.notes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          key={item.session_id}
+                          className="py-3 flex items-start gap-3"
+                          title={`Sesi ID: ${item.session_id}`}
+                        >
+                          <div className="mt-1 w-2 h-2 rounded-full bg-red-500"></div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium text-gray-900">
+                                Pemakaian Poin
+                              </div>
+                              <div className="text-sm font-mono text-red-600">
+                                -{item.points.toLocaleString()} points
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(item.timestamp).toLocaleString()}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Saldo: {item.balance_before?.toLocaleString()} →{" "}
+                              {item.balance_after?.toLocaleString()}
+                            </div>
+                            {item.notes && (
+                              <div className="text-xs text-gray-700 mt-1">
+                                {item.notes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </div>
         </div>
