@@ -28,6 +28,30 @@ async function getMinimumMinutesByConsole(consoleIds: string[]) {
   return map;
 }
 
+// Fungsi untuk ping ESP32
+async function pingESP32(ipAddress: string, timeout: number = 5000): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    // Menggunakan fetch untuk ping ke ESP32 dengan mode no-cors untuk menghindari CORS issues
+    const response = await fetch(`http://${ipAddress}`, {
+      method: 'GET',
+      mode: 'no-cors',
+      signal: controller.signal,
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
+    });
+
+    clearTimeout(timeoutId);
+    return true;
+  } catch (error) {
+    console.warn(`ESP32 ping timeout atau gagal untuk IP ${ipAddress}:`, error);
+    return false;
+  }
+}
+
 
 export const useMemberCardBilling = (activeSessions: any[]) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -287,7 +311,48 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       }));
 
       // Akhiri sesi karena saldo habis
+      // await endSessionDueToInsufficientBalance(session);
+      await endSessionWithESP32Check(session);
+    }
+  };
+
+  const endSessionWithESP32Check = async (session: MemberCardSession) => {
+    try {
+      // Ambil data console untuk mendapatkan IP ESP32
+      const { data: consoleData, error: consoleError } = await supabase
+        .from('consoles')
+        .select('ip_esp32')
+        .eq('id', session.console_id)
+        .single();
+
+      if (consoleError || !consoleData) {
+        console.error(`Error fetching console data for session ${session.id}:`, consoleError);
+        await endSessionDueToInsufficientBalance(session);
+        return;
+      }
+
+      // Jika ada IP ESP32, cek konektivitas
+      if (consoleData.ip_esp32 && consoleData.ip_esp32.trim() !== '') {
+        const isESP32Active = await pingESP32(consoleData.ip_esp32.trim(), 5000); 
+
+        if (!isESP32Active) {
+          console.warn(`ESP32 di IP ${consoleData.ip_esp32} tidak aktif untuk session ${session.id}, mengakhiri sesi`);
+        } else {
+          console.log(`ESP32 di IP ${consoleData.ip_esp32} masih aktif untuk session ${session.id}`);
+        }
+      } else {
+        console.warn(`Tidak ada IP ESP32 yang dikonfigurasi untuk console ${session.console_id}`);
+      }
+
+      // Akhiri sesi seperti biasa
       await endSessionDueToInsufficientBalance(session);
+    } catch (error) {
+      console.error(`Error dalam endSessionWithESP32Check untuk session ${session.id}:`, error);
+      try {
+        await endSessionDueToInsufficientBalance(session);
+      } catch (endError) {
+        console.error(`Error mengakhiri sesi ${session.id}:`, endError);
+      }
     }
   };
 
@@ -399,7 +464,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         amount: 0,
         paymentMethod: 'cash',
         referenceId: `AUTO_END-${session.id}-${Date.now()}`,
-        description: `Auto end (member card) - saldo habis}`,
+        description: `Auto end (member card)}`,
         details: {
           items: [
             {
