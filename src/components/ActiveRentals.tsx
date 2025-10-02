@@ -6976,7 +6976,15 @@ const ActiveRentals: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-1 text-[11px]">
                           <span>
-                            Rp <RealtimeCost session={activeSession} />
+                            {activeSession.is_voucher_used ? (
+                              <>
+                                <RealtimeCost session={activeSession} /> Points
+                              </>
+                            ) : (
+                              <>
+                                Rp <RealtimeCost session={activeSession} />
+                              </>
+                            )}
                           </span>
                           <span
                             className={`ml-auto font-bold text-[10px] px-2 py-0.5 rounded-full ${
@@ -7556,7 +7564,7 @@ const ActiveRentals: React.FC = () => {
                                 title="Tambah Saldo Points"
                               >
                                 <CreditCard className="h-5 w-5" />
-                                Tambah Points
+                                Jual Voucher
                               </button>
                             )}
                         </div>
@@ -7757,13 +7765,22 @@ const ActiveRentals: React.FC = () => {
                             Total
                           </div>
                           <div className="text-lg font-bold">
-                            Rp{" "}
+                            {/* Rp{" "}
                             <RealtimeCost
                               session={activeSession}
                               productsTotal={
                                 productsTotalMap[activeSession.id] || 0
                               }
-                            />
+                            /> */}
+                            {activeSession.is_voucher_used ? (
+                              <>
+                                <RealtimeCost session={activeSession} /> Points
+                              </>
+                            ) : (
+                              <>
+                                Rp <RealtimeCost session={activeSession} />
+                              </>
+                            )}
                           </div>
                         </div>
                       )}
@@ -7908,11 +7925,16 @@ const ActiveRentals: React.FC = () => {
                           <div>
                             <span className="text-blue-600">Biaya:</span>
                             <p className="font-medium">
-                              Rp{" "}
-                              {/* {calculateCurrentCost(
-                                activeSession
-                              ).toLocaleString("id-ID")} */}
-                              <RealtimeCost session={activeSession} />
+                              {activeSession.is_voucher_used ? (
+                                <>
+                                  <RealtimeCost session={activeSession} />{" "}
+                                  Points
+                                </>
+                              ) : (
+                                <>
+                                  Rp <RealtimeCost session={activeSession} />
+                                </>
+                              )}
                             </p>
                             <span className="text-blue-600">Status:</span>
                             <p className="font-medium">
@@ -8082,6 +8104,42 @@ const ActiveRentals: React.FC = () => {
                             </button>
                           )}
 
+                          {/* Tombol Tambah Saldo (member-card) */}
+                          {activeSession &&
+                            activeSession.status === "active" &&
+                            activeSession.is_voucher_used &&
+                            activeSession.card_uid && (
+                              <button
+                                onClick={async () => {
+                                  if (!ensureCashierActive()) return;
+                                  try {
+                                    setSelectedVoucherId("");
+                                    setVoucherQuantity(1);
+                                    setScannedCardUID(activeSession.card_uid!);
+                                    await fetchCardData(
+                                      activeSession.card_uid!
+                                    );
+                                    setShowSellVoucherModal(true);
+                                  } catch (e) {
+                                    window.console.error(
+                                      "Open Sell Voucher error:",
+                                      e
+                                    );
+                                    Swal.fire(
+                                      "Error",
+                                      "Gagal membuka penjualan voucher",
+                                      "error"
+                                    );
+                                  }
+                                }}
+                                className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2"
+                                title="Tambah Saldo Points"
+                              >
+                                <CreditCard className="h-5 w-5" />
+                                Jual Voucher
+                              </button>
+                            )}
+
                           <button
                             onClick={() => handleEndSession(activeSession.id)}
                             className={`w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-2 ${
@@ -8119,40 +8177,6 @@ const ActiveRentals: React.FC = () => {
                         </button>
                       )}
                     </div>
-
-                    {/* Tombol Tambah Saldo (member-card) */}
-                    {activeSession &&
-                      activeSession.status === "active" &&
-                      activeSession.is_voucher_used &&
-                      activeSession.card_uid && (
-                        <button
-                          onClick={async () => {
-                            if (!ensureCashierActive()) return;
-                            try {
-                              setSelectedVoucherId("");
-                              setVoucherQuantity(1);
-                              setScannedCardUID(activeSession.card_uid!);
-                              await fetchCardData(activeSession.card_uid!);
-                              setShowSellVoucherModal(true);
-                            } catch (e) {
-                              window.console.error(
-                                "Open Sell Voucher error:",
-                                e
-                              );
-                              Swal.fire(
-                                "Error",
-                                "Gagal membuka penjualan voucher",
-                                "error"
-                              );
-                            }
-                          }}
-                          className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                          title="Tambah Saldo Points"
-                        >
-                          <CreditCard className="h-5 w-5" />
-                          Tambah Points
-                        </button>
-                      )}
 
                     {/* Add Products Button - hanya tampil jika console rented */}
                     {activeSession &&

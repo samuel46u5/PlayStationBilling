@@ -11,6 +11,7 @@ interface MemberCardSession {
   hourly_rate_snapshot: number;
   per_minute_rate_snapshot: number;
   total_points_deducted: number;
+  is_mode_esp32?: boolean;
 }
 
 async function getMinimumMinutesByConsole(consoleIds: string[]) {
@@ -29,25 +30,97 @@ async function getMinimumMinutesByConsole(consoleIds: string[]) {
 }
 
 // Fungsi untuk ping ESP32
+// async function pingESP32(ipAddress: string, timeout: number = 5000): Promise<boolean> {
+//   try {
+//     const controller = new AbortController();
+//     const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+//     // Menggunakan fetch untuk ping ke ESP32 dengan mode no-cors untuk menghindari CORS issues
+//     const response = await fetch(`http://${ipAddress}`, {
+//       method: 'GET',
+//       mode: 'no-cors',
+//       signal: controller.signal,
+//       headers: {
+//         'Cache-Control': 'no-cache',
+//       },
+//     });
+
+//     clearTimeout(timeoutId);
+//     return true;
+//   } catch (error) {
+//     console.warn(`ESP32 ping timeout atau gagal untuk IP ${ipAddress}:`, error);
+//     return false;
+//   }
+// }
+
 async function pingESP32(ipAddress: string, timeout: number = 5000): Promise<boolean> {
   try {
+    // Validasi IP address
+    if (!ipAddress || ipAddress.trim() === '') {
+      console.warn('IP address kosong');
+      return false;
+    }
+
+    // Validasi format IP address sederhana
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (!ipRegex.test(ipAddress.trim())) {
+      console.warn(`Format IP address tidak valid: ${ipAddress}`);
+      return false;
+    }
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, timeout);
 
-    // Menggunakan fetch untuk ping ke ESP32 dengan mode no-cors untuk menghindari CORS issues
-    const response = await fetch(`http://${ipAddress}`, {
-      method: 'GET',
-      mode: 'no-cors',
-      signal: controller.signal,
-      headers: {
-        'Cache-Control': 'no-cache',
-      },
-    });
+    try {
+      // Coba dengan mode cors terlebih dahulu untuk mendapatkan response status
+      const response = await fetch(`http://${ipAddress}`, {
+        method: 'GET',
+        mode: 'cors',
+        signal: controller.signal,
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
 
-    clearTimeout(timeoutId);
-    return true;
+      clearTimeout(timeoutId);
+      
+      // Jika response OK, ESP32 aktif
+      if (response.ok) {
+        console.log(`ESP32 ping berhasil untuk IP ${ipAddress}`);
+        return true;
+      } else {
+        console.warn(`ESP32 ping gagal untuk IP ${ipAddress}, status: ${response.status}`);
+        return false;
+      }
+    } catch (corsError) {
+      // Jika CORS error, coba dengan mode no-cors sebagai fallback
+      console.log(`CORS error untuk IP ${ipAddress}, mencoba mode no-cors...`);
+      
+      try {
+        await fetch(`http://${ipAddress}`, {
+          method: 'GET',
+          mode: 'no-cors',
+          signal: controller.signal,
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+        });
+
+        clearTimeout(timeoutId);
+        
+        // Dengan mode no-cors, jika tidak ada error berarti koneksi berhasil
+        console.log(`ESP32 ping berhasil (no-cors) untuk IP ${ipAddress}`);
+        return true;
+      } catch (noCorsError) {
+        clearTimeout(timeoutId);
+        console.warn(`ESP32 ping gagal (no-cors) untuk IP ${ipAddress}:`, noCorsError);
+        return false;
+      }
+    }
   } catch (error) {
-    console.warn(`ESP32 ping timeout atau gagal untuk IP ${ipAddress}:`, error);
+    console.warn(`ESP32 ping error untuk IP ${ipAddress}:`, error);
     return false;
   }
 }
@@ -149,7 +222,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         .single(),
       supabase
         .from('rental_sessions')
-        .select('id,total_points_deducted')
+        .select('id,total_points_deducted,is_mode_esp32')
         .eq('id', session.id)
         .limit(1)
     ]);
@@ -167,7 +240,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       console.error(`Error fetching fresh session for ${session.id}:`, freshSessErr);
       return;
     }
-    const freshSession = freshSessionRows[0] as { total_points_deducted: number };
+    const freshSession = freshSessionRows[0] as { total_points_deducted: number; is_mode_esp32?: boolean };
 
     const currentBalance = Number(cardData.balance_points) || 0;
     const currentTotal = Number(freshSession.total_points_deducted) || 0;
@@ -312,12 +385,19 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
 
       // Akhiri sesi karena saldo habis
       // await endSessionDueToInsufficientBalance(session);
-      await endSessionWithESP32Check(session);
+      await endSessionWithESP32Check(session, freshSession.is_mode_esp32);
     }
   };
 
-  const endSessionWithESP32Check = async (session: MemberCardSession) => {
+  const endSessionWithESP32Check = async (session: MemberCardSession, isModeESP32?: boolean) => {
     try {
+      // Cek apakah session menggunakan mode ESP32
+      if (!isModeESP32) {
+        console.log(`Session ${session.id} tidak menggunakan mode ESP32, langsung mengakhiri sesi.`);
+        await endSessionDueToInsufficientBalance(session);
+        return;
+      }
+
       // Ambil data console untuk mendapatkan IP ESP32
       const { data: consoleData, error: consoleError } = await supabase
         .from('consoles')
@@ -333,19 +413,19 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
 
       // Jika ada IP ESP32, cek konektivitas
       if (consoleData.ip_esp32 && consoleData.ip_esp32.trim() !== '') {
-        const isESP32Active = await pingESP32(consoleData.ip_esp32.trim(), 5000); 
+        console.log(`Mengecek konektivitas ESP32 di IP ${consoleData.ip_esp32}...`);
+        const isESP32Active = await pingESP32(consoleData.ip_esp32.trim(), 3000);
 
         if (!isESP32Active) {
-          console.warn(`ESP32 di IP ${consoleData.ip_esp32} tidak aktif untuk session ${session.id}, mengakhiri sesi`);
+          console.warn(`ESP32 di IP ${consoleData.ip_esp32} tidak aktif/timeout untuk session ${session.id}. Mengakhiri sesi.`);
+          await endSessionDueToInsufficientBalance(session);
         } else {
-          console.log(`ESP32 di IP ${consoleData.ip_esp32} masih aktif untuk session ${session.id}`);
+          console.log(`ESP32 di IP ${consoleData.ip_esp32} aktif. Sesi tetap berjalan untuk session ${session.id}.`);
         }
       } else {
-        console.warn(`Tidak ada IP ESP32 yang dikonfigurasi untuk console ${session.console_id}`);
+        console.warn(`Tidak ada IP ESP32 yang dikonfigurasi untuk console ${session.console_id}. Mengakhiri sesi.`);
+        await endSessionDueToInsufficientBalance(session);
       }
-
-      // Akhiri sesi seperti biasa
-      await endSessionDueToInsufficientBalance(session);
     } catch (error) {
       console.error(`Error dalam endSessionWithESP32Check untuk session ${session.id}:`, error);
       try {
