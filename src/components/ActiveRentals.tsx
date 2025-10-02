@@ -1135,6 +1135,61 @@ const ActiveRentals: React.FC = () => {
     };
   }, [refreshActiveSessions]);
 
+  // Realtime subscription for console changes (especially auto_shutdown_enabled)
+  useEffect(() => {
+    const consolesChannel = supabase
+      .channel("consoles_auto_shutdown_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consoles" },
+        async (payload) => {
+          try {
+            console.log("Console change detected in ActiveRentals:", payload);
+
+            // Handle auto_shutdown_enabled changes specifically
+            if (payload.eventType === "UPDATE" && payload.new && payload.old) {
+              const consoleId = payload.new.id;
+              const oldAutoShutdown = payload.old.auto_shutdown_enabled;
+              const newAutoShutdown = payload.new.auto_shutdown_enabled;
+
+              if (oldAutoShutdown !== newAutoShutdown) {
+                console.log(
+                  `Updating auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`
+                );
+
+                // Update local state immediately
+                setConsoleAutoShutdownStates((prev) => {
+                  const newStates = {
+                    ...prev,
+                    [consoleId]: newAutoShutdown ?? true,
+                  };
+                  // Update global auto shutdown enabled state
+                  const anyEnabled = Object.values(newStates).some(
+                    (state) => state
+                  );
+                  setAutoShutdownEnabled(anyEnabled);
+                  return newStates;
+                });
+              }
+            }
+
+            // Refresh console data for other changes
+            await loadConsoleAutoShutdownStates();
+          } catch (e) {
+            console.error(
+              "Console realtime refresh error in ActiveRentals:",
+              e
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(consolesChannel);
+    };
+  }, [loadConsoleAutoShutdownStates]);
+
   const loadData = async () => {
     setLoading(true);
     try {

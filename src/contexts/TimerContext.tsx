@@ -467,6 +467,40 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     };
   }, [fetchActiveSessions]);
 
+  useEffect(() => {
+    const consolesChannel = supabase
+      .channel("consoles_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consoles" },
+        async (payload) => {
+          try {
+            console.log("Console change detected:", payload);
+            if (payload.eventType === "UPDATE" && payload.new && payload.old) {
+              const oldAutoShutdown = payload.old.auto_shutdown_enabled;
+              const newAutoShutdown = payload.new.auto_shutdown_enabled;
+
+              if (oldAutoShutdown !== newAutoShutdown) {
+                console.log(
+                  `auto_shutdown_enabled changed for console ${payload.new.id}: ${oldAutoShutdown} -> ${newAutoShutdown}`
+                );
+                setTimeout(() => {
+                  checkAndShutdownUnusedConsoles();
+                }, 1000);
+              }
+            }
+          } catch (e) {
+            console.error("Console realtime refresh error:", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(consolesChannel);
+    };
+  }, [checkAndShutdownUnusedConsoles]);
+
   // Set up interval to check sessions every 30 seconds
   useEffect(() => {
     setIsTimerRunning(true);
