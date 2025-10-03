@@ -14,6 +14,8 @@ import {
   Trash2,
   Edit,
   History,
+  LayoutGrid,
+  List as ListIcon,
 } from "lucide-react";
 
 const RFIDCards: React.FC = () => {
@@ -25,6 +27,7 @@ const RFIDCards: React.FC = () => {
   const [onlyAdmin, setOnlyAdmin] = useState<"all" | "admin" | "customer">(
     "all"
   );
+  const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
   const filtered = useMemo(() => {
     if (onlyAdmin === "all") return cards;
@@ -326,7 +329,7 @@ const RFIDCards: React.FC = () => {
       </div>
 
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Master Kartu RFID
@@ -335,13 +338,39 @@ const RFIDCards: React.FC = () => {
               Kelola kartu RFID untuk customer dan admin
             </p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <Plus className="h-5 w-5" />
-            Tambah Kartu
-          </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+              <button
+                onClick={() => setViewMode("card")}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  viewMode === "card"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                Card
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  viewMode === "list"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <ListIcon className="h-4 w-4" />
+                List
+              </button>
+            </div>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 justify-center"
+            >
+              <Plus className="h-5 w-5" />
+              Tambah Kartu
+            </button>
+          </div>
         </div>
       </div>
 
@@ -355,164 +384,285 @@ const RFIDCards: React.FC = () => {
       )}
       {!loading && cards.length > 0 && (
         <>
-          {/* Cards Grid */}
-          <div
-            key={cards.map((c) => c.id).join(",")}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
-            {filtered.map((card) => {
-              // const assigned =
-              //   Array.isArray(card.customers) && card.customers.length > 0;
-              // const customer = assigned ? card.customers[0] : null;
-              return (
-                <div
-                  key={card.id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-                >
-                  {/* Header */}
+          {filtered.length === 0 ? (
+            <div className="text-center text-gray-400 py-10">
+              Tidak ada kartu sesuai filter.
+            </div>
+          ) : viewMode === "card" ? (
+            <div
+              key={cards.map((c) => c.id).join(",")}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            >
+              {/* Cards Grid */}
+              {filtered.map((card) => {
+                // const assigned =
+                //   Array.isArray(card.customers) && card.customers.length > 0;
+                // const customer = assigned ? card.customers[0] : null;
+                return (
                   <div
-                    className={`p-4 text-white ${
-                      !card.is_admin
-                        ? "bg-gradient-to-r from-gray-600 to-gray-700"
-                        : "bg-gradient-to-r from-blue-600 to-blue-700"
-                    }`}
+                    key={card.id}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                          <CreditCard className="h-6 w-6" />
+                    {/* Header */}
+                    <div
+                      className={`p-4 text-white ${
+                        !card.is_admin
+                          ? "bg-gradient-to-r from-gray-600 to-gray-700"
+                          : "bg-gradient-to-r from-blue-600 to-blue-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                            <CreditCard className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-lg font-mono">
+                              {card.uid}
+                            </h3>
+                            {card.alias && (
+                              <span className="text-sm opacity-90">
+                                {card.alias}
+                              </span>
+                            )}
+                            {/* <span className="text-sm opacity-90">
+                              {assigned
+                                ? "Ter-assign ke customer"
+                                : "Belum ter-assign"}
+                            </span> */}
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-lg font-mono">
-                            {card.uid}
-                          </h3>
-                          {card.alias && (
-                            <span className="text-sm opacity-90">
-                              {card.alias}
-                            </span>
-                          )}
-                          {/* <span className="text-sm opacity-90">
-                            {assigned
-                              ? "Ter-assign ke customer"
-                              : "Belum ter-assign"}
-                          </span> */}
-                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                            card.status === "active"
+                              ? "bg-green-500 text-white"
+                              : card.status === "blocked"
+                              ? "bg-red-500 text-white"
+                              : "bg-gray-400 text-white"
+                          }`}
+                        >
+                          {card.status.toUpperCase()}
+                        </span>
+                        {card.is_admin && (
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-500 text-white">
+                            ADMIN
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                          card.status === "active"
-                            ? "bg-green-500 text-white"
-                            : card.status === "blocked"
-                            ? "bg-red-500 text-white"
-                            : "bg-gray-400 text-white"
-                        }`}
-                      >
-                        {card.status.toUpperCase()}
-                      </span>
-                      {card.is_admin && (
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-500 text-white">
-                          ADMIN
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Body */}
-                  <div className="p-4">
-                    <div className="space-y-4">
-                      {/* Customer Info */}
-                      <div>
-                        <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          Informasi Customer
-                        </h4>
-                        <div className="flex flex-col gap-1 text-md text-gray-700">
-                          <div className="flex justify-between">
-                            <span className="font-medium">Points:</span>
-                            <span className="font-mono">
-                              {card.balance_points}
-                            </span>
+                    {/* Body */}
+                    <div className="p-4">
+                      <div className="space-y-4">
+                        {/* Customer Info */}
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Informasi Customer
+                          </h4>
+                          <div className="flex flex-col gap-1 text-md text-gray-700">
+                            <div className="flex justify-between">
+                              <span className="font-medium">Points:</span>
+                              <span className="font-mono">
+                                {card.balance_points}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="font-medium">Status:</span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-sm font-semibold ${
+                                  card.status === "active"
+                                    ? "bg-green-100 text-green-700"
+                                    : card.status === "blocked"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-gray-100 text-gray-700"
+                                }`}
+                              >
+                                {card.status.toUpperCase()}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="font-medium">Status:</span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-sm font-semibold ${
-                                card.status === "active"
-                                  ? "bg-green-100 text-green-700"
-                                  : card.status === "blocked"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-gray-100 text-gray-700"
+                        </div>
+
+                        {/* Actions */}
+                        <div className="pt-4 border-t border-gray-100">
+                          <div className="flex gap-2 justify-end">
+                            {/* <button
+                              onClick={() => toggleAdmin(card)}
+                              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                                !card.is_admin
+                                  ? "bg-amber-500 hover:bg-amber-600 text-white"
+                                  : "bg-gray-500 hover:bg-gray-600 text-white"
                               }`}
                             >
-                              {card.status.toUpperCase()}
-                            </span>
+                              <Shield className="h-4 w-4" />
+                              {card.is_admin ? "Remove Admin" : "Make Admin"}
+                            </button> */}
+                            <button
+                              onClick={() => blockCard(card)}
+                              className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                                card.status === "active"
+                                  ? "bg-red-500 hover:bg-red-600 text-white"
+                                  : "bg-green-500 hover:bg-green-600 text-white"
+                              }`}
+                            >
+                              {card.status === "active" ? (
+                                <>
+                                  <UserX className="h-4 w-4" />
+                                  Block
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="h-4 w-4" />
+                                  Unblock
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => openEdit(card as any)}
+                              className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => openHistory(card)}
+                              className="p-2 border border-blue-300 hover:border-blue-400 text-blue-600 rounded-lg transition-colors flex items-center justify-center"
+                            >
+                              <History className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteCard(card as any)}
+                              className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="pt-4 border-t border-gray-100">
-                        <div className="flex gap-2 justify-end">
-                          {/* <button
-                            onClick={() => toggleAdmin(card)}
-                            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                              !card.is_admin
-                                ? "bg-amber-500 hover:bg-amber-600 text-white"
-                                : "bg-gray-500 hover:bg-gray-600 text-white"
-                            }`}
-                          >
-                            <Shield className="h-4 w-4" />
-                            {card.is_admin ? "Remove Admin" : "Make Admin"}
-                          </button> */}
-                          <button
-                            onClick={() => blockCard(card)}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                              card.status === "active"
-                                ? "bg-red-500 hover:bg-red-600 text-white"
-                                : "bg-green-500 hover:bg-green-600 text-white"
-                            }`}
-                          >
-                            {card.status === "active" ? (
-                              <>
-                                <UserX className="h-4 w-4" />
-                                Block
-                              </>
-                            ) : (
-                              <>
-                                <UserCheck className="h-4 w-4" />
-                                Unblock
-                              </>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => openEdit(card as any)}
-                            className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => openHistory(card)}
-                            className="p-2 border border-blue-300 hover:border-blue-400 text-blue-600 rounded-lg transition-colors flex items-center justify-center"
-                          >
-                            <History className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteCard(card as any)}
-                            className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        UID & Alias
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Tipe
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Points
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Aksi
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {filtered.map((card) => (
+                      <tr key={card.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-semibold text-gray-900 font-mono">
+                            {card.uid}
+                          </div>
+                          {card.alias && (
+                            <div className="text-sm text-gray-500">
+                              {card.alias}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              card.is_admin
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {card.is_admin ? "Admin" : "Member"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
+                              card.status === "active"
+                                ? "bg-green-100 text-green-700"
+                                : card.status === "blocked"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {card.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-sm text-gray-900">
+                            {typeof card.balance_points === "number"
+                              ? card.balance_points.toLocaleString()
+                              : card.balance_points ?? "-"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={() => blockCard(card)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                                card.status === "active"
+                                  ? "bg-red-500 hover:bg-red-600 text-white"
+                                  : "bg-green-500 hover:bg-green-600 text-white"
+                              }`}
+                            >
+                              {card.status === "active" ? (
+                                <>
+                                  <UserX className="h-4 w-4" />
+                                  Block
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="h-4 w-4" />
+                                  Unblock
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => openEdit(card as any)}
+                              className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => openHistory(card)}
+                              className="p-2 border border-blue-300 hover:border-blue-400 text-blue-600 rounded-lg transition-colors flex items-center justify-center"
+                            >
+                              <History className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteCard(card as any)}
+                              className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Add Modal */}
           {showAddModal && (
