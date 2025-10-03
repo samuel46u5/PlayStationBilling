@@ -5,6 +5,8 @@ import {
   Printer,
   Ticket,
   History,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, { useState, useEffect } from "react";
@@ -335,6 +337,7 @@ const ActiveRentals: React.FC = () => {
   const [showAutoShutdownModal, setShowAutoShutdownModal] =
     useState<boolean>(false);
   const [showToolsModal, setShowToolsModal] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [selectedCommand, setSelectedCommand] = useState("");
   const [volume, setVolume] = useState<number>(10);
   const [preparationMinutes, setPreparationMinutes] = useState<number>(5);
@@ -988,6 +991,132 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
+  // Function untuk sinkronisasi status console dan rental session
+  const syncConsoleAndSessionStatus = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+
+    try {
+      console.log("Memulai sinkronisasi status console dan rental session...");
+
+      // 1. Ambil semua console yang statusnya "rented"
+      const { data: rentedConsoles, error: consoleError } = await supabase
+        .from("consoles")
+        .select("id, name, status")
+        .eq("status", "rented")
+        .eq("is_active", true);
+
+      if (consoleError) {
+        throw new Error("Gagal mengambil data console");
+      }
+
+      // 2. Ambil semua rental session yang aktif
+      const { data: activeSessions, error: sessionError } = await supabase
+        .from("rental_sessions")
+        .select("id, console_id, status")
+        .eq("status", "active");
+
+      if (sessionError) {
+        throw new Error("Gagal mengambil data rental session");
+      }
+
+      let fixedCount = 0;
+      const issues: string[] = [];
+
+      // 3. Cek console yang "rented" tapi tidak ada session aktif
+      for (const console of rentedConsoles || []) {
+        const hasActiveSession = activeSessions?.some(
+          (session) => session.console_id === console.id
+        );
+
+        if (!hasActiveSession) {
+          // Console rented tapi tidak ada session aktif - set ke available
+          await supabase
+            .from("consoles")
+            .update({ status: "available" })
+            .eq("id", console.id);
+
+          issues.push(
+            `Console ${console.name} di-set ke "available" (tidak ada session aktif)`
+          );
+          fixedCount++;
+        }
+      }
+
+      // 4. Cek session aktif yang console-nya tidak "rented"
+      for (const session of activeSessions || []) {
+        const console = rentedConsoles?.find(
+          (c) => c.id === session.console_id
+        );
+
+        if (!console) {
+          // Session aktif tapi console tidak rented - cari console dan set ke rented
+          const { data: consoleData } = await supabase
+            .from("consoles")
+            .select("id, name, status")
+            .eq("id", session.console_id)
+            .single();
+
+          if (consoleData && consoleData.status !== "rented") {
+            await supabase
+              .from("consoles")
+              .update({ status: "rented" })
+              .eq("id", session.console_id);
+
+            issues.push(
+              `Console ${consoleData.name} di-set ke "rented" (ada session aktif)`
+            );
+            fixedCount++;
+          }
+        }
+      }
+
+      // 5. Refresh data
+      await loadData();
+      await refreshActiveSessions();
+
+      if (fixedCount > 0) {
+        Swal.fire({
+          title: "Sinkronisasi Berhasil",
+          html: `
+            <div class="text-left">
+              <p><strong>${fixedCount} masalah diperbaiki:</strong></p>
+              <ul class="list-disc list-inside mt-2 space-y-1">
+                ${issues
+                  .map((issue) => `<li class="text-sm">${issue}</li>`)
+                  .join("")}
+              </ul>
+            </div>
+          `,
+          icon: "success",
+          confirmButtonText: "OK",
+        });
+      } else {
+        Swal.fire({
+          title: "Status Sudah Sinkron",
+          text: "Tidak ada masalah yang ditemukan. Status console dan rental session sudah konsisten.",
+          icon: "info",
+          confirmButtonText: "OK",
+        });
+      }
+
+      console.log(`Sinkronisasi selesai. ${fixedCount} masalah diperbaiki.`);
+    } catch (error) {
+      console.error("Error during sync:", error);
+      Swal.fire({
+        title: "Sinkronisasi Gagal",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat sinkronisasi",
+        icon: "error",
+        confirmButtonText: "OK",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Reset paymentAmount ke 0 setiap kali showPaymentModal berubah (end rental)
   React.useEffect(() => {
     if (showPaymentModal) {
@@ -1135,7 +1264,6 @@ const ActiveRentals: React.FC = () => {
     };
   }, [refreshActiveSessions]);
 
-  // Realtime subscription for console changes (especially auto_shutdown_enabled)
   useEffect(() => {
     const consolesChannel = supabase
       .channel("consoles_auto_shutdown_realtime")
@@ -1146,7 +1274,6 @@ const ActiveRentals: React.FC = () => {
           try {
             console.log("Console change detected in ActiveRentals:", payload);
 
-            // Handle auto_shutdown_enabled changes specifically
             if (payload.eventType === "UPDATE" && payload.new && payload.old) {
               const consoleId = payload.new.id;
               const oldAutoShutdown = payload.old.auto_shutdown_enabled;
@@ -1157,13 +1284,11 @@ const ActiveRentals: React.FC = () => {
                   `Updating auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`
                 );
 
-                // Update local state immediately
                 setConsoleAutoShutdownStates((prev) => {
                   const newStates = {
                     ...prev,
                     [consoleId]: newAutoShutdown ?? true,
                   };
-                  // Update global auto shutdown enabled state
                   const anyEnabled = Object.values(newStates).some(
                     (state) => state
                   );
@@ -1173,7 +1298,6 @@ const ActiveRentals: React.FC = () => {
               }
             }
 
-            // Refresh console data for other changes
             await loadConsoleAutoShutdownStates();
           } catch (e) {
             console.error(
@@ -4088,30 +4212,97 @@ const ActiveRentals: React.FC = () => {
   };
 
   // Ganti handleStartRental untuk prepaid agar memunculkan modal pembayaran
-  const handleStartRental = async (consoleId: string) => {
-    if (!ensureCashierActive()) return;
-    if (startRentalLoading) return; // prevent re-entry
-    setStartRentalLoading(true);
-    try {
-      // Pastikan tidak ada session aktif sebelumnya untuk console ini
-      const { data: existingSessions, error: existingSessionsError } =
-        await supabase
-          .from("rental_sessions")
-          .select("id")
-          .eq("console_id", consoleId)
-          .eq("status", "active");
-      if (
-        !existingSessionsError &&
-        Array.isArray(existingSessions) &&
-        existingSessions.length > 0
-      ) {
-        // Akhiri semua session aktif lama
+  // Helper function untuk retry database operations
+  const retryDatabaseOperation = async (
+    operation: () => Promise<any>,
+    maxRetries: number = 3,
+    delayMs: number = 1000
+  ): Promise<any> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        console.warn(`Database operation attempt ${attempt} failed:`, error);
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+      }
+    }
+    throw new Error("Max retries exceeded");
+  };
+
+  // Helper function untuk atomic rental creation
+  const createRentalAtomic = async (consoleId: string, sessionData: any) => {
+    return await retryDatabaseOperation(async () => {
+      // Step 1: End existing sessions
+      const { data: existingSessions } = await supabase
+        .from("rental_sessions")
+        .select("id")
+        .eq("console_id", consoleId)
+        .eq("status", "active");
+
+      if (existingSessions && existingSessions.length > 0) {
         const sessionIds = existingSessions.map((s) => s.id);
         await supabase
           .from("rental_sessions")
           .update({ status: "completed", end_time: new Date().toISOString() })
           .in("id", sessionIds);
       }
+
+      // Step 2: Get latest console data
+      const { data: latestConsole, error: consoleError } = await supabase
+        .from("consoles")
+        .select(`*, rate_profiles(capital)`)
+        .eq("id", consoleId)
+        .single();
+
+      if (consoleError || !latestConsole) {
+        throw new Error("Failed to get console data");
+      }
+
+      if (latestConsole.status !== "available") {
+        throw new Error("Console is not available");
+      }
+
+      // Step 3: Atomic reservation - update console status only if still available
+      const { data: reservedRows, error: reserveError } = await supabase
+        .from("consoles")
+        .update({ status: "rented" })
+        .eq("id", consoleId)
+        .eq("status", "available")
+        .select("id");
+
+      if (reserveError || !reservedRows || reservedRows.length === 0) {
+        throw new Error("Console already in use");
+      }
+
+      // Step 4: Create rental session
+      const { data: newSession, error: sessionError } = await supabase
+        .from("rental_sessions")
+        .insert(sessionData)
+        .select()
+        .single();
+
+      if (sessionError || !newSession) {
+        // Rollback console reservation
+        await supabase
+          .from("consoles")
+          .update({ status: "available" })
+          .eq("id", consoleId);
+        throw new Error("Failed to create rental session");
+      }
+
+      return { console: latestConsole, session: newSession };
+    });
+  };
+
+  const handleStartRental = async (consoleId: string) => {
+    if (!ensureCashierActive()) return;
+    if (startRentalLoading) return; // prevent re-entry
+    setStartRentalLoading(true);
+
+    try {
       // Ambil data console terbaru dari database
       const { data: latestConsole, error: latestConsoleError } = await supabase
         .from("consoles")
@@ -4123,7 +4314,8 @@ const ActiveRentals: React.FC = () => {
         return;
       }
       if (latestConsole.status !== "available") {
-        throw new Error("Console is not available");
+        Swal.fire("Error", "Console sedang digunakan", "warning");
+        return;
       }
       // --- Cek status TV dan relay sebelum mulai rental, matikan otomatis jika masih ON ---
       let tvStatusNow = tvStatusJson?.toUpperCase?.() || "";
@@ -4190,17 +4382,19 @@ const ActiveRentals: React.FC = () => {
           return;
         }
 
-        // Ambil data kartu dan cek balance
-        const { data: cardData, error: cardError } = await supabase
-          .from("rfid_cards")
-          .select("uid, balance_points, status")
-          .eq("uid", scannedCardUID)
-          .single();
+        // Ambil data kartu dan cek balance dengan retry
+        const cardData = await retryDatabaseOperation(async () => {
+          const { data, error } = await supabase
+            .from("rfid_cards")
+            .select("uid, balance_points, status")
+            .eq("uid", scannedCardUID)
+            .single();
 
-        if (cardError || !cardData) {
-          Swal.fire("Error", "Kartu tidak ditemukan", "error");
-          return;
-        }
+          if (error || !data) {
+            throw new Error("Kartu tidak ditemukan");
+          }
+          return data;
+        });
 
         if (cardData.status !== "active") {
           Swal.fire("Error", "Kartu tidak aktif", "error");
@@ -4219,66 +4413,39 @@ const ActiveRentals: React.FC = () => {
         );
         const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
         const perMinuteRateSnapshot = Math.ceil(hourlyRateSnapshot / 60);
-        // Atomic reservation: update console status hanya jika masih available
-        const { data: reservedRows, error: reserveErr } = await supabase
-          .from("consoles")
-          .update({ status: "rented" })
-          .eq("id", consoleId)
-          .eq("status", "available")
-          .select("id");
-        if (reserveErr || !reservedRows || reservedRows.length === 0) {
-          Swal.fire("Gagal", "Console sudah digunakan. Coba lagi.", "warning");
-          return;
-        }
 
-        // Insert rental session dengan flag voucher dan snapshot rate
-        const { error: insertErr } = await supabase
-          .from("rental_sessions")
-          .insert({
-            customer_id: null,
-            console_id: consoleId,
-            card_uid: scannedCardUID,
-            status: "active",
-            payment_status: "pending",
-            total_amount: 0,
-            paid_amount: 0,
-            start_time: new Date(rentalStartTime).toISOString(),
-            duration_minutes: null,
-            is_voucher_used: true,
-            hourly_rate_snapshot: hourlyRateSnapshot,
-            per_minute_rate_snapshot: perMinuteRateSnapshot,
-          });
+        // Session data untuk member card
+        const sessionData = {
+          customer_id: null,
+          console_id: consoleId,
+          card_uid: scannedCardUID,
+          status: "active",
+          payment_status: "pending",
+          total_amount: 0,
+          paid_amount: 0,
+          start_time: new Date(rentalStartTime).toISOString(),
+          duration_minutes: null,
+          is_voucher_used: true,
+          hourly_rate_snapshot: hourlyRateSnapshot,
+          per_minute_rate_snapshot: perMinuteRateSnapshot,
+        };
 
-        if (insertErr) {
-          // Rollback reservation
-          await supabase
-            .from("consoles")
-            .update({ status: "available" })
-            .eq("id", consoleId);
-          throw insertErr;
-        }
+        // Atomic rental creation
+        const { console: updatedConsole, session: newSession } =
+          await createRentalAtomic(consoleId, sessionData);
 
-        // Nyalakan perangkat setelah reservasi & insert sukses
-        if (latestConsole.power_tv_command) {
-          fetch(latestConsole.power_tv_command).catch(() => {});
+        // Nyalakan perangkat setelah atomic operation sukses
+        if (updatedConsole.power_tv_command) {
+          fetch(updatedConsole.power_tv_command).catch(() => {});
         }
-        if (latestConsole.relay_command_on) {
-          fetch(latestConsole.relay_command_on).catch(() => {});
+        if (updatedConsole.relay_command_on) {
+          fetch(updatedConsole.relay_command_on).catch(() => {});
         }
-
-        // Update console status
-        // const { error: consoleError } = await supabase
-        //   .from("consoles")
-        //   .update({ status: "rented" })
-        //   .eq("id", consoleId);
-        // if (consoleError) throw consoleError;
 
         // Cetak bukti
-        let customerName = "Customer";
-
         printRentalProof({
-          customerName: customerName,
-          unitNumber: latestConsole.name,
+          customerName: "Customer",
+          unitNumber: updatedConsole.name,
           startTimestamp: new Date().toLocaleString("id-ID"),
           mode: rentalType,
         });
@@ -4300,54 +4467,34 @@ const ActiveRentals: React.FC = () => {
       }
 
       // Create new rental session (pay-as-you-go)
-      // Untuk pay-as-you-go: reserve console atomically, lalu buat session
-      const { data: reservedRows2, error: reserveErr2 } = await supabase
-        .from("consoles")
-        .update({ status: "rented" })
-        .eq("id", consoleId)
-        .eq("status", "available")
-        .select("id");
-      if (reserveErr2 || !reservedRows2 || reservedRows2.length === 0) {
-        Swal.fire("Gagal", "Console sudah digunakan. Coba lagi.", "warning");
-        return;
+      const sessionData = {
+        customer_id: null,
+        console_id: consoleId,
+        status: "active",
+        payment_status: paymentStatus,
+        total_amount: totalAmount,
+        paid_amount: paidAmount,
+        start_time: new Date(rentalStartTime).toISOString(),
+        duration_minutes:
+          rentalType === "prepaid" ? totalDurationMinutes : null,
+      };
+
+      // Atomic rental creation
+      const { console: updatedConsole, session: newSession } =
+        await createRentalAtomic(consoleId, sessionData);
+
+      // Nyalakan perangkat setelah atomic operation sukses
+      if (updatedConsole.power_tv_command) {
+        fetch(updatedConsole.power_tv_command).catch(() => {});
+      }
+      if (updatedConsole.relay_command_on) {
+        fetch(updatedConsole.relay_command_on).catch(() => {});
       }
 
-      const { error: rentalError } = await supabase
-        .from("rental_sessions")
-        .insert({
-          customer_id: null,
-          console_id: consoleId,
-          status: "active",
-          payment_status: paymentStatus,
-          total_amount: totalAmount,
-          paid_amount: paidAmount,
-          start_time: new Date(rentalStartTime).toISOString(),
-          duration_minutes:
-            rentalType === "prepaid" ? totalDurationMinutes : null,
-        });
-      if (rentalError) {
-        // Rollback reservation
-        await supabase
-          .from("consoles")
-          .update({ status: "available" })
-          .eq("id", consoleId);
-        throw rentalError;
-      }
-
-      // Nyalakan perangkat setelah reservasi & insert sukses (pay-as-you-go)
-      if (latestConsole.power_tv_command) {
-        fetch(latestConsole.power_tv_command).catch(() => {});
-      }
-      if (latestConsole.relay_command_on) {
-        fetch(latestConsole.relay_command_on).catch(() => {});
-      }
-
-      // Get customer name
-      let customerName = "Customer";
-
+      // Cetak bukti
       printRentalProof({
-        customerName: customerName,
-        unitNumber: latestConsole.name,
+        customerName: "Customer",
+        unitNumber: updatedConsole.name,
         startTimestamp: new Date().toLocaleString("id-ID"),
         mode: rentalType,
       });
@@ -4359,7 +4506,7 @@ const ActiveRentals: React.FC = () => {
       setRentalStartTime(getNowForDatetimeLocal());
       setSearchConsole("");
       await loadData();
-      await refreshActiveSessions(); // Refresh global sessions
+      await refreshActiveSessions();
       Swal.fire("Berhasil", "Sesi rental berhasil dimulai", "success");
     } catch (error) {
       console.error("Error starting rental:", error);
@@ -5399,6 +5546,26 @@ const ActiveRentals: React.FC = () => {
                   title="Manage auto shutdown for all consoles"
                 >
                   Manage All
+                </button>
+
+                {/* Sync Status Button */}
+                <button
+                  onClick={syncConsoleAndSessionStatus}
+                  disabled={isSyncing}
+                  className="text-xs text-purple-600 hover:text-purple-800 font-medium px-2 py-1 rounded border border-purple-200 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  title="Sinkronisasi status console dan rental session"
+                >
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3 w-3" />
+                      Sync Status
+                    </>
+                  )}
                 </button>
 
                 <button
