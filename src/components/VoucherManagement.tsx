@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   Plus,
   Search,
@@ -9,17 +10,19 @@ import {
   Eye,
   Edit,
   ShoppingCart,
+  Package,
   TrendingUp,
   CheckCircle,
   XCircle,
+  ChevronDown,
   Printer,
   QrCode,
-  CreditCard,
   AlertCircle,
   Trash2,
 } from "lucide-react";
 
 import { db } from "../lib/supabase";
+import paketService from '../lib/paketService';
 import Swal from "sweetalert2";
 
 type CashierDetailItem = {
@@ -56,9 +59,9 @@ const parseDetails = (raw: unknown): CashierDetails => {
 };
 
 const VoucherManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"vouchers" | "purchase-history">(
-    "vouchers"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "master-paket" | "vouchers" | "purchase-history"
+  >("master-paket");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [showCreateVoucherForm, setShowCreateVoucherForm] = useState(false);
@@ -77,6 +80,31 @@ const VoucherManagement: React.FC = () => {
     voucherPrice: 50000,
   });
 
+  // Modal-scoped Hari & Jam state used inside the Create Paket modal
+  const [showAddHariJamModal, setShowAddHariJamModal] = useState(false);
+  const [hariJamDraft, setHariJamDraft] = useState<{ day: string; startTime: string; endTime: string }>({ day: "Rabu", startTime: "09:00", endTime: "18:00" });
+  // when editing an existing entry, hold its id here
+  const [editHariJamId, setEditHariJamId] = useState<string | null>(null);
+  // modal to select consoles for paket draft
+  const [showSelectConsoleModal, setShowSelectConsoleModal] = useState(false);
+  // staged selection inside the console modal; applied on 'Selesai'
+  const [selectConsoleDraft, setSelectConsoleDraft] = useState<string[]>([]);
+  const [selectConsoleModalTab, setSelectConsoleModalTab] = useState<"list" | "dipilih">("list");
+  const [selectConsoleSearch, setSelectConsoleSearch] = useState("");
+
+  // close select-console modal on Escape and discard staged changes
+  useEffect(() => {
+    if (!showSelectConsoleModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSelectConsoleModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showSelectConsoleModal]);
+  const hariOptions = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+
   const [sellVoucher, setSellVoucher] = useState({
     voucherId: "",
     customerId: "",
@@ -88,6 +116,250 @@ const VoucherManagement: React.FC = () => {
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [voucherUsages, setVoucherUsages] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  
+  type Paket = {
+    id: string;
+    name: string;
+    code?: string;
+    status: string;
+    description?: string;
+    durationHours: number;
+    durationMinutes: number;
+    pricePerHour: number;
+    discountAmount?: number; // fixed amount in IDR to subtract per hour
+  };
+
+  type DaySpec = {
+    key: string;
+    label: string;
+    enabled: boolean;
+    startTime: string; // HH:MM
+    endTime: string; // HH:MM
+  };
+
+  const defaultDays: DaySpec[] = [
+    { key: "mon", label: "Senin", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "tue", label: "Selasa", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "wed", label: "Rabu", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "thu", label: "Kamis", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "fri", label: "Jumat", enabled: false, startTime: "09:00", endTime: "21:00" },
+    { key: "sat", label: "Sabtu", enabled: false, startTime: "09:00", endTime: "23:59" },
+    { key: "sun", label: "Minggu", enabled: false, startTime: "09:00", endTime: "21:00" },
+  ];
+
+  const [pakets, setPakets] = useState<Paket[]>([
+    {
+      id: "pkg-1",
+      name: "Paket 2 Jam",
+      status: "active",
+      description: "Paket standar 2 jam",
+      durationHours: 2,
+      durationMinutes: 0,
+      pricePerHour: 30000,
+      discountAmount: 0,
+    },
+  ]);
+  // consoles loaded from DB
+  const [consoles, setConsoles] = useState<{ id: string; name: string }[]>([]);
+  const [showCreatePaketForm, setShowCreatePaketForm] = useState(false);
+  const [createActiveTab, setCreateActiveTab] = useState<"info" | "hari" | "durasi" | "console">("info");
+  const [newPaketDraft, setNewPaketDraft] = useState<Partial<Paket> & {
+    discountAmount?: number;
+    days?: DaySpec[];
+    selectedConsoles?: string[];
+    hariJamList?: { id: string; day: string; startTime: string; endTime: string }[];
+    packagePrice?: number;
+    hargaNormal?: number;
+  }>({
+    name: "",
+    code: undefined,
+    durationHours: 1,
+    durationMinutes: 0,
+    pricePerHour: 50000,
+    status: "active",
+    discountAmount: 0,
+    days: defaultDays,
+    hariJamList: [],
+    packagePrice: undefined,
+    hargaNormal: 50000,
+  });
+  const [editingPaketId, setEditingPaketId] = useState<string | null>(null);
+  // viewPaketId not needed; we store full data in viewPaketData
+  const [viewPaketData, setViewPaketData] = useState<any | null>(null);
+  const [expandedHariFor, setExpandedHariFor] = useState<string | null>(null);
+  const [expandedConsolesFor, setExpandedConsolesFor] = useState<string | null>(null);
+  // local sub-tab state inside Master Paket
+  const [masterPaketSubTab, setMasterPaketSubTab] = useState<'management' | 'history'>('management');
+
+  const handleCreatePaketDraft = async () => {
+    if (!newPaketDraft.name) return alert("Nama paket wajib diisi");
+    const fullPayload: any = {
+      name: String(newPaketDraft.name),
+      code: String((newPaketDraft as any).code || ''),
+      status: String(newPaketDraft.status || "active"),
+      description: String(newPaketDraft.description || ""),
+      durationHours: Number(newPaketDraft.durationHours || 0),
+      durationMinutes: Number(newPaketDraft.durationMinutes || 0),
+      hargaNormal: Number((newPaketDraft as any).hargaNormal || 0),
+      packagePrice: (newPaketDraft as any).packagePrice === undefined ? undefined : Number((newPaketDraft as any).packagePrice),
+      discountAmount: Number(newPaketDraft.discountAmount || 0),
+      days: newPaketDraft.days || defaultDays,
+      consoles: newPaketDraft.selectedConsoles || [],
+      hariJamList: newPaketDraft.hariJamList || [],
+    };
+
+    try {
+      if (editingPaketId) {
+        await paketService.updatePackage(editingPaketId, {
+          name: fullPayload.name,
+          code: fullPayload.code,
+          description: fullPayload.description,
+          status: fullPayload.status,
+          durationHours: fullPayload.durationHours,
+          durationMinutes: fullPayload.durationMinutes,
+          hargaNormal: fullPayload.hargaNormal,
+          packagePrice: fullPayload.packagePrice,
+          discountAmount: fullPayload.discountAmount,
+          selectedConsoles: fullPayload.consoles,
+          hariJamList: fullPayload.hariJamList,
+        });
+
+    // close modal first, give React a tick to settle, then refresh and show toast
+    setShowCreatePaketForm(false);
+    await sleep(40);
+  await reloadPakets();
+  await refreshOpenDetail(editingPaketId);
+
+        await Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Paket berhasil diperbarui',
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      } else {
+        const created = await paketService.createPackage({
+          name: fullPayload.name,
+          code: fullPayload.code,
+          description: fullPayload.description,
+          status: fullPayload.status,
+          durationHours: fullPayload.durationHours,
+          durationMinutes: fullPayload.durationMinutes,
+          hargaNormal: fullPayload.hargaNormal,
+          packagePrice: fullPayload.packagePrice,
+          discountAmount: fullPayload.discountAmount,
+          selectedConsoles: fullPayload.consoles,
+          hariJamList: fullPayload.hariJamList,
+        });
+
+    // close modal first, give React a tick to settle, then refresh and show toast
+    setShowCreatePaketForm(false);
+    await sleep(40);
+        await reloadPakets();
+        const createdId = (created && (created.id || created.package_id || created.packageId)) ? (created.id ?? created.package_id ?? created.packageId) : undefined;
+        await refreshOpenDetail(createdId);
+
+        await Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Paket berhasil dibuat',
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      }
+
+      // reset draft & editing state after success
+      setNewPaketDraft({ name: "", code: undefined, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
+      setEditingPaketId(null);
+    } catch (err: any) {
+      // keep modal open so user can correct input; show error toast
+      await Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'error',
+        title: err?.message || 'Gagal menyimpan paket',
+        showConfirmButton: false,
+        timer: 2500,
+      });
+    }
+  };
+
+  // fetch consoles from DB once (and provide paket refresh)
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const rows = await paketService.loadConsoles();
+        setConsoles(rows || []);
+      } catch {
+        setConsoles([]);
+      }
+    };
+    load();
+
+    // expose paket refresh and load initial pakets
+    (window as any).refreshPakets = async () => {
+      try {
+        const rows = await paketService.loadPakets();
+        const mapped = (rows || []).map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          code: r.code,
+          status: r.status || 'active',
+          description: r.description,
+          durationHours: r.durationHours || 0,
+          durationMinutes: r.durationMinutes || 0,
+          pricePerHour: r.hargaNormal ?? r.packagePrice ?? 0,
+          discountAmount: r.discountAmount ?? 0,
+        }));
+        setPakets(mapped as Paket[]);
+      } catch {
+        setPakets([]);
+      }
+    };
+    (window as any).refreshPakets();
+  }, []);
+
+  // helper to reload pakets and set local state immediately
+  const reloadPakets = async () => {
+    try {
+      const rows = await paketService.loadPakets();
+      const mapped = (rows || []).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        code: r.code,
+        status: r.status || 'active',
+        description: r.description,
+        durationHours: r.durationHours || 0,
+        durationMinutes: r.durationMinutes || 0,
+        pricePerHour: r.hargaNormal ?? r.packagePrice ?? 0,
+        discountAmount: r.discountAmount ?? 0,
+      }));
+      setPakets(mapped as Paket[]);
+    } catch {
+      setPakets([]);
+    }
+  };
+
+  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+  // refresh the currently open paket detail (if any). If deletedId is provided and
+  // matches the open detail, clear the detail panel.
+  const refreshOpenDetail = async (deletedId?: string) => {
+    try {
+      if (deletedId && viewPaketData && viewPaketData.id === deletedId) {
+        setViewPaketData(null);
+        return;
+      }
+      if (viewPaketData && viewPaketData.id) {
+        const fresh = await paketService.getPackageById(viewPaketData.id);
+        setViewPaketData(fresh);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -199,11 +471,11 @@ const VoucherManagement: React.FC = () => {
   //   };
   // };
 
-  const generateVoucherCode = () => {
-    const lastVoucher = vouchers[vouchers.length - 1];
-    const lastNumber = parseInt(lastVoucher.voucherCode.replace("VCH", ""));
-    return `VCH${(lastNumber + 1).toString().padStart(3, "0")}`;
-  };
+  // const generateVoucherCode = () => {
+  //   const lastVoucher = vouchers[vouchers.length - 1];
+  //   const lastNumber = parseInt(lastVoucher.voucherCode.replace("VCH", ""));
+  //   return `VCH${(lastNumber + 1).toString().padStart(3, "0")}`;
+  // };
 
   // const handleCreateVoucher = () => {
   //   if (
@@ -353,29 +625,9 @@ const VoucherManagement: React.FC = () => {
   //   );
   // };
 
-  const handleUseVoucher = async (voucherId: string, hoursToUse: number) => {
-    const voucher = vouchers.find((v) => v.id === voucherId);
-    if (!voucher) return;
-
-    if (hoursToUse > voucher.remainingHours) {
-      alert("Jam yang digunakan melebihi sisa jam voucher");
-      return;
-    }
-
-    try {
-      const ok = await db.vouchers.use(voucherId, hoursToUse);
-      if (ok) {
-        alert(
-          `Voucher ${voucher.voucherCode} berhasil digunakan untuk ${hoursToUse} jam.`
-        );
-        (window as any).refreshVouchers?.();
-      } else {
-        alert("Gagal menggunakan voucher");
-      }
-    } catch (e: any) {
-      alert(e?.message || "Gagal menggunakan voucher");
-    }
-  };
+  // const handleUseVoucher = async (voucherId: string, hoursToUse: number) => {
+  //   // kept for future - disabled because it's unused here
+  // };
 
   const renderPrintableVoucher = (voucher: any) => (
     <div className="w-[5.5cm] h-[9cm] bg-white border-2 border-dashed border-gray-400 p-3 text-xs font-mono relative overflow-hidden">
@@ -475,6 +727,421 @@ const VoucherManagement: React.FC = () => {
       </div>
     </div>
   );
+
+  // Create Paket Modal (tabbed)
+  const renderCreatePaketModal = () => {
+
+    
+
+    
+
+    // helpers for 24-hour selects inside the 'Tambah Hari & Jam' modal
+    const pad = (n: number | string) => String(n).padStart(2, "0");
+    const normalizeTime = (raw?: string) => {
+      if (!raw) return "00:00";
+      const trimmed = String(raw).trim();
+      const cleaned = trimmed.replace(/[.,]/g, ':').replace(/\s+/g, '');
+      const m = cleaned.match(/^(\d{1,2}):?(\d{0,2})$/);
+      if (!m) return "00:00";
+      let hh = Number(m[1]) || 0;
+      let mm = Number(m[2] || '0') || 0;
+      if (hh < 0) hh = 0;
+      if (hh > 23) hh = 23;
+      if (mm < 0) mm = 0;
+      if (mm > 59) mm = 59;
+      return `${pad(hh)}:${pad(mm)}`;
+    };
+
+    if (!showCreatePaketForm) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Buat Paket</h2>
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-gray-500">Form: </div>
+                <button onClick={() => setShowCreatePaketForm(false)} className="text-gray-400 hover:text-gray-600"><XCircle className="h-6 w-6" /></button>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="mb-4">
+              <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-8">
+                  {[
+                    { id: "info", label: "Informasi" },
+                    { id: "hari", label: "Hari & Jam" },
+                    { id: "durasi", label: "Durasi & Harga" },
+                    { id: "console", label: `Console${(newPaketDraft.selectedConsoles || []).length > 0 ? ` (${(newPaketDraft.selectedConsoles || []).length})` : ''}` },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setCreateActiveTab(t.id as any)}
+                      className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${createActiveTab === t.id ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </div>
+
+            <div>
+              {createActiveTab === "info" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kode Paket</label>
+                    <input type="text" value={(newPaketDraft as any).code || ''} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, code: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Paket *</label>
+                    <input type="text" value={newPaketDraft.name} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select value={newPaketDraft.status} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, status: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi (opsional)</label>
+                    <textarea value={newPaketDraft.description} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" rows={3} />
+                  </div>
+                </div>
+              )}
+              {createActiveTab === "hari" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">Atur Hari & Jam berlaku untuk paket ini.</p>
+                    <button onClick={() => { setEditHariJamId(null); setHariJamDraft({ day: 'Rabu', startTime: '09:00', endTime: '18:00' }); setShowAddHariJamModal(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm">+ Hari & Jam</button>
+                  </div>
+
+                  {/* List of hari-jam saved in the paket draft */}
+                  {(newPaketDraft.hariJamList || []).length === 0 ? (
+                    <div className="text-gray-500">Belum ada data Hari & Jam. Klik "+ Hari & Jam" untuk menambah.</div>
+                  ) : (
+                    <div className="overflow-x-auto bg-white rounded-lg p-3 border border-gray-100">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Hari</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Jam Berlaku</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {(newPaketDraft.hariJamList || []).map((h) => (
+                              <tr key={h.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-sm font-medium text-gray-900">{h.day}</td>
+                                <td className="px-4 py-3 text-sm text-gray-700">{h.startTime} sd {h.endTime}</td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => {
+                                      // open modal in edit mode
+                                      setEditHariJamId(h.id);
+                                      setHariJamDraft({ day: h.day, startTime: h.startTime, endTime: h.endTime });
+                                      setShowAddHariJamModal(true);
+                                    }} className="text-sm px-2 py-1 border border-gray-200 rounded hover:bg-gray-50">Edit</button>
+                                    <button onClick={() => {
+                                      if (!confirm('Hapus entry Hari & Jam ini?')) return;
+                                      const next = (newPaketDraft.hariJamList || []).filter((it) => it.id !== h.id);
+                                      setNewPaketDraft({ ...newPaketDraft, hariJamList: next });
+                                    }} className="text-sm px-2 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50">Hapus</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Modal for adding Hari & Jam to paket draft (modal-scoped state declared below) */}
+                  {showAddHariJamModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+                        <div className="p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">Tambah Hari & Jam</h3>
+                            <button onClick={() => setShowAddHariJamModal(false)} className="text-gray-400 hover:text-gray-600"><XCircle className="h-6 w-6" /></button>
+                          </div>
+
+                            <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Pilih Hari</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {hariOptions.map((d) => (
+                                  <label key={d} className={`flex items-center gap-2 p-2 border rounded ${hariJamDraft.day === d ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
+                                    <input
+                                      type="radio"
+                                      name="hari"
+                                      value={d}
+                                      checked={hariJamDraft.day === d}
+                                      onChange={() => setHariJamDraft({ ...hariJamDraft, day: d })}
+                                      className="h-4 w-4 text-blue-600"
+                                    />
+                                    <span className="text-sm">{d}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Jam berlaku</label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="HH:MM"
+                                  aria-label="Jam Mulai (HH:MM)"
+                                  value={hariJamDraft.startTime}
+                                  onChange={(e) => setHariJamDraft({ ...hariJamDraft, startTime: e.target.value })}
+                                  onBlur={(e) => setHariJamDraft({ ...hariJamDraft, startTime: normalizeTime(e.target.value) })}
+                                  className="px-3 py-2 border border-gray-300 rounded-lg w-28"
+                                />
+                                <span className="text-sm text-gray-500">sd</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="HH:MM"
+                                  aria-label="Jam Selesai (HH:MM)"
+                                  value={hariJamDraft.endTime}
+                                  onChange={(e) => setHariJamDraft({ ...hariJamDraft, endTime: e.target.value })}
+                                  onBlur={(e) => setHariJamDraft({ ...hariJamDraft, endTime: normalizeTime(e.target.value) })}
+                                  className="px-3 py-2 border border-gray-300 rounded-lg w-28"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3 mt-6">
+                            <button onClick={() => { setShowAddHariJamModal(false); setEditHariJamId(null); }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg">Batal</button>
+                            <button onClick={() => {
+                              // validate and save into paket draft (add or update)
+                              if (!hariJamDraft.day) return alert('Pilih hari terlebih dahulu');
+                              if (!hariJamDraft.startTime || !hariJamDraft.endTime) return alert('Isi jam mulai dan selesai');
+                              // basic validation: end must be after start
+                              const start = hariJamDraft.startTime;
+                              const end = hariJamDraft.endTime;
+                              if (end <= start) return alert('Jam selesai harus lebih besar dari jam mulai');
+
+                              if (editHariJamId) {
+                                // update existing
+                                const next = (newPaketDraft.hariJamList || []).map((it) => it.id === editHariJamId ? { ...it, day: hariJamDraft.day, startTime: hariJamDraft.startTime, endTime: hariJamDraft.endTime } : it);
+                                setNewPaketDraft({ ...newPaketDraft, hariJamList: next });
+                              } else {
+                                const entry = { id: `hj-${Date.now()}`, day: hariJamDraft.day, startTime: hariJamDraft.startTime, endTime: hariJamDraft.endTime };
+                                setNewPaketDraft({ ...newPaketDraft, hariJamList: [entry, ...(newPaketDraft.hariJamList || [])] });
+                              }
+
+                              setShowAddHariJamModal(false);
+                              setHariJamDraft({ day: 'Rabu', startTime: '09:00', endTime: '18:00' });
+                              setEditHariJamId(null);
+                            }} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">{editHariJamId ? 'Simpan' : 'Tambahkan'}</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {createActiveTab === "durasi" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Durasi</label>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <input type="number" min={0} value={newPaketDraft.durationHours} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, durationHours: Number(e.target.value) })} className="w-20 px-3 py-2 border border-gray-300 rounded-lg" />
+                        <span className="text-sm">jam</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input type="number" min={0} max={59} value={newPaketDraft.durationMinutes} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, durationMinutes: Number(e.target.value) })} className="w-20 px-3 py-2 border border-gray-300 rounded-lg" />
+                        <span className="text-sm">menit</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga Normal</label>
+                    <input type="number" min={0} value={(newPaketDraft as any).hargaNormal ?? newPaketDraft.pricePerHour} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, hargaNormal: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Harga Paket</label>
+                    <input type="number" min={0} value={(newPaketDraft as any).packagePrice || ''} onChange={(e) => setNewPaketDraft({ ...newPaketDraft, packagePrice: e.target.value === '' ? undefined : Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hemat</label>
+                    <div className="px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">Rp {(() => {
+                      // hargaNormal is stored as TOTAL price for the duration (not per-hour)
+                      const hargaNormalTotal = Number((newPaketDraft as any).hargaNormal || 0);
+                      const packagePrice = Number((newPaketDraft as any).packagePrice || 0);
+                      const savings = Math.max(0, Math.round(hargaNormalTotal) - Math.round(packagePrice));
+                      return savings.toLocaleString('id-ID');
+                    })()}</div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Info</label>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      {(() => {
+                        const hours = Number(newPaketDraft.durationHours || 0);
+                        const minutes = Number(newPaketDraft.durationMinutes || 0);
+                        const totalMinutes = (hours * 60 + minutes) || 1;
+                        const hargaNormalTotal = Number(((newPaketDraft as any).hargaNormal ?? 0) || 0);
+                        const hargaPaket = Number((newPaketDraft as any).packagePrice || 0);
+                        const perHourNormal = Math.round((hargaNormalTotal / totalMinutes) * 60);
+                        const perHourPaket = Math.round((hargaPaket / totalMinutes) * 60);
+                        return (
+                          <>
+                            <div>Harga Normal per jam: Rp {perHourNormal.toLocaleString('id-ID')}</div>
+                            <div>Harga Paket per jam: Rp {perHourPaket.toLocaleString('id-ID')}</div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {createActiveTab === "console" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">Pilih console yang berlaku untuk paket ini.</p>
+                    <button onClick={() => {
+                      // initialize staged draft from current draft selections
+                      setSelectConsoleDraft([...(newPaketDraft.selectedConsoles || [])]);
+                      setSelectConsoleModalTab("list");
+                      setShowSelectConsoleModal(true);
+                    }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm">+ Console</button>
+                  </div>
+
+                  {/* Selected consoles preview/list in draft */}
+                  {(newPaketDraft.selectedConsoles || []).length === 0 ? (
+                    <div className="text-gray-500">Belum ada console dipilih. Klik "+ Console" untuk menambah.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(newPaketDraft.selectedConsoles || []).map((id) => {
+                        const c = consoles.find((m) => m.id === id);
+                        return (
+                          <div key={id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                            <div className="text-sm">{c?.name || id}</div>
+                            <button onClick={() => {
+                              const next = (newPaketDraft.selectedConsoles || []).filter((x) => x !== id);
+                              setNewPaketDraft({ ...newPaketDraft, selectedConsoles: next });
+                            }} className="text-sm text-red-600 px-2 py-1 rounded hover:bg-red-50">Hapus</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Modal to select consoles */}
+                  {showSelectConsoleModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
+                        <div className="p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">Pilih Console</h3>
+                            <button onClick={() => setShowSelectConsoleModal(false)} className="text-gray-400 hover:text-gray-600"><XCircle className="h-6 w-6" /></button>
+                          </div>
+
+                          {/* Tabs inside modal */}
+                          <div className="mb-4">
+                            <nav className="-mb-px flex space-x-8">
+                              <button onClick={() => setSelectConsoleModalTab("list")} className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${selectConsoleModalTab === "list" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>
+                                Daftar Console
+                              </button>
+                              <button onClick={() => setSelectConsoleModalTab("dipilih")} className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${selectConsoleModalTab === "dipilih" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>
+                                Dipilih
+                              </button>
+                            </nav>
+                          </div>
+
+                          {selectConsoleModalTab === "list" && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <input value={selectConsoleSearch} onChange={(e) => setSelectConsoleSearch(e.target.value)} placeholder="Cari console..." className="flex-1 px-3 py-2 border border-gray-200 rounded" />
+                                <button onClick={() => {
+                                  // select all in filtered list
+                                  const filtered = consoles.filter((c) => (c.name + ' ' + c.id).toLowerCase().includes(selectConsoleSearch.toLowerCase())).map((c) => c.id);
+                                  setSelectConsoleDraft(Array.from(new Set([...(selectConsoleDraft || []), ...filtered])));
+                                }} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Pilih Semua</button>
+                                <button onClick={() => setSelectConsoleDraft([])} className="px-3 py-2 border border-gray-200 rounded">Bersihkan</button>
+                              </div>
+
+                              {consoles.filter((c) => (c.name + ' ' + c.id).toLowerCase().includes(selectConsoleSearch.toLowerCase())).map((c) => {
+                                const checked = selectConsoleDraft.includes(c.id);
+                                return (
+                                  <label key={c.id} className="flex items-center justify-between p-2 border border-gray-100 rounded">
+                                    <div className="flex items-center gap-3">
+                                      <input type="checkbox" checked={checked} onChange={(e) => {
+                                        const prev = selectConsoleDraft || [];
+                                        const next = e.target.checked ? Array.from(new Set([...prev, c.id])) : prev.filter((id) => id !== c.id);
+                                        setSelectConsoleDraft(next);
+                                      }} />
+                                      <div className="text-sm">{c.name}</div>
+                                    </div>
+                                    <div className="text-sm text-gray-500">ID: {c.id}</div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {selectConsoleModalTab === "dipilih" && (
+                            <div className="space-y-2">
+                              {selectConsoleDraft.length === 0 ? (
+                                <div className="text-gray-500">Belum ada console dipilih.</div>
+                              ) : (
+                                selectConsoleDraft.map((id) => {
+                                  const c = consoles.find((m) => m.id === id);
+                                  return (
+                                    <div key={id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                      <div className="text-sm">{c?.name || id}</div>
+                                      <button onClick={() => setSelectConsoleDraft((prev) => prev.filter((x) => x !== id))} className="text-sm text-red-600 px-2 py-1 rounded hover:bg-red-50">Hapus</button>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-3 mt-6">
+                            <button onClick={() => {
+                              // Cancel: close modal and discard staged changes
+                              setShowSelectConsoleModal(false);
+                            }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg">Batal</button>
+                            <button onClick={() => {
+                              // Apply staged draft to paket draft
+                              setNewPaketDraft({ ...newPaketDraft, selectedConsoles: selectConsoleDraft });
+                              setShowSelectConsoleModal(false);
+                            }} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Selesai</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowCreatePaketForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg">Batal</button>
+              <button onClick={handleCreatePaketDraft} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">{editingPaketId ? 'Simpan Paket' : 'Buat Paket'}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Tab Riwayat Pembelian
   const renderPurchaseHistoryTab = () => (
@@ -882,6 +1549,8 @@ const VoucherManagement: React.FC = () => {
     </div>
   );
 
+  
+
   // const renderUsageHistoryTab = () => (
   //   <div className="space-y-6">
   //     <div>
@@ -976,6 +1645,248 @@ const VoucherManagement: React.FC = () => {
   //     </div>
   //   </div>
   // );
+
+  const renderMasterPaketTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Master Paket</h2>
+          <p className="text-gray-600">Daftar paket master (pengelolaan utama)</p>
+        </div>
+        <div>
+          <button onClick={() => {
+            // generate next PKT code (PKT###) based on existing pakets
+            const existingNumbers = pakets.map((pp) => {
+              const code = (pp as any).code || '';
+              const m = code.match(/PKT(\d{1,})$/i);
+              return m ? Number(m[1]) : 0;
+            });
+            const maxNum = existingNumbers.length ? Math.max(...existingNumbers) : 0;
+            const next = (maxNum + 1).toString().padStart(3, '0');
+            const defaultCode = `PKT${next}`;
+            // reset draft to zeros/empty when opening form
+            setNewPaketDraft({ name: "", code: defaultCode, durationHours: 0, durationMinutes: 0, pricePerHour: 0, status: "active", discountAmount: 0, days: defaultDays, selectedConsoles: [], hariJamList: [], packagePrice: undefined, hargaNormal: 0 });
+            setShowCreatePaketForm(true);
+          }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Buat Paket
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <nav className="flex space-x-4">
+            <button onClick={() => setMasterPaketSubTab('management')} className={`py-2 px-3 rounded-md font-medium ${masterPaketSubTab === 'management' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}>Management Paket</button>
+            <button onClick={() => setMasterPaketSubTab('history')} className={`py-2 px-3 rounded-md font-medium ${masterPaketSubTab === 'history' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}>History Pengunaan Paket</button>
+          </nav>
+        </div>
+
+        <div className="p-6">
+          {masterPaketSubTab === 'management' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kode Paket</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama Paket</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Durasi</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Harga / jam</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {pakets.map((p) => (
+                    <React.Fragment key={p.id}>
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          <button onClick={async () => {
+                            try {
+                              if (viewPaketData && viewPaketData.id === p.id) {
+                                setViewPaketData(null);
+                                return;
+                              }
+                              const full = await paketService.getPackageById(p.id);
+                              setViewPaketData(full);
+                            } catch (err: any) {
+                              alert(err?.message || 'Gagal memuat detail paket');
+                            }
+                          }} className="text-blue-600 hover:underline">{(p as any).code || ''}</button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-medium text-gray-900">{p.name}</div>
+                          <div className="text-sm text-gray-500">{p.description}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{p.durationHours} jam {p.durationMinutes} menit</td>
+                        <td className="px-4 py-3 text-sm">Rp {Number((p as any).hargaNormal ?? p.pricePerHour ?? 0).toLocaleString('id-ID')}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <button onClick={async () => {
+                              try {
+                                const full = await paketService.getPackageById(p.id);
+                                if (full) {
+                                  setNewPaketDraft({
+                                    name: full.name,
+                                    status: full.status,
+                                    description: full.description,
+                                    durationHours: full.durationHours,
+                                    durationMinutes: full.durationMinutes,
+                                    pricePerHour: full.hargaNormal ?? full.packagePrice ?? 0,
+                                    discountAmount: full.discountAmount ?? 0,
+                                    days: defaultDays,
+                                    selectedConsoles: full.selectedConsoles || [],
+                                    hariJamList: full.hariJamList || [],
+                                    packagePrice: full.packagePrice,
+                                    hargaNormal: full.hargaNormal ?? full.packagePrice ?? 0,
+                                    code: full.code,
+                                  });
+                                  setEditingPaketId(p.id);
+                                  setShowCreatePaketForm(true);
+                                } else {
+                                  alert('Paket tidak ditemukan');
+                                }
+                              } catch (err: any) {
+                                alert(err?.message || 'Gagal mengambil paket');
+                              }
+                            }} className="text-blue-600 hover:text-blue-700 p-1 rounded"><Edit className="h-4 w-4" /></button>
+                            <button onClick={async () => {
+                              if (!confirm(`Hapus paket ${p.name}?`)) return;
+                              try {
+                                await paketService.deletePackage(p.id);
+                                await reloadPakets();
+                                await refreshOpenDetail(p.id);
+                                await Swal.fire({
+                                  toast: true,
+                                  position: 'top-end',
+                                  icon: 'success',
+                                  title: 'Paket berhasil dihapus',
+                                  showConfirmButton: false,
+                                  timer: 2000,
+                                });
+                              } catch (err: any) {
+                                await Swal.fire({
+                                  toast: true,
+                                  position: 'top-end',
+                                  icon: 'error',
+                                  title: err?.message || 'Gagal menghapus paket',
+                                  showConfirmButton: false,
+                                  timer: 2500,
+                                });
+                              }
+                            }} className="text-red-600 hover:text-red-700 p-1 rounded"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                        </td>
+                      </tr>
+                      {viewPaketData && viewPaketData.id === p.id && (
+                        <tr key={`detail-${p.id}`} className="bg-white">
+                          <td colSpan={6} className="px-4 py-4">
+                            <div className="bg-gray-50 rounded-lg p-4 relative">
+                              <button onClick={() => setViewPaketData(null)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600" aria-label="Tutup detail paket"><XCircle className="h-5 w-5" /></button>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <div className="text-sm text-gray-500">Kode Paket</div>
+                                  <div className="font-medium">{viewPaketData.code}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Nama Paket</div>
+                                  <div className="font-medium">{viewPaketData.name}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Status</div>
+                                  <div className="font-medium">{viewPaketData.status}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Durasi</div>
+                                  <div className="font-medium">{viewPaketData.durationHours} jam {viewPaketData.durationMinutes} menit</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Harga Normal (Rp)</div>
+                                  <div className="font-medium">Rp {Number(viewPaketData.hargaNormal ?? viewPaketData.packagePrice ?? 0).toLocaleString('id-ID')}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">Harga Paket (Rp)</div>
+                                  <div className="font-medium">Rp {Number(viewPaketData.packagePrice ?? 0).toLocaleString('id-ID')}</div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <div className="text-sm text-gray-500">Deskripsi</div>
+                                  <div className="mt-1 text-sm text-gray-700">{viewPaketData.description || '-'}</div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <div>
+                                    <button onClick={() => setExpandedHariFor(expandedHariFor === p.id ? null : p.id)} className="w-full flex items-center justify-between bg-white p-2 rounded border">
+                                      <div className="text-sm font-medium text-blue-600 hover:underline">Hari & Jam Berlaku</div>
+                                      <div className="flex items-center gap-3">
+                                        <div className="text-sm text-gray-500">{(viewPaketData.hariJamList || []).length}</div>
+                                        <ChevronDown className={`h-4 w-4 text-gray-500 transform transition-transform duration-150 ease-in-out ${expandedHariFor === p.id ? 'rotate-180' : 'rotate-0'}`} />
+                                      </div>
+                                    </button>
+                                    {expandedHariFor === p.id && (
+                                      <div className="mt-2 space-y-2">
+                                        {(viewPaketData.hariJamList || []).length === 0 ? (
+                                          <div className="text-sm text-gray-500">Tidak ada hari/jam yang diatur.</div>
+                                        ) : (
+                                          (viewPaketData.hariJamList || []).map((hj: any) => (
+                                            <div key={hj.id || (hj.day + hj.startTime)} className="flex items-center justify-between bg-white p-2 rounded border">
+                                              <div className="font-medium">{hj.day}</div>
+                                              <div className="text-sm text-gray-600">{hj.startTime} - {hj.endTime}</div>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <div>
+                                    <button onClick={() => setExpandedConsolesFor(expandedConsolesFor === p.id ? null : p.id)} className="w-full flex items-center justify-between bg-white p-2 rounded border">
+                                      <div className="text-sm font-medium text-blue-600 hover:underline">Consoles</div>
+                                      <div className="flex items-center gap-3">
+                                        <div className="text-sm text-gray-500">{(viewPaketData.selectedConsoles || []).length}</div>
+                                        <ChevronDown className={`h-4 w-4 text-gray-500 transform transition-transform duration-150 ease-in-out ${expandedConsolesFor === p.id ? 'rotate-180' : 'rotate-0'}`} />
+                                      </div>
+                                    </button>
+                                    {expandedConsolesFor === p.id && (
+                                      <div className="mt-2 space-y-2">
+                                        {(viewPaketData.selectedConsoles || []).length === 0 ? (
+                                          <div className="text-sm text-gray-500">Tidak ada console terkait.</div>
+                                        ) : (
+                                          (viewPaketData.selectedConsoles || []).map((cid: any) => {
+                                            const c = consoles.find((x) => x.id === cid);
+                                            return (
+                                              <div key={cid} className="flex items-center justify-between bg-white p-2 rounded border">
+                                                <div className="font-medium">{c?.name ?? cid}</div>
+                                                <div className="text-sm text-gray-600">ID: {cid}</div>
+                                              </div>
+                                            );
+                                          })
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">History Pengunaan Paket masih kosong. Saya akan menunggu desain Anda untuk mengisinya.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   // const renderExpiredTab = () => (
   //   <div className="space-y-6">
@@ -1211,6 +2122,7 @@ const VoucherManagement: React.FC = () => {
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
             {[
+              { id: "master-paket", label: "Master Paket", icon: Package },
               { id: "vouchers", label: "Voucher Aktif", icon: Ticket },
               // { id: "usage-history", label: "Riwayat Penggunaan", icon: Clock },
               // { id: "expired", label: "Expired/Habis", icon: XCircle },
@@ -1240,11 +2152,17 @@ const VoucherManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Tab Content */}
-      {activeTab === "vouchers" && renderVouchersTab()}
-      {/* {activeTab === "usage-history" && renderUsageHistoryTab()} */}
-      {/* {activeTab === "expired" && renderExpiredTab()} */}
-      {activeTab === "purchase-history" && renderPurchaseHistoryTab()}
+  {/* Tab Content */}
+  {activeTab === "master-paket" && renderMasterPaketTab()}
+  {activeTab === "vouchers" && renderVouchersTab()}
+  {/* {activeTab === "usage-history" && renderUsageHistoryTab()} */}
+  {/* {activeTab === "expired" && renderExpiredTab()} */}
+  {/* paket tab renderer not present in this version */}
+  {activeTab === "purchase-history" && renderPurchaseHistoryTab()}
+
+  {renderCreatePaketModal()}
+
+  {/* inline paket details are rendered directly under the paket row; modal removed */}
 
       {/* Create Voucher Modal */}
       {showCreateVoucherForm && (
