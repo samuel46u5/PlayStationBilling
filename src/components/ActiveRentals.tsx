@@ -1,6 +1,7 @@
 import {
   CreditCard,
   Pause,
+  Info,
   Power,
   Printer,
   Ticket,
@@ -141,6 +142,28 @@ type AddTimeModalState = {
   currentDuration: number;
   hourlyRate: number;
 } | null;
+
+const getCurrentCashierSession = async () => {
+  try {
+    const { data } = await supabase.auth.getUser();
+    const cashierId = data?.user?.id;
+
+    if (!cashierId) return null;
+
+    const { data: sessions } = await supabase
+      .from("cashier_sessions")
+      .select("id, cashier_id, cashier_name, start_time")
+      .eq("cashier_id", cashierId)
+      .eq("status", "active")
+      .order("start_time", { ascending: false })
+      .limit(1);
+
+    return sessions?.[0] || null;
+  } catch (error) {
+    console.error("Error getting current cashier session:", error);
+    return null;
+  }
+};
 
 function groupDeductLogsBySession(logs: CardUsageLog[]) {
   const grouped: Record<
@@ -348,7 +371,8 @@ const ActiveRentals: React.FC = () => {
           "id, card_uid, session_id, action_type, points_amount, balance_before, balance_after, timestamp, notes"
         )
         .eq("card_uid", cardUID)
-        .order("timestamp", { ascending: false });
+        .order("timestamp", { ascending: false })
+        .limit(100);
 
       if (error) throw error;
       setHistoryLogs((data || []) as unknown as CardUsageLog[]);
@@ -4086,135 +4110,6 @@ const ActiveRentals: React.FC = () => {
     useState<PrepaidPaymentModalState>(null);
   const [prepaidPaymentLoading, setPrepaidPaymentLoading] = useState(false);
 
-  // const handleSellVoucher = async () => {
-  //   try {
-  //     // Get selected voucher data
-  //     const selectedVoucher = voucherList.find(
-  //       (v) => v.id === selectedVoucherId
-  //     );
-  //     if (!selectedVoucher) {
-  //       alert("Voucher tidak ditemukan!");
-  //       return;
-  //     }
-
-  //     // Validate member card is scanned
-  //     if (!scannedCardUID || !scannedCardData) {
-  //       alert("Silakan scan kartu member terlebih dahulu!");
-  //       return;
-  //     }
-
-  //     // Get current balance
-  //     const { data: currentCardData, error: fetchError } = await supabase
-  //       .from("rfid_cards")
-  //       .select("balance_points")
-  //       .eq("uid", scannedCardUID)
-  //       .single();
-
-  //     if (fetchError || !currentCardData) {
-  //       alert("Gagal mengambil data kartu!");
-  //       return;
-  //     }
-
-  //     const qty = Math.max(1, Number(voucherQuantity) || 1);
-  //     const pointsToAdd = (selectedVoucher.total_points || 0) * qty;
-  //     const priceToPay = (selectedVoucher.voucher_price || 0) * qty;
-
-  //     const newBalance = currentCardData.balance_points + pointsToAdd;
-
-  //     // Update member card balance
-  //     const { error: updateError } = await supabase
-  //       .from("rfid_cards")
-  //       .update({ balance_points: newBalance })
-  //       .eq("uid", scannedCardUID);
-
-  //     if (updateError) {
-  //       alert("Gagal memperbarui saldo kartu!");
-  //       return;
-  //     }
-
-  //     const { error: logError } = await supabase
-  //       .from("card_usage_logs")
-  //       .insert({
-  //         card_uid: scannedCardUID,
-  //         session_id: null,
-  //         action_type: "balance_add",
-  //         points_amount: pointsToAdd,
-  //         balance_before: currentCardData.balance_points,
-  //         balance_after: newBalance,
-  //         notes: `Voucher purchase: ${selectedVoucher.name} (${selectedVoucher.voucher_code}) - Payment: ${paymentMethod}`,
-  //       });
-
-  //     if (logError) {
-  //       console.error("Error logging voucher purchase:", logError);
-  //     }
-
-  //     // Log transaction
-  //     await logCashierTransaction({
-  //       type: "voucher",
-  //       amount: priceToPay,
-  //       paymentMethod: paymentMethod,
-  //       referenceId: selectedVoucher.id,
-  //       description: `Penjualan voucher ${selectedVoucher.name} (${pointsToAdd} points) x ${qty}`,
-  //       details: {
-  //         voucher_id: selectedVoucher.id,
-  //         voucher_code: selectedVoucher.voucher_code,
-  //         points_added: pointsToAdd,
-  //         quantity: qty,
-  //         card_uid: scannedCardUID,
-  //         previous_balance: currentCardData.balance_points,
-  //         new_balance: newBalance,
-  //         items: [
-  //           {
-  //             name: selectedVoucher.name,
-  //             product_name: selectedVoucher.name,
-  //             title: `Voucher ${selectedVoucher.voucher_code}`,
-  //             qty: qty,
-  //             quantity: qty,
-  //             price: selectedVoucher.voucher_price || 0,
-  //             total: priceToPay,
-  //             description: `Voucher ${pointsToAdd} points`,
-  //             type: "voucher",
-  //           },
-  //         ],
-  //         // Payment block used by receipt converter
-  //         payment: {
-  //           method: paymentMethod,
-  //           amount: priceToPay,
-  //           change: 0,
-  //         },
-  //       },
-  //     });
-
-  //     // Refresh card data
-  //     const { data: updatedCardData } = await supabase
-  //       .from("rfid_cards")
-  //       .select("uid, balance_points, status")
-  //       .eq("uid", scannedCardUID)
-  //       .single();
-
-  //     if (updatedCardData) {
-  //       setScannedCardData(updatedCardData);
-  //     }
-
-  //     // Close modal and reset states
-  //     setShowSellVoucherModal(false);
-  //     setSelectedVoucherId("");
-  //     setPaymentMethod("cash");
-  //     setVoucherQuantity(1);
-
-  //     // Show success message
-  //     Swal.fire({
-  //       icon: "success",
-  //       title: "Voucher berhasil dijual!",
-  //       text: `Saldo kartu bertambah ${pointsToAdd} points`,
-  //       confirmButtonColor: "#22c55e",
-  //     });
-  //   } catch (error) {
-  //     console.error("Error selling voucher:", error);
-  //     alert("Terjadi kesalahan saat menjual voucher!");
-  //   }
-  // };
-
   const handleSellVoucher = async (
     paymentMethod: "cash" | "qris",
     paymentAmount: number,
@@ -4274,6 +4169,11 @@ const ActiveRentals: React.FC = () => {
         return;
       }
 
+      const currentCashierSession = await getCurrentCashierSession();
+      const cashierSessionInfo = currentCashierSession
+        ? `${currentCashierSession.cashier_name}`
+        : "Unknown";
+
       const { error: logError } = await supabase
         .from("card_usage_logs")
         .insert({
@@ -4283,7 +4183,7 @@ const ActiveRentals: React.FC = () => {
           points_amount: pointsToAdd,
           balance_before: currentCardData.balance_points,
           balance_after: newBalance,
-          notes: `Voucher purchase: ${selectedVoucher.name} (${selectedVoucher.voucher_code}) - Payment: ${paymentMethod}`,
+          notes: `Voucher purchase: ${selectedVoucher.name} (${selectedVoucher.voucher_code}) - Payment: ${paymentMethod} by ${cashierSessionInfo}`,
         });
 
       if (logError) {
@@ -7357,6 +7257,18 @@ const ActiveRentals: React.FC = () => {
                         ) : (
                           <Unlock className="h-4 w-4 text-red-700" />
                         )}
+                        {activeSession?.is_voucher_used && (
+                          <button
+                            className="rounded-md p-1"
+                            onClick={() => {
+                              setScannedCardUID(activeSession.card_uid!);
+                              fetchCardHistory(scannedCardUID);
+                              setShowHistoryPointModal(true);
+                            }}
+                          >
+                            <Info className="h-4 w-4 text-gray-600" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -7799,6 +7711,18 @@ const ActiveRentals: React.FC = () => {
                       ) : (
                         <Unlock className="h-4 w-4 text-red-700" />
                       )}
+                      {activeSession?.is_voucher_used && (
+                        <button
+                          className="rounded-md p-1"
+                          onClick={() => {
+                            setScannedCardUID(activeSession.card_uid!);
+                            fetchCardHistory(scannedCardUID);
+                            setShowHistoryPointModal(true);
+                          }}
+                        >
+                          <Info className="h-4 w-4 text-gray-600" />
+                        </button>
+                      )}
                     </div>
                     <div className="text-sm text-gray-600 flex flex-wrap gap-4">
                       <div className="flex items-center gap-1">
@@ -8214,10 +8138,22 @@ const ActiveRentals: React.FC = () => {
                           ? "ACTIVE"
                           : "READY"}
                       </span>
-                      {console.location && (
+                      {/* {console.location && (
                         <span className="text-sm opacity-80">
                           {console.location}
                         </span>
+                      )} */}
+                      {activeSession?.is_voucher_used && (
+                        <button
+                          className="rounded-md p-1"
+                          onClick={() => {
+                            setScannedCardUID(activeSession.card_uid!);
+                            fetchCardHistory(scannedCardUID);
+                            setShowHistoryPointModal(true);
+                          }}
+                        >
+                          <Info className="h-5 w-5 text-white-600" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -8941,7 +8877,7 @@ const ActiveRentals: React.FC = () => {
                             <p className="text-sm text-yellow-800">
                               Silakan scan kartu RFID atau masukkan UID manual.
                             </p>
-                            {/* <input
+                            <input
                               type="text"
                               placeholder="Input UID kartu manual"
                               value={scannedCardUID}
@@ -8954,7 +8890,7 @@ const ActiveRentals: React.FC = () => {
                                 }
                               }}
                               className="mt-2 px-3 py-2 border border-gray-300 rounded-lg"
-                            /> */}
+                            />
                             <p className="text-xs text-yellow-600 mt-1">
                               Kartu akan otomatis terdeteksi saat di-scan
                             </p>
