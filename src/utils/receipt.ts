@@ -81,8 +81,8 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   lines.push("=".repeat(lineWidth));
   lines.push(pad(`RECEIPT ID : ${tx.id}`, lineWidth));
   lines.push(pad(`TANGGAL    : ${tx.timestamp}`, lineWidth));
-  if (tx.customer)
-    lines.push(pad(`CUSTOMER   : ${tx.customer.name}`, lineWidth));
+  // if (tx.customer)
+  //   lines.push(pad(`CUSTOMER   : ${tx.customer.name}`, lineWidth));
   lines.push(pad(`KASIR      : ${tx.cashier}`, lineWidth));
   lines.push("-".repeat(lineWidth));
 
@@ -143,9 +143,9 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   lines.push("=".repeat(lineWidth));
 
   // FOOTER
-  lines.push(center("TERIMA KASIH"));
-  lines.push(center("ATAS KUNJUNGAN ANDA"));
-  lines.push(center("STRUK INI ADALAH BUKTI PEMBAYARAN"));
+  // lines.push(center("TERIMA KASIH"));
+  // lines.push(center("ATAS KUNJUNGAN ANDA"));
+  // lines.push(center("STRUK INI ADALAH BUKTI PEMBAYARAN"));
 
   const receiptText = lines.join("\n");
 
@@ -225,7 +225,7 @@ export const generateRentalProofHTML = async (data: RentalProofData) => {
   lines.push("-".repeat(lineWidth));
 
   // DATA RENTAL
-  lines.push(pad(`Customer : ${data.customerName}`, lineWidth));
+  // lines.push(pad(`Customer : ${data.customerName}`, lineWidth));
   lines.push(pad(`Mode     : ${data.mode}`, lineWidth));
   lines.push(pad(`No Unit  : ${data.unitNumber}`, lineWidth));
   lines.push(pad(`Mulai    : ${data.startTimestamp}`, lineWidth));
@@ -233,8 +233,8 @@ export const generateRentalProofHTML = async (data: RentalProofData) => {
   lines.push("=".repeat(lineWidth));
 
   // FOOTER
-  lines.push(center("HARAP SIMPAN BUKTI INI"));
-  lines.push(center("TERIMA KASIH"));
+  // lines.push(center("HARAP SIMPAN BUKTI INI"));
+  // lines.push(center("TERIMA KASIH"));
 
   const proofText = lines.join("\n");
 
