@@ -27,7 +27,20 @@ const RFIDCards: React.FC = () => {
   const [onlyAdmin, setOnlyAdmin] = useState<"all" | "admin" | "customer">(
     "all"
   );
+  // keep setter referenced to avoid unused-local TypeScript diagnostic when it's intentionally unused
+  void setOnlyAdmin;
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
+  const [activeTab, setActiveTab] = useState<"management" | "laporan">(
+    (localStorage.getItem("rfid_active_tab") as "management" | "laporan") || "management"
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("rfid_active_tab", activeTab);
+    } catch {}
+  }, [activeTab]);
+
+  const [laporanSample, setLaporanSample] = useState<any[]>([]);
 
   const filtered = useMemo(() => {
     if (onlyAdmin === "all") return cards;
@@ -330,15 +343,44 @@ const RFIDCards: React.FC = () => {
 
       <div className="mb-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {activeTab === "management" && (
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Master Kartu RFID
-            </h1>
-            <p className="text-gray-600">
+              </h1>
+              <p className="text-gray-600">
               Kelola kartu RFID untuk customer dan admin
-            </p>
-          </div>
+              </p>
+            </div>
+            )}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="w-full">
+              <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-6">
+                  {[
+                    { id: "laporan", label: "Laporan", icon: History },
+                    { id: "management", label: "Management Kartu", icon: CreditCard },
+                  ].map((tab) => {
+                    const Icon = (tab as any).icon as any;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
+                          activeTab === tab.id
+                            ? "border-blue-500 text-blue-600"
+                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        {Icon ? <Icon className="h-4 w-4" /> : null}
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+            </div>
+
             <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
               <button
                 onClick={() => setViewMode("card")}
@@ -363,6 +405,7 @@ const RFIDCards: React.FC = () => {
                 List
               </button>
             </div>
+
             <button
               onClick={() => setShowAddModal(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 justify-center"
@@ -374,21 +417,23 @@ const RFIDCards: React.FC = () => {
         </div>
       </div>
 
-      {loading && (
-        <div className="text-center text-gray-500">Memuat data...</div>
-      )}
-      {!loading && cards.length === 0 && (
-        <div className="text-center text-gray-400 py-10">
-          Tidak ada data kartu RFID ditemukan.
-        </div>
-      )}
-      {!loading && cards.length > 0 && (
+      {activeTab === "management" ? (
         <>
-          {filtered.length === 0 ? (
+          {loading && (
+            <div className="text-center text-gray-500">Memuat data...</div>
+          )}
+          {!loading && cards.length === 0 && (
             <div className="text-center text-gray-400 py-10">
-              Tidak ada kartu sesuai filter.
+              Tidak ada data kartu RFID ditemukan.
             </div>
-          ) : viewMode === "card" ? (
+          )}
+          {!loading && cards.length > 0 && (
+            <>
+              {filtered.length === 0 ? (
+                <div className="text-center text-gray-400 py-10">
+                  Tidak ada kartu sesuai filter.
+                </div>
+              ) : viewMode === "card" ? (
             <div
               key={cards.map((c) => c.id).join(",")}
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
@@ -937,8 +982,65 @@ const RFIDCards: React.FC = () => {
                 </div>
               </div>
             </div>
+              )}
+            </>
           )}
         </>
+      ) : (
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Laporan</h2>
+              <p className="text-gray-600">Laporan terkait kartu RFID (sementara placeholder)</p>
+            </div>
+            <div>
+              <button
+                onClick={() =>
+                  setLaporanSample([
+                    { id: 1, date: new Date().toLocaleDateString(), type: "Aktivasi", desc: "Kartu UID 1234 diaktifkan" },
+                    { id: 2, date: new Date().toLocaleDateString(), type: "Blokir", desc: "Kartu UID 5678 diblokir" },
+                  ])
+                }
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm"
+              >
+                Load contoh
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jenis Laporan</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deskripsi</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {laporanSample.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-4 text-sm text-gray-500" colSpan={4}>
+                        Belum ada data laporan.
+                      </td>
+                    </tr>
+                  ) : (
+                    laporanSample.map((r) => (
+                      <tr key={r.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm text-gray-700">{r.date}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{r.type}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{r.desc}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">-</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
