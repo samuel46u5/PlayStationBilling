@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
-import { db } from './supabase';
+import { db, supabase } from './supabase';
 
 type DaySpec = {
   id?: string;
@@ -33,9 +33,14 @@ export async function loadConsoles() {
 
 export async function loadPakets() {
   try {
-    const rows: any = await db.select('packages', '*');
-    if (!rows) return [];
-    return (rows as any[]).map((r: any) => ({
+    const rows: any = await supabase.from("packages").select(`
+      *,
+      package_consoles (
+        console_id
+      )
+    `);
+    if (!rows.data) return [];
+    return (rows.data as any[]).map((r: any) => ({
       id: r?.id,
       code: r?.code,
       name: r?.name,
@@ -46,6 +51,8 @@ export async function loadPakets() {
       hargaNormal: r?.harga_normal ?? r?.hargaNormal ?? 0,
       packagePrice: r?.package_price ?? r?.packagePrice ?? undefined,
       discountAmount: r?.discount_amount ?? r?.discountAmount ?? 0,
+      pricePerHour: r?.price_per_hour ?? r?.pricePerHour ?? 0,
+      selectedConsoles: r?.package_consoles?.map((c: any) => c?.console_id) ?? [],
     }));
   } catch (err) {
     return [];

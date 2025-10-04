@@ -16,6 +16,7 @@ import { printReceipt, printRentalProof } from "../utils/receipt";
 import { useTimer } from "../contexts/TimerContext";
 import { useRFIDReader } from "../hooks/useRFIDReader";
 import type { CardUsageLog } from "../types";
+import paketService from "../lib/paketService";
 // import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
 
 interface SaleItem {
@@ -248,6 +249,12 @@ const ActiveRentals: React.FC = () => {
   );
   const [showVoucherPaymentModal, setShowVoucherPaymentModal] = useState(false);
 
+  // State untuk modal paket
+  const [showPackageModal, setShowPackageModal] = useState(false);
+  const [availablePackages, setAvailablePackages] = useState<any[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  const [packageLoading, setPackageLoading] = useState(false);
+
   const fetchCardData = async (uid: string) => {
     if (!uid) {
       setScannedCardData(null);
@@ -272,6 +279,64 @@ const ActiveRentals: React.FC = () => {
       console.error("Error fetching card data:", error);
       setScannedCardData(null);
     }
+  };
+
+  // Fungsi untuk fetch paket
+  const fetchAvailablePackages = async (consoleId: string) => {
+    setPackageLoading(true);
+    try {
+      const packages = await paketService.loadPakets();
+      const consoleObj = consoles.find((c) => c.id === consoleId);
+
+      if (!consoleObj) {
+        setAvailablePackages([]);
+        return;
+      }
+
+      const filteredPackages = packages!.filter((pkg: any) => {
+        const relatedConsoles = pkg.selectedConsoles || [];
+
+        return relatedConsoles.includes(consoleId);
+      });
+
+      const activePackages = filteredPackages.filter(
+        (pkg: any) => pkg.status === "active"
+      );
+
+      setAvailablePackages(activePackages);
+    } catch (error) {
+      console.error("Error fetching packages:", error);
+      setAvailablePackages([]);
+    } finally {
+      setPackageLoading(false);
+    }
+  };
+
+  // Fungsi untuk menangani pemilihan paket
+  const handleSelectPackage = (pkg: any) => {
+    if (!showStartRentalModal) return;
+
+    setSelectedPackage(pkg);
+    setShowPackageModal(false);
+
+    setRentalDurationHours(pkg.durationHours);
+    setRentalDurationMinutes(pkg.durationMinutes);
+
+    // Tampilkan modal pembayaran prepaid
+    const consoleObj = consoles.find((c) => c.id === showStartRentalModal);
+    if (!consoleObj) return;
+
+    const hourlyRate = pkg.pricePerHour || 0;
+    const totalAmount = pkg.packagePrice || 0;
+
+    setShowPrepaidPaymentModal({
+      console: consoleObj,
+      duration: pkg.durationHours * 60 + pkg.durationMinutes,
+      hourlyRate,
+      totalAmount,
+      rentalDurationHours: pkg.durationHours,
+      rentalDurationMinutes: pkg.durationMinutes,
+    });
   };
 
   const fetchCardHistory = async (cardUID: string) => {
@@ -3882,6 +3947,132 @@ const ActiveRentals: React.FC = () => {
     );
   };
 
+  // Modal pemilihan paket
+  const PackageSelectionModal = ({
+    open,
+    onClose,
+    onSelectPackage,
+    packages,
+    loading,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onSelectPackage: (pkg: any) => void;
+    packages: any[];
+    loading: boolean;
+  }) => {
+    if (!open) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Pilih Paket
+                </h2>
+                <p className="text-gray-600">
+                  Pilih paket yang sesuai dengan kebutuhan Anda
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <span className="ml-2 text-gray-600">Memuat paket...</span>
+              </div>
+            ) : packages.length === 0 ? (
+              <div className="text-center py-12">
+                <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">
+                  Tidak ada paket tersedia untuk console ini
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                {packages.map((pkg) => (
+                  <div
+                    key={pkg.id}
+                    className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                    onClick={() => onSelectPackage(pkg)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          {pkg.name}
+                        </h3>
+                        <p className="text-sm text-gray-500">{pkg.code}</p>
+                      </div>
+                      <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                        {pkg.status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Durasi:</span>
+                        <span className="font-medium">
+                          {pkg.durationHours} jam {pkg.durationMinutes} menit
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Harga Normal:</span>
+                        <span className="font-medium text-gray-900">
+                          Rp{" "}
+                          {Number(
+                            pkg.hargaNormal || pkg.packagePrice || 0
+                          ).toLocaleString("id-ID")}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Harga Paket:</span>
+                        <span className="font-medium text-blue-600">
+                          Rp{" "}
+                          {Number(pkg.packagePrice || 0).toLocaleString(
+                            "id-ID"
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    {pkg.description && (
+                      <p className="text-xs text-gray-500 mb-3">
+                        {pkg.description}
+                      </p>
+                    )}
+
+                    <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+                      Pilih Paket
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end mt-6 pt-4 border-t border-gray-200">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Tambahkan state untuk modal pembayaran prepaid
   type PrepaidPaymentModalState = {
     console: any;
@@ -4212,7 +4403,6 @@ const ActiveRentals: React.FC = () => {
   };
 
   // Ganti handleStartRental untuk prepaid agar memunculkan modal pembayaran
-  // Helper function untuk retry database operations
   const retryDatabaseOperation = async (
     operation: () => Promise<any>,
     maxRetries: number = 3,
@@ -6026,7 +6216,7 @@ const ActiveRentals: React.FC = () => {
                       Silakan scan kartu RFID atau masukkan UID manual.
                     </p>
 
-                    <div className="mt-2 flex gap-2">
+                    {/* <div className="mt-2 flex gap-2">
                       <input
                         type="text"
                         placeholder="Input UID kartu manual"
@@ -6054,7 +6244,7 @@ const ActiveRentals: React.FC = () => {
                       >
                         Cek Kartu
                       </button>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
               </div>
@@ -8667,6 +8857,26 @@ const ActiveRentals: React.FC = () => {
                       <p className="text-xs text-gray-500 mt-1">
                         Jam dan menit akan digabung sebagai total durasi.
                       </p>
+
+                      {/* Button Beli Paket */}
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!showStartRentalModal) return;
+                            await fetchAvailablePackages(showStartRentalModal);
+                            setShowPackageModal(true);
+                          }}
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+                        >
+                          <ShoppingCart className="h-4 w-4" />
+                          Beli Paket
+                        </button>
+                        <p className="text-xs text-gray-500 mt-1 text-center">
+                          Pilih paket dengan harga dan durasi yang sudah
+                          ditentukan
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -8731,7 +8941,7 @@ const ActiveRentals: React.FC = () => {
                             <p className="text-sm text-yellow-800">
                               Silakan scan kartu RFID atau masukkan UID manual.
                             </p>
-                            <input
+                            {/* <input
                               type="text"
                               placeholder="Input UID kartu manual"
                               value={scannedCardUID}
@@ -8744,13 +8954,12 @@ const ActiveRentals: React.FC = () => {
                                 }
                               }}
                               className="mt-2 px-3 py-2 border border-gray-300 rounded-lg"
-                            />
+                            /> */}
                             <p className="text-xs text-yellow-600 mt-1">
-                              Kartu akan otomatis terdeteksi saat di-scan, atau
-                              isi manual jika scanner bermasalah.
+                              Kartu akan otomatis terdeteksi saat di-scan
                             </p>
                           </div>
-                          <button
+                          {/* <button
                             type="button"
                             onClick={() => {
                               if (scannedCardUID.trim()) {
@@ -8760,7 +8969,7 @@ const ActiveRentals: React.FC = () => {
                             className="mt-2 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
                           >
                             Cek Kartu
-                          </button>
+                          </button> */}
                         </div>
                       )}
                     </div>
@@ -9948,6 +10157,15 @@ const ActiveRentals: React.FC = () => {
           showPrepaidPaymentModal ? showPrepaidPaymentModal.totalAmount : 0
         }
         loading={prepaidPaymentLoading}
+      />
+
+      {/* Package Selection Modal */}
+      <PackageSelectionModal
+        open={showPackageModal}
+        onClose={() => setShowPackageModal(false)}
+        onSelectPackage={handleSelectPackage}
+        packages={availablePackages}
+        loading={packageLoading}
       />
 
       {/* Add Time Modal */}
