@@ -341,6 +341,34 @@ const RFIDCards: React.FC = () => {
         </div>
       </div>
 
+      {/* Main Tabs (moved to top-level) */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-6">
+            {[              
+              { id: "management", label: "Management Kartu", icon: CreditCard },
+              { id: "laporan", label: "Laporan", icon: History },
+            ].map((tab) => {
+              const Icon = (tab as any).icon as any;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab.id
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {Icon ? <Icon className="h-4 w-4" /> : null}
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      </div>
+
       <div className="mb-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {activeTab === "management" && (
@@ -354,65 +382,42 @@ const RFIDCards: React.FC = () => {
             </div>
             )}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="w-full">
-              <div className="border-b border-gray-200">
-                <nav className="-mb-px flex space-x-6">
-                  {[
-                    { id: "laporan", label: "Laporan", icon: History },
-                    { id: "management", label: "Management Kartu", icon: CreditCard },
-                  ].map((tab) => {
-                    const Icon = (tab as any).icon as any;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
-                          activeTab === tab.id
-                            ? "border-blue-500 text-blue-600"
-                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                        }`}
-                      >
-                        {Icon ? <Icon className="h-4 w-4" /> : null}
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </nav>
-              </div>
-            </div>
+            {activeTab !== "laporan" && (
+              <>
+                <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                  <button
+                    onClick={() => setViewMode("card")}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                      viewMode === "card"
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                    Card
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                      viewMode === "list"
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <ListIcon className="h-4 w-4" />
+                    List
+                  </button>
+                </div>
 
-            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-              <button
-                onClick={() => setViewMode("card")}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-                  viewMode === "card"
-                    ? "bg-blue-600 text-white"
-                    : "bg-white text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <LayoutGrid className="h-4 w-4" />
-                Card
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-                  viewMode === "list"
-                    ? "bg-blue-600 text-white"
-                    : "bg-white text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <ListIcon className="h-4 w-4" />
-                List
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 justify-center"
-            >
-              <Plus className="h-5 w-5" />
-              Tambah Kartu
-            </button>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 justify-center"
+                >
+                  <Plus className="h-5 w-5" />
+                  Tambah Kartu
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -994,17 +999,7 @@ const RFIDCards: React.FC = () => {
               <p className="text-gray-600">Laporan terkait kartu RFID (sementara placeholder)</p>
             </div>
             <div>
-              <button
-                onClick={() =>
-                  setLaporanSample([
-                    { id: 1, date: new Date().toLocaleDateString(), type: "Aktivasi", desc: "Kartu UID 1234 diaktifkan" },
-                    { id: 2, date: new Date().toLocaleDateString(), type: "Blokir", desc: "Kartu UID 5678 diblokir" },
-                  ])
-                }
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm"
-              >
-                Load contoh
-              </button>
+             
             </div>
           </div>
 
