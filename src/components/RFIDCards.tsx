@@ -41,6 +41,10 @@ const RFIDCards: React.FC = () => {
   }, [activeTab]);
 
   const [laporanSample, setLaporanSample] = useState<any[]>([]);
+  // keep setter referenced to avoid unused-local TypeScript diagnostic when it's intentionally unused
+  void setLaporanSample;
+  const [searchTerm, setSearchTerm] = useState("");
+  const [purchasePeriod, setPurchasePeriod] = useState<string>("today");
 
   const filtered = useMemo(() => {
     if (onlyAdmin === "all") return cards;
@@ -1004,6 +1008,41 @@ const RFIDCards: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Cari PO / Supplier
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Cari PO number atau nama supplier..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Periode
+                  </label>
+                  <select
+                    value={purchasePeriod}
+                    onChange={(e) => setPurchasePeriod(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+                  >
+                    <option value="today">Hari Ini</option>
+                    <option value="yesterday">Kemarin</option>
+                    <option value="week">Minggu Ini</option>
+                    <option value="month">Bulan Ini</option>
+                    <option value="range">Rentang Waktu</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg">Cari</button>
+                </div>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
