@@ -22,16 +22,18 @@ import { db } from "../lib/supabase"; // Hanya import db
 import { printPriceList, ProductPriceList } from "../utils/receipt";
 import Swal from "sweetalert2";
 import PurchaseFilters from "./PurchaseFilters";
+import StokOpname from "./StokOpname";
 
 const Products: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
-    "products" | "purchases" | "suppliers" | "purchaseList" | "sales" | "salesSummary" | "reports"
+    "products" | "purchases" | "suppliers" | "purchaseList" | "sales" | "salesSummary" | "reports" | "stokOpname"
   >("products");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
+  // stok opname modal moved into StokOpname component
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<string | null>(null);
 
@@ -61,6 +63,7 @@ const Products: React.FC = () => {
     // orderDate will be stored in purchase_orders.order_date (ISO string)
     orderDate: new Date().toISOString(),
   });
+
 
   const [editingPoId, setEditingPoId] = useState<string | null>(null);
   const [isSavingPurchase, setIsSavingPurchase] = useState(false);
@@ -580,7 +583,8 @@ const Products: React.FC = () => {
   const [showProductSelectModal, setShowProductSelectModal] = useState<{
     open: boolean;
     index: number | null;
-  }>({ open: false, index: null });
+    forOpname?: boolean;
+  }>({ open: false, index: null, forOpname: false });
   const [productSearchTerm, setProductSearchTerm] = useState("");
 
   // State untuk Stock Card modal
@@ -1981,22 +1985,24 @@ const Products: React.FC = () => {
             Kelola purchase order dan pembelian produk
           </p>
         </div>
-        <button
-          onClick={() => {
-            setShowPurchaseForm(true);
-            setNewPurchase({
-              supplierId: "",
-              items: [],
-              notes: "",
-              expectedDate: new Date().toISOString().split("T")[0],
-              orderDate: new Date().toISOString(),
-            });
-          }}
-          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <ShoppingBag className="h-5 w-5" />
-          Buat Purchase Order
-        </button>
+        <div>
+          <button
+            onClick={() => {
+              setShowPurchaseForm(true);
+              setNewPurchase({
+                supplierId: "",
+                items: [],
+                notes: "",
+                expectedDate: new Date().toISOString().split("T")[0],
+                orderDate: new Date().toISOString(),
+              });
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <ShoppingBag className="h-5 w-5" />
+            Buat Purchase Order
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -2241,6 +2247,8 @@ const Products: React.FC = () => {
             Tidak ada data purchase order ditemukan.
           </div>
         )}
+
+        
       </div>
     </div>
   );
@@ -3228,6 +3236,7 @@ const Products: React.FC = () => {
               {[
                 { id: "products", label: "Produk", icon: Package },
                 { id: "purchases", label: "Pembelian", icon: ShoppingBag },
+                { id: "stokOpname", label: "Stok Opname", icon: ListIcon },
                 {
                   id: "purchaseList",
                   label: "Daftar Pembelian",
@@ -3319,6 +3328,9 @@ const Products: React.FC = () => {
     </div>
   )}
   {activeTab === "suppliers" && renderSuppliersTab()}
+  {activeTab === 'stokOpname' && (
+    <StokOpname products={products} />
+  )}
 
         {/* Add Product Modal */}
         {showAddForm && (
@@ -4197,10 +4209,7 @@ const Products: React.FC = () => {
                               p.id
                             );
                           }
-                          setShowProductSelectModal({
-                            open: false,
-                            index: null,
-                          });
+                          setShowProductSelectModal({ open: false, index: null });
                           setProductSearchTerm("");
                         }}
                         className="w-full text-left p-4 hover:bg-gray-50 transition-colors"
