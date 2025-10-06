@@ -16,6 +16,9 @@ import {
   History,
   LayoutGrid,
   List as ListIcon,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
 } from "lucide-react";
 
 const RFIDCards: React.FC = () => {
@@ -40,11 +43,120 @@ const RFIDCards: React.FC = () => {
     } catch {}
   }, [activeTab]);
 
-  const [laporanSample, setLaporanSample] = useState<any[]>([]);
-  // keep setter referenced to avoid unused-local TypeScript diagnostic when it's intentionally unused
-  void setLaporanSample;
+  // laporan state (summary and logs)
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchExact, setSearchExact] = useState<boolean>(false);
   const [purchasePeriod, setPurchasePeriod] = useState<string>("today");
+  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [laporanLoading, setLaporanLoading] = useState<boolean>(false);
+  const [laporanSummary, setLaporanSummary] = useState<any[]>([]);
+  const [laporanLogs, setLaporanLogs] = useState<any[]>([]);
+  const [groupByDateUid, setGroupByDateUid] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem("rfid_groupByDateUid");
+      return v ? JSON.parse(v) : false;
+    } catch {
+      return false;
+    }
+  });
+
+  // server-provided grouped summary (preferred when available)
+  const [laporanGroupedRpc, setLaporanGroupedRpc] = useState<any[] | null>(null);
+
+  // grouped view computed client-side (fallback)
+  const laporanGrouped = useMemo(() => {
+    if (!groupByDateUid) return null;
+    const grouped: Record<string, Record<string, any>> = {};
+    laporanLogs.forEach((row: any) => {
+      if (searchTerm && searchTerm.trim()) {
+        const term = searchTerm.trim().toLowerCase();
+        const uid = (row.card_uid || "").toLowerCase();
+        if (searchExact) {
+          if (uid !== term) return;
+        } else {
+          if (!uid.includes(term)) return;
+        }
+      }
+      const dt = row.timestamp ? new Date(row.timestamp).toISOString().slice(0, 10) : "<unknown>";
+      const uid = row.card_uid || "<unknown>";
+      if (!grouped[dt]) grouped[dt] = {};
+      if (!grouped[dt][uid]) grouped[dt][uid] = { date: dt, card_uid: uid, total_add: 0, total_deduct: 0, net_change: 0, events: [] };
+      const entry = grouped[dt][uid];
+      const amt = Number(row.points_amount || 0);
+      if (row.action_type === "balance_add") entry.total_add += amt;
+      if (row.action_type === "balance_deduct") entry.total_deduct += amt;
+      entry.net_change = entry.total_add - entry.total_deduct;
+      entry.events.push(row);
+    });
+    // convert to array per date
+    const result: Array<{ date: string; rows: any[] }> = Object.keys(grouped)
+      .sort((a, b) => b.localeCompare(a))
+      .map((date) => ({ date, rows: Object.values(grouped[date]).sort((x: any, y: any) => y.net_change - x.net_change) }));
+    return result;
+  }, [groupByDateUid, laporanLogs]);
+  // expand/collapse state for grouped view
+  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
+  const [expandedUid, setExpandedUid] = useState<Record<string, Record<string, boolean>>>({});
+  const [sortByPerDate, setSortByPerDate] = useState<Record<string, string>>({});
+  // initialize expanded/sort state from localStorage
+  useEffect(() => {
+    try {
+      const ed = localStorage.getItem("rfid_expandedDates");
+      const eu = localStorage.getItem("rfid_expandedUid");
+      const sp = localStorage.getItem("rfid_sortByPerDate");
+      if (ed) setExpandedDates(JSON.parse(ed));
+      if (eu) setExpandedUid(JSON.parse(eu));
+      if (sp) setSortByPerDate(JSON.parse(sp));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("rfid_groupByDateUid", JSON.stringify(groupByDateUid));
+    } catch {}
+  }, [groupByDateUid]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("rfid_expandedDates", JSON.stringify(expandedDates));
+    } catch {}
+  }, [expandedDates]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("rfid_expandedUid", JSON.stringify(expandedUid));
+    } catch {}
+  }, [expandedUid]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("rfid_sortByPerDate", JSON.stringify(sortByPerDate));
+    } catch {}
+  }, [sortByPerDate]);
+
+  const toggleDate = (date: string) => {
+    setExpandedDates((s) => ({ ...s, [date]: !s[date] }));
+  };
+
+  const toggleUid = (date: string, uid: string) => {
+    setExpandedUid((s) => ({ ...s, [date]: { ...(s[date] || {}), [uid]: !(s[date]?.[uid] || false) } }));
+  };
+
+  const expandAllDates = () => {
+    const map: Record<string, boolean> = {};
+    laporanGrouped?.forEach((g: any) => (map[g.date] = true));
+    setExpandedDates(map);
+  };
+
+  const collapseAllDates = () => {
+    setExpandedDates({});
+    setExpandedUid({});
+  };
+
+  const setSortForDate = (date: string, sortKey: string) => {
+    setSortByPerDate((s) => ({ ...s, [date]: sortKey }));
+  };
 
   const filtered = useMemo(() => {
     if (onlyAdmin === "all") return cards;
@@ -228,6 +340,140 @@ const RFIDCards: React.FC = () => {
       setHistoryLogs([]);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  // Fetch laporan (summary + logs) based on selected period / range
+  const fetchLaporan = async () => {
+    setLaporanLoading(true);
+    try {
+      let s: string | null = null;
+      let e: string | null = null;
+      const now = new Date();
+      switch (purchasePeriod) {
+        case "today":
+          s = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+          e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+          break;
+        case "yesterday": {
+          const d = new Date();
+          d.setDate(d.getDate() - 1);
+          s = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+          e = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+          break;
+        }
+        case "week": {
+          const d = new Date();
+          const day = d.getDay();
+          const diff = (day === 0 ? -6 : 1) - day; // Monday start
+          const start = new Date();
+          start.setDate(d.getDate() + diff);
+          s = new Date(start.getFullYear(), start.getMonth(), start.getDate()).toISOString();
+          e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+          break;
+        }
+        case "month":
+          s = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+          e = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+          break;
+        case "range":
+          s = startDate ? new Date(startDate).toISOString() : null;
+          e = endDate ? new Date(endDate).toISOString() : null;
+          break;
+      }
+
+      console.log("fetchLaporan params", { start_ts: s, end_ts: e });
+
+      // Attempt RPC summary first. If RPC is not found or fails (e.g., not deployed),
+      // we'll fallback to computing the summary client-side from the logs we fetch below.
+      let usedRpc = true;
+      try {
+        // supabase.rpc usually returns { data, error } in v2. We'll be defensive here.
+        // @ts-ignore
+        const rpcRes = await supabase.rpc("rpc_card_usage_summary", { start_ts: s, end_ts: e });
+        // @ts-ignore
+        const rpcError = rpcRes?.error;
+        // @ts-ignore
+        const rpcData = rpcRes?.data ?? rpcRes;
+        if (rpcError) throw rpcError;
+        console.log("summaryData length", Array.isArray(rpcData) ? rpcData.length : 0);
+        setLaporanSummary(Array.isArray(rpcData) ? rpcData : []);
+      } catch (rpcErr: any) {
+        usedRpc = false;
+        console.warn("rpc_card_usage_summary unavailable or failed, will compute summary client-side:", rpcErr?.message || rpcErr);
+        // clear summary for now; we'll fill it after fetching logs
+        setLaporanSummary([]);
+      }
+
+      // Fetch logs (always fetch; needed both for display and for client-side summary fallback)
+      let logsQuery = supabase
+        .from("card_usage_logs")
+        .select("id, card_uid, session_id, used_by_name, used_by_phone, action_type, points_amount, balance_before, balance_after, timestamp, notes")
+        .order("timestamp", { ascending: false })
+        .limit(2000);
+      if (s) logsQuery = logsQuery.gte("timestamp", s);
+      if (e) logsQuery = logsQuery.lte("timestamp", e);
+      if (searchTerm && searchTerm.trim()) {
+        if (searchExact) {
+          logsQuery = logsQuery.eq("card_uid", searchTerm.trim());
+        } else {
+          logsQuery = logsQuery.ilike("card_uid", `%${searchTerm.trim()}%`);
+        }
+      }
+      const { data: logsData, error: logsError } = await logsQuery;
+      if (logsError) throw logsError;
+      console.log("logsData length", Array.isArray(logsData) ? logsData.length : 0);
+      const logsArr = Array.isArray(logsData) ? logsData : [];
+      setLaporanLogs(logsArr);
+
+      // Try server-side grouped RPC (preferred for large ranges)
+      try {
+  // @ts-ignore
+  const rpcGrouped = await supabase.rpc("rpc_card_usage_grouped", { start_ts: s, end_ts: e, search_uid: searchTerm || null, search_exact: searchExact });
+        // @ts-ignore
+        const rpcGroupedErr = rpcGrouped?.error;
+        // @ts-ignore
+        const rpcGroupedData = rpcGrouped?.data ?? rpcGrouped;
+        if (!rpcGroupedErr && Array.isArray(rpcGroupedData)) {
+          // Filter RPC grouped results by searchTerm if provided
+          if (searchTerm && searchTerm.trim()) {
+            const term = searchTerm.trim().toLowerCase();
+            const filtered = rpcGroupedData
+              .map((g: any) => ({ ...g, uids: (g.uids || []).filter((u: any) => (u.card_uid || "").toLowerCase().includes(term)) }))
+              .filter((g: any) => (g.uids || []).length > 0);
+            setLaporanGroupedRpc(filtered);
+          } else {
+            setLaporanGroupedRpc(rpcGroupedData);
+          }
+        } else {
+          setLaporanGroupedRpc(null);
+        }
+      } catch (e) {
+        setLaporanGroupedRpc(null);
+      }
+
+      // If RPC wasn't used (missing), compute a basic per-card summary client-side
+      if (!usedRpc) {
+        const grouped: Record<string, any> = {};
+        logsArr.forEach((row: any) => {
+          const key = row.card_uid || "<unknown>";
+          if (!grouped[key]) grouped[key] = { card_uid: key, total_add: 0, total_deduct: 0, net_change: 0, last_activity: row.timestamp };
+          if (row.action_type === "balance_add") grouped[key].total_add += Number(row.points_amount || 0);
+          if (row.action_type === "balance_deduct") grouped[key].total_deduct += Number(row.points_amount || 0);
+          grouped[key].net_change = grouped[key].total_add - grouped[key].total_deduct;
+          if (!grouped[key].last_activity || new Date(row.timestamp) > new Date(grouped[key].last_activity)) {
+            grouped[key].last_activity = row.timestamp;
+          }
+        });
+        const summaryFromLogs = Object.values(grouped);
+        console.log("computed summary length", summaryFromLogs.length);
+        setLaporanSummary(summaryFromLogs);
+      }
+    } catch (err: any) {
+      console.error("fetch laporan error", err);
+      Swal.fire("Gagal", err?.message || "Gagal memuat laporan", "error");
+    } finally {
+      setLaporanLoading(false);
     }
   };
 
@@ -1012,15 +1258,19 @@ const RFIDCards: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Cari PO / Supplier
+                    Cari UID
                   </label>
                   <input
                     type="text"
-                    placeholder="Cari PO number atau nama supplier..."
+                    placeholder="Cari UID atau sebagian UID..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <div className="flex items-center gap-2 mt-2 text-xs">
+                    <input id="search-exact" type="checkbox" checked={searchExact} onChange={(e) => setSearchExact(e.target.checked)} className="rounded" />
+                    <label htmlFor="search-exact" className="text-xs text-gray-600">Exact match</label>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1037,41 +1287,203 @@ const RFIDCards: React.FC = () => {
                     <option value="month">Bulan Ini</option>
                     <option value="range">Rentang Waktu</option>
                   </select>
+                  {purchasePeriod === "range" && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-500">s/d</span>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-end">
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg">Cari</button>
+                  <button
+                    onClick={() => void fetchLaporan()}
+                    className={`px-4 py-2 text-white rounded-lg ${laporanLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+                  >
+                    {laporanLoading ? 'Memuat...' : 'Cari'}
+                  </button>
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jenis Laporan</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deskripsi</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {laporanSample.length === 0 ? (
+            <div className="p-4">
+                <div className="flex items-center gap-4 mb-4">
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={groupByDateUid} onChange={(e) => setGroupByDateUid(e.target.checked)} />
+                    <span>Group by Tanggal & UID</span>
+                  </label>
+                </div>
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <button onClick={expandAllDates} className="px-3 py-1 bg-blue-50 text-blue-600 rounded">Expand all</button>
+                  <button onClick={collapseAllDates} className="px-3 py-1 bg-gray-50 text-gray-700 rounded">Collapse all</button>
+                </div>
+                <div className="text-sm text-gray-500">Group by shown: Tanggal & UID</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-white rounded-xl p-4 border"> 
+                  <div className="text-sm text-gray-500">Total Kartu (summary rows)</div>
+                  <div className="text-xl font-semibold">{laporanSummary.length}</div>
+                </div>
+                <div className="bg-white rounded-xl p-4 border"> 
+                  <div className="text-sm text-gray-500">Total Events (logs)</div>
+                  <div className="text-xl font-semibold">{laporanLogs.length}</div>
+                </div>
+                <div className="bg-white rounded-xl p-4 border"> 
+                  <div className="text-sm text-gray-500">Net Change (sample)</div>
+                  <div className="text-xl font-semibold">{laporanSummary.reduce((s, r) => s + Number(r.net_change || 0), 0).toLocaleString()}</div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+                {groupByDateUid && (laporanGroupedRpc || laporanGrouped) ? (
+                  <div className="p-4">
+                    {((laporanGroupedRpc ? laporanGroupedRpc : laporanGrouped) as any[]).map((grp: any) => {
+                      const sortKey = sortByPerDate[grp.date] || "net_change";
+                      // normalize rows: RPC might return { date, uids: [{card_uid,...,events}] }
+                      const rows = grp.rows ?? grp.uids ?? grp.items ?? [];
+                      const rowsSorted = [...rows].sort((a: any, b: any) => {
+                        if (sortKey === "net_change") return b.net_change - a.net_change;
+                        if (sortKey === "events") return b.events.length - a.events.length;
+                        return a.card_uid.localeCompare(b.card_uid);
+                      });
+
+                      return (
+                        <div key={grp.date} className="mb-6">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                              <div className="text-sm font-semibold">{grp.date}</div>
+                              <select
+                                value={sortByPerDate[grp.date] || "net_change"}
+                                onChange={(e) => setSortForDate(grp.date, e.target.value)}
+                                className="text-xs px-2 py-1 border rounded bg-white"
+                              >
+                                <option value="net_change">Sort: Net Change</option>
+                                <option value="events">Sort: Events</option>
+                                <option value="uid">Sort: UID</option>
+                              </select>
+                            </div>
+                            <div>
+                              <button
+                                onClick={() => toggleDate(grp.date)}
+                                className="p-1 rounded hover:bg-gray-100"
+                                aria-label={expandedDates[grp.date] ? "Collapse date" : "Expand date"}
+                              >
+                                {expandedDates[grp.date] ? <ChevronDown className="w-4 h-4 text-gray-600 rotate-180" /> : <ChevronRight className="w-4 h-4 text-gray-600" />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto bg-white rounded border">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">UID</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Events</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Add</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Deduct</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Net</th>
+                                  <th className="px-4 py-2" />
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-100">
+                                {rowsSorted.map((r: any) => (
+                                  <React.Fragment key={grp.date + "::" + r.card_uid}>
+                                    <tr className="hover:bg-gray-50">
+                                      <td className="px-4 py-2 text-sm font-mono text-gray-900">{r.card_uid}</td>
+                                      <td className="px-4 py-2 text-sm text-gray-700">{r.events.length}</td>
+                                      <td className="px-4 py-2 text-sm text-gray-700">{r.total_add.toLocaleString()}</td>
+                                      <td className="px-4 py-2 text-sm text-gray-700">{r.total_deduct.toLocaleString()}</td>
+                                      <td className="px-4 py-2 text-sm text-gray-700">{r.net_change.toLocaleString()}</td>
+                                      <td className="px-4 py-2 text-right">
+                                        <button
+                                          onClick={() => toggleUid(grp.date, r.card_uid)}
+                                          className="p-1 rounded hover:bg-gray-100"
+                                          aria-label={expandedUid[grp.date]?.[r.card_uid] ? "Hide events" : "Show events"}
+                                        >
+                                          {expandedUid[grp.date]?.[r.card_uid] ? <ChevronUp className="w-4 h-4 text-gray-600" /> : <ChevronRight className="w-4 h-4 text-gray-600" />}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                    {expandedUid[grp.date]?.[r.card_uid] && (
+                                      <tr>
+                                        <td colSpan={6} className="bg-gray-50 px-4 py-2">
+                                          <div className="max-h-56 overflow-auto">
+                                            <table className="min-w-full">
+                                              <thead>
+                                                <tr>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">Waktu</th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">Jenis</th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">Amount</th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">Saldo</th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">Notes</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {r.events.map((ev: any) => (
+                                                  <tr key={ev.id} className="text-sm text-gray-700">
+                                                    <td className="px-2 py-1">{new Date(ev.timestamp).toLocaleString()}</td>
+                                                    <td className="px-2 py-1">{ev.action_type}</td>
+                                                    <td className="px-2 py-1">{Number(ev.points_amount || 0).toLocaleString()}</td>
+                                                    <td className="px-2 py-1">{(ev.balance_before ?? '-')+' → '+(ev.balance_after ?? '-')}</td>
+                                                    <td className="px-2 py-1">{ev.notes || '-'}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td className="px-6 py-4 text-sm text-gray-500" colSpan={4}>
-                        Belum ada data laporan.
-                      </td>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Waktu</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">UID</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Jenis</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Saldo</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
                     </tr>
-                  ) : (
-                    laporanSample.map((r) => (
-                      <tr key={r.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm text-gray-700">{r.date}</td>
-                        <td className="px-6 py-4 text-sm text-gray-700">{r.type}</td>
-                        <td className="px-6 py-4 text-sm text-gray-700">{r.desc}</td>
-                        <td className="px-6 py-4 text-sm text-gray-700">-</td>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {laporanLogs.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="text-center text-gray-400 py-6">Tidak ada data</td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    )}
+                    {laporanLogs.map((l: any) => (
+                      <tr key={l.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-sm text-gray-700">{new Date(l.timestamp).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-sm font-mono text-gray-900">{l.card_uid}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{l.action_type}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{Number(l.points_amount || 0).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{(l.balance_before ?? '-')+' → '+(l.balance_after ?? '-')}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{l.notes || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           </div>
         </div>
