@@ -7260,9 +7260,9 @@ const ActiveRentals: React.FC = () => {
                         {activeSession?.is_voucher_used && (
                           <button
                             className="rounded-md p-1"
-                            onClick={() => {
+                            onClick={async () => {
                               setScannedCardUID(activeSession.card_uid!);
-                              fetchCardHistory(scannedCardUID);
+                              await fetchCardHistory(scannedCardUID);
                               setShowHistoryPointModal(true);
                             }}
                           >
@@ -7714,9 +7714,9 @@ const ActiveRentals: React.FC = () => {
                       {activeSession?.is_voucher_used && (
                         <button
                           className="rounded-md p-1"
-                          onClick={() => {
+                          onClick={async () => {
                             setScannedCardUID(activeSession.card_uid!);
-                            fetchCardHistory(scannedCardUID);
+                            await fetchCardHistory(scannedCardUID);
                             setShowHistoryPointModal(true);
                           }}
                         >
@@ -8146,9 +8146,9 @@ const ActiveRentals: React.FC = () => {
                       {activeSession?.is_voucher_used && (
                         <button
                           className="rounded-md p-1"
-                          onClick={() => {
+                          onClick={async () => {
                             setScannedCardUID(activeSession.card_uid!);
-                            fetchCardHistory(scannedCardUID);
+                            await fetchCardHistory(activeSession.card_uid!);
                             setShowHistoryPointModal(true);
                           }}
                         >
