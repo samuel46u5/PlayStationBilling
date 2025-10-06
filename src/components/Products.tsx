@@ -22,10 +22,11 @@ import { db } from "../lib/supabase"; // Hanya import db
 import { printPriceList, ProductPriceList } from "../utils/receipt";
 import Swal from "sweetalert2";
 import PurchaseFilters from "./PurchaseFilters";
+import StokOpname from "./StokOpname";
 
 const Products: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
-    "products" | "purchases" | "suppliers" | "purchaseList" | "sales" | "salesSummary" | "reports"
+    "products" | "purchases" | "suppliers" | "purchaseList" | "sales" | "salesSummary" | "reports" | "stokOpname"
   >("products");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -3228,6 +3229,7 @@ const Products: React.FC = () => {
               {[
                 { id: "products", label: "Produk", icon: Package },
                 { id: "purchases", label: "Pembelian", icon: ShoppingBag },
+                { id: "stokOpname", label: "Stok Opname", icon: ListIcon },
                 {
                   id: "purchaseList",
                   label: "Daftar Pembelian",
@@ -3319,6 +3321,9 @@ const Products: React.FC = () => {
     </div>
   )}
   {activeTab === "suppliers" && renderSuppliersTab()}
+  {activeTab === 'stokOpname' && (
+    <StokOpname products={products} />
+  )}
 
         {/* Add Product Modal */}
         {showAddForm && (
