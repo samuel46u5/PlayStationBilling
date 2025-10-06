@@ -41,33 +41,42 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
 
   // track focused input to restore focus after state updates (prevents focus-jump)
   const focusedRef = useRef<{ id: string; field: string; start: number | null; end: number | null } | null>(null);
+  // per-row input refs to reliably restore focus to the correct input
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // restore focus to input after updates (if we recorded it)
   useEffect(() => {
     const info = focusedRef.current;
     if (!info) return;
-    // try to find input by data attribute or by locating input near row id
-    // inputs don't have data attributes, so find by querySelector matching row id
-    // rows have keys but not DOM ids; we'll search inputs and match by proximity using dataset-row-id if present
-    // fallback: find first input and focus
-    const inputs = document.querySelectorAll('input');
-    for (const input of Array.from(inputs)) {
-      const el = input as HTMLInputElement;
-      // attempt to find a nearby element containing the row id text
-      if (el.closest('tr') && el.closest('tr')!.textContent && el.closest('tr')!.textContent!.includes(info.id)) {
-        try {
-          el.focus();
-          if (info.start !== null && info.end !== null) el.setSelectionRange(info.start, info.end);
-        } catch (e) {}
+    // first try: use the dedicated per-row ref map (most reliable)
+    try {
+      const el = inputRefs.current[info.id];
+      if (el) {
+        el.focus();
+        if (info.start !== null && info.end !== null) {
+          try { el.setSelectionRange(info.start, info.end); } catch (e) {}
+        }
         focusedRef.current = null;
         return;
       }
+    } catch (e) {
+      // ignore
     }
-    // fallback: focus first matching input with same name / placeholder
+    // fallback: try to find input by data attributes in the DOM
     try {
-      const first = document.querySelector('input[ inputmode="numeric"], input[inputmode="numeric"]') as HTMLInputElement | null;
-      if (first) first.focus();
-    } catch (e) {}
+      const selector = `input[data-row-id="${info.id}"][data-field="${info.field}"]`;
+      const el = document.querySelector(selector) as HTMLInputElement | null;
+      if (el) {
+        el.focus();
+        if (info.start !== null && info.end !== null) {
+          try { el.setSelectionRange(info.start, info.end); } catch (e) {}
+        }
+        focusedRef.current = null;
+        return;
+      }
+    } catch (e) {
+      // ignore
+    }
     focusedRef.current = null;
   }, [current]);
 
@@ -89,8 +98,9 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
     const s = {
       id: generateId(),
       nomor,
-      name: `Opname ${new Date().toLocaleString()}`,
+      name: nomor,
       createdAt: new Date().toISOString(),
+      opnameDate: new Date().toISOString(),
       notes: "",
       rows: [] as any[],
     };
@@ -126,6 +136,8 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
   const removeRow = (id: string) => {
     if (!current) return;
     const rows = (current.rows || []).filter((r: any) => r.id !== id);
+    // cleanup ref map
+    if (inputRefs.current[id]) delete inputRefs.current[id];
     setCurrent({ ...current, rows });
   };
 
@@ -252,8 +264,8 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
       Swal.fire({ icon: 'warning', title: 'Tidak ada item', text: 'Tambahkan minimal satu item sebelum menyimpan.' });
       return;
     }
-    const totals = computeTotalsWithNominal(current);
-    const opnameSaved = { ...current, id: Math.random().toString(36).slice(2,9), totals };
+  const totals = computeTotalsWithNominal(current);
+  const opnameSaved = { ...current, id: Math.random().toString(36).slice(2,9), totals, opnameDate: current.opnameDate || current.createdAt };
     (window as any).lastOpname = opnameSaved;
     Swal.fire({ icon: 'success', title: 'Disimpan (lokal)', text: 'Sesi Stok Opname disimpan secara lokal.' });
     setSessions((s) => [opnameSaved, ...s]);
@@ -268,9 +280,22 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
         <div className="p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Buat Stok Opname</h2>
           <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nama Sesi</label>
-              <input type="text" value={current?.name || ''} onChange={(e) => setCurrent((c:any)=> ({ ...c, name: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor Stok Opname</label>
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">{current?.nomor}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Stok Opname</label>
+                <input type="date" value={current ? new Date(current.opnameDate || current.createdAt).toISOString().slice(0,10) : ''} onChange={(e) => {
+                  const val = e.target.value;
+                  const d = new Date(val + 'T00:00:00');
+                  // recompute nomor based on new date and local session count
+                  const seq = getLocalNextSeq(sessions, d);
+                  const newNomor = formatNomor(d, seq);
+                  setCurrent((c:any) => ({ ...c, opnameDate: d.toISOString(), nomor: newNomor, name: newNomor }));
+                }} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+              </div>
             </div>
 
             <div>
@@ -301,7 +326,10 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*"
+                        data-row-id={item.id}
+                        data-field="physicalStock"
                         value={item.physicalStock ?? ''}
+                        ref={(el) => { inputRefs.current[item.id] = el; }}
                         onFocus={(e) => {
                           const target = e.target as HTMLInputElement;
                           focusedRef.current = { id: item.id, field: 'physicalStock', start: target.selectionStart, end: target.selectionEnd };
@@ -485,14 +513,22 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
                         <input
                           type="text"
                           inputMode="numeric"
-                          value={r.physicalStock ?? ""}
-                          onFocus={(e) => {
-                            const t = e.target as HTMLInputElement;
-                            focusedRef.current = { id: r.id, field: 'physicalStock', start: t.selectionStart, end: t.selectionEnd };
-                          }}
-                          onChange={(e) => updateRow(r.id, { physicalStock: e.target.value === "" ? 0 : Number(e.target.value) })}
-                          className="w-20 text-right px-2 py-1 border rounded appearance-none"
-                          style={{ MozAppearance: 'textfield' as any }}
+                          data-row-id={r.id}
+                          data-field="physicalStock"
+                            value={r.physicalStock ?? ""}
+                            ref={(el) => { inputRefs.current[r.id] = el; }}
+                            onFocus={(e) => {
+                              const t = e.target as HTMLInputElement;
+                              focusedRef.current = { id: r.id, field: 'physicalStock', start: t.selectionStart, end: t.selectionEnd };
+                            }}
+                            onChange={(e) => {
+                              const raw = String(e.target.value || '');
+                              const cleaned = raw.replace(/[^0-9.-]/g, '');
+                              const v = cleaned === '' ? 0 : Number(cleaned);
+                              updateRow(r.id, { physicalStock: v });
+                            }}
+                            className="w-20 text-right px-2 py-1 border rounded appearance-none"
+                            style={{ MozAppearance: 'textfield' as any }}
                         />
                       </td>
                       <td className={`px-3 py-2 text-right font-medium ${((Number(r.physicalStock||0) - Number(r.systemStock||0)) > 0) ? 'text-green-600' : 'text-red-600'}`}>
