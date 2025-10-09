@@ -522,6 +522,177 @@ export const db = {
     }
   },
 
+  // Stock Opname
+  stockOpname: {
+    async createSession(payload: {
+      nomor?: string;
+      name?: string;
+      opname_date?: string; // ISO date
+      notes?: string;
+      totals_diff: number;
+      totals_nominal: number;
+    }) {
+      const user = await getCurrentUserSafe();
+      const data = await db.insert('stock_opname_sessions', {
+        nomor: payload.nomor ?? null,
+        name: payload.name ?? null,
+        opname_date: payload.opname_date ? payload.opname_date.slice(0,10) : new Date().toISOString().slice(0,10),
+        notes: payload.notes ?? null,
+        totals_diff: Math.trunc(payload.totals_diff || 0),
+        totals_nominal: Number(payload.totals_nominal || 0),
+        created_by: user?.id ?? null
+      });
+      return data;
+    },
+
+    async addItems(sessionId: string, rows: Array<{ productId?: string | null; productName?: string; barcode?: string; systemStock?: number; physicalStock?: number; unitCost?: number; }>) {
+      for (const r of rows) {
+        const diff = Math.trunc((Number(r.physicalStock||0)) - (Number(r.systemStock||0)));
+        const nominal = Number(diff * Number(r.unitCost||0));
+        await db.insert('stock_opname_items', {
+          session_id: sessionId,
+          product_id: r.productId ?? null,
+          product_name: r.productName ?? null,
+          barcode: r.barcode ?? null,
+          system_stock: Math.trunc(Number(r.systemStock||0)),
+          physical_stock: Math.trunc(Number(r.physicalStock||0)),
+          unit_cost: Number(r.unitCost||0),
+          diff: diff,
+          nominal_diff: nominal
+        });
+      }
+    },
+
+    async replaceItems(sessionId: string, rows: Array<{ productId?: string | null; productName?: string; barcode?: string; systemStock?: number; physicalStock?: number; unitCost?: number; }>) {
+      // delete existing items then add new ones
+      await supabase.from('stock_opname_items').delete().eq('session_id', sessionId);
+      await (db as any).stockOpname.addItems(sessionId, rows);
+    },
+
+    async syncProductStocks(rows: Array<{ productId?: string | null; physicalStock?: number }>) {
+      for (const r of rows) {
+        if (!r.productId) continue;
+        const target = Math.max(0, Math.trunc(Number(r.physicalStock || 0)));
+        await db.products.update(String(r.productId), { stock: target });
+      }
+    },
+
+    async applyStockAdjustments(rows: Array<{ productId?: string | null; systemStock?: number; physicalStock?: number }>) {
+      for (const r of rows) {
+        if (!r.productId) continue;
+        const sys = Math.trunc(Number(r.systemStock||0));
+        const phy = Math.trunc(Number(r.physicalStock||0));
+        const delta = phy - sys;
+        if (delta === 0) continue;
+        if (delta > 0) {
+          await db.products.increaseStock(String(r.productId), delta);
+        } else {
+          await db.products.decreaseStock(String(r.productId), Math.abs(delta));
+        }
+      }
+    },
+
+    async getAllSessions() {
+      const { data, error } = await supabase
+        .from('stock_opname_sessions')
+        .select(`
+          *,
+          users(full_name)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    },
+
+    async getSessionWithItems(sessionId: string) {
+      const { data: session, error: sessionError } = await supabase
+        .from('stock_opname_sessions')
+        .select(`
+          *,
+          users(full_name)
+        `)
+        .eq('id', sessionId)
+        .single();
+      
+      if (sessionError) throw sessionError;
+
+      const { data: items, error: itemsError } = await supabase
+        .from('stock_opname_items')
+        .select('*')
+        .eq('session_id', sessionId);
+        // .order('created_at', { ascending: true });
+      
+      if (itemsError) throw itemsError;
+
+      return {
+        ...session,
+        rows: (items || []).map((item: any) => ({
+          id: item.id,
+          productId: item.product_id,
+          productName: item.product_name,
+          barcode: item.barcode,
+          systemStock: item.system_stock,
+          physicalStock: item.physical_stock,
+          unitCost: item.unit_cost,
+          note: '', // items table doesn't have note field, but we can add it later if needed
+          code: item.barcode || item.product_name || '',
+        }))
+      };
+    },
+
+    async getNextSequenceNumber(date: Date) {
+      const mm = date.getMonth();
+      const yy = date.getFullYear();
+      
+      // Get all sessions from database
+      const { data, error } = await supabase
+        .from('stock_opname_sessions')
+        .select('nomor, opname_date, created_at')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Filter sessions for the exact month/year
+      const sameMonthSessions = (data || []).filter((s: any) => {
+        try {
+          const sessionDate = new Date(s.opname_date || s.created_at);
+          return sessionDate.getMonth() === mm && sessionDate.getFullYear() === yy;
+        } catch (e) {
+          return false;
+        }
+      });
+      
+      return sameMonthSessions.length + 1;
+    },
+
+    async updateSession(id: string, payload: {
+      nomor?: string | null;
+      name?: string | null;
+      opname_date?: string | null; 
+      notes?: string | null;
+      totals_diff?: number;
+      totals_nominal?: number;
+    }) {
+      const updateDoc: any = {};
+      if (payload.nomor !== undefined) updateDoc.nomor = payload.nomor;
+      if (payload.name !== undefined) updateDoc.name = payload.name;
+      if (payload.opname_date !== undefined) updateDoc.opname_date = payload.opname_date ? payload.opname_date.slice(0,10) : null;
+      if (payload.notes !== undefined) updateDoc.notes = payload.notes;
+      if (payload.totals_diff !== undefined) updateDoc.totals_diff = Math.trunc(payload.totals_diff || 0);
+      if (payload.totals_nominal !== undefined) updateDoc.totals_nominal = Number(payload.totals_nominal || 0);
+
+      const { data, error } = await supabase
+        .from('stock_opname_sessions')
+        .update(updateDoc)
+        .eq('id', id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return data;
+    }
+  },
+
   // System settings (single row: id = 'default')
   settings: {
     async get() {

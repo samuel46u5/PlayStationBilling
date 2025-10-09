@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-// db import removed for offline UI mode
+import { db } from "../lib/supabase";
 import Swal from "sweetalert2";
 import { Plus, Search, XCircle } from "lucide-react";
 
@@ -8,39 +8,66 @@ type Product = any;
 const generateId = () => Math.random().toString(36).slice(2, 9);
 
 const MONTH_ABBR_ID = [
-  'JAN','FEB','MAR','APR','MEI','JUN','JUL','AGT','SEP','OKT','NOV','DES'
+  "JAN",
+  "FEB",
+  "MAR",
+  "APR",
+  "MEI",
+  "JUN",
+  "JUL",
+  "AGT",
+  "SEP",
+  "OKT",
+  "NOV",
+  "DES",
 ];
 
 const formatNomor = (date: Date, seq: number) => {
-  const m = MONTH_ABBR_ID[date.getMonth()] || 'XXX';
+  const m = MONTH_ABBR_ID[date.getMonth()] || "XXX";
   const yy = String(date.getFullYear()).slice(-2);
-  const xxx = String(seq).padStart(3, '0');
+  const xxx = String(seq).padStart(3, "0");
   return `SO-${m}${yy}-${xxx}`;
 };
 
 const getLocalNextSeq = (sessions: any[], date: Date) => {
   const mm = date.getMonth();
   const yy = date.getFullYear();
-  const same = sessions.filter((s:any) => {
+  const same = sessions.filter((s: any) => {
     try {
-      const d = new Date(s.createdAt || s.created_at || null);
+      const d = new Date(s.createdAt || s.created_at || s.opname_date || null);
       return d.getMonth() === mm && d.getFullYear() === yy;
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   });
   return (same.length || 0) + 1;
 };
 
-const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> = ({ products, onOpenCreate }) => {
+const StokOpname: React.FC<{
+  products: Product[];
+  onOpenCreate?: () => void;
+}> = ({ products, onOpenCreate }) => {
   const [sessions, setSessions] = useState<any[]>([]); // local saved sessions
+  const [savedSessions, setSavedSessions] = useState<any[]>([]); // sessions from database
   const [current, setCurrent] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState("");
-  const [showProductSelectModal, setShowProductSelectModal] = useState<{ open: boolean; index: number | null }>({ open: false, index: null });
+  const [showProductSelectModal, setShowProductSelectModal] = useState<{
+    open: boolean;
+    index: number | null;
+  }>({ open: false, index: null });
 
   // track focused input to restore focus after state updates (prevents focus-jump)
-  const focusedRef = useRef<{ id: string; field: string; start: number | null; end: number | null } | null>(null);
+  const focusedRef = useRef<{
+    id: string;
+    field: string;
+    start: number | null;
+    end: number | null;
+  } | null>(null);
   // per-row input refs to reliably restore focus to the correct input
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -54,7 +81,9 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
       if (el) {
         el.focus();
         if (info.start !== null && info.end !== null) {
-          try { el.setSelectionRange(info.start, info.end); } catch (e) {}
+          try {
+            el.setSelectionRange(info.start, info.end);
+          } catch (e) {}
         }
         focusedRef.current = null;
         return;
@@ -69,7 +98,9 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
       if (el) {
         el.focus();
         if (info.start !== null && info.end !== null) {
-          try { el.setSelectionRange(info.start, info.end); } catch (e) {}
+          try {
+            el.setSelectionRange(info.start, info.end);
+          } catch (e) {}
         }
         focusedRef.current = null;
         return;
@@ -91,36 +122,123 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
     });
   }, [productSearchTerm, products]);
 
-  const startNew = () => {
-    const now = new Date();
-    const localSeq = getLocalNextSeq(sessions, now);
-    const nomor = formatNomor(now, localSeq);
-    const s = {
-      id: generateId(),
-      nomor,
-      name: nomor,
-      createdAt: new Date().toISOString(),
-      opnameDate: new Date().toISOString(),
-      notes: "",
-      rows: [] as any[],
-    };
-    setCurrent(s);
-    setShowCreateModal(true);
-    // offline mode: do not call server for nomor
+  // Load saved sessions from database
+  const loadSavedSessions = async () => {
+    try {
+      setLoading(true);
+      const sessions = await (db as any).stockOpname.getAllSessions();
+      setSavedSessions(sessions);
+
+      // Load first session as current if no current session exists
+      // if (sessions.length > 0 && !current) {
+      //   const firstSession = await (db as any).stockOpname.getSessionWithItems(
+      //     sessions[0].id
+      //   );
+      //   setCurrent(firstSession);
+      // }
+    } catch (err: any) {
+      console.error("Error loading sessions:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Gagal memuat sesi",
+        text: err?.message || "Terjadi kesalahan saat memuat sesi stok opname.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const addRow = (product?: Product) => {
-    if (!current) startNew();
+  // Load specific session with items
+  const loadSession = async (sessionId: string) => {
+    try {
+      setLoading(true);
+      const session = await (db as any).stockOpname.getSessionWithItems(
+        sessionId
+      );
+      setCurrent(session);
+      setShowLoadModal(false);
+    } catch (err: any) {
+      console.error("Error loading session:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Gagal memuat sesi",
+        text: err?.message || "Terjadi kesalahan saat memuat sesi stok opname.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load sessions on component mount
+  React.useEffect(() => {
+    loadSavedSessions();
+  }, []);
+
+  const startNew = async () => {
+    try {
+      const now = new Date();
+      const dbSeq = await (db as any).stockOpname.getNextSequenceNumber(now);
+      const nomor = formatNomor(now, dbSeq);
+      const s = {
+        id: generateId(),
+        nomor,
+        name: nomor,
+        createdAt: new Date().toISOString(),
+        opnameDate: new Date().toISOString(),
+        notes: "",
+        rows: [] as any[],
+      };
+      setCurrent(s);
+      setShowCreateModal(true);
+    } catch (err: any) {
+      console.error("Error generating nomor:", err);
+      const now = new Date();
+      const localSeq = getLocalNextSeq([...sessions, ...savedSessions], now);
+      const nomor = formatNomor(now, localSeq);
+      const s = {
+        id: generateId(),
+        nomor,
+        name: nomor,
+        createdAt: new Date().toISOString(),
+        opnameDate: new Date().toISOString(),
+        notes: "",
+        rows: [] as any[],
+      };
+      setCurrent(s);
+      setShowCreateModal(true);
+    }
+  };
+
+  const addRow = async (product?: Product) => {
+    if (!current) await startNew();
     const row = {
       id: generateId(),
       productId: product?.id ?? null,
-      code: product?.code || product?.sku || product?.barcode || product?.id || '',
+      code:
+        product?.code || product?.sku || product?.barcode || product?.id || "",
       productName: product?.name ?? "",
       barcode: product?.barcode ?? "",
       systemStock: product?.stock ?? 0,
       physicalStock: 0,
-      note: '',
+      note: "",
       unitCost: Number(product?.cost || product?.price || 0),
+    };
+    setCurrent((c: any) => ({ ...c, rows: [...(c?.rows || []), row] }));
+  };
+
+  // Add row with product selection for existing sessions
+  const addRowWithProduct = async () => {
+    if (!current) await startNew();
+    const row = {
+      id: generateId(),
+      productId: null,
+      code: "",
+      productName: "",
+      barcode: "",
+      systemStock: 0,
+      physicalStock: 0,
+      note: "",
+      unitCost: 0,
     };
     setCurrent((c: any) => ({ ...c, rows: [...(c?.rows || []), row] }));
   };
@@ -128,7 +246,9 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
   const updateRow = (id: string, changes: Partial<any>) => {
     setCurrent((c: any) => {
       if (!c) return c;
-      const rows = (c.rows || []).map((r: any) => (r.id === id ? { ...r, ...changes } : r));
+      const rows = (c.rows || []).map((r: any) =>
+        r.id === id ? { ...r, ...changes } : r
+      );
       return { ...c, rows };
     });
   };
@@ -149,7 +269,10 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
 
   const parseCSV = (text: string) => {
     // naive CSV parser: split by lines, commas; expect header or simple rows
-    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
     if (lines.length === 0) return [];
     const rows: { productKey: string; qty: number }[] = [];
     // Try detect header: if first line contains non-numeric in qty position
@@ -158,9 +281,11 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
       if (cols.length === 0) continue;
       // Try: barcode,name,qty or name,qty or barcode,qty
       let productKey = cols[0];
-      let qty = Number((cols[cols.length - 1] || "").replace(/[^0-9.-]/g, "")) || 0;
+      let qty =
+        Number((cols[cols.length - 1] || "").replace(/[^0-9.-]/g, "")) || 0;
       // If first line looks like header (contains 'name' or 'barcode' or 'qty'), skip
-      if (/name|barcode|qty|quantity/i.test(productKey) && rows.length === 0) continue;
+      if (/name|barcode|qty|quantity/i.test(productKey) && rows.length === 0)
+        continue;
       rows.push({ productKey, qty });
     }
     return rows;
@@ -169,14 +294,20 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
   const importCSV = (file: File | null) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const txt = String(e.target?.result || "");
       const parsed = parseCSV(txt);
-      if (!current) startNew();
+      if (!current) await startNew();
       // Map parsed rows to products (by barcode or name)
       const mapped = parsed.map((r) => {
         const lower = String(r.productKey).toLowerCase();
-        const found = products.find((p: any) => (String(p.barcode || "").toLowerCase() === lower) || String(p.name || "").toLowerCase().includes(lower));
+        const found = products.find(
+          (p: any) =>
+            String(p.barcode || "").toLowerCase() === lower ||
+            String(p.name || "")
+              .toLowerCase()
+              .includes(lower)
+        );
         return {
           id: generateId(),
           productId: found?.id ?? null,
@@ -257,20 +388,107 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
   };
 
   const saveToServer = async () => {
-    // offline/local save only with validation
     if (!current) return;
     const hasRows = (current.rows || []).length > 0;
     if (!hasRows) {
-      Swal.fire({ icon: 'warning', title: 'Tidak ada item', text: 'Tambahkan minimal satu item sebelum menyimpan.' });
+      Swal.fire({
+        icon: "warning",
+        title: "Tidak ada item",
+        text: "Tambahkan minimal satu item sebelum menyimpan.",
+      });
       return;
     }
-  const totals = computeTotalsWithNominal(current);
-  const opnameSaved = { ...current, id: Math.random().toString(36).slice(2,9), totals, opnameDate: current.opnameDate || current.createdAt };
-    (window as any).lastOpname = opnameSaved;
-    Swal.fire({ icon: 'success', title: 'Disimpan (lokal)', text: 'Sesi Stok Opname disimpan secara lokal.' });
-    setSessions((s) => [opnameSaved, ...s]);
-    setCurrent(null);
-    setShowCreateModal(false);
+    try {
+      const totals = computeTotalsWithNominal(current);
+      const isExisting = Boolean(current.id && String(current.id).length > 8); // simple heuristic: DB uuid vs local id
+      let sessionId = current.id;
+
+      if (!isExisting) {
+        const session = await (db as any).stockOpname.createSession({
+          nomor: current.nomor,
+          name: current.name,
+          opname_date: current.opnameDate || current.createdAt,
+          notes: current.notes,
+          totals_diff: totals.totalDiff,
+          totals_nominal: totals.totalNominal,
+        });
+        sessionId = session.id;
+        // insert items
+        await (db as any).stockOpname.addItems(
+          sessionId,
+          (current.rows || []).map((r: any) => ({
+            productId: r.productId,
+            productName: r.productName,
+            barcode: r.barcode,
+            systemStock: r.systemStock,
+            physicalStock: r.physicalStock,
+            unitCost: r.unitCost,
+          }))
+        );
+        await (db as any).stockOpname.syncProductStocks(
+          (current.rows || []).map((r: any) => ({
+            productId: r.productId,
+            physicalStock: r.physicalStock,
+          }))
+        );
+      } else {
+        await (db as any).stockOpname.updateSession(sessionId, {
+          name: current.name,
+          opname_date: current.opnameDate || current.createdAt,
+          notes: current.notes,
+          totals_diff: totals.totalDiff,
+          totals_nominal: totals.totalNominal,
+        });
+        // replace items
+        await (db as any).stockOpname.replaceItems(
+          sessionId,
+          (current.rows || []).map((r: any) => ({
+            productId: r.productId,
+            productName: r.productName,
+            barcode: r.barcode,
+            systemStock: r.systemStock,
+            physicalStock: r.physicalStock,
+            unitCost: r.unitCost,
+          }))
+        );
+        await (db as any).stockOpname.syncProductStocks(
+          (current.rows || []).map((r: any) => ({
+            productId: r.productId,
+            physicalStock: r.physicalStock,
+          }))
+        );
+      }
+
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: isExisting
+          ? "Perubahan sesi Stok Opname telah disimpan."
+          : "Sesi Stok Opname tersimpan dan stok produk diperbarui.",
+      });
+      if (!isExisting) {
+        setSessions((s) => [
+          {
+            ...current,
+            id: sessionId,
+            totals,
+            opnameDate: current.opnameDate || current.createdAt,
+          },
+          ...s,
+        ]);
+      }
+      setCurrent((c: any) => (c ? { ...c, id: sessionId, totals } : c));
+      setShowCreateModal(false);
+      // Reload saved sessions to show the new one
+      loadSavedSessions();
+    } catch (err: any) {
+      console.error("saveToServer error", err);
+      Swal.fire({
+        icon: "error",
+        title: "Gagal menyimpan",
+        text: err?.message || "Terjadi kesalahan saat menyimpan stok opname.",
+      });
+    }
   };
 
   // Modal & product-select UI
@@ -278,85 +496,189 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Buat Stok Opname</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Buat Stok Opname
+          </h2>
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor Stok Opname</label>
-                <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">{current?.nomor}</div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nomor Stok Opname
+                </label>
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                  {current?.nomor}
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Stok Opname</label>
-                <input type="date" value={current ? new Date(current.opnameDate || current.createdAt).toISOString().slice(0,10) : ''} onChange={(e) => {
-                  const val = e.target.value;
-                  const d = new Date(val + 'T00:00:00');
-                  // recompute nomor based on new date and local session count
-                  const seq = getLocalNextSeq(sessions, d);
-                  const newNomor = formatNomor(d, seq);
-                  setCurrent((c:any) => ({ ...c, opnameDate: d.toISOString(), nomor: newNomor, name: newNomor }));
-                }} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tanggal Stok Opname
+                </label>
+                <input
+                  type="date"
+                  value={new Date().toISOString().slice(0, 10)}
+                  // value={
+                  //   current
+                  //     ? new Date(current.opnameDate || current.createdAt)
+                  //         .toLocaleString()
+                  //         .slice(0, 10)
+                  //     : ""
+                  // }
+                  // onChange={async (e) => {
+                  //   const val = e.target.value;
+                  //   const d = new Date(val + "T00:00:00");
+                  //   try {
+                  //     // Get next sequence number from database for the new date
+                  //     const dbSeq = await (
+                  //       db as any
+                  //     ).stockOpname.getNextSequenceNumber(d);
+                  //     const newNomor = formatNomor(d, dbSeq);
+                  //     setCurrent((c: any) => ({
+                  //       ...c,
+                  //       opnameDate: d.toISOString(),
+                  //       nomor: newNomor,
+                  //       name: newNomor,
+                  //     }));
+                  //   } catch (err) {
+                  //     // Fallback to local sequence if database fails
+                  //     const seq = getLocalNextSeq(
+                  //       [...sessions, ...savedSessions],
+                  //       d
+                  //     );
+                  //     const newNomor = formatNomor(d, seq);
+                  //     setCurrent((c: any) => ({
+                  //       ...c,
+                  //       opnameDate: d.toISOString(),
+                  //       nomor: newNomor,
+                  //       name: newNomor,
+                  //     }));
+                  //   }
+                  // }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-medium text-gray-900">Item Stok Opname</h3>
-                <button type="button" onClick={() => addRow()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Item Stok Opname
+                </h3>
+                <button
+                  type="button"
+                  onClick={async () => await addRow()}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
                   <Plus className="h-4 w-4" /> Tambah Item
                 </button>
               </div>
 
               <div className="space-y-3">
-                {(current?.rows || []).map((item:any, index:number) => (
-                  <div key={item.id || index} className="grid grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg">
+                {(current?.rows || []).map((item: any, index: number) => (
+                  <div
+                    key={item.id || index}
+                    className="grid grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg"
+                  >
                     <div className="col-span-4">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Produk</label>
-                      <button type="button" onClick={() => openProductSelect(index)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-left flex items-center justify-between">
-                        <span>{item.productId ? products.find((p) => p.id === item.productId)?.name || item.productName || 'Pilih Produk' : 'Pilih Produk'}</span>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Produk
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => openProductSelect(index)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-left flex items-center justify-between"
+                      >
+                        <span>
+                          {item.productId
+                            ? products.find((p) => p.id === item.productId)
+                                ?.name ||
+                              item.productName ||
+                              "Pilih Produk"
+                            : "Pilih Produk"}
+                        </span>
                         <Search className="h-4 w-4 text-gray-400" />
                       </button>
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Stok Komputer</label>
-                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">{Number(item.systemStock||0).toLocaleString()}</div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Stok Komputer
+                      </label>
+                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">
+                        {Number(item.systemStock || 0).toLocaleString()}
+                      </div>
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Stok Fisik</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Stok Fisik
+                      </label>
                       <input
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*"
                         data-row-id={item.id}
                         data-field="physicalStock"
-                        value={item.physicalStock ?? ''}
-                        ref={(el) => { inputRefs.current[item.id] = el; }}
+                        value={item.physicalStock ?? ""}
+                        ref={(el) => {
+                          inputRefs.current[item.id] = el;
+                        }}
+                        autoFocus={true}
                         onFocus={(e) => {
                           const target = e.target as HTMLInputElement;
-                          focusedRef.current = { id: item.id, field: 'physicalStock', start: target.selectionStart, end: target.selectionEnd };
+                          focusedRef.current = {
+                            id: item.id,
+                            field: "physicalStock",
+                            start: target.selectionStart,
+                            end: target.selectionEnd,
+                          };
                         }}
                         onChange={(e) => {
-                          const raw = String(e.target.value || '');
-                          const cleaned = raw.replace(/[^0-9.-]/g, '');
-                          const v = cleaned === '' ? 0 : Number(cleaned);
+                          const raw = String(e.target.value || "");
+                          const cleaned = raw.replace(/[^0-9.-]/g, "");
+                          const v = cleaned === "" ? 0 : Number(cleaned);
                           updateRow(item.id, { physicalStock: v });
                         }}
                         className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-right"
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Selisih</label>
-                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">{((Number(item.physicalStock ?? 0) - Number(item.systemStock || 0))).toLocaleString()}</div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Selisih
+                      </label>
+                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">
+                        {(
+                          Number(item.physicalStock ?? 0) -
+                          Number(item.systemStock || 0)
+                        ).toLocaleString()}
+                      </div>
                     </div>
                     <div className="col-span-1">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Harga Beli</label>
-                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">Rp {Number(item.unitCost||0).toLocaleString('id-ID')}</div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Harga Beli
+                      </label>
+                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">
+                        Rp {Number(item.unitCost || 0).toLocaleString("id-ID")}
+                      </div>
                     </div>
                     <div className="col-span-1">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Nominal</label>
-                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">Rp {(((Number(item.physicalStock ?? 0) - Number(item.systemStock || 0)) * Number(item.unitCost||0)) ).toLocaleString('id-ID')}</div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Nominal
+                      </label>
+                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">
+                        Rp{" "}
+                        {(
+                          (Number(item.physicalStock ?? 0) -
+                            Number(item.systemStock || 0)) *
+                          Number(item.unitCost || 0)
+                        ).toLocaleString("id-ID")}
+                      </div>
                     </div>
                     <div className="col-span-12 text-right">
-                      <button type="button" onClick={() => removeRow(item.id)} className="text-sm text-red-600">Hapus</button>
+                      <button
+                        type="button"
+                        onClick={() => removeRow(item.id)}
+                        className="text-sm text-red-600"
+                      >
+                        Hapus
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -364,27 +686,66 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
 
               {(current?.rows || []).length > 0 && (
                 <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg">
-                  <h4 className="font-medium text-indigo-900 mb-3">Ringkasan Stok Opname</h4>
+                  <h4 className="font-medium text-indigo-900 mb-3">
+                    Ringkasan Stok Opname
+                  </h4>
                   <div className="flex justify-between items-center">
                     <div className="text-indigo-800">Total Selisih</div>
-                    <div className="font-medium text-indigo-900">{computeTotalsWithNominal(current).totalDiff.toLocaleString()}</div>
+                    <div className="font-medium text-indigo-900">
+                      {computeTotalsWithNominal(
+                        current
+                      ).totalDiff.toLocaleString()}
+                    </div>
                   </div>
                   <div className="flex justify-between items-center mt-2">
                     <div className="text-indigo-800">Total Nominal Selisih</div>
-                    <div className="font-medium text-indigo-900">Rp {computeTotalsWithNominal(current).totalNominal.toLocaleString('id-ID')}</div>
+                    <div className="font-medium text-indigo-900">
+                      Rp{" "}
+                      {computeTotalsWithNominal(
+                        current
+                      ).totalNominal.toLocaleString("id-ID")}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Catatan (Opsional)</label>
-              <textarea value={current?.notes || ''} onChange={(e) => setCurrent((c:any) => ({ ...c, notes: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" rows={3} />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Catatan (Opsional)
+              </label>
+              <textarea
+                value={current?.notes || ""}
+                onChange={(e) =>
+                  setCurrent((c: any) => ({ ...c, notes: e.target.value }))
+                }
+                autoFocus={true}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={3}
+              />
             </div>
 
             <div className="flex gap-3 mt-6">
-              <button onClick={() => { setShowCreateModal(false); setCurrent(null); }} className="flex-1 px-4 py-2 border rounded-lg font-medium">Batal</button>
-              <button onClick={() => saveToServer()} className={`flex-1 text-white px-4 py-2 rounded-lg ${((current?.rows||[]).length === 0) ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700' } font-medium`} disabled={((current?.rows||[]).length === 0)}>Buat Stok Opname</button>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setCurrent(null);
+                }}
+                className="flex-1 px-4 py-2 border rounded-lg font-medium"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => saveToServer()}
+                className={`flex-1 text-white px-4 py-2 rounded-lg ${
+                  (current?.rows || []).length === 0
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-indigo-600 hover:bg-indigo-700"
+                } font-medium`}
+                disabled={(current?.rows || []).length === 0}
+              >
+                Buat Stok Opname
+              </button>
             </div>
           </div>
         </div>
@@ -392,33 +753,69 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
     </div>
   );
 
-  const ProductSelectModal = () => (
+  const ProductSelectModal = () =>
     showProductSelectModal.open ? (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex">
           <div className="flex-1 p-6 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Pilih Produk</h3>
-              <button onClick={() => setShowProductSelectModal({ open: false, index: null })} className="text-gray-400 hover:text-gray-600"><XCircle className="h-6 w-6" /></button>
+              <h3 className="text-xl font-semibold text-gray-900">
+                Pilih Produk
+              </h3>
+              <button
+                onClick={() =>
+                  setShowProductSelectModal({ open: false, index: null })
+                }
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
             </div>
             <div className="relative mb-4">
-              <input type="text" placeholder="Cari produk..." value={productSearchTerm} onChange={(e) => setProductSearchTerm(e.target.value)} className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg" />
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-5 w-5 text-gray-400" /></div>
+              <input
+                type="text"
+                placeholder="Cari produk..."
+                value={productSearchTerm}
+                onChange={(e) => setProductSearchTerm(e.target.value)}
+                autoFocus={true}
+                className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
             </div>
             <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100">
               {filteredProductsForSelect.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">{productSearchTerm ? 'Tidak ada produk yang cocok' : 'Belum ada produk'}</div>
+                <div className="p-6 text-center text-gray-500">
+                  {productSearchTerm
+                    ? "Tidak ada produk yang cocok"
+                    : "Belum ada produk"}
+                </div>
               ) : (
                 filteredProductsForSelect.map((p: any) => (
-                  <button key={p.id} onClick={() => handleSelectProduct(p)} className="w-full text-left p-4 hover:bg-gray-50 transition-colors">
+                  <button
+                    key={p.id}
+                    onClick={() => handleSelectProduct(p)}
+                    className="w-full text-left p-4 hover:bg-gray-50 transition-colors"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium text-gray-900">{p.name}</div>
-                        <div className="text-xs text-gray-500">Kategori: {p.category || '-'}{p.barcode ? ` • Barcode: ${p.barcode}` : ''}</div>
+                        <div className="font-medium text-gray-900">
+                          {p.name}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Kategori: {p.category || "-"}
+                          {p.barcode ? ` • Barcode: ${p.barcode}` : ""}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-gray-700">Stok: {p.stock}</div>
-                        <div className="text-xs text-gray-500">Modal: Rp {Number(p.cost || 0).toLocaleString('id-ID')}</div>
+                        <div className="text-sm text-gray-700">
+                          Stok: {p.stock}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Modal: Rp{" "}
+                          {Number(p.cost || 0).toLocaleString("id-ID")}
+                        </div>
                       </div>
                     </div>
                   </button>
@@ -426,13 +823,108 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
               )}
             </div>
             <div className="border-t border-gray-200 pt-4 mt-4 flex justify-end">
-              <button type="button" onClick={() => setShowProductSelectModal({ open: false, index: null })} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Tutup</button>
+              <button
+                type="button"
+                onClick={() =>
+                  setShowProductSelectModal({ open: false, index: null })
+                }
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>
       </div>
-    ) : null
-  );
+    ) : null;
+
+  // Load Session Modal
+  const LoadSessionModal = () =>
+    showLoadModal ? (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Pilih Sesi Stok Opname
+              </h3>
+              <button
+                onClick={() => setShowLoadModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-gray-500">Memuat sesi...</div>
+              </div>
+            ) : (
+              <div className="max-h-[60vh] overflow-y-auto">
+                {savedSessions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    Belum ada sesi stok opname tersimpan
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {savedSessions.map((session: any) => (
+                      <button
+                        key={session.id}
+                        onClick={() => loadSession(session.id)}
+                        className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {session.name ||
+                                session.nomor ||
+                                "Sesi Stok Opname"}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Tanggal:{" "}
+                              {new Date(
+                                session.opname_date || session.created_at
+                              ).toLocaleDateString("id-ID")}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              Dibuat oleh:{" "}
+                              {session.users?.full_name || "Unknown"}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-gray-700">
+                              Selisih:{" "}
+                              {session.totals_diff?.toLocaleString() || 0}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Nominal: Rp{" "}
+                              {Number(
+                                session.totals_nominal || 0
+                              ).toLocaleString("id-ID")}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="border-t border-gray-200 pt-4 mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLoadModal(false)}
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div>
@@ -440,9 +932,26 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
         <h2 className="text-lg font-semibold">Stok Opname</h2>
         <div className="flex items-center gap-2">
           {onOpenCreate && (
-            <button onClick={() => onOpenCreate()} className="px-3 py-1 rounded bg-indigo-600 text-white text-sm">Buat Stok Opname</button>
+            <button
+              onClick={() => onOpenCreate()}
+              className="px-3 py-1 rounded bg-indigo-600 text-white text-sm"
+            >
+              Buat Stok Opname
+            </button>
           )}
-          <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileInput} className="hidden" />
+          <button
+            onClick={() => setShowLoadModal(true)}
+            className="px-3 py-1 rounded bg-purple-600 text-white text-sm"
+          >
+            Muat Sesi
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleFileInput}
+            className="hidden"
+          />
           <button
             onClick={() => fileInputRef.current?.click()}
             className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm"
@@ -450,23 +959,43 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
             Import CSV
           </button>
           <button
-            onClick={() => { if (!current) startNew(); else addRow(); }}
+            onClick={async () => {
+              if (!current) await startNew();
+              else await addRow();
+            }}
             className="px-3 py-1 rounded bg-blue-600 text-white text-sm"
           >
             Buat / Tambah Baris
           </button>
           <button
-            onClick={() => { if (current) saveSession(); }}
-            className={`px-3 py-1 rounded text-white text-sm ${!current ? 'bg-gray-300 cursor-not-allowed' : ((current?.rows||[]).length === 0) ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
-            disabled={!current || (current?.rows||[]).length === 0}
+            onClick={() => {
+              if (current) saveSession();
+            }}
+            className={`px-3 py-1 rounded text-white text-sm ${
+              !current
+                ? "bg-gray-300 cursor-not-allowed"
+                : (current?.rows || []).length === 0
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+            }`}
+            disabled={!current || (current?.rows || []).length === 0}
           >
             Simpan (lokal)
           </button>
         </div>
       </div>
 
-      {!current && (
-        <div className="text-sm text-gray-500 mb-4">Belum ada sesi opname aktif. Tekan "Buat / Tambah Baris" untuk memulai.</div>
+      {loading && (
+        <div className="text-sm text-gray-500 mb-4">
+          Memuat sesi stok opname...
+        </div>
+      )}
+
+      {!loading && !current && (
+        <div className="text-sm text-gray-500 mb-4">
+          Tekan "Buat / Tambah Baris" untuk memulai atau "Muat Sesi" untuk
+          membuka sesi yang tersimpan.
+        </div>
       )}
 
       {current && (
@@ -475,70 +1004,189 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
             <div className="flex items-center justify-between mb-3">
               <div>
                 <div className="text-sm text-gray-500">Sesi</div>
-                <div className="font-medium">{current.name} {current.nomor ? <span className="text-xs text-gray-500 ml-2">({current.nomor})</span> : null}</div>
+                <div className="font-medium">
+                  {current.name}{" "}
+                  {current.nomor ? (
+                    <span className="text-xs text-gray-500 ml-2">
+                      ({current.nomor})
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-sm text-gray-500">Dibuat</div>
-                <div className="font-medium">{new Date(current.createdAt).toLocaleString()}</div>
+                <div className="font-medium">
+                  {current.created_at
+                    ? new Date(current.created_at).toLocaleDateString("id-ID", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : "Tanggal tidak tersedia"}
+                </div>
               </div>
+            </div>
+
+            {/* Action buttons for current session */}
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={async () => await addRowWithProduct()}
+                className="px-3 py-1 rounded bg-blue-600 text-white text-sm flex items-center gap-1"
+              >
+                <Plus className="h-4 w-4" /> Tambah Item
+              </button>
+              <button
+                onClick={() => saveToServer()}
+                className={`px-3 py-1 rounded text-white text-sm ${
+                  (current?.rows || []).length === 0
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700"
+                }`}
+                disabled={(current?.rows || []).length === 0}
+              >
+                Simpan
+              </button>
+              <button
+                onClick={() => setCurrent(null)}
+                className="px-3 py-1 rounded bg-gray-500 text-white text-sm"
+              >
+                Tutup Sesi
+              </button>
             </div>
 
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kode</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Sistem</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Fisik</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Selisih</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Catatan</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      Produk
+                    </th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                      Sistem
+                    </th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                      Fisik
+                    </th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                      Selisih
+                    </th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                      Harga Beli
+                    </th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                      Nominal
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      Catatan
+                    </th>
+                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">
+                      Aksi
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
-                  {(current.rows || []).map((r: any) => (
+                  {(current.rows || []).map((r: any, index: number) => (
                     <tr key={r.id}>
                       <td className="px-3 py-2">
-                        <div className="font-medium">{r.code || ''}</div>
+                        <button
+                          type="button"
+                          onClick={() => openProductSelect(index)}
+                          className="w-full text-left px-2 py-1 border border-gray-300 rounded text-sm flex items-center justify-between hover:bg-gray-50"
+                        >
+                          <span>
+                            {r.productId
+                              ? products.find((p) => p.id === r.productId)
+                                  ?.name ||
+                                r.productName ||
+                                "Pilih Produk"
+                              : "Pilih Produk"}
+                          </span>
+                          <Search className="h-4 w-4 text-gray-400" />
+                        </button>
+                        {r.barcode && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Barcode: {r.barcode}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="font-medium">{r.productName || "-"}</div>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">{r.barcode ? `Barcode: ${r.barcode}` : ''}</div>
+                      <td className="px-3 py-2 text-right">
+                        {Number(r.systemStock || 0).toLocaleString()}
                       </td>
-                      <td className="px-3 py-2 text-right">{Number(r.systemStock||0).toLocaleString()}</td>
                       <td className="px-3 py-2 text-right">
                         <input
                           type="text"
                           inputMode="numeric"
                           data-row-id={r.id}
                           data-field="physicalStock"
-                            value={r.physicalStock ?? ""}
-                            ref={(el) => { inputRefs.current[r.id] = el; }}
-                            onFocus={(e) => {
-                              const t = e.target as HTMLInputElement;
-                              focusedRef.current = { id: r.id, field: 'physicalStock', start: t.selectionStart, end: t.selectionEnd };
-                            }}
-                            onChange={(e) => {
-                              const raw = String(e.target.value || '');
-                              const cleaned = raw.replace(/[^0-9.-]/g, '');
-                              const v = cleaned === '' ? 0 : Number(cleaned);
-                              updateRow(r.id, { physicalStock: v });
-                            }}
-                            className="w-20 text-right px-2 py-1 border rounded appearance-none"
-                            style={{ MozAppearance: 'textfield' as any }}
+                          value={r.physicalStock ?? ""}
+                          ref={(el) => {
+                            inputRefs.current[r.id] = el;
+                          }}
+                          onFocus={(e) => {
+                            const t = e.target as HTMLInputElement;
+                            focusedRef.current = {
+                              id: r.id,
+                              field: "physicalStock",
+                              start: t.selectionStart,
+                              end: t.selectionEnd,
+                            };
+                          }}
+                          onChange={(e) => {
+                            const raw = String(e.target.value || "");
+                            const cleaned = raw.replace(/[^0-9.-]/g, "");
+                            const v = cleaned === "" ? 0 : Number(cleaned);
+                            updateRow(r.id, { physicalStock: v });
+                          }}
+                          className="w-20 text-right px-2 py-1 border rounded appearance-none"
+                          style={{ MozAppearance: "textfield" as any }}
                         />
                       </td>
-                      <td className={`px-3 py-2 text-right font-medium ${((Number(r.physicalStock||0) - Number(r.systemStock||0)) > 0) ? 'text-green-600' : 'text-red-600'}`}>
-                        {((r.physicalStock ?? 0) - (r.systemStock ?? 0)).toLocaleString?.() ?? ((r.physicalStock ?? 0) - (r.systemStock ?? 0))}
+                      <td
+                        className={`px-3 py-2 text-right font-medium ${
+                          Number(r.physicalStock || 0) -
+                            Number(r.systemStock || 0) >
+                          0
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {(
+                          (r.physicalStock ?? 0) - (r.systemStock ?? 0)
+                        ).toLocaleString?.() ??
+                          (r.physicalStock ?? 0) - (r.systemStock ?? 0)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="text-sm">
+                          Rp {Number(r.unitCost || 0).toLocaleString("id-ID")}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="text-sm font-medium">
+                          Rp{" "}
+                          {(
+                            ((r.physicalStock || 0) - (r.systemStock || 0)) *
+                            Number(r.unitCost || 0)
+                          ).toLocaleString("id-ID")}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
-                        <input type="text" value={r.note || ''} onChange={(e) => updateRow(r.id, { note: e.target.value })} className="w-full px-2 py-1 border rounded text-sm" />
+                        <input
+                          type="text"
+                          value={r.note || ""}
+                          onChange={(e) =>
+                            updateRow(r.id, { note: e.target.value })
+                          }
+                          className="w-full px-2 py-1 border rounded text-sm"
+                          placeholder="Catatan..."
+                        />
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <button onClick={() => removeRow(r.id)} className="text-sm text-red-600">Hapus</button>
+                        <button
+                          onClick={() => removeRow(r.id)}
+                          className="text-sm text-red-600 hover:text-red-800"
+                        >
+                          Hapus
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -555,9 +1203,30 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
                   const sum = computeSummary(current);
                   return (
                     <div className="text-right">
-                      <div>Stok Sistem: <span className="font-medium">{sum.totalSystem.toLocaleString()}</span></div>
-                      <div>Stok Fisik: <span className="font-medium">{sum.totalPhysical.toLocaleString()}</span></div>
-                      <div>Selisih: <span className={`font-medium ${sum.totalDiff > 0 ? 'text-green-600' : 'text-red-600'}`}>{sum.totalDiff.toLocaleString()}</span></div>
+                      <div>
+                        Stok Sistem:{" "}
+                        <span className="font-medium">
+                          {sum.totalSystem.toLocaleString()}
+                        </span>
+                      </div>
+                      <div>
+                        Stok Fisik:{" "}
+                        <span className="font-medium">
+                          {sum.totalPhysical.toLocaleString()}
+                        </span>
+                      </div>
+                      <div>
+                        Selisih:{" "}
+                        <span
+                          className={`font-medium ${
+                            sum.totalDiff > 0
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {sum.totalDiff.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
                   );
                 })()}
@@ -567,24 +1236,153 @@ const StokOpname: React.FC<{ products: Product[]; onOpenCreate?: () => void }> =
         </div>
       )}
 
-      {sessions.length > 0 && (
+      {/* {savedSessions.length > 0 && (
         <div className="mt-6">
-          <h3 className="text-sm font-medium mb-2">Sesi Tersimpan</h3>
-          <div className="space-y-2">
-            {sessions.map((s) => (
-              <div key={s.id} className="bg-white border rounded p-3 flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{s.name}</div>
-                  <div className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleString()}</div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">
+              Sesi Stok Opname Tersimpan
+            </h3>
+            <div className="text-sm text-gray-500">
+              Total: {savedSessions.length} sesi
+            </div>
+          </div>
+          <div className="space-y-4">
+            {savedSessions.map((session: any) => (
+              <div
+                key={session.id}
+                className={`bg-white border rounded-lg p-4 cursor-pointer transition-colors ${
+                  current?.id === session.id
+                    ? "border-indigo-500 bg-indigo-50"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+                onClick={() => loadSession(session.id)}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      {session.name || session.nomor || "Sesi Stok Opname"}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Tanggal:{" "}
+                      {new Date(
+                        session.opname_date || session.created_at
+                      ).toLocaleDateString("id-ID")}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Dibuat oleh: {session.users?.full_name || "Unknown"}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-700">
+                      Selisih: {session.totals_diff?.toLocaleString() || 0}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Nominal: Rp{" "}
+                      {Number(session.totals_nominal || 0).toLocaleString(
+                        "id-ID"
+                      )}
+                    </div>
+                    {current?.id === session.id && (
+                      <div className="text-xs text-indigo-600 font-medium mt-1">
+                        Sedang dilihat
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-sm text-gray-700">Baris: {(s.rows||[]).length}</div>
+
+                {current?.id === session.id &&
+                  current?.rows &&
+                  current.rows.length > 0 && (
+                    <div className="border-t border-gray-200 pt-3">
+                      <div className="text-sm font-medium text-gray-700 mb-2">
+                        Item Stok Opname ({current.rows.length} item)
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-2 py-1 text-left font-medium text-gray-500">
+                                Produk
+                              </th>
+                              <th className="px-2 py-1 text-right font-medium text-gray-500">
+                                Sistem
+                              </th>
+                              <th className="px-2 py-1 text-right font-medium text-gray-500">
+                                Fisik
+                              </th>
+                              <th className="px-2 py-1 text-right font-medium text-gray-500">
+                                Selisih
+                              </th>
+                              <th className="px-2 py-1 text-right font-medium text-gray-500">
+                                Nominal
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {current.rows.slice(0, 5).map((item: any) => (
+                              <tr key={item.id}>
+                                <td className="px-2 py-1">
+                                  <div className="font-medium">
+                                    {item.productName || "-"}
+                                  </div>
+                                  {item.barcode && (
+                                    <div className="text-gray-400">
+                                      {item.barcode}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1 text-right">
+                                  {Number(
+                                    item.systemStock || 0
+                                  ).toLocaleString()}
+                                </td>
+                                <td className="px-2 py-1 text-right">
+                                  {Number(
+                                    item.physicalStock || 0
+                                  ).toLocaleString()}
+                                </td>
+                                <td
+                                  className={`px-2 py-1 text-right font-medium ${
+                                    Number(item.physicalStock || 0) -
+                                      Number(item.systemStock || 0) >
+                                    0
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  {(
+                                    (item.physicalStock || 0) -
+                                    (item.systemStock || 0)
+                                  ).toLocaleString()}
+                                </td>
+                                <td className="px-2 py-1 text-right">
+                                  Rp{" "}
+                                  {(
+                                    ((item.physicalStock || 0) -
+                                      (item.systemStock || 0)) *
+                                    Number(item.unitCost || 0)
+                                  ).toLocaleString("id-ID")}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {current.rows.length > 5 && (
+                          <div className="text-xs text-gray-500 mt-2 text-center">
+                            ... dan {current.rows.length - 5} item lainnya
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
               </div>
             ))}
           </div>
         </div>
-      )}
+      )} */}
       {showCreateModal && <CreateModal />}
       <ProductSelectModal />
+      <LoadSessionModal />
     </div>
   );
 };
