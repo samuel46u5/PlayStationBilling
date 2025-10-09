@@ -264,6 +264,7 @@ export interface RFIDCard {
   status: "active" | "blocked" | "lost";
   balance_points: number;
   is_admin: boolean;
+  is_helper_card: boolean;
   created_at: string;
 }
 

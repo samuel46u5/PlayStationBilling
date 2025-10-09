@@ -38,7 +38,7 @@ const RFIDCards: React.FC = () => {
       .from("rfid_cards")
       .select(
         `
-        id, alias, is_admin, uid, status, created_at, balance_points
+        id, alias, is_admin, is_helper_card, uid, status, created_at, balance_points
       `
       )
       .order("created_at", { ascending: false });
@@ -126,6 +126,7 @@ const RFIDCards: React.FC = () => {
     (RFIDCard & { customers?: { name: string; phone: string } | null }) | null
   >(null);
   const [editIsAdmin, setEditIsAdmin] = useState(false);
+  const [editIsHelper, setEditIsHelper] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
   // History modal state
@@ -216,6 +217,7 @@ const RFIDCards: React.FC = () => {
   ) => {
     setEditCard(card);
     setEditIsAdmin(card.is_admin);
+    setEditIsHelper(card.is_helper_card);
     setEditAlias(card.alias || "");
   };
 
@@ -225,7 +227,11 @@ const RFIDCards: React.FC = () => {
     try {
       await supabase
         .from("rfid_cards")
-        .update({ is_admin: editIsAdmin, alias: editAlias.trim() || null })
+        .update({
+          is_admin: editIsAdmin,
+          is_helper_card: editIsHelper,
+          alias: editAlias.trim() || null,
+        })
         .eq("id", editCard.id);
       Swal.fire("Berhasil", "Kartu berhasil diperbarui", "success");
       load();
@@ -622,6 +628,18 @@ const RFIDCards: React.FC = () => {
                       />
                       <label htmlFor="edit-admin-only" className="text-sm">
                         Kartu Admin
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="edit-helper-only"
+                        type="checkbox"
+                        checked={editIsHelper}
+                        onChange={(e) => setEditIsHelper(e.target.checked)}
+                        className="rounded"
+                      />
+                      <label htmlFor="edit-helper-only" className="text-sm">
+                        Kartu Helper
                       </label>
                     </div>
                   </div>

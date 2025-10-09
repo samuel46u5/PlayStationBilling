@@ -1,5 +1,6 @@
 import {
   CreditCard,
+  RotateCcw,
   Pause,
   Info,
   Power,
@@ -287,7 +288,7 @@ const ActiveRentals: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from("rfid_cards")
-        .select("uid, balance_points, status")
+        .select("uid, balance_points, status, is_helper_card")
         .eq("uid", uid)
         .single();
 
@@ -301,6 +302,27 @@ const ActiveRentals: React.FC = () => {
     } catch (error) {
       console.error("Error fetching card data:", error);
       setScannedCardData(null);
+    }
+  };
+
+  const resetPoints = async () => {
+    if (!scannedCardUID || !scannedCardData) return;
+
+    try {
+      const { error } = await supabase
+        .from("rfid_cards")
+        .update({ balance_points: 0 })
+        .eq("uid", scannedCardUID);
+
+      if (!error) {
+        setScannedCardData({ ...scannedCardData, balance_points: 0 });
+        Swal.fire("Berhasil", "Points berhasil direset menjadi 0", "success");
+      } else {
+        Swal.fire("Gagal", "Gagal mereset points", "error");
+      }
+    } catch (error) {
+      console.error("Error resetting points:", error);
+      Swal.fire("Gagal", "Terjadi kesalahan saat mereset points", "error");
     }
   };
 
@@ -6187,15 +6209,15 @@ const ActiveRentals: React.FC = () => {
                               ? "✅ Aktif"
                               : "❌ Tidak Aktif"}
                           </p>
-                          <button
+                          {/* <button
                             onClick={() => {
                               setScannedCardData(null);
                               setScannedCardUID("");
                             }}
                             className="text-sm text-green-600 underline mt-2"
                           >
-                            Reset
-                          </button>
+                            Reset Input
+                          </button> */}
                         </div>
                       </div>
                     </div>
@@ -6226,6 +6248,15 @@ const ActiveRentals: React.FC = () => {
                       <History className="h-5 w-5 mr-2" />
                       History Points
                     </button>
+                    {scannedCardData?.is_helper_card && (
+                      <button
+                        onClick={resetPoints}
+                        className="mx-auto mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2"
+                      >
+                        <RotateCcw className="h-5 w-5 mr-2" />
+                        Reset Points
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
