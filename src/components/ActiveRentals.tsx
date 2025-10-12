@@ -19,6 +19,7 @@ import { useTimer } from "../contexts/TimerContext";
 import { useRFIDReader } from "../hooks/useRFIDReader";
 import type { CardUsageLog } from "../types";
 import paketService from "../lib/paketService";
+import { useAuth } from "../contexts/AuthContext";
 // import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
 
 interface SaleItem {
@@ -230,6 +231,8 @@ const ActiveRentals: React.FC = () => {
     isTimerRunning,
     triggerUnusedConsolesCheck,
   } = useTimer();
+
+  const { user } = useAuth();
 
   // Untuk interface pembayaran mirip Cashier
   const [isManualInput, setIsManualInput] = useState(false);
@@ -3224,7 +3227,7 @@ const ActiveRentals: React.FC = () => {
         paymentMethod: paymentMethod.toUpperCase(),
         paymentAmount: paymentAmount,
         change: paymentAmount - finalTotal,
-        cashier: "System",
+        cashier: user?.full_name || "System",
       };
 
       const details = {
@@ -4295,7 +4298,7 @@ const ActiveRentals: React.FC = () => {
         paymentMethod: paymentMethod.toUpperCase(),
         paymentAmount: paymentAmount,
         change: paymentAmount - finalAmount,
-        cashier: "System",
+        cashier: user?.full_name || "System",
       };
 
       // Close modal and reset states
@@ -5373,7 +5376,7 @@ const ActiveRentals: React.FC = () => {
         paymentMethod: paymentMethod.toUpperCase(),
         paymentAmount: paymentAmount,
         change: paymentAmount - finalTotal,
-        cashier: "System",
+        cashier: user?.full_name || "System",
       };
 
       const details = {
@@ -8908,7 +8911,7 @@ const ActiveRentals: React.FC = () => {
                             <p className="text-sm text-yellow-800">
                               Silakan scan kartu RFID atau masukkan UID manual.
                             </p>
-                            <input
+                            {/* <input
                               type="text"
                               placeholder="Input UID kartu manual"
                               value={scannedCardUID}
@@ -8921,7 +8924,7 @@ const ActiveRentals: React.FC = () => {
                                 }
                               }}
                               className="mt-2 px-3 py-2 border border-gray-300 rounded-lg"
-                            />
+                            /> */}
                             <p className="text-xs text-yellow-600 mt-1">
                               Kartu akan otomatis terdeteksi saat di-scan
                             </p>

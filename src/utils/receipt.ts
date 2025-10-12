@@ -66,20 +66,20 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   };
 
   // HEADER
-  lines.push("=".repeat(lineWidth));
-  lines.push(
-    center(
-      generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"
-    )
-  );
-  if (generalSettings.businessAddress)
-    lines.push(center(generalSettings.businessAddress));
-  if (generalSettings.businessPhone)
-    lines.push(center(`Telp: ${generalSettings.businessPhone}`));
-  if (generalSettings.businessEmail)
-    lines.push(center(`Email: ${generalSettings.businessEmail}`));
-  lines.push("=".repeat(lineWidth));
-  lines.push(pad(`RECEIPT ID : ${tx.id}`, lineWidth));
+  // lines.push("=".repeat(lineWidth));
+  // lines.push(
+  //   center(
+  //     generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"
+  //   )
+  // );
+  // if (generalSettings.businessAddress)
+  //   lines.push(center(generalSettings.businessAddress));
+  // if (generalSettings.businessPhone)
+  //   lines.push(center(`Telp: ${generalSettings.businessPhone}`));
+  // if (generalSettings.businessEmail)
+  //   lines.push(center(`Email: ${generalSettings.businessEmail}`));
+  // lines.push("=".repeat(lineWidth));
+  // lines.push(pad(`RECEIPT ID : ${tx.id}`, lineWidth));
   lines.push(pad(`TANGGAL    : ${tx.timestamp}`, lineWidth));
   // if (tx.customer)
   //   lines.push(pad(`CUSTOMER   : ${tx.customer.name}`, lineWidth));
@@ -87,10 +87,10 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   lines.push("-".repeat(lineWidth));
 
   // ITEMS HEADER
-  lines.push(
-    pad("ITEM", 20) + pad("QTY", 5, "right") + pad("TOTAL", 15, "right")
-  );
-  lines.push("-".repeat(lineWidth));
+  // lines.push(
+  //   pad("ITEM", 20) + pad("QTY", 5, "right") + pad("TOTAL", 15, "right")
+  // );
+  // lines.push("-".repeat(lineWidth));
 
   // ITEMS LIST
   tx.items.forEach((item, index) => {
@@ -128,7 +128,7 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
     );
   }
 
-  lines.push("=".repeat(lineWidth));
+  // lines.push("=".repeat(lineWidth));
   lines.push(pad("TOTAL :", 25) + pad(formatMoney(tx.total), 15, "right"));
   lines.push(
     pad(`BAYAR (${tx.paymentMethod.toUpperCase()}):`, 25) +
@@ -140,7 +140,7 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
       pad("KEMBALIAN :", 25) + pad(formatMoney(tx.change), 15, "right")
     );
   }
-  lines.push("=".repeat(lineWidth));
+  // lines.push("=".repeat(lineWidth));
 
   // FOOTER
   // lines.push(center("TERIMA KASIH"));
@@ -208,17 +208,17 @@ export const generateRentalProofHTML = async (data: RentalProofData) => {
   const lines: string[] = [];
 
   // HEADER
-  lines.push("=".repeat(lineWidth));
-  lines.push(
-    center(
-      generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"
-    )
-  );
-  if (generalSettings.businessAddress)
-    lines.push(center(generalSettings.businessAddress));
-  if (generalSettings.businessPhone)
-    lines.push(center(`Telp: ${generalSettings.businessPhone}`));
-  lines.push("=".repeat(lineWidth));
+  // lines.push("=".repeat(lineWidth));
+  // lines.push(
+  //   center(
+  //     generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"
+  //   )
+  // );
+  // if (generalSettings.businessAddress)
+  //   lines.push(center(generalSettings.businessAddress));
+  // if (generalSettings.businessPhone)
+  //   lines.push(center(`Telp: ${generalSettings.businessPhone}`));
+  // lines.push("=".repeat(lineWidth));
 
   // TITLE
   lines.push(center("BUKTI RENTAL"));
@@ -230,7 +230,7 @@ export const generateRentalProofHTML = async (data: RentalProofData) => {
   lines.push(pad(`No Unit  : ${data.unitNumber}`, lineWidth));
   lines.push(pad(`Mulai    : ${data.startTimestamp}`, lineWidth));
 
-  lines.push("=".repeat(lineWidth));
+  // lines.push("=".repeat(lineWidth));
 
   // FOOTER
   // lines.push(center("HARAP SIMPAN BUKTI INI"));
