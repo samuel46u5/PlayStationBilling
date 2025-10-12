@@ -503,7 +503,9 @@ const CashierSessionComponent: React.FC = () => {
           total: todayTotalRevenue,
           description: `Cafe: Rp ${todayTotalSales.toLocaleString(
             "id-ID"
-          )} | Rental: Rp ${todayTotalRentals.toLocaleString("id-ID")}`,
+          )} | Rental: Rp ${todayTotalRentals.toLocaleString(
+            "id-ID"
+          )} | Voucher: Rp ${todayTotalVouchers.toLocaleString("id-ID")}`,
         },
         {
           name: "Total Pengeluaran",
