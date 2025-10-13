@@ -690,6 +690,15 @@ export const db = {
         .single();
       if (error) throw error;
       return data;
+    },
+
+    async deleteSession(id: string) {
+      const { error } = await supabase
+        .from('stock_opname_sessions')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      return true;
     }
   },
 

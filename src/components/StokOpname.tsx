@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { db } from "../lib/supabase";
 import Swal from "sweetalert2";
-import { Plus, Search, XCircle } from "lucide-react";
+import { Plus, Search, Trash, XCircle } from "lucide-react";
 
 type Product = any;
 
@@ -54,12 +54,17 @@ const StokOpname: React.FC<{
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showLoadModal, setShowLoadModal] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState("");
   const [showProductSelectModal, setShowProductSelectModal] = useState<{
     open: boolean;
     index: number | null;
   }>({ open: false, index: null });
+  const [expandedSessions, setExpandedSessions] = useState<Set<string>>(
+    new Set()
+  );
+  const [sessionItemsMap, setSessionItemsMap] = useState<Record<string, any[]>>(
+    {}
+  );
 
   // track focused input to restore focus after state updates (prevents focus-jump)
   const focusedRef = useRef<{
@@ -155,8 +160,16 @@ const StokOpname: React.FC<{
       const session = await (db as any).stockOpname.getSessionWithItems(
         sessionId
       );
-      setCurrent(session);
-      setShowLoadModal(false);
+      setSessionItemsMap((m: any) => ({
+        ...m,
+        [sessionId]: session.rows || [],
+      }));
+      setExpandedSessions((prev) => {
+        const s = new Set(prev);
+        if (s.has(sessionId)) s.delete(sessionId);
+        else s.add(sessionId);
+        return s;
+      });
     } catch (err: any) {
       console.error("Error loading session:", err);
       Swal.fire({
@@ -838,113 +851,24 @@ const StokOpname: React.FC<{
       </div>
     ) : null;
 
-  // Load Session Modal
-  const LoadSessionModal = () =>
-    showLoadModal ? (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">
-                Pilih Sesi Stok Opname
-              </h3>
-              <button
-                onClick={() => setShowLoadModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <XCircle className="h-6 w-6" />
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-gray-500">Memuat sesi...</div>
-              </div>
-            ) : (
-              <div className="max-h-[60vh] overflow-y-auto">
-                {savedSessions.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    Belum ada sesi stok opname tersimpan
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {savedSessions.map((session: any) => (
-                      <button
-                        key={session.id}
-                        onClick={() => loadSession(session.id)}
-                        className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-gray-900">
-                              {session.name ||
-                                session.nomor ||
-                                "Sesi Stok Opname"}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Tanggal:{" "}
-                              {new Date(
-                                session.opname_date || session.created_at
-                              ).toLocaleDateString("id-ID")}
-                            </div>
-                            <div className="text-xs text-gray-400">
-                              Dibuat oleh:{" "}
-                              {session.users?.full_name || "Unknown"}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm text-gray-700">
-                              Selisih:{" "}
-                              {session.totals_diff?.toLocaleString() || 0}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              Nominal: Rp{" "}
-                              {Number(
-                                session.totals_nominal || 0
-                              ).toLocaleString("id-ID")}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="border-t border-gray-200 pt-4 mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowLoadModal(false)}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    ) : null;
+  // removed LoadSessionModal
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Stok Opname</h2>
         <div className="flex items-center gap-2">
+          <div className="text-sm text-gray-500">
+            Total: {savedSessions.length} sesi
+          </div>
           {onOpenCreate && (
             <button
-              onClick={() => onOpenCreate()}
+              onClick={async () => await startNew()}
               className="px-3 py-1 rounded bg-indigo-600 text-white text-sm"
             >
               Buat Stok Opname
             </button>
           )}
-          <button
-            onClick={() => setShowLoadModal(true)}
-            className="px-3 py-1 rounded bg-purple-600 text-white text-sm"
-          >
-            Muat Sesi
-          </button>
           <input
             ref={fileInputRef}
             type="file"
@@ -960,12 +884,11 @@ const StokOpname: React.FC<{
           </button>
           <button
             onClick={async () => {
-              if (!current) await startNew();
-              else await addRow();
+              await startNew();
             }}
             className="px-3 py-1 rounded bg-blue-600 text-white text-sm"
           >
-            Buat / Tambah Baris
+            Buat Stok Opname
           </button>
           <button
             onClick={() => {
@@ -991,14 +914,13 @@ const StokOpname: React.FC<{
         </div>
       )}
 
-      {!loading && !current && (
+      {!loading && !current && savedSessions.length === 0 && (
         <div className="text-sm text-gray-500 mb-4">
-          Tekan "Buat / Tambah Baris" untuk memulai atau "Muat Sesi" untuk
-          membuka sesi yang tersimpan.
+          Tekan "Buat Stok Opname" untuk memulai.
         </div>
       )}
 
-      {current && (
+      {/* {current && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
@@ -1027,32 +949,69 @@ const StokOpname: React.FC<{
               </div>
             </div>
 
-            {/* Action buttons for current session */}
-            <div className="flex items-center gap-2 mb-4">
-              <button
-                onClick={async () => await addRowWithProduct()}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-sm flex items-center gap-1"
-              >
-                <Plus className="h-4 w-4" /> Tambah Item
-              </button>
-              <button
-                onClick={() => saveToServer()}
-                className={`px-3 py-1 rounded text-white text-sm ${
-                  (current?.rows || []).length === 0
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-green-600 hover:bg-green-700"
-                }`}
-                disabled={(current?.rows || []).length === 0}
-              >
-                Simpan
-              </button>
-              <button
-                onClick={() => setCurrent(null)}
-                className="px-3 py-1 rounded bg-gray-500 text-white text-sm"
-              >
-                Tutup Sesi
-              </button>
-            </div>
+            {(() => {
+              const isExisting = Boolean(
+                current?.id && String(current.id).length > 8
+              );
+              if (isExisting) {
+                return (
+                  <div className="flex items-center gap-2 mb-4">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await (db as any).stockOpname.deleteSession(
+                            current.id
+                          );
+                          Swal.fire({
+                            icon: "success",
+                            title: "Terhapus",
+                            text: "Sesi stok opname dihapus.",
+                          });
+                          setCurrent(null);
+                          loadSavedSessions();
+                        } catch (e: any) {
+                          Swal.fire({
+                            icon: "error",
+                            title: "Gagal",
+                            text: e?.message || "Gagal menghapus sesi",
+                          });
+                        }
+                      }}
+                      className="px-3 py-1 rounded bg-red-600 text-white text-sm"
+                    >
+                      Hapus Sesi
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    onClick={async () => await addRowWithProduct()}
+                    className="px-3 py-1 rounded bg-blue-600 text-white text-sm flex items-center gap-1"
+                  >
+                    <Plus className="h-4 w-4" /> Tambah Item
+                  </button>
+                  <button
+                    onClick={() => saveToServer()}
+                    className={`px-3 py-1 rounded text-white text-sm ${
+                      (current?.rows || []).length === 0
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-green-600 hover:bg-green-700"
+                    }`}
+                    disabled={(current?.rows || []).length === 0}
+                  >
+                    Simpan
+                  </button>
+                  <button
+                    onClick={() => setCurrent(null)}
+                    className="px-3 py-1 rounded bg-gray-500 text-white text-sm"
+                  >
+                    Tutup Sesi
+                  </button>
+                </div>
+              );
+            })()}
 
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -1091,7 +1050,10 @@ const StokOpname: React.FC<{
                         <button
                           type="button"
                           onClick={() => openProductSelect(index)}
-                          className="w-full text-left px-2 py-1 border border-gray-300 rounded text-sm flex items-center justify-between hover:bg-gray-50"
+                          disabled={Boolean(
+                            current?.id && String(current.id).length > 8
+                          )}
+                          className="w-full text-left px-2 py-1 border border-gray-300 rounded text-sm flex items-center justify-between hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           <span>
                             {r.productId
@@ -1122,6 +1084,9 @@ const StokOpname: React.FC<{
                           ref={(el) => {
                             inputRefs.current[r.id] = el;
                           }}
+                          disabled={Boolean(
+                            current?.id && String(current.id).length > 8
+                          )}
                           onFocus={(e) => {
                             const t = e.target as HTMLInputElement;
                             focusedRef.current = {
@@ -1176,17 +1141,24 @@ const StokOpname: React.FC<{
                           onChange={(e) =>
                             updateRow(r.id, { note: e.target.value })
                           }
-                          className="w-full px-2 py-1 border rounded text-sm"
+                          disabled={Boolean(
+                            current?.id && String(current.id).length > 8
+                          )}
+                          className="w-full px-2 py-1 border rounded text-sm disabled:opacity-60"
                           placeholder="Catatan..."
                         />
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <button
-                          onClick={() => removeRow(r.id)}
-                          className="text-sm text-red-600 hover:text-red-800"
-                        >
-                          Hapus
-                        </button>
+                        {!Boolean(
+                          current?.id && String(current.id).length > 8
+                        ) && (
+                          <button
+                            onClick={() => removeRow(r.id)}
+                            className="text-sm text-red-600 hover:text-red-800"
+                          >
+                            Hapus
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1234,24 +1206,25 @@ const StokOpname: React.FC<{
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
-      {/* {savedSessions.length > 0 && (
+      {/* Saved sessions list */}
+      {savedSessions.length > 0 && (
         <div className="mt-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">
+            {/* <h3 className="text-lg font-semibold">
               Sesi Stok Opname Tersimpan
             </h3>
             <div className="text-sm text-gray-500">
               Total: {savedSessions.length} sesi
-            </div>
+            </div> */}
           </div>
           <div className="space-y-4">
             {savedSessions.map((session: any) => (
               <div
                 key={session.id}
                 className={`bg-white border rounded-lg p-4 cursor-pointer transition-colors ${
-                  current?.id === session.id
+                  expandedSessions.has(session.id)
                     ? "border-indigo-500 bg-indigo-50"
                     : "border-gray-200 hover:border-gray-300"
                 }`}
@@ -1282,44 +1255,89 @@ const StokOpname: React.FC<{
                         "id-ID"
                       )}
                     </div>
-                    {current?.id === session.id && (
+                    <div className="mt-2">
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+
+                          const result = await Swal.fire({
+                            title: "Apakah Anda yakin?",
+                            text: `Sesi "${
+                              session.name || session.nomor
+                            }" akan dihapus secara permanen!`,
+                            icon: "warning",
+                            showCancelButton: true,
+                            confirmButtonColor: "#d33",
+                            cancelButtonColor: "#3085d6",
+                            confirmButtonText: "Ya, Hapus!",
+                            cancelButtonText: "Batal",
+                          });
+
+                          if (result.isConfirmed) {
+                            try {
+                              await (db as any).stockOpname.deleteSession(
+                                session.id
+                              );
+                              Swal.fire({
+                                icon: "success",
+                                title: "Terhapus",
+                                text: "Sesi stok opname dihapus.",
+                              });
+                              setCurrent(null);
+                              loadSavedSessions();
+                            } catch (e: any) {
+                              Swal.fire({
+                                icon: "error",
+                                title: "Gagal",
+                                text: e?.message || "Gagal menghapus sesi",
+                              });
+                            }
+                          }
+                        }}
+                        className="px-3 py-2 rounded bg-red-600 text-white text-sm"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {expandedSessions.has(session.id) && (
                       <div className="text-xs text-indigo-600 font-medium mt-1">
-                        Sedang dilihat
+                        Dibuka
                       </div>
                     )}
                   </div>
                 </div>
 
-                {current?.id === session.id &&
-                  current?.rows &&
-                  current.rows.length > 0 && (
-                    <div className="border-t border-gray-200 pt-3">
-                      <div className="text-sm font-medium text-gray-700 mb-2">
-                        Item Stok Opname ({current.rows.length} item)
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full text-xs">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-2 py-1 text-left font-medium text-gray-500">
-                                Produk
-                              </th>
-                              <th className="px-2 py-1 text-right font-medium text-gray-500">
-                                Sistem
-                              </th>
-                              <th className="px-2 py-1 text-right font-medium text-gray-500">
-                                Fisik
-                              </th>
-                              <th className="px-2 py-1 text-right font-medium text-gray-500">
-                                Selisih
-                              </th>
-                              <th className="px-2 py-1 text-right font-medium text-gray-500">
-                                Nominal
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {current.rows.slice(0, 5).map((item: any) => (
+                {expandedSessions.has(session.id) && (
+                  <div className="border-t border-gray-200 pt-3">
+                    <div className="text-sm font-medium text-gray-700 mb-2">
+                      Item Stok Opname (
+                      {sessionItemsMap[session.id]?.length || 0} item)
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-2 py-1 text-left font-medium text-gray-500">
+                              Produk
+                            </th>
+                            <th className="px-2 py-1 text-right font-medium text-gray-500">
+                              Sistem
+                            </th>
+                            <th className="px-2 py-1 text-right font-medium text-gray-500">
+                              Fisik
+                            </th>
+                            <th className="px-2 py-1 text-right font-medium text-gray-500">
+                              Selisih
+                            </th>
+                            <th className="px-2 py-1 text-right font-medium text-gray-500">
+                              Nominal
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {(sessionItemsMap[session.id] || [])
+                            .slice(0, 5)
+                            .map((item: any) => (
                               <tr key={item.id}>
                                 <td className="px-2 py-1">
                                   <div className="font-medium">
@@ -1350,10 +1368,8 @@ const StokOpname: React.FC<{
                                       : "text-red-600"
                                   }`}
                                 >
-                                  {(
-                                    (item.physicalStock || 0) -
-                                    (item.systemStock || 0)
-                                  ).toLocaleString()}
+                                  {(item.physicalStock || 0) -
+                                    (item.systemStock || 0)}
                                 </td>
                                 <td className="px-2 py-1 text-right">
                                   Rp{" "}
@@ -1365,24 +1381,30 @@ const StokOpname: React.FC<{
                                 </td>
                               </tr>
                             ))}
-                          </tbody>
-                        </table>
-                        {current.rows.length > 5 && (
-                          <div className="text-xs text-gray-500 mt-2 text-center">
-                            ... dan {current.rows.length - 5} item lainnya
-                          </div>
-                        )}
-                      </div>
+                        </tbody>
+                      </table>
+                      {(sessionItemsMap[session.id]?.length || 0) > 5 && (
+                        <div className="text-xs text-gray-500 mt-2 text-center">
+                          ... dan {sessionItemsMap[session.id].length - 5} item
+                          lainnya
+                        </div>
+                      )}
                     </div>
-                  )}
+                    {(sessionItemsMap[session.id]?.length || 0) === 0 && (
+                      <div className="text-sm text-gray-500">
+                        Tidak ada item.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
-      )} */}
+      )}
       {showCreateModal && <CreateModal />}
       <ProductSelectModal />
-      <LoadSessionModal />
+      {/* LoadSessionModal removed */}
     </div>
   );
 };
