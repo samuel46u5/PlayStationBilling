@@ -83,6 +83,9 @@ const CashierSessionComponent: React.FC = () => {
   const [newPaymentMethod, setNewPaymentMethod] = useState<
     "cash" | "card" | "transfer"
   >("cash");
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "card" | "transfer"
+  >("cash");
 
   // Get current user (in real app, this would come from auth context)
   const { user } = useAuth();
@@ -231,7 +234,10 @@ const CashierSessionComponent: React.FC = () => {
       todayRentals
         .filter((r) => r.payment_method === "cash")
         .reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
-      todayIncome.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
+      // todayIncome.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
+      todayIncome
+        .filter((i) => i.payment_method === "cash")
+        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
       todayVouchers
         .filter((v) => v.payment_method === "cash")
         .reduce((sum, v) => sum + (Number(v.amount) || 0), 0);
@@ -262,7 +268,8 @@ const CashierSessionComponent: React.FC = () => {
         session_id: currentSession.id,
         type: typeTransaction,
         amount: totalAmount,
-        payment_method: "cash",
+        // payment_method: "cash",
+        payment_method: typeTransaction === "income" ? paymentMethod : "cash",
         reference_id:
           typeTransaction === "expense"
             ? `EXP-${Date.now()}`
@@ -298,6 +305,8 @@ const CashierSessionComponent: React.FC = () => {
         title: "Transaksi berhasil ditambahkan!",
         text: `Jumlah: Rp ${totalAmount.toLocaleString("id-ID")}`,
       });
+
+      setPaymentMethod("cash");
     } catch (error) {
       console.error("Error adding expense:", error);
       Swal.fire({
@@ -585,6 +594,9 @@ const CashierSessionComponent: React.FC = () => {
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "cash")
       .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0) +
+    (todayIncome || [])
+      .filter((i: any) => i.payment_method === "cash")
+      .reduce((sum, i: any) => sum + (Number(i.amount) || 0), 0) +
     (todayVouchers || [])
       .filter((v: any) => v.payment_method === "cash")
       .reduce((sum, v: any) => sum + (Number(v.amount) || 0), 0);
@@ -596,6 +608,9 @@ const CashierSessionComponent: React.FC = () => {
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "card")
       .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0) +
+    (todayIncome || [])
+      .filter((i: any) => i.payment_method === "card")
+      .reduce((sum, i: any) => sum + (Number(i.amount) || 0), 0) +
     (todayVouchers || [])
       .filter((v: any) => v.payment_method === "card")
       .reduce((sum, v: any) => sum + (Number(v.amount) || 0), 0);
@@ -607,6 +622,9 @@ const CashierSessionComponent: React.FC = () => {
     (todayRentals || [])
       .filter((r: any) => r.payment_method === "transfer")
       .reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0) +
+    (todayIncome || [])
+      .filter((i: any) => i.payment_method === "transfer")
+      .reduce((sum, i: any) => sum + (Number(i.amount) || 0), 0) +
     (todayVouchers || [])
       .filter((v: any) => v.payment_method === "transfer")
       .reduce((sum, v: any) => sum + (Number(v.amount) || 0), 0);
@@ -1675,6 +1693,27 @@ const CashierSessionComponent: React.FC = () => {
                     <option value="expense">Pengeluaran</option>
                   </select>
                 </div>
+
+                {typeTransaction === "income" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Metode Pembayaran <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={paymentMethod}
+                      onChange={(e) =>
+                        setPaymentMethod(
+                          e.target.value as "cash" | "card" | "transfer"
+                        )
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="transfer">QRIS</option>
+                    </select>
+                  </div>
+                )}
 
                 {/* <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
