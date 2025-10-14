@@ -396,8 +396,8 @@ const ActiveRentals: React.FC = () => {
           "id, card_uid, session_id, action_type, points_amount, balance_before, balance_after, timestamp, notes"
         )
         .eq("card_uid", cardUID)
-        .order("timestamp", { ascending: false })
-        .limit(100);
+        .order("timestamp", { ascending: false });
+      // .limit(100);
 
       if (error) throw error;
       setHistoryLogs((data || []) as unknown as CardUsageLog[]);
