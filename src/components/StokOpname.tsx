@@ -65,6 +65,13 @@ const StokOpname: React.FC<{
   const [sessionItemsMap, setSessionItemsMap] = useState<Record<string, any[]>>(
     {}
   );
+  // Filters like purchases list
+  const [opnameSearch, setOpnameSearch] = useState<string>("");
+  const [opnamePeriod, setOpnamePeriod] = useState<string>("week");
+  const [opnameDateRange, setOpnameDateRange] = useState<{
+    start: string;
+    end: string;
+  }>({ start: "", end: "" });
 
   // track focused input to restore focus after state updates (prevents focus-jump)
   const focusedRef = useRef<{
@@ -186,6 +193,95 @@ const StokOpname: React.FC<{
   React.useEffect(() => {
     loadSavedSessions();
   }, []);
+
+  // Compute filtered sessions (by period + search)
+  const filteredSavedSessions = React.useMemo(() => {
+    const now = new Date();
+    let start: Date | null = null;
+    let end: Date | null = null;
+    switch (opnamePeriod) {
+      case "today": {
+        const s = new Date();
+        s.setHours(0, 0, 0, 0);
+        start = s;
+        const e = new Date();
+        e.setHours(23, 59, 59, 999);
+        end = e;
+        break;
+      }
+      case "yesterday": {
+        const s = new Date();
+        s.setDate(s.getDate() - 1);
+        s.setHours(0, 0, 0, 0);
+        start = s;
+        const e = new Date(s);
+        e.setHours(23, 59, 59, 999);
+        end = e;
+        break;
+      }
+      case "week": {
+        const s = new Date();
+        const d = s.getDay();
+        const diff = (d === 0 ? -6 : 1) - d;
+        s.setDate(s.getDate() + diff);
+        s.setHours(0, 0, 0, 0);
+        start = s;
+        const e = new Date();
+        e.setHours(23, 59, 59, 999);
+        end = e;
+        break;
+      }
+      case "month": {
+        const s = new Date(now.getFullYear(), now.getMonth(), 1);
+        start = s;
+        const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        e.setHours(23, 59, 59, 999);
+        end = e;
+        break;
+      }
+      case "range": {
+        if (opnameDateRange.start) {
+          start = new Date(opnameDateRange.start);
+          start.setHours(0, 0, 0, 0);
+        }
+        if (opnameDateRange.end) {
+          end = new Date(opnameDateRange.end);
+          end.setHours(23, 59, 59, 999);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    const out = (savedSessions || [])
+      .filter((s: any) => {
+        const dt = s.opname_date
+          ? new Date(s.opname_date)
+          : s.created_at
+          ? new Date(s.created_at)
+          : null;
+        if (dt) {
+          if (start && dt < start) return false;
+          if (end && dt > end) return false;
+        }
+        if (!opnameSearch) return true;
+        const st = opnameSearch.toLowerCase();
+        const nomor = String(s.nomor || s.name || "").toLowerCase();
+        return nomor.includes(st);
+      })
+      .sort((a: any, b: any) => {
+        const da = new Date(a.opname_date || a.created_at).getTime();
+        const db = new Date(b.opname_date || b.created_at).getTime();
+        return db - da; // newest first
+      });
+    return out;
+  }, [
+    savedSessions,
+    opnameSearch,
+    opnamePeriod,
+    opnameDateRange.start,
+    opnameDateRange.end,
+  ]);
 
   const startNew = async () => {
     try {
@@ -1068,7 +1164,7 @@ const StokOpname: React.FC<{
                         {r.barcode && (
                           <div className="text-xs text-gray-500 mt-1">
                             Barcode: {r.barcode}
-                          </div>
+                        </div>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -1080,29 +1176,29 @@ const StokOpname: React.FC<{
                           inputMode="numeric"
                           data-row-id={r.id}
                           data-field="physicalStock"
-                          value={r.physicalStock ?? ""}
+                            value={r.physicalStock ?? ""}
                           ref={(el) => {
                             inputRefs.current[r.id] = el;
                           }}
                           disabled={Boolean(
                             current?.id && String(current.id).length > 8
                           )}
-                          onFocus={(e) => {
-                            const t = e.target as HTMLInputElement;
+                            onFocus={(e) => {
+                              const t = e.target as HTMLInputElement;
                             focusedRef.current = {
                               id: r.id,
                               field: "physicalStock",
                               start: t.selectionStart,
                               end: t.selectionEnd,
                             };
-                          }}
-                          onChange={(e) => {
+                            }}
+                            onChange={(e) => {
                             const raw = String(e.target.value || "");
                             const cleaned = raw.replace(/[^0-9.-]/g, "");
                             const v = cleaned === "" ? 0 : Number(cleaned);
-                            updateRow(r.id, { physicalStock: v });
-                          }}
-                          className="w-20 text-right px-2 py-1 border rounded appearance-none"
+                              updateRow(r.id, { physicalStock: v });
+                            }}
+                            className="w-20 text-right px-2 py-1 border rounded appearance-none"
                           style={{ MozAppearance: "textfield" as any }}
                         />
                       </td>
@@ -1211,194 +1307,259 @@ const StokOpname: React.FC<{
       {/* Saved sessions list */}
       {savedSessions.length > 0 && (
         <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            {/* <h3 className="text-lg font-semibold">
-              Sesi Stok Opname Tersimpan
-            </h3>
-            <div className="text-sm text-gray-500">
-              Total: {savedSessions.length} sesi
-            </div> */}
-          </div>
-          <div className="space-y-4">
-            {savedSessions.map((session: any) => (
-              <div
-                key={session.id}
-                className={`bg-white border rounded-lg p-4 cursor-pointer transition-colors ${
-                  expandedSessions.has(session.id)
-                    ? "border-indigo-500 bg-indigo-50"
-                    : "border-gray-200 hover:border-gray-300"
-                }`}
-                onClick={() => loadSession(session.id)}
+          <div className="flex flex-col md:flex-row md:items-end gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Cari Sesi
+              </label>
+              <input
+                type="text"
+                placeholder="Cari Nomor/Name Sesi..."
+                value={opnameSearch}
+                onChange={(e) => setOpnameSearch(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Periode
+              </label>
+              <select
+                value={opnamePeriod}
+                onChange={(e) => setOpnamePeriod(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="font-medium text-gray-900">
-                      {session.name || session.nomor || "Sesi Stok Opname"}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      Tanggal:{" "}
-                      {new Date(
-                        session.opname_date || session.created_at
-                      ).toLocaleDateString("id-ID")}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      Dibuat oleh: {session.users?.full_name || "Unknown"}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-700">
-                      Selisih: {session.totals_diff?.toLocaleString() || 0}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Nominal: Rp{" "}
-                      {Number(session.totals_nominal || 0).toLocaleString(
-                        "id-ID"
-                      )}
-                    </div>
-                    <div className="mt-2">
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-
-                          const result = await Swal.fire({
-                            title: "Apakah Anda yakin?",
-                            text: `Sesi "${
-                              session.name || session.nomor
-                            }" akan dihapus secara permanen!`,
-                            icon: "warning",
-                            showCancelButton: true,
-                            confirmButtonColor: "#d33",
-                            cancelButtonColor: "#3085d6",
-                            confirmButtonText: "Ya, Hapus!",
-                            cancelButtonText: "Batal",
-                          });
-
-                          if (result.isConfirmed) {
-                            try {
-                              await (db as any).stockOpname.deleteSession(
-                                session.id
-                              );
-                              Swal.fire({
-                                icon: "success",
-                                title: "Terhapus",
-                                text: "Sesi stok opname dihapus.",
-                              });
-                              setCurrent(null);
-                              loadSavedSessions();
-                            } catch (e: any) {
-                              Swal.fire({
-                                icon: "error",
-                                title: "Gagal",
-                                text: e?.message || "Gagal menghapus sesi",
-                              });
-                            }
-                          }
-                        }}
-                        className="px-3 py-2 rounded bg-red-600 text-white text-sm"
-                      >
-                        <Trash className="h-4 w-4" />
-                      </button>
-                    </div>
-                    {expandedSessions.has(session.id) && (
-                      <div className="text-xs text-indigo-600 font-medium mt-1">
-                        Dibuka
-                      </div>
-                    )}
-                  </div>
+                <option value="today">Hari Ini</option>
+                <option value="yesterday">Kemarin</option>
+                <option value="week">Minggu Ini</option>
+                <option value="month">Bulan Ini</option>
+                <option value="range">Rentang Waktu</option>
+              </select>
+            </div>
+            {opnamePeriod === "range" && (
+              <div className="flex gap-2 items-end">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Dari
+                  </label>
+                  <input
+                    type="date"
+                    value={opnameDateRange.start}
+                    onChange={(e) =>
+                      setOpnameDateRange((r) => ({
+                        ...r,
+                        start: e.target.value,
+                      }))
+                    }
+                    className="px-3 py-2 border border-gray-300 rounded-lg"
+                  />
                 </div>
-
-                {expandedSessions.has(session.id) && (
-                  <div className="border-t border-gray-200 pt-3">
-                    <div className="text-sm font-medium text-gray-700 mb-2">
-                      Item Stok Opname (
-                      {sessionItemsMap[session.id]?.length || 0} item)
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-xs">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-2 py-1 text-left font-medium text-gray-500">
-                              Produk
-                            </th>
-                            <th className="px-2 py-1 text-right font-medium text-gray-500">
-                              Sistem
-                            </th>
-                            <th className="px-2 py-1 text-right font-medium text-gray-500">
-                              Fisik
-                            </th>
-                            <th className="px-2 py-1 text-right font-medium text-gray-500">
-                              Selisih
-                            </th>
-                            <th className="px-2 py-1 text-right font-medium text-gray-500">
-                              Nominal
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {(sessionItemsMap[session.id] || [])
-                            .slice(0, 5)
-                            .map((item: any) => (
-                              <tr key={item.id}>
-                                <td className="px-2 py-1">
-                                  <div className="font-medium">
-                                    {item.productName || "-"}
-                                  </div>
-                                  {item.barcode && (
-                                    <div className="text-gray-400">
-                                      {item.barcode}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="px-2 py-1 text-right">
-                                  {Number(
-                                    item.systemStock || 0
-                                  ).toLocaleString()}
-                                </td>
-                                <td className="px-2 py-1 text-right">
-                                  {Number(
-                                    item.physicalStock || 0
-                                  ).toLocaleString()}
-                                </td>
-                                <td
-                                  className={`px-2 py-1 text-right font-medium ${
-                                    Number(item.physicalStock || 0) -
-                                      Number(item.systemStock || 0) >
-                                    0
-                                      ? "text-green-600"
-                                      : "text-red-600"
-                                  }`}
-                                >
-                                  {(item.physicalStock || 0) -
-                                    (item.systemStock || 0)}
-                                </td>
-                                <td className="px-2 py-1 text-right">
-                                  Rp{" "}
-                                  {(
-                                    ((item.physicalStock || 0) -
-                                      (item.systemStock || 0)) *
-                                    Number(item.unitCost || 0)
-                                  ).toLocaleString("id-ID")}
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                      {(sessionItemsMap[session.id]?.length || 0) > 5 && (
-                        <div className="text-xs text-gray-500 mt-2 text-center">
-                          ... dan {sessionItemsMap[session.id].length - 5} item
-                          lainnya
-                        </div>
-                      )}
-                    </div>
-                    {(sessionItemsMap[session.id]?.length || 0) === 0 && (
-                      <div className="text-sm text-gray-500">
-                        Tidak ada item.
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Sampai
+                  </label>
+                  <input
+                    type="date"
+                    value={opnameDateRange.end}
+                    onChange={(e) =>
+                      setOpnameDateRange((r) => ({ ...r, end: e.target.value }))
+                    }
+                    className="px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
               </div>
-            ))}
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto mt-4">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Nomor
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Tanggal
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    Total Selisih
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    Nominal
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {filteredSavedSessions.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center text-gray-400 py-6">
+                      Tidak ada sesi stok opname ditemukan.
+                    </td>
+                  </tr>
+                )}
+                {filteredSavedSessions.map((s: any) => {
+                  const dateStr = s.opname_date
+                    ? new Date(s.opname_date).toLocaleDateString("id-ID")
+                    : s.created_at
+                    ? new Date(s.created_at).toLocaleDateString("id-ID")
+                    : "-";
+                  const isOpen = expandedSessions.has(s.id);
+                  return (
+                    <React.Fragment key={s.id}>
+                      <tr>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-900">
+                          <button
+                            onClick={() => loadSession(s.id)}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {s.nomor || s.name || "-"}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3">{dateStr}</td>
+                        <td className="px-4 py-3 text-right">
+                          {Number(s.totals_diff || 0).toLocaleString("id-ID")}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-blue-700 text-right">
+                          Rp{" "}
+                          {Number(s.totals_nominal || 0).toLocaleString(
+                            "id-ID"
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {/* <button
+                              onClick={() => loadSession(s.id)}
+                              className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                            >
+                              {isOpen ? "Tutup" : "Lihat"} Items
+                            </button> */}
+                            <button
+                              onClick={async () => {
+                                const result = await Swal.fire({
+                                  title: "Hapus Sesi?",
+                                  text: `Sesi \"${
+                                    s.name || s.nomor
+                                  }\" akan dihapus permanen`,
+                                  icon: "warning",
+                                  showCancelButton: true,
+                                  confirmButtonColor: "#d33",
+                                  cancelButtonColor: "#6b7280",
+                                  confirmButtonText: "Ya, hapus",
+                                  cancelButtonText: "Batal",
+                                });
+                                if (!result.isConfirmed) return;
+                                try {
+                                  await (db as any).stockOpname.deleteSession(
+                                    s.id
+                                  );
+                                  await Swal.fire({
+                                    icon: "success",
+                                    title: "Berhasil",
+                                    text: "Sesi dihapus",
+                                  });
+                                  loadSavedSessions();
+                                } catch (err: any) {
+                                  await Swal.fire({
+                                    icon: "error",
+                                    title: "Gagal",
+                                    text:
+                                      err?.message || "Gagal menghapus sesi",
+                                  });
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+                            >
+                              <Trash className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={5} className="bg-gray-50 p-0">
+                            <div className="bg-white rounded-b-xl shadow-sm border border-t-0 border-gray-200 p-4">
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        Produk
+                                      </th>
+                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                        Sistem
+                                      </th>
+                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                        Fisik
+                                      </th>
+                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                        Selisih
+                                      </th>
+                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                        Nominal (Rp)
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-100">
+                                    {(sessionItemsMap[s.id] || []).map(
+                                      (it: any) => (
+                                        <tr key={it.id}>
+                                          <td className="px-4 py-2">
+                                            {it.productName || "-"}
+                                          </td>
+                                          <td className="px-4 py-2 text-right">
+                                            {Number(
+                                              it.systemStock || 0
+                                            ).toLocaleString("id-ID")}
+                                          </td>
+                                          <td className="px-4 py-2 text-right">
+                                            {Number(
+                                              it.physicalStock || 0
+                                            ).toLocaleString("id-ID")}
+                                          </td>
+                                          <td
+                                            className={`px-4 py-2 text-right font-medium ${
+                                              Number(it.physicalStock || 0) -
+                                                Number(it.systemStock || 0) >
+                                              0
+                                                ? "text-green-600"
+                                                : "text-red-600"
+                                            }`}
+                                          >
+                                            {(
+                                              Number(it.physicalStock || 0) -
+                                              Number(it.systemStock || 0)
+                                            ).toLocaleString("id-ID")}
+                                          </td>
+                                          <td className="px-4 py-2 font-semibold text-blue-700 text-right">
+                                            {(
+                                              (Number(it.physicalStock || 0) -
+                                                Number(it.systemStock || 0)) *
+                                              Number(it.unitCost || 0)
+                                            ).toLocaleString("id-ID")}
+                                          </td>
+                                        </tr>
+                                      )
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                              {(sessionItemsMap[s.id]?.length || 0) === 0 && (
+                                <div className="text-sm text-gray-500">
+                                  Tidak ada item.
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
