@@ -1439,25 +1439,45 @@ const StokOpname: React.FC<{
                             </button> */}
                             <button
                               type="button"
-                              onClick={() => {
-                                const stockOpnameData: StockOpnameData = {
-                                  nomor: s.nomor || s.name || "",
-                                  tanggal: s.opname_date
-                                    ? new Date(
-                                        s.opname_date
-                                      ).toLocaleDateString("id-ID")
-                                    : new Date(s.created_at).toLocaleDateString(
-                                        "id-ID"
-                                      ),
-                                  staf: s.users?.full_name || "Admin",
-                                  items: (sessionItemsMap[s.id] || []).map(
-                                    (row: any) => ({
-                                      productName: row.productName || "",
-                                      physicalStock: row.physicalStock || 0,
-                                    })
-                                  ),
-                                };
-                                printStockOpname(stockOpnameData);
+                              onClick={async () => {
+                                try {
+                                  const sessionData = await (
+                                    db as any
+                                  ).stockOpname.getSessionWithItems(s.id);
+
+                                  const stockOpnameData: StockOpnameData = {
+                                    nomor:
+                                      sessionData.nomor ||
+                                      sessionData.name ||
+                                      "",
+                                    tanggal: sessionData.opname_date
+                                      ? new Date(
+                                          sessionData.opname_date
+                                        ).toLocaleDateString("id-ID")
+                                      : new Date(
+                                          sessionData.created_at
+                                        ).toLocaleDateString("id-ID"),
+                                    staf:
+                                      sessionData.users?.full_name || "System",
+                                    items: (sessionData.rows || []).map(
+                                      (row: any) => ({
+                                        productName: row.productName || "",
+                                        physicalStock: row.physicalStock || 0,
+                                      })
+                                    ),
+                                  };
+                                  printStockOpname(stockOpnameData);
+                                } catch (error) {
+                                  console.error(
+                                    "Error loading session for print:",
+                                    error
+                                  );
+                                  Swal.fire({
+                                    icon: "error",
+                                    title: "Gagal",
+                                    text: "Gagal memuat data untuk print",
+                                  });
+                                }
                               }}
                               className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
                             >
