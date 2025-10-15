@@ -1,13 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
+import { UserSession } from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceRole = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your .env file.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabaseServiceRole, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -82,13 +84,15 @@ export const db = {
   },
 
   async delete(table: string, id: string) {
-    const { error } = await supabase
+    const { data: result, error } = await supabase
       .from(table)
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select()
+      .single();
     
     if (error) throw error;
-    return true;
+    return result;
   },
 
   // Specific business logic functions
@@ -172,6 +176,28 @@ export const db = {
       }
     },
 
+    async increaseStock(id: string, quantity: number) {
+      const { data: product, error } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      if (!product) throw new Error('Produk tidak ditemukan');
+      return db.update('products', id, { stock: (Number(product.stock) || 0) + Number(quantity) });
+    },
+
+    async decreaseStock(id: string, quantity: number) {
+      const { data: product, error } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      if (!product) throw new Error('Produk tidak ditemukan');
+      return db.update('products', id, { stock: (Number(product.stock) || 0) - Number(quantity) });
+    },
+
     async update(id: string, product: any) {
       return db.update('products', id, product);
     }
@@ -229,7 +255,6 @@ export const db = {
     async getActive() {
       return db.select('rental_sessions', `
         *,
-        customers(name, phone),
         consoles(name, location)
       `, { status: 'active' });
     },
@@ -256,8 +281,8 @@ export const db = {
       return db.insert('vouchers', {
         ...voucher,
         voucher_code: data,
-        created_by: user.id,
-        expiry_date: new Date(Date.now() + voucher.validity_days * 24 * 60 * 60 * 1000).toISOString()
+        // created_by: user.id,
+        // expiry_date: new Date(Date.now() + voucher.validity_days * 24 * 60 * 60 * 1000).toISOString()
       });
     },
 
@@ -320,7 +345,7 @@ export const db = {
       
       return db.insert('cashier_sessions', {
         ...sessionData,
-        cashier_id: user.id
+        cashier_id: user.id,
       });
     },
 
@@ -366,9 +391,9 @@ export const db = {
         notes: purchase.notes,
         expected_date: purchase.expected_date,
         subtotal: purchase.subtotal,
-        tax: purchase.tax,
+        // tax: purchase.tax,
         total_amount: purchase.total_amount || purchase.total, // fallback for old code
-        status: 'pending',
+        // status: 'pending',
         // created_by: null // tidak perlu jika tidak ada user
       });
       // Insert PO items
@@ -382,9 +407,237 @@ export const db = {
             unit_cost: item.unitCost,
             total: item.total
           });
+
+          if (item.productId && item.quantity > 0) {
+            await db.products.increaseStock(item.productId, item.quantity);
+          }
         }
       }
       return po;
+    },
+
+    async delete(poId: string) {
+      const { data: items, error: itemsErr } = await supabase
+        .from('purchase_order_items')
+        .select('product_id, quantity')
+        .eq('po_id', poId);
+      if (itemsErr) throw itemsErr;
+
+      if (Array.isArray(items)) {
+        for (const it of items) {
+          if (it?.product_id && it?.quantity) {
+            await db.products.decreaseStock(it.product_id, it.quantity);
+          }
+        }
+      }
+
+      return db.delete('purchase_orders', poId);
+    }
+    ,
+    async update(poId: string, purchase: any) {
+      // Fetch existing items
+      const { data: oldItems, error: oldErr } = await supabase
+        .from('purchase_order_items')
+        .select('id, product_id, quantity')
+        .eq('po_id', poId);
+      if (oldErr) throw oldErr;
+
+      const oldItemsArray = Array.isArray(oldItems) ? oldItems : [];
+
+      // Compute stock deltas per product
+      const deltaByProduct: Record<string, number> = {};
+      for (const it of oldItemsArray) {
+        const pid = String(it.product_id);
+        deltaByProduct[pid] = (deltaByProduct[pid] || 0) - Number(it.quantity || 0);
+      }
+
+      const newItems = Array.isArray(purchase.items) ? purchase.items : [];
+      for (const it of newItems) {
+        if (!it.productId) continue;
+        const pid = String(it.productId);
+        deltaByProduct[pid] = (deltaByProduct[pid] || 0) + Number(it.quantity || 0);
+      }
+
+      // Update PO header
+      await db.update('purchase_orders', poId, {
+        supplier_id: purchase.supplier_id ?? undefined,
+        notes: purchase.notes ?? undefined,
+        expected_date: purchase.expected_date ?? undefined,
+        subtotal: purchase.subtotal ?? undefined,
+        total_amount: purchase.total_amount ?? purchase.total ?? undefined
+      });
+
+      // Upsert items
+      const existingIds = new Set<string>();
+      for (const it of newItems) {
+        if (it.id) {
+          existingIds.add(String(it.id));
+          await db.update('purchase_order_items', String(it.id), {
+            po_id: poId,
+            product_id: it.productId,
+            product_name: it.productName,
+            quantity: it.quantity,
+            unit_cost: it.unitCost,
+            total: it.total
+          });
+        } else {
+          const inserted = await db.insert('purchase_order_items', {
+            po_id: poId,
+            product_id: it.productId,
+            product_name: it.productName,
+            quantity: it.quantity,
+            unit_cost: it.unitCost,
+            total: it.total
+          });
+          if (inserted?.id) existingIds.add(String(inserted.id));
+        }
+      }
+
+      // Delete removed items
+      for (const oi of oldItemsArray) {
+        const idStr = String(oi.id);
+        if (!existingIds.has(idStr)) {
+          await db.delete('purchase_order_items', idStr);
+        }
+      }
+
+      // Apply stock adjustments
+      for (const [productId, delta] of Object.entries(deltaByProduct)) {
+        if (!productId || !Number.isFinite(delta as unknown as number)) continue;
+        if ((delta as number) > 0) {
+          await db.products.increaseStock(productId, delta as number);
+        } else if ((delta as number) < 0) {
+          await db.products.decreaseStock(productId, Math.abs(delta as number));
+        }
+      }
+
+      // Return updated PO
+      const { data: updated, error: getErr } = await supabase
+        .from('purchase_orders')
+        .select('*')
+        .eq('id', poId)
+        .single();
+      if (getErr) throw getErr;
+      return updated;
+    }
+  },
+
+  // System settings (single row: id = 'default')
+  settings: {
+    async get() {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('id', 'default')
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
+    },
+
+    async upsert(payload: any) {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .upsert(
+          {
+            id: 'default',
+            general: payload.general,
+            printer: payload.printer,
+            api: payload.api,
+            whatsapp_crm: payload.whatsapp_crm,
+            notifications: payload.notifications,
+            security: payload.security,
+            backup: payload.backup,
+            system: payload.system,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'id' }
+        )
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+  },
+  sessions: {
+    async getActiveSessions() {
+      const { data, error } = await supabase
+      .from('user_sessions')
+      .select('*')
+      .eq("status", "active")
+      .order('created_at', { ascending: false })
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
+    },
+    async createSession(userId: string, sessionData: {
+      ip_address?: string;
+      user_agent?: string;}): Promise<UserSession | null> {
+      const { data, error } = await supabase
+        .from('user_sessions')
+        .insert({
+          user_id: userId,
+          ip_address: sessionData.ip_address || null,
+          user_agent: sessionData.user_agent || null,
+          status: 'active'
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data || null;
+    },
+
+    async logoutSession(sessionId: string): Promise<boolean> {
+      try {
+        const { error } = await supabase
+          .from('user_sessions')
+          .update({
+            status: 'offline',
+            logout_time: new Date().toISOString(),
+          })
+          .eq('id', sessionId);
+  
+        return !error;
+      } catch (error) {
+        console.error('Error terminating session:', error);
+        return false;
+      }
+    }
+  },
+  logs: { 
+    async logActivity(logData: {
+      user_id: string;
+      action: string;
+      module: string;
+      description: string;
+      ip_address?: string;
+      metadata?: any;
+    }): Promise<boolean> {
+      try {
+        const { error } = await supabase
+          .from('activity_logs')
+          .insert({
+            user_id: logData.user_id,
+            action: logData.action,
+            module: logData.module,
+            description: logData.description,
+            ip_address: logData.ip_address || await getClientIP(),
+            metadata: logData.metadata || null,
+            timestamp: new Date().toISOString()
+          });
+  
+        return !error;
+      } catch (error) {
+        console.error('Error logging activity:', error);
+        return false;
+      }
+    },
+    async getLogs() {
+      const { data, error } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(20)
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
     }
   }
 };
@@ -396,7 +649,7 @@ export const auth = {
       email,
       password
     });
-    
+
     if (error) throw error;
     return data;
   },
@@ -418,7 +671,7 @@ export const auth = {
         .from('users')
         .select(`
           *,
-          roles(name, permissions)
+          roles(name, nav_items)
         `)
         .eq('id', user.id)
         .single();
@@ -434,5 +687,15 @@ export const auth = {
       }
       throw new Error('Failed to get current user information');
     }
+  }
+};
+
+const getClientIP = async (): Promise<string> => {
+  try {
+    const response = await fetch("https://api.ipify.org?format=json");
+    const data = await response.json();
+    return data.ip;
+  } catch {
+    return "Unknown";
   }
 };

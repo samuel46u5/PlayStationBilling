@@ -1,24 +1,29 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import Dashboard from './components/Dashboard';
-import Navigation from './components/Navigation';
-import Cashier from './components/Cashier';
-import CashierSession from './components/CashierSession';
-import ActiveRentals from './components/ActiveRentals';
-import ScheduledBookings from './components/ScheduledBookings';
-import Customers from './components/Customers';
-import Products from './components/Products';
-import Sales from './components/Sales';
-import Payments from './components/Payments';
-import Bookkeeping from './components/Bookkeeping';
-import Consoles from './components/Consoles';
-import EquipmentManagement from './components/EquipmentManagement';
-import RateManagement from './components/RateManagement';
-import UserManagement from './components/UserManagement';
-import VoucherManagement from './components/VoucherManagement';
-import Settings from './components/Settings';
-import MaintenanceManagement from './components/MaintenanceManagement';
-import RateProfilePage from './components/RateProfilePage';
+import React from "react";
+import { Routes, Route } from "react-router-dom";
+import Dashboard from "./components/Dashboard";
+import Navigation from "./components/Navigation";
+import Cashier from "./components/Cashier";
+import CashierSession from "./components/CashierSession";
+import ActiveRentals from "./components/ActiveRentals";
+import ScheduledBookings from "./components/ScheduledBookings";
+import Customers from "./components/Customers";
+import Products from "./components/Products";
+import Sales from "./components/Sales";
+import Payments from "./components/Payments";
+import Bookkeeping from "./components/Bookkeeping";
+import Consoles from "./components/Consoles";
+import EquipmentManagement from "./components/EquipmentManagement";
+import RateManagement from "./components/RateManagement";
+import UserManagement from "./components/UserManagement";
+import VoucherManagement from "./components/VoucherManagement";
+import Settings from "./components/Settings";
+import MaintenanceManagement from "./components/MaintenanceManagement";
+import RateProfilePage from "./components/RateProfilePage";
+import DeviceManagement from "./components/DeviceManagement";
+import RFIDCards from "./components/RFIDCards";
+import LoginPage from "./pages/LoginPage";
+import { useAuth } from "./contexts/AuthContext";
+import { TimerProvider } from "./contexts/TimerContext";
 
 const App: React.FC = () => {
   return (
@@ -29,59 +34,76 @@ const App: React.FC = () => {
 };
 
 const AppLayout: React.FC = () => {
-  const [activeTab, setActiveTab] = React.useState('dashboard');
+  const { user, isLoading } = useAuth();
+  const [activeTab, setActiveTab] = React.useState("dashboard");
+
+  if (isLoading) {
+    // Tampilkan loading spinner
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':
+      case "dashboard":
         return <Dashboard />;
-      case 'cashier':
-        return <Cashier />;
-      case 'cashier-session':
+      // case "cashier":
+      //   return <Cashier />;
+      case "cashier-session":
         return <CashierSession />;
-      case 'rentals':
+      case "rentals":
         return <ActiveRentals />;
-      case 'bookings':
+      case "bookings":
         return <ScheduledBookings />;
-      case 'customers':
-        return <Customers />;
-      case 'products':
+      // case "customers":
+      //   return <Customers />;
+      case "products":
         return <Products />;
-      case 'sales':
+      case "sales":
         return <Sales />;
-      case 'payments':
-        return <Payments />;
-      case 'bookkeeping':
+      // case "payments":
+      //   return <Payments />;
+      case "bookkeeping":
         return <Bookkeeping />;
-      case 'consoles':
+      case "consoles":
         return <Consoles />;
-      case 'equipment':
+      case "equipment":
         return <EquipmentManagement />;
-      case 'rates':
+      case "rates":
         return <RateManagement />;
-      case 'vouchers':
+      case "vouchers":
         return <VoucherManagement />;
-      case 'users':
+      case "users":
         return <UserManagement />;
-      case 'settings':
+      case "rfid-cards":
+        return <RFIDCards />;
+      case "settings":
         return <Settings />;
-      case 'maintenance':
+      case "maintenance":
         return <MaintenanceManagement />;
-      case 'rate-profile':
-      case 'rate-profiles':
-        return <RateProfilePage />;
+      // case "rate-profiles":
+      //   return <RateProfilePage />;
+      case "device":
+        return <DeviceManagement />;
       default:
         return <Dashboard />;
     }
   };
 
   return (
-    <div className="flex bg-gray-100 min-h-screen">
-      <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="flex-1 overflow-y-auto">
-        {renderContent()}
-      </main>
-    </div>
+    <TimerProvider>
+      <div className="flex bg-gray-100 min-h-screen">
+        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <main className="flex-1 overflow-y-auto">{renderContent()}</main>
+      </div>
+    </TimerProvider>
   );
 };
 
