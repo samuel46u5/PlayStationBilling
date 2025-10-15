@@ -39,6 +39,16 @@ export interface ProductPriceList {
   price: number;
 }
 
+export interface StockOpnameData {
+  nomor: string;
+  tanggal: string;
+  staf: string;
+  items: Array<{
+    productName: string;
+    physicalStock: number;
+  }>;
+}
+
 export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   const settings = await db.settings.get();
   const generalSettings = settings?.general || {};
@@ -374,6 +384,93 @@ export const generatePriceListHTMLTextMode = async (
   `;
 };
 
+export const generateStockOpnameHTMLTextMode = async (data: StockOpnameData) => {
+  const settings = await db.settings.get();
+  const generalSettings = settings?.general || {};
+  const printerSettings = settings?.printer || {};
+
+  const lineWidth = printerSettings.receiptWidth || 40;
+
+  const pad = (
+    text: string,
+    width: number,
+    align: "left" | "right" = "left"
+  ) => {
+    if (align === "right") return text.toString().padStart(width);
+    return text.toString().padEnd(width);
+  };
+
+  const center = (text: string) => {
+    const space = Math.max(0, Math.floor((lineWidth - text.length) / 2));
+    return " ".repeat(space) + text;
+  };
+
+  const lines: string[] = [];
+
+  // HEADER
+  lines.push(center("====== STOK OPNAME ======"));
+  lines.push("");
+  lines.push(pad(`Tanggal : ${data.tanggal}`, lineWidth));
+  lines.push(pad(`Staf    : ${data.staf}`, lineWidth));
+  lines.push("-".repeat(lineWidth));
+  lines.push(pad("Nama Produk", 28) + pad("Stok", 12, "right"));
+  lines.push("-".repeat(lineWidth));
+
+  // ITEMS LIST
+  data.items.forEach((item) => {
+    const nameMax = 28;
+    const stockWidth = 12;
+    let name = item.productName;
+
+    if (name.length > nameMax) {
+      name = name.slice(0, nameMax - 1) + "…";
+    }
+
+    const dots = ".".repeat(Math.max(1, lineWidth - name.length - item.physicalStock.toString().length));
+    lines.push(`${name}${dots}${item.physicalStock}`);
+  });
+
+  lines.push("-".repeat(lineWidth));
+  lines.push(pad(`Total Item: ${data.items.length}`, lineWidth));
+
+  const stockOpnameText = lines.join("\n");
+
+  return `
+  <html>
+    <head>
+      <title>Stok Opname - ${data.nomor}</title>
+      <style>
+        @media print {
+          @page {
+            size: auto;
+            margin: 0mm;
+          }
+          body {
+            margin: 0;
+          }
+        }
+
+        body {
+          font-family: 'Courier New', monospace;
+          font-size: ${printerSettings.fontSize || 10}pt;
+          white-space: pre;
+          margin: 0;
+          padding: 0;
+        }
+
+        pre {
+          margin: 0;
+          padding: ${printerSettings.padding || 10}px;
+        }
+      </style>
+    </head>
+    <body>
+      <pre>${stockOpnameText}</pre>
+    </body>
+  </html>`;
+};
+
+
 export const printReceipt = async (tx: ReceiptData) => {
   try {
     const html = await generateReceiptHTMLTextMode(tx);
@@ -456,6 +553,37 @@ export const printPriceList = async (products: ProductPriceList[]) => {
   } catch (error) {
     console.error("Error printing price list:", error);
     alert("Gagal mencetak daftar harga. Silakan coba lagi.");
+  }
+};
+
+export const printStockOpname = async (data: StockOpnameData) => {
+  try {
+    const html = await generateStockOpnameHTMLTextMode(data);
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+
+    const doPrint = () => {
+      try {
+        win.print();
+      } finally {
+        win.close();
+      }
+    };
+
+    if ("onload" in win) {
+      win.onload = () => setTimeout(doPrint, 100);
+    } else {
+      setTimeout(doPrint, 200);
+    }
+  } catch (error) {
+    console.error("Error printing stock opname:", error);
+    alert("Gagal mencetak stok opname. Silakan coba lagi.");
   }
 };
 

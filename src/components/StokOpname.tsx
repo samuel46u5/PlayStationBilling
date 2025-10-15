@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { db } from "../lib/supabase";
 import Swal from "sweetalert2";
-import { Plus, Search, Trash, XCircle } from "lucide-react";
+import { Plus, Search, Trash, XCircle, Printer } from "lucide-react";
+import { printStockOpname, StockOpnameData } from "../utils/receipt";
 
 type Product = any;
 
@@ -336,21 +337,21 @@ const StokOpname: React.FC<{
   };
 
   // Add row with product selection for existing sessions
-  const addRowWithProduct = async () => {
-    if (!current) await startNew();
-    const row = {
-      id: generateId(),
-      productId: null,
-      code: "",
-      productName: "",
-      barcode: "",
-      systemStock: 0,
-      physicalStock: 0,
-      note: "",
-      unitCost: 0,
-    };
-    setCurrent((c: any) => ({ ...c, rows: [...(c?.rows || []), row] }));
-  };
+  // const addRowWithProduct = async () => {
+  //   if (!current) await startNew();
+  //   const row = {
+  //     id: generateId(),
+  //     productId: null,
+  //     code: "",
+  //     productName: "",
+  //     barcode: "",
+  //     systemStock: 0,
+  //     physicalStock: 0,
+  //     note: "",
+  //     unitCost: 0,
+  //   };
+  //   setCurrent((c: any) => ({ ...c, rows: [...(c?.rows || []), row] }));
+  // };
 
   const updateRow = (id: string, changes: Partial<any>) => {
     setCurrent((c: any) => {
@@ -1436,6 +1437,32 @@ const StokOpname: React.FC<{
                             >
                               {isOpen ? "Tutup" : "Lihat"} Items
                             </button> */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const stockOpnameData: StockOpnameData = {
+                                  nomor: s.nomor || s.name || "",
+                                  tanggal: s.opname_date
+                                    ? new Date(
+                                        s.opname_date
+                                      ).toLocaleDateString("id-ID")
+                                    : new Date(s.created_at).toLocaleDateString(
+                                        "id-ID"
+                                      ),
+                                  staf: s.users?.full_name || "Admin",
+                                  items: (sessionItemsMap[s.id] || []).map(
+                                    (row: any) => ({
+                                      productName: row.productName || "",
+                                      physicalStock: row.physicalStock || 0,
+                                    })
+                                  ),
+                                };
+                                printStockOpname(stockOpnameData);
+                              }}
+                              className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </button>
                             <button
                               onClick={async () => {
                                 const result = await Swal.fire({
