@@ -49,9 +49,18 @@ export interface StockOpnameData {
   }>;
 }
 
+export interface StockOpnameFormData {
+  nomor?: string;
+  tanggal: string;
+  staf: string;
+  items: Array<{
+    productName: string;
+  }>;
+}
+
 export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   const settings = await db.settings.get();
-  const generalSettings = settings?.general || {};
+  const generalSettings = settings?.general || {}; 
   const printerSettings = settings?.printer || {};
 
   const lineWidth = printerSettings.receiptWidth || 40;
@@ -119,8 +128,8 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   lines.push("-".repeat(lineWidth));
 
   // TAX / DISCOUNT / TOTAL
-  if (tx.tax > 0) {
-    lines.push(pad("PAJAK:", 25) + pad(formatMoney(tx.tax), 15, "right"));
+  if ((tx.tax ?? 0) > 0) {
+    lines.push(pad("PAJAK:", 25) + pad(formatMoney(tx.tax || 0), 15, "right"));
   }
 
   if (tx.discount) {
@@ -287,7 +296,7 @@ export const generatePriceListHTMLTextMode = async (
   products: ProductPriceList[]
 ) => {
   const settings = await db.settings.get();
-  const generalSettings = settings?.general || {};
+  const generalSettings = settings?.general || {}; 
   const printerSettings = settings?.printer || {};
   const lineWidth = printerSettings.receiptWidth || 40;
 
@@ -419,7 +428,7 @@ export const generateStockOpnameHTMLTextMode = async (data: StockOpnameData) => 
   // ITEMS LIST
   data.items.forEach((item) => {
     const nameMax = 28;
-    const stockWidth = 12;
+  const stockWidth = 12;
     let name = item.productName;
 
     if (name.length > nameMax) {
@@ -470,6 +479,103 @@ export const generateStockOpnameHTMLTextMode = async (data: StockOpnameData) => 
   </html>`;
 };
 
+
+export const generateStockOpnameFormHTMLTextMode = async (
+  data: StockOpnameFormData
+) => {
+  const settings = await db.settings.get();
+  const printerSettings = settings?.printer || {};
+
+  const lineWidth = printerSettings.receiptWidth || 40;
+
+  const pad = (
+    text: string,
+    width: number,
+    align: "left" | "right" = "left"
+  ) => {
+    if (align === "right") return text.toString().padStart(width);
+    return text.toString().padEnd(width);
+  };
+
+  const center = (text: string) => {
+    const space = Math.max(0, Math.floor((lineWidth - text.length) / 2));
+    return " ".repeat(space) + text;
+  };
+
+  const lines: string[] = [];
+
+  // HEADER sesuai format permintaan
+  lines.push(center("------ Stok Opname -----"));
+  lines.push("");
+  lines.push(pad(`Tanggal : ${data.tanggal}`, lineWidth));
+  lines.push(pad(`Staf    : ${data.staf}`, lineWidth));
+  lines.push("-".repeat(lineWidth));
+  lines.push(pad("Nama produk", 28) + pad("Stok", 12, "right"));
+
+  data.items.forEach((item) => {
+    const nameMax = 22;
+    let name = item.productName || "-";
+    if (name.length > nameMax) {
+      name = name.slice(0, nameMax - 1) + "…";
+    }
+    const dots = ".".repeat(Math.max(1, lineWidth - name.length));
+    // Biarkan kolom stok kosong (manual tulis)
+    lines.push(`${name}${dots}`);
+  });
+
+  // data.items.forEach((item) => {
+  //   const productNameMax = 22; // Sesuaikan untuk spasi cukup
+  //   const dotsLength = 15;
+  //   const stokFieldLength = 6;
+  
+  //   let name = item.productName || "-";
+  //   if (name.length > productNameMax) {
+  //     name = name.slice(0, productNameMax - 1) + "…";
+  //   } else {
+  //     name = name.padEnd(productNameMax, " ");
+  //   }
+  
+  //   const dots = ".".repeat(dotsLength);
+  //   const emptyStockField = " ".repeat(stokFieldLength);
+  
+  //   // Hasil: NamaProduk ......       <- ruang stok manual
+  //   lines.push(`${name}${dots}${emptyStockField}`);
+  // });
+
+  lines.push("");
+  lines.push("Ttd. ");
+  lines.push("");
+  lines.push("(                                    )");
+
+  const text = lines.join("\n");
+
+  return `
+  <html>
+    <head>
+      <title>Form Stok Opname${data.nomor ? ` - ${data.nomor}` : ""}</title>
+      <style>
+        @media print {
+          @page { size: auto; margin: 0mm; }
+          body { margin: 0; }
+        }
+        body {
+          font-family: 'Courier New', monospace;
+          font-size: ${printerSettings.fontSize || 10}pt;
+          white-space: pre;
+          margin: 0;
+          padding: 0;
+        }
+        pre {
+          margin: 0;
+          padding: ${printerSettings.padding || 10}px;
+        }
+      </style>
+    </head>
+    <body>
+      <pre>${text}</pre>
+    </body>
+  </html>`;
+};
 
 export const printReceipt = async (tx: ReceiptData) => {
   try {
@@ -584,6 +690,37 @@ export const printStockOpname = async (data: StockOpnameData) => {
   } catch (error) {
     console.error("Error printing stock opname:", error);
     alert("Gagal mencetak stok opname. Silakan coba lagi.");
+  }
+};
+
+export const printStockOpnameForm = async (data: StockOpnameFormData) => {
+  try {
+    const html = await generateStockOpnameFormHTMLTextMode(data);
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+
+    const doPrint = () => {
+      try {
+        win.print();
+      } finally {
+        win.close();
+      }
+    };
+
+    if ("onload" in win) {
+      win.onload = () => setTimeout(doPrint, 100);
+    } else {
+      setTimeout(doPrint, 200);
+    }
+  } catch (error) {
+    console.error("Error printing stock opname form:", error);
+    alert("Gagal mencetak form stok opname. Silakan coba lagi.");
   }
 };
 

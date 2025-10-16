@@ -2,7 +2,13 @@ import React, { useState, useRef, useEffect } from "react";
 import { db } from "../lib/supabase";
 import Swal from "sweetalert2";
 import { Plus, Search, Trash, XCircle, Printer } from "lucide-react";
-import { printStockOpname, StockOpnameData } from "../utils/receipt";
+import {
+  printStockOpname,
+  StockOpnameData,
+  printStockOpnameForm,
+  StockOpnameFormData,
+} from "../utils/receipt";
+import { useAuth } from "../contexts/AuthContext";
 
 type Product = any;
 
@@ -66,6 +72,15 @@ const StokOpname: React.FC<{
   const [sessionItemsMap, setSessionItemsMap] = useState<Record<string, any[]>>(
     {}
   );
+  const { user } = useAuth();
+
+  // Print Form modal states (pilih produk untuk form kosong)
+  const [showPrintFormModal, setShowPrintFormModal] = useState(false);
+  const [selectedProductsForForm, setSelectedProductsForForm] = useState<
+    string[]
+  >([]);
+  const [selectAllProductsForForm, setSelectAllProductsForForm] =
+    useState(false);
   // Filters like purchases list
   const [opnameSearch, setOpnameSearch] = useState<string>("");
   const [opnamePeriod, setOpnamePeriod] = useState<string>("week");
@@ -980,6 +995,16 @@ const StokOpname: React.FC<{
             Import CSV
           </button>
           <button
+            onClick={() => {
+              setShowPrintFormModal(true);
+              setSelectAllProductsForForm(false);
+              setSelectedProductsForForm([]);
+            }}
+            className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm flex items-center gap-2"
+          >
+            <Printer className="h-4 w-4" /> Print Form
+          </button>
+          <button
             onClick={async () => {
               await startNew();
             }}
@@ -1165,7 +1190,7 @@ const StokOpname: React.FC<{
                         {r.barcode && (
                           <div className="text-xs text-gray-500 mt-1">
                             Barcode: {r.barcode}
-                        </div>
+                          </div>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -1177,29 +1202,29 @@ const StokOpname: React.FC<{
                           inputMode="numeric"
                           data-row-id={r.id}
                           data-field="physicalStock"
-                            value={r.physicalStock ?? ""}
+                          value={r.physicalStock ?? ""}
                           ref={(el) => {
                             inputRefs.current[r.id] = el;
                           }}
                           disabled={Boolean(
                             current?.id && String(current.id).length > 8
                           )}
-                            onFocus={(e) => {
-                              const t = e.target as HTMLInputElement;
+                          onFocus={(e) => {
+                            const t = e.target as HTMLInputElement;
                             focusedRef.current = {
                               id: r.id,
                               field: "physicalStock",
                               start: t.selectionStart,
                               end: t.selectionEnd,
                             };
-                            }}
-                            onChange={(e) => {
+                          }}
+                          onChange={(e) => {
                             const raw = String(e.target.value || "");
                             const cleaned = raw.replace(/[^0-9.-]/g, "");
                             const v = cleaned === "" ? 0 : Number(cleaned);
-                              updateRow(r.id, { physicalStock: v });
-                            }}
-                            className="w-20 text-right px-2 py-1 border rounded appearance-none"
+                            updateRow(r.id, { physicalStock: v });
+                          }}
+                          className="w-20 text-right px-2 py-1 border rounded appearance-none"
                           style={{ MozAppearance: "textfield" as any }}
                         />
                       </td>
@@ -1367,6 +1392,157 @@ const StokOpname: React.FC<{
                     }
                     className="px-3 py-2 border border-gray-300 rounded-lg"
                   />
+                </div>
+              </div>
+            )}
+            {showPrintFormModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[80vh] overflow-hidden">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-semibold text-gray-900">
+                        Print Form Stok Opname
+                      </h2>
+                      <button
+                        onClick={() => {
+                          setShowPrintFormModal(false);
+                          setSelectedProductsForForm([]);
+                          setSelectAllProductsForForm(false);
+                        }}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <XCircle className="h-6 w-6" />
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-2">
+                      Pilih produk yang akan dicantumkan di form. Kolom stok
+                      akan dikosongkan untuk ditulis manual.
+                    </p>
+                  </div>
+
+                  <div className="p-6 overflow-y-auto max-h-[60vh]">
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectAllProductsForForm}
+                          onChange={(e) => {
+                            setSelectAllProductsForForm(e.target.checked);
+                            if (e.target.checked) {
+                              setSelectedProductsForForm(
+                                products.map((p: any) => p.id)
+                              );
+                            } else {
+                              setSelectedProductsForForm([]);
+                            }
+                          }}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className="font-medium text-gray-900">
+                          Pilih Semua Produk ({products.length})
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="space-y-2">
+                      {products
+                        .slice()
+                        .sort((a: any, b: any) =>
+                          String(a.name).localeCompare(String(b.name))
+                        )
+                        .map((product: any) => (
+                          <div
+                            key={product.id}
+                            className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedProductsForForm.includes(
+                                product.id
+                              )}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedProductsForForm((prev) => [
+                                    ...prev,
+                                    product.id,
+                                  ]);
+                                } else {
+                                  setSelectedProductsForForm((prev) =>
+                                    prev.filter((id) => id !== product.id)
+                                  );
+                                }
+                              }}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900">
+                                {product.name}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {product.category || "-"}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="p-6 border-t border-gray-200 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-600">
+                        {selectedProductsForForm.length} produk dipilih
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            setShowPrintFormModal(false);
+                            setSelectedProductsForForm([]);
+                            setSelectAllProductsForForm(false);
+                          }}
+                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={() => {
+                            const selected = products.filter((p: any) =>
+                              selectedProductsForForm.includes(p.id)
+                            );
+                            const data: StockOpnameFormData = {
+                              nomor: current?.nomor || "",
+                              tanggal: new Date().toLocaleDateString("id-ID"),
+                              // staf: (() => {
+                              //   const isExisting = Boolean(
+                              //     current?.id && String(current.id).length > 8
+                              //   );
+                              //   if (isExisting) {
+                              //     const saved = savedSessions.find(
+                              //       (s: any) => s.id === current?.id
+                              //     );
+                              //     return saved?.users?.full_name || "System";
+                              //   }
+                              //   return "System";
+                              // })(),
+                              staf: user?.full_name || "System",
+                              items: selected.map((p: any) => ({
+                                productName: p.name,
+                              })),
+                            };
+                            printStockOpnameForm(data);
+                          }}
+                          disabled={selectedProductsForForm.length === 0}
+                          className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                            selectedProductsForForm.length === 0
+                              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                              : "bg-green-600 hover:bg-green-700 text-white"
+                          }`}
+                        >
+                          <Printer className="h-4 w-4" />
+                          Print ({selectedProductsForForm.length})
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
