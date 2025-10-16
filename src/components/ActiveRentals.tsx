@@ -1966,6 +1966,19 @@ const ActiveRentals: React.FC = () => {
         //   );
         // }
 
+        const { data: cardInfo } = await supabase
+          .from("rfid_cards")
+          .select("avg_nilai_point")
+          .eq("uid", session.card_uid as string)
+          .single();
+
+        const avgNilaiPoint = cardInfo?.avg_nilai_point ?? 0;
+        const capital = session?.consoles?.rate_profiles?.capital ?? 0;
+        const durationHours = elapsedMinutes / 60;
+        const totalCapitalCost = capital * durationHours;
+        const profit = avgNilaiPoint * totalPoints - totalCapitalCost;
+        // const profit = avgNilaiPoint * totalPoints;
+
         // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
         await logCashierTransaction({
           type: "rental",
@@ -1983,6 +1996,8 @@ const ActiveRentals: React.FC = () => {
                 description: `Member Card - ${elapsedMinutes} menit`,
                 qty: 1,
                 price: totalPoints,
+                profit: profit,
+                capital: totalCapitalCost,
                 product_name: `Rental ${session.consoles?.name || "Console"}`,
               },
             ],
@@ -2005,6 +2020,7 @@ const ActiveRentals: React.FC = () => {
               points_used: totalPoints,
               hourly_rate_snapshot: session.hourly_rate_snapshot,
               per_minute_rate_snapshot: session.per_minute_rate_snapshot,
+              avg_nilai_point: avgNilaiPoint,
             },
             payment: {
               method: "member_card",
@@ -2528,10 +2544,25 @@ const ActiveRentals: React.FC = () => {
           type: "rental" as const,
           capital: session?.consoles?.rate_profiles?.capital ?? 0,
           total: totalCost,
-          profit:
-            totalCost -
-            (session?.consoles?.rate_profiles?.capital ?? 0) -
-            (discountAmount > 0 ? discountAmount : 0),
+          profit: (() => {
+            const capitalPerHour =
+              session?.consoles?.rate_profiles?.capital ?? 0;
+            const durationMinutes =
+              session.duration_minutes ??
+              (session.start_time
+                ? Math.ceil(
+                    (Date.now() - new Date(session.start_time).getTime()) /
+                      (1000 * 60)
+                  )
+                : 0);
+            const durationHours = durationMinutes / 60;
+            const capitalCost = capitalPerHour * durationHours;
+            return (
+              totalCost -
+              capitalCost -
+              (discountAmount > 0 ? discountAmount : 0)
+            );
+          })(),
           description: `${formatElapsedHMS(session.start_time || "")}${
             session.consoles?.location
               ? ` | Lokasi: ${session.consoles.location}`
@@ -3207,7 +3238,12 @@ const ActiveRentals: React.FC = () => {
             type: "rental" as const,
             capital: consoleData?.rate_profiles?.capital ?? 0,
             total: additionalCost,
-            profit: finalTotal - (consoleData?.rate_profiles?.capital ?? 0),
+            profit: (() => {
+              const capitalPerHour = consoleData?.rate_profiles?.capital ?? 0;
+              const durationHours = additionalDurationMinutes / 60;
+              const capitalCost = capitalPerHour * durationHours;
+              return finalTotal - capitalCost;
+            })(),
             description: `Durasi: ${additionalHours} jam ${
               additionalMinutes > 0 ? `${additionalMinutes} menit` : " Tambahan"
             }`,
@@ -4161,7 +4197,7 @@ const ActiveRentals: React.FC = () => {
       // Get current balance
       const { data: currentCardData, error: fetchError } = await supabase
         .from("rfid_cards")
-        .select("balance_points")
+        .select("balance_points, total_poin_ever, total_uang_ever")
         .eq("uid", scannedCardUID)
         .single();
 
@@ -4182,11 +4218,22 @@ const ActiveRentals: React.FC = () => {
       }
 
       const newBalance = currentCardData.balance_points + pointsToAdd;
+      const newTotalPoinEver =
+        (currentCardData.total_poin_ever || 0) + pointsToAdd;
+      const newTotalUangEver =
+        (currentCardData.total_uang_ever || 0) + finalAmount;
+      const newAvgNilaiPoint =
+        newTotalPoinEver > 0 ? newTotalUangEver / newTotalPoinEver : 0;
 
       // Update member card balance
       const { error: updateError } = await supabase
         .from("rfid_cards")
-        .update({ balance_points: newBalance })
+        .update({
+          balance_points: newBalance,
+          total_poin_ever: newTotalPoinEver,
+          total_uang_ever: newTotalUangEver,
+          avg_nilai_point: newAvgNilaiPoint,
+        })
         .eq("uid", scannedCardUID);
 
       if (updateError) {
@@ -5356,7 +5403,13 @@ const ActiveRentals: React.FC = () => {
             type: "rental" as const,
             capital: latestConsole?.rate_profiles?.capital ?? 0,
             total: totalAmount,
-            profit: finalTotal - (latestConsole?.rate_profiles?.capital ?? 0),
+            profit: (() => {
+              const capitalPerHour = latestConsole?.rate_profiles?.capital ?? 0;
+              const durationHours =
+                rentalDurationHours + rentalDurationMinutes / 60;
+              const capitalCost = capitalPerHour * durationHours;
+              return finalTotal - capitalCost;
+            })(),
             description: `Durasi: ${rentalDurationHours} jam ${
               rentalDurationMinutes > 0 ? `${rentalDurationMinutes} menit` : ""
             } (Prepaid)`,

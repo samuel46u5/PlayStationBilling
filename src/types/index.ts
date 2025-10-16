@@ -265,6 +265,7 @@ export interface RFIDCard {
   balance_points: number;
   is_admin: boolean;
   is_helper_card: boolean;
+  avg_nilai_point: number;
   created_at: string;
 }
 

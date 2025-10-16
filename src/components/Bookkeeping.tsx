@@ -1552,7 +1552,7 @@ const Bookkeeping: React.FC = () => {
                             )}
 
                             {!t?.details ||
-                              (!t.details?.action && (
+                              (!t.details?.action && t.type !== "voucher" && (
                                 <button
                                   onClick={
                                     () =>
@@ -1628,7 +1628,8 @@ const Bookkeeping: React.FC = () => {
                                     )}
                                 </span>
                                 <span className="font-medium text-gray-900">
-                                  Rp {item.profit.toLocaleString("id-ID")}
+                                  Rp{" "}
+                                  {item?.profit?.toLocaleString("id-ID") || 0}
                                 </span>
                               </div>
                             );

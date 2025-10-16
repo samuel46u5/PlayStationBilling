@@ -34,7 +34,8 @@ const RFIDCards: React.FC = () => {
   void setOnlyAdmin;
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
   const [activeTab, setActiveTab] = useState<"management" | "laporan">(
-    (localStorage.getItem("rfid_active_tab") as "management" | "laporan") || "management"
+    (localStorage.getItem("rfid_active_tab") as "management" | "laporan") ||
+      "management"
   );
 
   useEffect(() => {
@@ -47,8 +48,12 @@ const RFIDCards: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchExact, setSearchExact] = useState<boolean>(false);
   const [purchasePeriod, setPurchasePeriod] = useState<string>("today");
-  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const [endDate, setEndDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [startDate, setStartDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
+  const [endDate, setEndDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
   const [laporanLoading, setLaporanLoading] = useState<boolean>(false);
   const [laporanSummary, setLaporanSummary] = useState<any[]>([]);
   const [laporanLogs, setLaporanLogs] = useState<any[]>([]);
@@ -62,7 +67,9 @@ const RFIDCards: React.FC = () => {
   });
 
   // server-provided grouped summary (preferred when available)
-  const [laporanGroupedRpc, setLaporanGroupedRpc] = useState<any[] | null>(null);
+  const [laporanGroupedRpc, setLaporanGroupedRpc] = useState<any[] | null>(
+    null
+  );
 
   // grouped view computed client-side (fallback)
   const laporanGrouped = useMemo(() => {
@@ -78,10 +85,20 @@ const RFIDCards: React.FC = () => {
           if (!uid.includes(term)) return;
         }
       }
-      const dt = row.timestamp ? new Date(row.timestamp).toISOString().slice(0, 10) : "<unknown>";
+      const dt = row.timestamp
+        ? new Date(row.timestamp).toISOString().slice(0, 10)
+        : "<unknown>";
       const uid = row.card_uid || "<unknown>";
       if (!grouped[dt]) grouped[dt] = {};
-      if (!grouped[dt][uid]) grouped[dt][uid] = { date: dt, card_uid: uid, total_add: 0, total_deduct: 0, net_change: 0, events: [] };
+      if (!grouped[dt][uid])
+        grouped[dt][uid] = {
+          date: dt,
+          card_uid: uid,
+          total_add: 0,
+          total_deduct: 0,
+          net_change: 0,
+          events: [],
+        };
       const entry = grouped[dt][uid];
       const amt = Number(row.points_amount || 0);
       if (row.action_type === "balance_add") entry.total_add += amt;
@@ -92,13 +109,24 @@ const RFIDCards: React.FC = () => {
     // convert to array per date
     const result: Array<{ date: string; rows: any[] }> = Object.keys(grouped)
       .sort((a, b) => b.localeCompare(a))
-      .map((date) => ({ date, rows: Object.values(grouped[date]).sort((x: any, y: any) => y.net_change - x.net_change) }));
+      .map((date) => ({
+        date,
+        rows: Object.values(grouped[date]).sort(
+          (x: any, y: any) => y.net_change - x.net_change
+        ),
+      }));
     return result;
   }, [groupByDateUid, laporanLogs]);
   // expand/collapse state for grouped view
-  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
-  const [expandedUid, setExpandedUid] = useState<Record<string, Record<string, boolean>>>({});
-  const [sortByPerDate, setSortByPerDate] = useState<Record<string, string>>({});
+  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [expandedUid, setExpandedUid] = useState<
+    Record<string, Record<string, boolean>>
+  >({});
+  const [sortByPerDate, setSortByPerDate] = useState<Record<string, string>>(
+    {}
+  );
   // initialize expanded/sort state from localStorage
   useEffect(() => {
     try {
@@ -113,7 +141,10 @@ const RFIDCards: React.FC = () => {
 
   useEffect(() => {
     try {
-      localStorage.setItem("rfid_groupByDateUid", JSON.stringify(groupByDateUid));
+      localStorage.setItem(
+        "rfid_groupByDateUid",
+        JSON.stringify(groupByDateUid)
+      );
     } catch {}
   }, [groupByDateUid]);
 
@@ -140,7 +171,10 @@ const RFIDCards: React.FC = () => {
   };
 
   const toggleUid = (date: string, uid: string) => {
-    setExpandedUid((s) => ({ ...s, [date]: { ...(s[date] || {}), [uid]: !(s[date]?.[uid] || false) } }));
+    setExpandedUid((s) => ({
+      ...s,
+      [date]: { ...(s[date] || {}), [uid]: !(s[date]?.[uid] || false) },
+    }));
   };
 
   const expandAllDates = () => {
@@ -170,7 +204,7 @@ const RFIDCards: React.FC = () => {
       .from("rfid_cards")
       .select(
         `
-        id, alias, is_admin, is_helper_card, uid, status, created_at, balance_points
+        id, alias, is_admin, is_helper_card, uid, status, created_at, balance_points, avg_nilai_point
       `
       )
       .order("created_at", { ascending: false });
@@ -353,14 +387,38 @@ const RFIDCards: React.FC = () => {
       const now = new Date();
       switch (purchasePeriod) {
         case "today":
-          s = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-          e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+          s = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate()
+          ).toISOString();
+          e = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            23,
+            59,
+            59,
+            999
+          ).toISOString();
           break;
         case "yesterday": {
           const d = new Date();
           d.setDate(d.getDate() - 1);
-          s = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
-          e = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+          s = new Date(
+            d.getFullYear(),
+            d.getMonth(),
+            d.getDate()
+          ).toISOString();
+          e = new Date(
+            d.getFullYear(),
+            d.getMonth(),
+            d.getDate(),
+            23,
+            59,
+            59,
+            999
+          ).toISOString();
           break;
         }
         case "week": {
@@ -369,13 +427,33 @@ const RFIDCards: React.FC = () => {
           const diff = (day === 0 ? -6 : 1) - day; // Monday start
           const start = new Date();
           start.setDate(d.getDate() + diff);
-          s = new Date(start.getFullYear(), start.getMonth(), start.getDate()).toISOString();
-          e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+          s = new Date(
+            start.getFullYear(),
+            start.getMonth(),
+            start.getDate()
+          ).toISOString();
+          e = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            23,
+            59,
+            59,
+            999
+          ).toISOString();
           break;
         }
         case "month":
           s = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-          e = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+          e = new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            0,
+            23,
+            59,
+            59,
+            999
+          ).toISOString();
           break;
         case "range":
           s = startDate ? new Date(startDate).toISOString() : null;
@@ -391,17 +469,26 @@ const RFIDCards: React.FC = () => {
       try {
         // supabase.rpc usually returns { data, error } in v2. We'll be defensive here.
         // @ts-ignore
-        const rpcRes = await supabase.rpc("rpc_card_usage_summary", { start_ts: s, end_ts: e });
+        const rpcRes = await supabase.rpc("rpc_card_usage_summary", {
+          start_ts: s,
+          end_ts: e,
+        });
         // @ts-ignore
         const rpcError = rpcRes?.error;
         // @ts-ignore
         const rpcData = rpcRes?.data ?? rpcRes;
         if (rpcError) throw rpcError;
-        console.log("summaryData length", Array.isArray(rpcData) ? rpcData.length : 0);
+        console.log(
+          "summaryData length",
+          Array.isArray(rpcData) ? rpcData.length : 0
+        );
         setLaporanSummary(Array.isArray(rpcData) ? rpcData : []);
       } catch (rpcErr: any) {
         usedRpc = false;
-        console.warn("rpc_card_usage_summary unavailable or failed, will compute summary client-side:", rpcErr?.message || rpcErr);
+        console.warn(
+          "rpc_card_usage_summary unavailable or failed, will compute summary client-side:",
+          rpcErr?.message || rpcErr
+        );
         // clear summary for now; we'll fill it after fetching logs
         setLaporanSummary([]);
       }
@@ -409,7 +496,9 @@ const RFIDCards: React.FC = () => {
       // Fetch logs (always fetch; needed both for display and for client-side summary fallback)
       let logsQuery = supabase
         .from("card_usage_logs")
-        .select("id, card_uid, session_id, used_by_name, used_by_phone, action_type, points_amount, balance_before, balance_after, timestamp, notes")
+        .select(
+          "id, card_uid, session_id, used_by_name, used_by_phone, action_type, points_amount, balance_before, balance_after, timestamp, notes"
+        )
         .order("timestamp", { ascending: false })
         .limit(2000);
       if (s) logsQuery = logsQuery.gte("timestamp", s);
@@ -423,14 +512,22 @@ const RFIDCards: React.FC = () => {
       }
       const { data: logsData, error: logsError } = await logsQuery;
       if (logsError) throw logsError;
-      console.log("logsData length", Array.isArray(logsData) ? logsData.length : 0);
+      console.log(
+        "logsData length",
+        Array.isArray(logsData) ? logsData.length : 0
+      );
       const logsArr = Array.isArray(logsData) ? logsData : [];
       setLaporanLogs(logsArr);
 
       // Try server-side grouped RPC (preferred for large ranges)
       try {
-  // @ts-ignore
-  const rpcGrouped = await supabase.rpc("rpc_card_usage_grouped", { start_ts: s, end_ts: e, search_uid: searchTerm || null, search_exact: searchExact });
+        // @ts-ignore
+        const rpcGrouped = await supabase.rpc("rpc_card_usage_grouped", {
+          start_ts: s,
+          end_ts: e,
+          search_uid: searchTerm || null,
+          search_exact: searchExact,
+        });
         // @ts-ignore
         const rpcGroupedErr = rpcGrouped?.error;
         // @ts-ignore
@@ -440,7 +537,12 @@ const RFIDCards: React.FC = () => {
           if (searchTerm && searchTerm.trim()) {
             const term = searchTerm.trim().toLowerCase();
             const filtered = rpcGroupedData
-              .map((g: any) => ({ ...g, uids: (g.uids || []).filter((u: any) => (u.card_uid || "").toLowerCase().includes(term)) }))
+              .map((g: any) => ({
+                ...g,
+                uids: (g.uids || []).filter((u: any) =>
+                  (u.card_uid || "").toLowerCase().includes(term)
+                ),
+              }))
               .filter((g: any) => (g.uids || []).length > 0);
             setLaporanGroupedRpc(filtered);
           } else {
@@ -458,11 +560,24 @@ const RFIDCards: React.FC = () => {
         const grouped: Record<string, any> = {};
         logsArr.forEach((row: any) => {
           const key = row.card_uid || "<unknown>";
-          if (!grouped[key]) grouped[key] = { card_uid: key, total_add: 0, total_deduct: 0, net_change: 0, last_activity: row.timestamp };
-          if (row.action_type === "balance_add") grouped[key].total_add += Number(row.points_amount || 0);
-          if (row.action_type === "balance_deduct") grouped[key].total_deduct += Number(row.points_amount || 0);
-          grouped[key].net_change = grouped[key].total_add - grouped[key].total_deduct;
-          if (!grouped[key].last_activity || new Date(row.timestamp) > new Date(grouped[key].last_activity)) {
+          if (!grouped[key])
+            grouped[key] = {
+              card_uid: key,
+              total_add: 0,
+              total_deduct: 0,
+              net_change: 0,
+              last_activity: row.timestamp,
+            };
+          if (row.action_type === "balance_add")
+            grouped[key].total_add += Number(row.points_amount || 0);
+          if (row.action_type === "balance_deduct")
+            grouped[key].total_deduct += Number(row.points_amount || 0);
+          grouped[key].net_change =
+            grouped[key].total_add - grouped[key].total_deduct;
+          if (
+            !grouped[key].last_activity ||
+            new Date(row.timestamp) > new Date(grouped[key].last_activity)
+          ) {
             grouped[key].last_activity = row.timestamp;
           }
         });
@@ -601,7 +716,7 @@ const RFIDCards: React.FC = () => {
       <div className="mb-6">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-6">
-            {[              
+            {[
               { id: "management", label: "Management Kartu", icon: CreditCard },
               { id: "laporan", label: "Laporan", icon: History },
             ].map((tab) => {
@@ -627,16 +742,16 @@ const RFIDCards: React.FC = () => {
 
       <div className="mb-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            {activeTab === "management" && (
+          {activeTab === "management" && (
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Master Kartu RFID
+                Master Kartu RFID
               </h1>
               <p className="text-gray-600">
-              Kelola kartu RFID untuk customer dan admin
+                Kelola kartu RFID untuk customer dan admin
               </p>
             </div>
-            )}
+          )}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {activeTab !== "laporan" && (
               <>
@@ -695,108 +810,116 @@ const RFIDCards: React.FC = () => {
                   Tidak ada kartu sesuai filter.
                 </div>
               ) : viewMode === "card" ? (
-            <div
-              key={cards.map((c) => c.id).join(",")}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
-              {/* Cards Grid */}
-              {filtered.map((card) => {
-                // const assigned =
-                //   Array.isArray(card.customers) && card.customers.length > 0;
-                // const customer = assigned ? card.customers[0] : null;
-                return (
-                  <div
-                    key={card.id}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-                  >
-                    {/* Header */}
-                    <div
-                      className={`p-4 text-white ${
-                        !card.is_admin
-                          ? "bg-gradient-to-r from-gray-600 to-gray-700"
-                          : "bg-gradient-to-r from-blue-600 to-blue-700"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                            <CreditCard className="h-6 w-6" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-lg font-mono">
-                              {card.uid}
-                            </h3>
-                            {card.alias && (
-                              <span className="text-sm opacity-90">
-                                {card.alias}
-                              </span>
-                            )}
-                            {/* <span className="text-sm opacity-90">
+                <div
+                  key={cards.map((c) => c.id).join(",")}
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                >
+                  {/* Cards Grid */}
+                  {filtered.map((card) => {
+                    // const assigned =
+                    //   Array.isArray(card.customers) && card.customers.length > 0;
+                    // const customer = assigned ? card.customers[0] : null;
+                    return (
+                      <div
+                        key={card.id}
+                        className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+                      >
+                        {/* Header */}
+                        <div
+                          className={`p-4 text-white ${
+                            !card.is_admin
+                              ? "bg-gradient-to-r from-gray-600 to-gray-700"
+                              : "bg-gradient-to-r from-blue-600 to-blue-700"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                                <CreditCard className="h-6 w-6" />
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-lg font-mono">
+                                  {card.uid}
+                                </h3>
+                                {card.alias && (
+                                  <span className="text-sm opacity-90">
+                                    {card.alias}
+                                  </span>
+                                )}
+                                {/* <span className="text-sm opacity-90">
                               {assigned
                                 ? "Ter-assign ke customer"
                                 : "Belum ter-assign"}
                             </span> */}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                            card.status === "active"
-                              ? "bg-green-500 text-white"
-                              : card.status === "blocked"
-                              ? "bg-red-500 text-white"
-                              : "bg-gray-400 text-white"
-                          }`}
-                        >
-                          {card.status.toUpperCase()}
-                        </span>
-                        {card.is_admin && (
-                          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-500 text-white">
-                            ADMIN
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Body */}
-                    <div className="p-4">
-                      <div className="space-y-4">
-                        {/* Customer Info */}
-                        <div>
-                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            Informasi Customer
-                          </h4>
-                          <div className="flex flex-col gap-1 text-md text-gray-700">
-                            <div className="flex justify-between">
-                              <span className="font-medium">Points:</span>
-                              <span className="font-mono">
-                                {card.balance_points}
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                                card.status === "active"
+                                  ? "bg-green-500 text-white"
+                                  : card.status === "blocked"
+                                  ? "bg-red-500 text-white"
+                                  : "bg-gray-400 text-white"
+                              }`}
+                            >
+                              {card.status.toUpperCase()}
+                            </span>
+                            {card.is_admin && (
+                              <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-500 text-white">
+                                ADMIN
                               </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium">Status:</span>
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-sm font-semibold ${
-                                  card.status === "active"
-                                    ? "bg-green-100 text-green-700"
-                                    : card.status === "blocked"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-gray-100 text-gray-700"
-                                }`}
-                              >
-                                {card.status.toUpperCase()}
-                              </span>
-                            </div>
+                            )}
                           </div>
                         </div>
 
-                        {/* Actions */}
-                        <div className="pt-4 border-t border-gray-100">
-                          <div className="flex gap-2 justify-end">
-                            {/* <button
+                        {/* Body */}
+                        <div className="p-4">
+                          <div className="space-y-4">
+                            {/* Customer Info */}
+                            <div>
+                              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                Informasi Customer
+                              </h4>
+                              <div className="flex flex-col gap-1 text-md text-gray-700">
+                                <div className="flex justify-between">
+                                  <span className="font-medium">Points:</span>
+                                  <span className="font-mono">
+                                    {card.balance_points}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="font-medium">
+                                    Average (Rupiah per Point):
+                                  </span>
+                                  <span className="font-mono">
+                                    {card.avg_nilai_point}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="font-medium">Status:</span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-sm font-semibold ${
+                                      card.status === "active"
+                                        ? "bg-green-100 text-green-700"
+                                        : card.status === "blocked"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-gray-100 text-gray-700"
+                                    }`}
+                                  >
+                                    {card.status.toUpperCase()}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="pt-4 border-t border-gray-100">
+                              <div className="flex gap-2 justify-end">
+                                {/* <button
                               onClick={() => toggleAdmin(card)}
                               className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                                 !card.is_admin
@@ -807,454 +930,460 @@ const RFIDCards: React.FC = () => {
                               <Shield className="h-4 w-4" />
                               {card.is_admin ? "Remove Admin" : "Make Admin"}
                             </button> */}
-                            <button
-                              onClick={() => blockCard(card)}
-                              className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                                card.status === "active"
-                                  ? "bg-red-500 hover:bg-red-600 text-white"
-                                  : "bg-green-500 hover:bg-green-600 text-white"
-                              }`}
-                            >
-                              {card.status === "active" ? (
-                                <>
-                                  <UserX className="h-4 w-4" />
-                                  Block
-                                </>
-                              ) : (
-                                <>
-                                  <UserCheck className="h-4 w-4" />
-                                  Unblock
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => openEdit(card as any)}
-                              className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => openHistory(card)}
-                              className="p-2 border border-blue-300 hover:border-blue-400 text-blue-600 rounded-lg transition-colors flex items-center justify-center"
-                            >
-                              <History className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => deleteCard(card as any)}
-                              className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                                <button
+                                  onClick={() => blockCard(card)}
+                                  className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                                    card.status === "active"
+                                      ? "bg-red-500 hover:bg-red-600 text-white"
+                                      : "bg-green-500 hover:bg-green-600 text-white"
+                                  }`}
+                                >
+                                  {card.status === "active" ? (
+                                    <>
+                                      <UserX className="h-4 w-4" />
+                                      Block
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserCheck className="h-4 w-4" />
+                                      Unblock
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => openEdit(card as any)}
+                                  className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => openHistory(card)}
+                                  className="p-2 border border-blue-300 hover:border-blue-400 text-blue-600 rounded-lg transition-colors flex items-center justify-center"
+                                >
+                                  <History className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => deleteCard(card as any)}
+                                  className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        UID & Alias
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Tipe
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Points
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Aksi
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {filtered.map((card) => (
-                      <tr key={card.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-semibold text-gray-900 font-mono">
-                            {card.uid}
-                          </div>
-                          {card.alias && (
-                            <div className="text-sm text-gray-500">
-                              {card.alias}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                              card.is_admin
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-gray-100 text-gray-700"
-                            }`}
-                          >
-                            {card.is_admin ? "Admin" : "Member"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                              card.status === "active"
-                                ? "bg-green-100 text-green-700"
-                                : card.status === "blocked"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-gray-100 text-gray-700"
-                            }`}
-                          >
-                            {card.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-mono text-sm text-gray-900">
-                            {typeof card.balance_points === "number"
-                              ? card.balance_points.toLocaleString()
-                              : card.balance_points ?? "-"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              onClick={() => blockCard(card)}
-                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                                card.status === "active"
-                                  ? "bg-red-500 hover:bg-red-600 text-white"
-                                  : "bg-green-500 hover:bg-green-600 text-white"
-                              }`}
-                            >
-                              {card.status === "active" ? (
-                                <>
-                                  <UserX className="h-4 w-4" />
-                                  Block
-                                </>
-                              ) : (
-                                <>
-                                  <UserCheck className="h-4 w-4" />
-                                  Unblock
-                                </>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            UID & Alias
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Tipe
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Points
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Aksi
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-100">
+                        {filtered.map((card) => (
+                          <tr key={card.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-semibold text-gray-900 font-mono">
+                                {card.uid}
+                              </div>
+                              {card.alias && (
+                                <div className="text-sm text-gray-500">
+                                  {card.alias}
+                                </div>
                               )}
-                            </button>
-                            <button
-                              onClick={() => openEdit(card as any)}
-                              className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => openHistory(card)}
-                              className="p-2 border border-blue-300 hover:border-blue-400 text-blue-600 rounded-lg transition-colors flex items-center justify-center"
-                            >
-                              <History className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => deleteCard(card as any)}
-                              className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Add Modal */}
-          {showAddModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                    Tambah Kartu RFID
-                  </h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        UID Kartu
-                      </label>
-                      <input
-                        value={uidInput}
-                        onChange={(e) => setUidInput(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Masukkan UID kartu"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-3 mt-6">
-                    <button
-                      onClick={() => setShowAddModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      onClick={async () => {
-                        setUidInput(uidInput);
-                        await addCard();
-                        setShowAddModal(false);
-                        setUidInput("");
-                        Swal.fire(
-                          "Berhasil",
-                          "Kartu berhasil ditambahkan!",
-                          "success"
-                        );
-                        load();
-                      }}
-                      disabled={!uidInput.trim()}
-                      className={`flex-1 ${
-                        !uidInput.trim()
-                          ? "bg-blue-400"
-                          : "bg-blue-600 hover:bg-blue-700"
-                      } text-white px-4 py-2 rounded-lg font-medium transition-colors`}
-                    >
-                      Simpan
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Edit Modal */}
-          {editCard && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      Edit Kartu
-                    </h2>
-                    <button
-                      onClick={() => setEditCard(null)}
-                      className="text-gray-500 hover:text-gray-700"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        UID
-                      </label>
-                      <input
-                        value={editCard.uid}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Alias / Nama Kartu
-                      </label>
-                      <input
-                        value={editAlias}
-                        onChange={(e) => setEditAlias(e.target.value)}
-                        placeholder="Contoh: Kartu Admin Utama"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <p className="mt-1 text-sm text-gray-500">
-                        Alias memudahkan identifikasi kartu
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="edit-admin-only"
-                        type="checkbox"
-                        checked={editIsAdmin}
-                        onChange={(e) => setEditIsAdmin(e.target.checked)}
-                        className="rounded"
-                      />
-                      <label htmlFor="edit-admin-only" className="text-sm">
-                        Kartu Admin
-                      </label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="edit-helper-only"
-                        type="checkbox"
-                        checked={editIsHelper}
-                        onChange={(e) => setEditIsHelper(e.target.checked)}
-                        className="rounded"
-                      />
-                      <label htmlFor="edit-helper-only" className="text-sm">
-                        Kartu Helper
-                      </label>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 mt-6">
-                    <button
-                      onClick={() => setEditCard(null)}
-                      className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      onClick={saveEdit}
-                      disabled={savingEdit}
-                      className={`flex-1 ${
-                        savingEdit
-                          ? "bg-blue-400"
-                          : "bg-blue-600 hover:bg-blue-700"
-                      } text-white px-4 py-2 rounded-lg font-medium transition-colors`}
-                    >
-                      {savingEdit ? "Menyimpan..." : "Simpan"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* History Modal */}
-          {historyCard && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      Riwayat Points - UID {historyCard.uid}
-                    </h2>
-                    <button
-                      onClick={() => {
-                        setHistoryCard(null);
-                        setHistoryLogs([]);
-                      }}
-                      className="text-gray-500 hover:text-gray-700"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  {historyLoading ? (
-                    <div className="text-gray-500">Memuat riwayat...</div>
-                  ) : historyLogs.length === 0 ? (
-                    <div className="text-gray-500">
-                      Tidak ada riwayat untuk kartu ini.
-                    </div>
-                  ) : (
-                    <div className="max-h-[60vh] overflow-auto divide-y divide-gray-100">
-                      {(() => {
-                        // Filter logs penambahan dan group pemakaian
-                        const addLogs = historyLogs.filter(
-                          (log) => log.action_type === "balance_add"
-                        );
-                        const deductGrouped =
-                          groupDeductLogsBySession(historyLogs);
-
-                        // Gabungkan dan urutkan semua logs
-                        const combined = [
-                          ...addLogs.map((log) => ({
-                            type: "balance_add" as const,
-                            id: log.id,
-                            timestamp: log.timestamp,
-                            points: log.points_amount,
-                            notes: log.notes,
-                            used_by_name: log.used_by_name,
-                            balance_before: log.balance_before,
-                            balance_after: log.balance_after,
-                          })),
-                          ...deductGrouped.map((g) => ({
-                            type: "balance_deduct" as const,
-                            session_id: g.session_id,
-                            points: g.total_points,
-                            timestamp: g.firstTimestamp,
-                            balance_before: g.balance_before,
-                            balance_after: g.balance_after,
-                            notes: g.notes,
-                          })),
-                        ].sort(
-                          (a, b) =>
-                            new Date(b.timestamp).getTime() -
-                            new Date(a.timestamp).getTime()
-                        );
-
-                        if (combined.length === 0) {
-                          return (
-                            <div className="text-gray-500">
-                              Tidak ada riwayat poin.
-                            </div>
-                          );
-                        }
-
-                        return combined.map((item) =>
-                          item.type === "balance_add" ? (
-                            <div
-                              key={item.id}
-                              className="py-3 flex items-start gap-3"
-                            >
-                              <div className="mt-1 w-2 h-2 rounded-full bg-green-500"></div>
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                  <div className="text-sm font-medium text-gray-900">
-                                    Penambahan Poin
-                                  </div>
-                                  <div className="text-sm font-mono text-green-600">
-                                    +{item.points.toLocaleString()} points
-                                  </div>
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {new Date(item.timestamp).toLocaleString()}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Saldo: {item.balance_before?.toLocaleString()}{" "}
-                                  → {item.balance_after?.toLocaleString()}
-                                </div>
-                                {item.notes && (
-                                  <div className="text-xs text-gray-700 mt-1">
-                                    {item.notes}
-                                  </div>
-                                )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                                  card.is_admin
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "bg-gray-100 text-gray-700"
+                                }`}
+                              >
+                                {card.is_admin ? "Admin" : "Member"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
+                                  card.status === "active"
+                                    ? "bg-green-100 text-green-700"
+                                    : card.status === "blocked"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-gray-100 text-gray-700"
+                                }`}
+                              >
+                                {card.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="font-mono text-sm text-gray-900">
+                                {typeof card.balance_points === "number"
+                                  ? card.balance_points.toLocaleString()
+                                  : card.balance_points ?? "-"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  onClick={() => blockCard(card)}
+                                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                                    card.status === "active"
+                                      ? "bg-red-500 hover:bg-red-600 text-white"
+                                      : "bg-green-500 hover:bg-green-600 text-white"
+                                  }`}
+                                >
+                                  {card.status === "active" ? (
+                                    <>
+                                      <UserX className="h-4 w-4" />
+                                      Block
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserCheck className="h-4 w-4" />
+                                      Unblock
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => openEdit(card as any)}
+                                  className="p-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg transition-colors flex items-center justify-center"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => openHistory(card)}
+                                  className="p-2 border border-blue-300 hover:border-blue-400 text-blue-600 rounded-lg transition-colors flex items-center justify-center"
+                                >
+                                  <History className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => deleteCard(card as any)}
+                                  className="p-2 border border-red-300 hover:border-red-400 text-red-600 rounded-lg transition-colors flex items-center justify-center"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               </div>
-                            </div>
-                          ) : (
-                            <div
-                              key={item.session_id}
-                              className="py-3 flex items-start gap-3"
-                              title={`Sesi ID: ${item.session_id}`}
-                            >
-                              <div className="mt-1 w-2 h-2 rounded-full bg-red-500"></div>
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                  <div className="text-sm font-medium text-gray-900">
-                                    Pemakaian Poin
-                                  </div>
-                                  <div className="text-sm font-mono text-red-600">
-                                    -{item.points.toLocaleString()} points
-                                  </div>
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {new Date(item.timestamp).toLocaleString()}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Saldo: {item.balance_before?.toLocaleString()}{" "}
-                                  → {item.balance_after?.toLocaleString()}
-                                </div>
-                                {item.notes && (
-                                  <div className="text-xs text-gray-700 mt-1">
-                                    {item.notes}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        );
-                      })()}
-                    </div>
-                  )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            </div>
+              )}
+
+              {/* Add Modal */}
+              {showAddModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+                    <div className="p-6">
+                      <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                        Tambah Kartu RFID
+                      </h2>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            UID Kartu
+                          </label>
+                          <input
+                            value={uidInput}
+                            onChange={(e) => setUidInput(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Masukkan UID kartu"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-3 mt-6">
+                        <button
+                          onClick={() => setShowAddModal(false)}
+                          className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setUidInput(uidInput);
+                            await addCard();
+                            setShowAddModal(false);
+                            setUidInput("");
+                            Swal.fire(
+                              "Berhasil",
+                              "Kartu berhasil ditambahkan!",
+                              "success"
+                            );
+                            load();
+                          }}
+                          disabled={!uidInput.trim()}
+                          className={`flex-1 ${
+                            !uidInput.trim()
+                              ? "bg-blue-400"
+                              : "bg-blue-600 hover:bg-blue-700"
+                          } text-white px-4 py-2 rounded-lg font-medium transition-colors`}
+                        >
+                          Simpan
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Modal */}
+              {editCard && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          Edit Kartu
+                        </h2>
+                        <button
+                          onClick={() => setEditCard(null)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            UID
+                          </label>
+                          <input
+                            value={editCard.uid}
+                            disabled
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Alias / Nama Kartu
+                          </label>
+                          <input
+                            value={editAlias}
+                            onChange={(e) => setEditAlias(e.target.value)}
+                            placeholder="Contoh: Kartu Admin Utama"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <p className="mt-1 text-sm text-gray-500">
+                            Alias memudahkan identifikasi kartu
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id="edit-admin-only"
+                            type="checkbox"
+                            checked={editIsAdmin}
+                            onChange={(e) => setEditIsAdmin(e.target.checked)}
+                            className="rounded"
+                          />
+                          <label htmlFor="edit-admin-only" className="text-sm">
+                            Kartu Admin
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id="edit-helper-only"
+                            type="checkbox"
+                            checked={editIsHelper}
+                            onChange={(e) => setEditIsHelper(e.target.checked)}
+                            className="rounded"
+                          />
+                          <label htmlFor="edit-helper-only" className="text-sm">
+                            Kartu Helper
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 mt-6">
+                        <button
+                          onClick={() => setEditCard(null)}
+                          className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={saveEdit}
+                          disabled={savingEdit}
+                          className={`flex-1 ${
+                            savingEdit
+                              ? "bg-blue-400"
+                              : "bg-blue-600 hover:bg-blue-700"
+                          } text-white px-4 py-2 rounded-lg font-medium transition-colors`}
+                        >
+                          {savingEdit ? "Menyimpan..." : "Simpan"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* History Modal */}
+              {historyCard && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4">
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          Riwayat Points - UID {historyCard.uid}
+                        </h2>
+                        <button
+                          onClick={() => {
+                            setHistoryCard(null);
+                            setHistoryLogs([]);
+                          }}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      {historyLoading ? (
+                        <div className="text-gray-500">Memuat riwayat...</div>
+                      ) : historyLogs.length === 0 ? (
+                        <div className="text-gray-500">
+                          Tidak ada riwayat untuk kartu ini.
+                        </div>
+                      ) : (
+                        <div className="max-h-[60vh] overflow-auto divide-y divide-gray-100">
+                          {(() => {
+                            // Filter logs penambahan dan group pemakaian
+                            const addLogs = historyLogs.filter(
+                              (log) => log.action_type === "balance_add"
+                            );
+                            const deductGrouped =
+                              groupDeductLogsBySession(historyLogs);
+
+                            // Gabungkan dan urutkan semua logs
+                            const combined = [
+                              ...addLogs.map((log) => ({
+                                type: "balance_add" as const,
+                                id: log.id,
+                                timestamp: log.timestamp,
+                                points: log.points_amount,
+                                notes: log.notes,
+                                used_by_name: log.used_by_name,
+                                balance_before: log.balance_before,
+                                balance_after: log.balance_after,
+                              })),
+                              ...deductGrouped.map((g) => ({
+                                type: "balance_deduct" as const,
+                                session_id: g.session_id,
+                                points: g.total_points,
+                                timestamp: g.firstTimestamp,
+                                balance_before: g.balance_before,
+                                balance_after: g.balance_after,
+                                notes: g.notes,
+                              })),
+                            ].sort(
+                              (a, b) =>
+                                new Date(b.timestamp).getTime() -
+                                new Date(a.timestamp).getTime()
+                            );
+
+                            if (combined.length === 0) {
+                              return (
+                                <div className="text-gray-500">
+                                  Tidak ada riwayat poin.
+                                </div>
+                              );
+                            }
+
+                            return combined.map((item) =>
+                              item.type === "balance_add" ? (
+                                <div
+                                  key={item.id}
+                                  className="py-3 flex items-start gap-3"
+                                >
+                                  <div className="mt-1 w-2 h-2 rounded-full bg-green-500"></div>
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        Penambahan Poin
+                                      </div>
+                                      <div className="text-sm font-mono text-green-600">
+                                        +{item.points.toLocaleString()} points
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {new Date(
+                                        item.timestamp
+                                      ).toLocaleString()}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      Saldo:{" "}
+                                      {item.balance_before?.toLocaleString()} →{" "}
+                                      {item.balance_after?.toLocaleString()}
+                                    </div>
+                                    {item.notes && (
+                                      <div className="text-xs text-gray-700 mt-1">
+                                        {item.notes}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  key={item.session_id}
+                                  className="py-3 flex items-start gap-3"
+                                  title={`Sesi ID: ${item.session_id}`}
+                                >
+                                  <div className="mt-1 w-2 h-2 rounded-full bg-red-500"></div>
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        Pemakaian Poin
+                                      </div>
+                                      <div className="text-sm font-mono text-red-600">
+                                        -{item.points.toLocaleString()} points
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {new Date(
+                                        item.timestamp
+                                      ).toLocaleString()}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      Saldo:{" "}
+                                      {item.balance_before?.toLocaleString()} →{" "}
+                                      {item.balance_after?.toLocaleString()}
+                                    </div>
+                                    {item.notes && (
+                                      <div className="text-xs text-gray-700 mt-1">
+                                        {item.notes}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </>
           )}
@@ -1264,11 +1393,11 @@ const RFIDCards: React.FC = () => {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Laporan</h2>
-              <p className="text-gray-600">Laporan terkait kartu RFID (sementara placeholder)</p>
+              <p className="text-gray-600">
+                Laporan terkait kartu RFID (sementara placeholder)
+              </p>
             </div>
-            <div>
-             
-            </div>
+            <div></div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1286,8 +1415,19 @@ const RFIDCards: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <div className="flex items-center gap-2 mt-2 text-xs">
-                    <input id="search-exact" type="checkbox" checked={searchExact} onChange={(e) => setSearchExact(e.target.checked)} className="rounded" />
-                    <label htmlFor="search-exact" className="text-xs text-gray-600">Exact match</label>
+                    <input
+                      id="search-exact"
+                      type="checkbox"
+                      checked={searchExact}
+                      onChange={(e) => setSearchExact(e.target.checked)}
+                      className="rounded"
+                    />
+                    <label
+                      htmlFor="search-exact"
+                      className="text-xs text-gray-600"
+                    >
+                      Exact match
+                    </label>
                   </div>
                 </div>
                 <div>
@@ -1326,52 +1466,92 @@ const RFIDCards: React.FC = () => {
                 <div className="flex items-end">
                   <button
                     onClick={() => void fetchLaporan()}
-                    className={`px-4 py-2 text-white rounded-lg ${laporanLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+                    className={`px-4 py-2 text-white rounded-lg ${
+                      laporanLoading
+                        ? "bg-blue-400"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
                   >
-                    {laporanLoading ? 'Memuat...' : 'Cari'}
+                    {laporanLoading ? "Memuat..." : "Cari"}
                   </button>
                 </div>
               </div>
             </div>
             <div className="p-4">
-                <div className="flex items-center gap-4 mb-4">
-                  <label className="inline-flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={groupByDateUid} onChange={(e) => setGroupByDateUid(e.target.checked)} />
-                    <span>Group by Tanggal & UID</span>
-                  </label>
-                </div>
+              <div className="flex items-center gap-4 mb-4">
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={groupByDateUid}
+                    onChange={(e) => setGroupByDateUid(e.target.checked)}
+                  />
+                  <span>Group by Tanggal & UID</span>
+                </label>
+              </div>
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div className="flex items-center gap-2">
-                  <button onClick={expandAllDates} className="px-3 py-1 bg-blue-50 text-blue-600 rounded">Expand all</button>
-                  <button onClick={collapseAllDates} className="px-3 py-1 bg-gray-50 text-gray-700 rounded">Collapse all</button>
+                  <button
+                    onClick={expandAllDates}
+                    className="px-3 py-1 bg-blue-50 text-blue-600 rounded"
+                  >
+                    Expand all
+                  </button>
+                  <button
+                    onClick={collapseAllDates}
+                    className="px-3 py-1 bg-gray-50 text-gray-700 rounded"
+                  >
+                    Collapse all
+                  </button>
                 </div>
-                <div className="text-sm text-gray-500">Group by shown: Tanggal & UID</div>
+                <div className="text-sm text-gray-500">
+                  Group by shown: Tanggal & UID
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="bg-white rounded-xl p-4 border"> 
-                  <div className="text-sm text-gray-500">Total Kartu (summary rows)</div>
-                  <div className="text-xl font-semibold">{laporanSummary.length}</div>
+                <div className="bg-white rounded-xl p-4 border">
+                  <div className="text-sm text-gray-500">
+                    Total Kartu (summary rows)
+                  </div>
+                  <div className="text-xl font-semibold">
+                    {laporanSummary.length}
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 border"> 
-                  <div className="text-sm text-gray-500">Total Events (logs)</div>
-                  <div className="text-xl font-semibold">{laporanLogs.length}</div>
+                <div className="bg-white rounded-xl p-4 border">
+                  <div className="text-sm text-gray-500">
+                    Total Events (logs)
+                  </div>
+                  <div className="text-xl font-semibold">
+                    {laporanLogs.length}
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 border"> 
-                  <div className="text-sm text-gray-500">Net Change (sample)</div>
-                  <div className="text-xl font-semibold">{laporanSummary.reduce((s, r) => s + Number(r.net_change || 0), 0).toLocaleString()}</div>
+                <div className="bg-white rounded-xl p-4 border">
+                  <div className="text-sm text-gray-500">
+                    Net Change (sample)
+                  </div>
+                  <div className="text-xl font-semibold">
+                    {laporanSummary
+                      .reduce((s, r) => s + Number(r.net_change || 0), 0)
+                      .toLocaleString()}
+                  </div>
                 </div>
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
                 {groupByDateUid && (laporanGroupedRpc || laporanGrouped) ? (
                   <div className="p-4">
-                    {((laporanGroupedRpc ? laporanGroupedRpc : laporanGrouped) as any[]).map((grp: any) => {
+                    {(
+                      (laporanGroupedRpc
+                        ? laporanGroupedRpc
+                        : laporanGrouped) as any[]
+                    ).map((grp: any) => {
                       const sortKey = sortByPerDate[grp.date] || "net_change";
                       // normalize rows: RPC might return { date, uids: [{card_uid,...,events}] }
                       const rows = grp.rows ?? grp.uids ?? grp.items ?? [];
                       const rowsSorted = [...rows].sort((a: any, b: any) => {
-                        if (sortKey === "net_change") return b.net_change - a.net_change;
-                        if (sortKey === "events") return b.events.length - a.events.length;
+                        if (sortKey === "net_change")
+                          return b.net_change - a.net_change;
+                        if (sortKey === "events")
+                          return b.events.length - a.events.length;
                         return a.card_uid.localeCompare(b.card_uid);
                       });
 
@@ -1379,13 +1559,19 @@ const RFIDCards: React.FC = () => {
                         <div key={grp.date} className="mb-6">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-3">
-                              <div className="text-sm font-semibold">{grp.date}</div>
+                              <div className="text-sm font-semibold">
+                                {grp.date}
+                              </div>
                               <select
                                 value={sortByPerDate[grp.date] || "net_change"}
-                                onChange={(e) => setSortForDate(grp.date, e.target.value)}
+                                onChange={(e) =>
+                                  setSortForDate(grp.date, e.target.value)
+                                }
                                 className="text-xs px-2 py-1 border rounded bg-white"
                               >
-                                <option value="net_change">Sort: Net Change</option>
+                                <option value="net_change">
+                                  Sort: Net Change
+                                </option>
                                 <option value="events">Sort: Events</option>
                                 <option value="uid">Sort: UID</option>
                               </select>
@@ -1394,9 +1580,17 @@ const RFIDCards: React.FC = () => {
                               <button
                                 onClick={() => toggleDate(grp.date)}
                                 className="p-1 rounded hover:bg-gray-100"
-                                aria-label={expandedDates[grp.date] ? "Collapse date" : "Expand date"}
+                                aria-label={
+                                  expandedDates[grp.date]
+                                    ? "Collapse date"
+                                    : "Expand date"
+                                }
                               >
-                                {expandedDates[grp.date] ? <ChevronDown className="w-4 h-4 text-gray-600 rotate-180" /> : <ChevronRight className="w-4 h-4 text-gray-600" />}
+                                {expandedDates[grp.date] ? (
+                                  <ChevronDown className="w-4 h-4 text-gray-600 rotate-180" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-gray-600" />
+                                )}
                               </button>
                             </div>
                           </div>
@@ -1404,55 +1598,123 @@ const RFIDCards: React.FC = () => {
                             <table className="min-w-full divide-y divide-gray-200">
                               <thead className="bg-gray-50">
                                 <tr>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">UID</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Events</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Add</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Deduct</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Net</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                    UID
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Events
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Total Add
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Total Deduct
+                                  </th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Net
+                                  </th>
                                   <th className="px-4 py-2" />
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-100">
                                 {rowsSorted.map((r: any) => (
-                                  <React.Fragment key={grp.date + "::" + r.card_uid}>
+                                  <React.Fragment
+                                    key={grp.date + "::" + r.card_uid}
+                                  >
                                     <tr className="hover:bg-gray-50">
-                                      <td className="px-4 py-2 text-sm font-mono text-gray-900">{r.card_uid}</td>
-                                      <td className="px-4 py-2 text-sm text-gray-700">{r.events.length}</td>
-                                      <td className="px-4 py-2 text-sm text-gray-700">{r.total_add.toLocaleString()}</td>
-                                      <td className="px-4 py-2 text-sm text-gray-700">{r.total_deduct.toLocaleString()}</td>
-                                      <td className="px-4 py-2 text-sm text-gray-700">{r.net_change.toLocaleString()}</td>
+                                      <td className="px-4 py-2 text-sm font-mono text-gray-900">
+                                        {r.card_uid}
+                                      </td>
+                                      <td className="px-4 py-2 text-sm text-gray-700">
+                                        {r.events.length}
+                                      </td>
+                                      <td className="px-4 py-2 text-sm text-gray-700">
+                                        {r.total_add.toLocaleString()}
+                                      </td>
+                                      <td className="px-4 py-2 text-sm text-gray-700">
+                                        {r.total_deduct.toLocaleString()}
+                                      </td>
+                                      <td className="px-4 py-2 text-sm text-gray-700">
+                                        {r.net_change.toLocaleString()}
+                                      </td>
                                       <td className="px-4 py-2 text-right">
                                         <button
-                                          onClick={() => toggleUid(grp.date, r.card_uid)}
+                                          onClick={() =>
+                                            toggleUid(grp.date, r.card_uid)
+                                          }
                                           className="p-1 rounded hover:bg-gray-100"
-                                          aria-label={expandedUid[grp.date]?.[r.card_uid] ? "Hide events" : "Show events"}
+                                          aria-label={
+                                            expandedUid[grp.date]?.[r.card_uid]
+                                              ? "Hide events"
+                                              : "Show events"
+                                          }
                                         >
-                                          {expandedUid[grp.date]?.[r.card_uid] ? <ChevronUp className="w-4 h-4 text-gray-600" /> : <ChevronRight className="w-4 h-4 text-gray-600" />}
+                                          {expandedUid[grp.date]?.[
+                                            r.card_uid
+                                          ] ? (
+                                            <ChevronUp className="w-4 h-4 text-gray-600" />
+                                          ) : (
+                                            <ChevronRight className="w-4 h-4 text-gray-600" />
+                                          )}
                                         </button>
                                       </td>
                                     </tr>
                                     {expandedUid[grp.date]?.[r.card_uid] && (
                                       <tr>
-                                        <td colSpan={6} className="bg-gray-50 px-4 py-2">
+                                        <td
+                                          colSpan={6}
+                                          className="bg-gray-50 px-4 py-2"
+                                        >
                                           <div className="max-h-56 overflow-auto">
                                             <table className="min-w-full">
                                               <thead>
                                                 <tr>
-                                                  <th className="px-2 py-1 text-xs text-gray-500">Waktu</th>
-                                                  <th className="px-2 py-1 text-xs text-gray-500">Jenis</th>
-                                                  <th className="px-2 py-1 text-xs text-gray-500">Amount</th>
-                                                  <th className="px-2 py-1 text-xs text-gray-500">Saldo</th>
-                                                  <th className="px-2 py-1 text-xs text-gray-500">Notes</th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">
+                                                    Waktu
+                                                  </th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">
+                                                    Jenis
+                                                  </th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">
+                                                    Amount
+                                                  </th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">
+                                                    Saldo
+                                                  </th>
+                                                  <th className="px-2 py-1 text-xs text-gray-500">
+                                                    Notes
+                                                  </th>
                                                 </tr>
                                               </thead>
                                               <tbody>
                                                 {r.events.map((ev: any) => (
-                                                  <tr key={ev.id} className="text-sm text-gray-700">
-                                                    <td className="px-2 py-1">{new Date(ev.timestamp).toLocaleString()}</td>
-                                                    <td className="px-2 py-1">{ev.action_type}</td>
-                                                    <td className="px-2 py-1">{Number(ev.points_amount || 0).toLocaleString()}</td>
-                                                    <td className="px-2 py-1">{(ev.balance_before ?? '-')+' → '+(ev.balance_after ?? '-')}</td>
-                                                    <td className="px-2 py-1">{ev.notes || '-'}</td>
+                                                  <tr
+                                                    key={ev.id}
+                                                    className="text-sm text-gray-700"
+                                                  >
+                                                    <td className="px-2 py-1">
+                                                      {new Date(
+                                                        ev.timestamp
+                                                      ).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-2 py-1">
+                                                      {ev.action_type}
+                                                    </td>
+                                                    <td className="px-2 py-1">
+                                                      {Number(
+                                                        ev.points_amount || 0
+                                                      ).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-2 py-1">
+                                                      {(ev.balance_before ??
+                                                        "-") +
+                                                        " → " +
+                                                        (ev.balance_after ??
+                                                          "-")}
+                                                    </td>
+                                                    <td className="px-2 py-1">
+                                                      {ev.notes || "-"}
+                                                    </td>
                                                   </tr>
                                                 ))}
                                               </tbody>
@@ -1472,33 +1734,64 @@ const RFIDCards: React.FC = () => {
                   </div>
                 ) : (
                   <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Waktu</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">UID</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Jenis</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Saldo</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {laporanLogs.length === 0 && (
+                    <thead className="bg-gray-50">
                       <tr>
-                        <td colSpan={6} className="text-center text-gray-400 py-6">Tidak ada data</td>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Waktu
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          UID
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Jenis
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Amount
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Saldo
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Notes
+                        </th>
                       </tr>
-                    )}
-                    {laporanLogs.map((l: any) => (
-                      <tr key={l.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 text-sm text-gray-700">{new Date(l.timestamp).toLocaleString()}</td>
-                        <td className="px-4 py-2 text-sm font-mono text-gray-900">{l.card_uid}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.action_type}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{Number(l.points_amount || 0).toLocaleString()}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{(l.balance_before ?? '-')+' → '+(l.balance_after ?? '-')}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.notes || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {laporanLogs.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="text-center text-gray-400 py-6"
+                          >
+                            Tidak ada data
+                          </td>
+                        </tr>
+                      )}
+                      {laporanLogs.map((l: any) => (
+                        <tr key={l.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-sm text-gray-700">
+                            {new Date(l.timestamp).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2 text-sm font-mono text-gray-900">
+                            {l.card_uid}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-700">
+                            {l.action_type}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-700">
+                            {Number(l.points_amount || 0).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-700">
+                            {(l.balance_before ?? "-") +
+                              " → " +
+                              (l.balance_after ?? "-")}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-700">
+                            {l.notes || "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
                 )}
               </div>

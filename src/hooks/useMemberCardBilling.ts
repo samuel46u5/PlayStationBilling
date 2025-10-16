@@ -538,6 +538,23 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
 
       // Note: Final logging removed - already handled by partial deduction logging above
 
+      const { data: cardInfo } = await supabase
+        .from('rfid_cards')
+        .select('avg_nilai_point')
+        .eq('uid', session.card_uid)
+        .single();
+
+      const avgNilaiPoint = cardInfo?.avg_nilai_point ?? 0;
+      const { data: capitalRow } = await supabase
+        .from('consoles')
+        .select('rate_profiles(capital)')
+        .eq('id', session.console_id)
+        .single();
+      const capitalPerHour = (capitalRow as any)?.rate_profiles?.capital ?? 0;
+      const durationHours = elapsedMinutes / 60;
+      const totalCapitalCost = capitalPerHour * durationHours;
+      const profit = (avgNilaiPoint * totalPoints) - totalCapitalCost;
+
       // Log transaksi kasir dengan struktur yang kompatibel untuk print receipt
       await logCashierTransaction({
         type: 'rental',
@@ -555,6 +572,8 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
               description: `Member Card - ${elapsedMinutes} menit (Auto End)`,
               qty: 1,
               price: totalPoints,
+              profit: profit,
+              capital: totalCapitalCost,
               product_name: `Rental ${consoleData?.name || "Console"}`,
             }
           ],
@@ -579,6 +598,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
             points_deducted_final: totalPoints,
             hourly_rate_snapshot: session.hourly_rate_snapshot,
             per_minute_rate_snapshot: session.per_minute_rate_snapshot,
+            avg_nilai_point: avgNilaiPoint,
             auto_end_reason: "insufficient_balance",
           },
           payment: {
