@@ -1452,15 +1452,17 @@ const ActiveRentals: React.FC = () => {
       const rentalData = globalActiveSessions;
 
       // Fetch products from database
-      const { data: productData, error: productError } = await supabase
-        .from("products")
-        .select("*")
-        .eq("is_active", true);
+      // const { data: productData, error: productError } = await supabase
+      //   .from("products")
+      //   .select("*")
+      //   .eq("is_active", true);
 
-      if (productError) {
-        console.error("Error fetching products:", productError);
-        throw productError;
-      }
+      const productData = await db.products.getActiveProducts();
+
+      // if (productError) {
+      //   console.error("Error fetching products:", productError);
+      //   throw productError;
+      // }
 
       // Fetch customers
       // const { data: customerData, error: customerError } = await supabase
@@ -7207,7 +7209,7 @@ const ActiveRentals: React.FC = () => {
             );
 
             const groupedConsoles = filteredConsoles.reduce((acc, console) => {
-              const location = console.location || "Lantai 1"; // Default to Lantai 1 if no location
+              const location = console.location || "Lantai 1";
               if (!acc[location]) {
                 acc[location] = [];
               }
@@ -7215,7 +7217,6 @@ const ActiveRentals: React.FC = () => {
               return acc;
             }, {} as Record<string, typeof filteredConsoles>);
 
-            // Sort locations: Lantai 1 first, then Lantai 2, then others
             const sortedLocations = Object.keys(groupedConsoles).sort(
               (a, b) => {
                 if (a === "Lantai 1") return -1;

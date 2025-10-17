@@ -145,6 +145,18 @@ export const db = {
           *,
           suppliers(name)
         `)
+      
+      if (error) throw error;
+      return data;
+    },
+
+    async getActiveProducts() {
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          suppliers(name)
+        `)
         .eq('is_active', true);
       
       if (error) throw error;

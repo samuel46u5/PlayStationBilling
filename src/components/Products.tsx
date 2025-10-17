@@ -26,7 +26,14 @@ import StokOpname from "./StokOpname";
 
 const Products: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
-    "products" | "purchases" | "suppliers" | "purchaseList" | "sales" | "salesSummary" | "reports" | "stokOpname"
+    | "products"
+    | "purchases"
+    | "suppliers"
+    | "purchaseList"
+    | "sales"
+    | "salesSummary"
+    | "reports"
+    | "stokOpname"
   >("products");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -46,6 +53,7 @@ const Products: React.FC = () => {
     min_stock: 0,
     barcode: "",
     description: "",
+    is_active: true,
   });
 
   const [newPurchase, setNewPurchase] = useState({
@@ -63,7 +71,6 @@ const Products: React.FC = () => {
     // orderDate will be stored in purchase_orders.order_date (ISO string)
     orderDate: new Date().toISOString(),
   });
-
 
   const [editingPoId, setEditingPoId] = useState<string | null>(null);
   const [isSavingPurchase, setIsSavingPurchase] = useState(false);
@@ -98,15 +105,21 @@ const Products: React.FC = () => {
   const [purchaseStatus] = useState<string>("all");
   // State untuk periode filter pada laporan penjualan
   const [salesPeriod, setSalesPeriod] = useState<string>("week");
-  const [salesDateRange, setSalesDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [salesDateRange, setSalesDateRange] = useState<{
+    start: string;
+    end: string;
+  }>({ start: "", end: "" });
   // Filters for Sales Summary (Laporan Rekap Per Barang)
   const [salesSummarySearch, setSalesSummarySearch] = useState<string>("");
   const [salesSummaryPeriod, setSalesSummaryPeriod] = useState<string>("week");
-  const [salesSummaryDateRange, setSalesSummaryDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [salesSummaryDateRange, setSalesSummaryDateRange] = useState<{
+    start: string;
+    end: string;
+  }>({ start: "", end: "" });
   // Local search state for sales tab to avoid clashing with global searchTerm
   const [salesSearch, setSalesSearch] = useState<string>("");
   // Which report sub-tab is active under Laporan Penjualan
-  const [reportTab, setReportTab] = useState<'sales' | 'salesSummary'>('sales');
+  const [reportTab, setReportTab] = useState<"sales" | "salesSummary">("sales");
   // expandedProducts removed - not currently used
 
   // State untuk item PO detail
@@ -117,34 +130,54 @@ const Products: React.FC = () => {
   );
   // purchasePeriod removed - use daftarPeriod instead
   // subtab inside Daftar Pembelian: 'daftar' (existing list), 'rekapTanggalBarang', 'rekapPerBarang'
-  const [purchaseTabView, setPurchaseTabView] = useState<'daftar' | 'rekapTanggalBarang' | 'rekapPerBarang'>('daftar');
+  const [purchaseTabView, setPurchaseTabView] = useState<
+    "daftar" | "rekapTanggalBarang" | "rekapPerBarang"
+  >("daftar");
   // Independent filters for the 'Daftar Pembelian' subtab (do not share with other tabs)
   const [daftarSearch, setDaftarSearch] = useState("");
   const [daftarPeriod, setDaftarPeriod] = useState<string>("week");
-  const [daftarDateRange, setDaftarDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [daftarDateRange, setDaftarDateRange] = useState<{
+    start: string;
+    end: string;
+  }>({ start: "", end: "" });
   // Filters for Rekap Pembelian (Per tanggal - Per Barang)
   const [rekapTanggalSearch, setRekapTanggalSearch] = useState("");
   const [rekapTanggalPeriod, setRekapTanggalPeriod] = useState<string>("week");
-  const [rekapTanggalDateRange, setRekapTanggalDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [rekapTanggalDateRange, setRekapTanggalDateRange] = useState<{
+    start: string;
+    end: string;
+  }>({ start: "", end: "" });
 
   // Filters for Rekap Per Barang
   const [rekapPerBarangSearch, setRekapPerBarangSearch] = useState("");
-  const [rekapPerBarangPeriod, setRekapPerBarangPeriod] = useState<string>("week");
-  const [rekapPerBarangDateRange, setRekapPerBarangDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [rekapPerBarangPeriod, setRekapPerBarangPeriod] =
+    useState<string>("week");
+  const [rekapPerBarangDateRange, setRekapPerBarangDateRange] = useState<{
+    start: string;
+    end: string;
+  }>({ start: "", end: "" });
 
   // Data + loading states for Rekap views
-  const [rekapTanggalData, setRekapTanggalData] = useState<Record<string, any>>({});
+  const [rekapTanggalData, setRekapTanggalData] = useState<Record<string, any>>(
+    {}
+  );
   const [rekapTanggalLoading, setRekapTanggalLoading] = useState(false);
-  const [rekapTanggalError, setRekapTanggalError] = useState<string | null>(null);
+  const [rekapTanggalError, setRekapTanggalError] = useState<string | null>(
+    null
+  );
 
-  const [rekapPerBarangData, setRekapPerBarangData] = useState<Record<string, any>>({});
+  const [rekapPerBarangData, setRekapPerBarangData] = useState<
+    Record<string, any>
+  >({});
   const [rekapPerBarangLoading, setRekapPerBarangLoading] = useState(false);
-  const [rekapPerBarangError, setRekapPerBarangError] = useState<string | null>(null);
+  const [rekapPerBarangError, setRekapPerBarangError] = useState<string | null>(
+    null
+  );
 
   // Load purchase order items and purchases for rekap computations when needed
   useEffect(() => {
     const loadRekapTanggal = async () => {
-      if (purchaseTabView !== 'rekapTanggalBarang') return;
+      if (purchaseTabView !== "rekapTanggalBarang") return;
       setRekapTanggalLoading(true);
       setRekapTanggalError(null);
       try {
@@ -153,21 +186,69 @@ const Products: React.FC = () => {
         let end: string | null = null;
         const now = new Date();
         switch (rekapTanggalPeriod) {
-          case 'today': { const s = new Date(); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
-          case 'yesterday': { const s = new Date(); s.setDate(s.getDate()-1); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(s); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
-          case 'week': { const s = new Date(); const d = s.getDay(); const diff = (d === 0 ? -6 : 1) - d; s.setDate(s.getDate() + diff); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
-          case 'month': { const s = new Date(now.getFullYear(), now.getMonth(), 1); start = s.toISOString().slice(0,10); const e = new Date(now.getFullYear(), now.getMonth()+1, 0); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
-          case 'range': if (rekapTanggalDateRange.start) start = new Date(rekapTanggalDateRange.start).toISOString().slice(0,10); if (rekapTanggalDateRange.end) end = new Date(rekapTanggalDateRange.end).toISOString().slice(0,10); break;
+          case "today": {
+            const s = new Date();
+            s.setHours(0, 0, 0, 0);
+            start = s.toISOString().slice(0, 10);
+            const e = new Date();
+            e.setHours(23, 59, 59, 999);
+            end = e.toISOString().slice(0, 10);
+            break;
+          }
+          case "yesterday": {
+            const s = new Date();
+            s.setDate(s.getDate() - 1);
+            s.setHours(0, 0, 0, 0);
+            start = s.toISOString().slice(0, 10);
+            const e = new Date(s);
+            e.setHours(23, 59, 59, 999);
+            end = e.toISOString().slice(0, 10);
+            break;
+          }
+          case "week": {
+            const s = new Date();
+            const d = s.getDay();
+            const diff = (d === 0 ? -6 : 1) - d;
+            s.setDate(s.getDate() + diff);
+            s.setHours(0, 0, 0, 0);
+            start = s.toISOString().slice(0, 10);
+            const e = new Date();
+            e.setHours(23, 59, 59, 999);
+            end = e.toISOString().slice(0, 10);
+            break;
+          }
+          case "month": {
+            const s = new Date(now.getFullYear(), now.getMonth(), 1);
+            start = s.toISOString().slice(0, 10);
+            const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            e.setHours(23, 59, 59, 999);
+            end = e.toISOString().slice(0, 10);
+            break;
+          }
+          case "range":
+            if (rekapTanggalDateRange.start)
+              start = new Date(rekapTanggalDateRange.start)
+                .toISOString()
+                .slice(0, 10);
+            if (rekapTanggalDateRange.end)
+              end = new Date(rekapTanggalDateRange.end)
+                .toISOString()
+                .slice(0, 10);
+            break;
         }
 
         // Build purchases query with date filters (DB-side)
         const { supabase } = db as any; // use db.supabase if available, otherwise fallback to exported supabase
         // prefer using the exported supabase client directly
         // Query purchase_orders (via supabase)
-        let purchasesQuery: any = (supabase || (db as any).supabase).from('purchase_orders').select('*');
-        if (start) purchasesQuery = purchasesQuery.gte('order_date', start);
-        if (end) purchasesQuery = purchasesQuery.lte('order_date', end);
-        purchasesQuery = purchasesQuery.order('order_date', { ascending: false }).limit(2000);
+        let purchasesQuery: any = (supabase || (db as any).supabase)
+          .from("purchase_orders")
+          .select("*");
+        if (start) purchasesQuery = purchasesQuery.gte("order_date", start);
+        if (end) purchasesQuery = purchasesQuery.lte("order_date", end);
+        purchasesQuery = purchasesQuery
+          .order("order_date", { ascending: false })
+          .limit(2000);
         const { data: posData, error: posErr } = await purchasesQuery;
         if (posErr) throw posErr;
 
@@ -176,11 +257,17 @@ const Products: React.FC = () => {
         if (rekapTanggalSearch) {
           const st = rekapTanggalSearch.toLowerCase();
           // try supplier name match
-          const { data: supMatches } = await (supabase || (db as any).supabase).from('suppliers').select('id').ilike('name', `%${st}%`).limit(200);
+          const { data: supMatches } = await (supabase || (db as any).supabase)
+            .from("suppliers")
+            .select("id")
+            .ilike("name", `%${st}%`)
+            .limit(200);
           const supplierIds = (supMatches || []).map((s: any) => s.id);
           filteredPos = (filteredPos || []).filter((p: any) => {
             const matchPo = p.po_number?.toLowerCase().includes(st);
-            const matchSupplier = supplierIds.length ? supplierIds.includes(p.supplier_id) : false;
+            const matchSupplier = supplierIds.length
+              ? supplierIds.includes(p.supplier_id)
+              : false;
             return matchPo || matchSupplier;
           });
         }
@@ -190,10 +277,12 @@ const Products: React.FC = () => {
         // fetch PO items for filtered PO ids only
         let poItems: any[] = [];
         if (poIds.length > 0) {
-          const { data: itemsData, error: itemsErr } = await (supabase || (db as any).supabase)
-            .from('purchase_order_items')
-            .select('*')
-            .in('po_id', poIds)
+          const { data: itemsData, error: itemsErr } = await (
+            supabase || (db as any).supabase
+          )
+            .from("purchase_order_items")
+            .select("*")
+            .in("po_id", poIds)
             .limit(5000);
           if (itemsErr) throw itemsErr;
           poItems = itemsData || [];
@@ -202,19 +291,44 @@ const Products: React.FC = () => {
         // build map: date -> productKey -> { qty, total }
         const map: Record<string, any> = {};
         for (const iti of (poItems || []) as any[]) {
-          const po = ((filteredPos || []).find((p: any) => p.id === iti.po_id) as any) || {};
-          const orderDate = (po as any).order_date ? new Date((po as any).order_date).toISOString().slice(0,10) : 'unknown';
+          const po =
+            ((filteredPos || []).find((p: any) => p.id === iti.po_id) as any) ||
+            {};
+          const orderDate = (po as any).order_date
+            ? new Date((po as any).order_date).toISOString().slice(0, 10)
+            : "unknown";
           const productId = iti.product_id ?? iti.productId ?? null;
-          const name = iti.product_name || (productId ? (products.find((p: any) => String(p.id) === String(productId))?.name) : '') || 'Unknown Produk';
+          const name =
+            iti.product_name ||
+            (productId
+              ? products.find((p: any) => String(p.id) === String(productId))
+                  ?.name
+              : "") ||
+            "Unknown Produk";
           const qty = Number(iti.quantity || iti.qty || 0) || 0;
-          const total = Number(iti.total || (iti.unit_cost ? iti.unit_cost * qty : 0)) || 0;
+          const total =
+            Number(iti.total || (iti.unit_cost ? iti.unit_cost * qty : 0)) || 0;
           if (!map[orderDate]) map[orderDate] = { products: {}, dateTotal: 0 };
           const key = String(productId ?? name);
-          if (!map[orderDate].products[key]) map[orderDate].products[key] = { productId, name, qty: 0, total: 0, lines: [] };
+          if (!map[orderDate].products[key])
+            map[orderDate].products[key] = {
+              productId,
+              name,
+              qty: 0,
+              total: 0,
+              lines: [],
+            };
           map[orderDate].products[key].qty += qty;
           map[orderDate].products[key].total += total;
-          const supplierName = suppliers.find((s: any) => s.id === po.supplier_id)?.name || '';
-          map[orderDate].products[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0, supplierName });
+          const supplierName =
+            suppliers.find((s: any) => s.id === po.supplier_id)?.name || "";
+          map[orderDate].products[key].lines.push({
+            poId: iti.po_id,
+            qty,
+            total,
+            unitPrice: qty ? Math.round(total / qty) : 0,
+            supplierName,
+          });
           map[orderDate].dateTotal += total;
         }
 
@@ -228,7 +342,7 @@ const Products: React.FC = () => {
     };
 
     const loadRekapPerBarang = async () => {
-      if (purchaseTabView !== 'rekapPerBarang') return;
+      if (purchaseTabView !== "rekapPerBarang") return;
       setRekapPerBarangLoading(true);
       setRekapPerBarangError(null);
       try {
@@ -237,31 +351,83 @@ const Products: React.FC = () => {
         let end: string | null = null;
         const now = new Date();
         switch (rekapPerBarangPeriod) {
-          case 'today': { const s = new Date(); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
-          case 'yesterday': { const s = new Date(); s.setDate(s.getDate()-1); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(s); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
-          case 'week': { const s = new Date(); const d = s.getDay(); const diff = (d === 0 ? -6 : 1) - d; s.setDate(s.getDate() + diff); s.setHours(0,0,0,0); start = s.toISOString().slice(0,10); const e = new Date(); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
-          case 'month': { const s = new Date(now.getFullYear(), now.getMonth(), 1); start = s.toISOString().slice(0,10); const e = new Date(now.getFullYear(), now.getMonth()+1, 0); e.setHours(23,59,59,999); end = e.toISOString().slice(0,10); break; }
-          case 'range': if (rekapPerBarangDateRange.start) start = new Date(rekapPerBarangDateRange.start).toISOString().slice(0,10); if (rekapPerBarangDateRange.end) end = new Date(rekapPerBarangDateRange.end).toISOString().slice(0,10); break;
+          case "today": {
+            const s = new Date();
+            s.setHours(0, 0, 0, 0);
+            start = s.toISOString().slice(0, 10);
+            const e = new Date();
+            e.setHours(23, 59, 59, 999);
+            end = e.toISOString().slice(0, 10);
+            break;
+          }
+          case "yesterday": {
+            const s = new Date();
+            s.setDate(s.getDate() - 1);
+            s.setHours(0, 0, 0, 0);
+            start = s.toISOString().slice(0, 10);
+            const e = new Date(s);
+            e.setHours(23, 59, 59, 999);
+            end = e.toISOString().slice(0, 10);
+            break;
+          }
+          case "week": {
+            const s = new Date();
+            const d = s.getDay();
+            const diff = (d === 0 ? -6 : 1) - d;
+            s.setDate(s.getDate() + diff);
+            s.setHours(0, 0, 0, 0);
+            start = s.toISOString().slice(0, 10);
+            const e = new Date();
+            e.setHours(23, 59, 59, 999);
+            end = e.toISOString().slice(0, 10);
+            break;
+          }
+          case "month": {
+            const s = new Date(now.getFullYear(), now.getMonth(), 1);
+            start = s.toISOString().slice(0, 10);
+            const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            e.setHours(23, 59, 59, 999);
+            end = e.toISOString().slice(0, 10);
+            break;
+          }
+          case "range":
+            if (rekapPerBarangDateRange.start)
+              start = new Date(rekapPerBarangDateRange.start)
+                .toISOString()
+                .slice(0, 10);
+            if (rekapPerBarangDateRange.end)
+              end = new Date(rekapPerBarangDateRange.end)
+                .toISOString()
+                .slice(0, 10);
+            break;
         }
 
         const supabase = (db as any).supabase;
 
         // Query matching purchase_orders with date filters
-        let purchasesQuery: any = supabase.from('purchase_orders').select('*');
-        if (start) purchasesQuery = purchasesQuery.gte('order_date', start);
-        if (end) purchasesQuery = purchasesQuery.lte('order_date', end);
-        purchasesQuery = purchasesQuery.order('order_date', { ascending: false }).limit(2000);
+        let purchasesQuery: any = supabase.from("purchase_orders").select("*");
+        if (start) purchasesQuery = purchasesQuery.gte("order_date", start);
+        if (end) purchasesQuery = purchasesQuery.lte("order_date", end);
+        purchasesQuery = purchasesQuery
+          .order("order_date", { ascending: false })
+          .limit(2000);
         const { data: posData, error: posErr } = await purchasesQuery;
         if (posErr) throw posErr;
 
         let filteredPos = posData || [];
         if (rekapPerBarangSearch) {
           const st = rekapPerBarangSearch.toLowerCase();
-          const { data: supMatches } = await supabase.from('suppliers').select('id').ilike('name', `%${st}%`).limit(200);
+          const { data: supMatches } = await supabase
+            .from("suppliers")
+            .select("id")
+            .ilike("name", `%${st}%`)
+            .limit(200);
           const supplierIds = (supMatches || []).map((s: any) => s.id);
           filteredPos = (filteredPos || []).filter((p: any) => {
             const matchPo = p.po_number?.toLowerCase().includes(st);
-            const matchSupplier = supplierIds.length ? supplierIds.includes(p.supplier_id) : false;
+            const matchSupplier = supplierIds.length
+              ? supplierIds.includes(p.supplier_id)
+              : false;
             return matchPo || matchSupplier;
           });
         }
@@ -272,9 +438,9 @@ const Products: React.FC = () => {
         let poItems: any[] = [];
         if (poIds.length > 0) {
           const { data: itemsData, error: itemsErr } = await supabase
-            .from('purchase_order_items')
-            .select('*')
-            .in('po_id', poIds)
+            .from("purchase_order_items")
+            .select("*")
+            .in("po_id", poIds)
             .limit(5000);
           if (itemsErr) throw itemsErr;
           poItems = itemsData || [];
@@ -283,18 +449,40 @@ const Products: React.FC = () => {
         // aggregate per product
         const map: Record<string, any> = {};
         for (const iti of (poItems || []) as any[]) {
-          const po = ((filteredPos || []).find((p: any) => p.id === iti.po_id) as any) || {};
-          const orderDate = (po as any).order_date ? new Date((po as any).order_date).toISOString().slice(0,10) : ((iti.created_at || iti.inserted_at || '') ? String((iti.created_at || iti.inserted_at)).slice(0,10) : 'unknown');
+          const po =
+            ((filteredPos || []).find((p: any) => p.id === iti.po_id) as any) ||
+            {};
+          const orderDate = (po as any).order_date
+            ? new Date((po as any).order_date).toISOString().slice(0, 10)
+            : iti.created_at || iti.inserted_at || ""
+            ? String(iti.created_at || iti.inserted_at).slice(0, 10)
+            : "unknown";
           const productId = iti.product_id ?? iti.productId ?? null;
-          const name = iti.product_name || (productId ? (products.find((p: any) => String(p.id) === String(productId))?.name) : '') || 'Unknown Produk';
+          const name =
+            iti.product_name ||
+            (productId
+              ? products.find((p: any) => String(p.id) === String(productId))
+                  ?.name
+              : "") ||
+            "Unknown Produk";
           const qty = Number(iti.quantity || iti.qty || 0) || 0;
-          const total = Number(iti.total || (iti.unit_cost ? iti.unit_cost * qty : 0)) || 0;
+          const total =
+            Number(iti.total || (iti.unit_cost ? iti.unit_cost * qty : 0)) || 0;
           const key = String(productId ?? name);
-          if (!map[key]) map[key] = { productId, name, qty: 0, total: 0, lines: [] };
+          if (!map[key])
+            map[key] = { productId, name, qty: 0, total: 0, lines: [] };
           map[key].qty += qty;
           map[key].total += total;
-          const supplierName = suppliers.find((s: any) => s.id === po.supplier_id)?.name || '';
-          map[key].lines.push({ poId: iti.po_id, qty, total, unitPrice: qty ? Math.round(total/qty) : 0, date: orderDate, supplierName });
+          const supplierName =
+            suppliers.find((s: any) => s.id === po.supplier_id)?.name || "";
+          map[key].lines.push({
+            poId: iti.po_id,
+            qty,
+            total,
+            unitPrice: qty ? Math.round(total / qty) : 0,
+            date: orderDate,
+            supplierName,
+          });
         }
 
         setRekapPerBarangData(map);
@@ -309,7 +497,7 @@ const Products: React.FC = () => {
     // run both (each will early-return if not active)
     loadRekapTanggal();
     loadRekapPerBarang();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     purchaseTabView,
     products,
@@ -320,121 +508,234 @@ const Products: React.FC = () => {
     rekapPerBarangPeriod,
     rekapPerBarangDateRange.start,
     rekapPerBarangDateRange.end,
-    rekapPerBarangSearch
+    rekapPerBarangSearch,
   ]);
 
   // Render helpers for rekap tabs
   const renderRekapTanggalTab = () => {
-    if (rekapTanggalLoading) return <div className="text-sm text-gray-500">Memuat rekap...</div>;
-    if (rekapTanggalError) return <div className="text-sm text-red-500">{rekapTanggalError}</div>;
-    const dateKeys = Object.keys(rekapTanggalData).sort((a,b) => a < b ? 1 : -1);
-    if (dateKeys.length === 0) return <div className="text-sm text-gray-500">Belum ada data pembelian.</div>;
+    if (rekapTanggalLoading)
+      return <div className="text-sm text-gray-500">Memuat rekap...</div>;
+    if (rekapTanggalError)
+      return <div className="text-sm text-red-500">{rekapTanggalError}</div>;
+    const dateKeys = Object.keys(rekapTanggalData).sort((a, b) =>
+      a < b ? 1 : -1
+    );
+    if (dateKeys.length === 0)
+      return (
+        <div className="text-sm text-gray-500">Belum ada data pembelian.</div>
+      );
     const rtPeriodLabel = (() => {
-      if (rekapTanggalPeriod === 'range') {
+      if (rekapTanggalPeriod === "range") {
         if (rekapTanggalDateRange.start && rekapTanggalDateRange.end) {
           const s = new Date(rekapTanggalDateRange.start).toLocaleDateString();
           const e = new Date(rekapTanggalDateRange.end).toLocaleDateString();
           return `${s} - ${e}`;
         }
-        if (rekapTanggalDateRange.start) return `Mulai ${new Date(rekapTanggalDateRange.start).toLocaleDateString()}`;
-        return 'Rentang waktu (tidak lengkap)';
+        if (rekapTanggalDateRange.start)
+          return `Mulai ${new Date(
+            rekapTanggalDateRange.start
+          ).toLocaleDateString()}`;
+        return "Rentang waktu (tidak lengkap)";
       }
       switch (rekapTanggalPeriod) {
-        case 'today': { const d = new Date(); return `Hari Ini (${d.toLocaleDateString()})`; }
-        case 'yesterday': { const d = new Date(); d.setDate(d.getDate()-1); return `Kemarin (${d.toLocaleDateString()})`; }
-        case 'week': { const d0 = new Date(); const dd = new Date(d0); const day = dd.getDay(); const diff = (day === 0 ? -6 : 1) - day; dd.setDate(dd.getDate() + diff); return `Minggu Ini (${dd.toLocaleDateString()} - ${new Date().toLocaleDateString()})`; }
-        case 'month': { const now = new Date(); const start = new Date(now.getFullYear(), now.getMonth(), 1); const end = new Date(now.getFullYear(), now.getMonth()+1, 0); return `Bulan Ini (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`; }
-        default: return 'Semua Waktu';
+        case "today": {
+          const d = new Date();
+          return `Hari Ini (${d.toLocaleDateString()})`;
+        }
+        case "yesterday": {
+          const d = new Date();
+          d.setDate(d.getDate() - 1);
+          return `Kemarin (${d.toLocaleDateString()})`;
+        }
+        case "week": {
+          const d0 = new Date();
+          const dd = new Date(d0);
+          const day = dd.getDay();
+          const diff = (day === 0 ? -6 : 1) - day;
+          dd.setDate(dd.getDate() + diff);
+          return `Minggu Ini (${dd.toLocaleDateString()} - ${new Date().toLocaleDateString()})`;
+        }
+        case "month": {
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth(), 1);
+          const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          return `Bulan Ini (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`;
+        }
+        default:
+          return "Semua Waktu";
       }
     })();
 
     return (
       <div className="space-y-4">
-  {dateKeys.map(dk => {
+        {dateKeys.map((dk) => {
           const day = rekapTanggalData[dk];
-          const productsArr = Object.values(day.products).sort((a:any,b:any) => b.total - a.total);
+          const productsArr = Object.values(day.products).sort(
+            (a: any, b: any) => b.total - a.total
+          );
           return (
-            <div key={dk} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div
+              key={dk}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+            >
               <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="text-sm text-gray-500">{new Date(dk).toLocaleDateString('id-ID', { weekday: 'long' })}</div>
-                      <button
-                        onClick={() => {
-                          const s = new Set(expandedDates);
-                          if (s.has(dk)) s.delete(dk);
-                          else s.add(dk);
-                          setExpandedDates(s);
-                        }}
-                        className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
-                        aria-expanded={expandedDates.has(dk)}
-                      >
-                        <span>{dk === 'unknown' ? '-' : new Date(dk).toLocaleDateString('id-ID')}</span>
-                        <svg className={`h-4 w-4 transform ${expandedDates.has(dk) ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                      </button>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">Total</div>
-                      <div className="font-semibold text-green-700">Rp {Number(day.dateTotal||0).toLocaleString('id-ID')}</div>
-                    </div>
+                <div>
+                  <div className="text-sm text-gray-500">
+                    {new Date(dk).toLocaleDateString("id-ID", {
+                      weekday: "long",
+                    })}
                   </div>
-                  {expandedDates.has(dk) && (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-100">
-                          {productsArr.map((p:any) => (
-                            <tr key={String(p.productId ?? p.name)}>
-                              <td className="px-4 py-2">
-                                <div className="font-medium">{p.name}</div>
-                                {p.lines && p.lines.length > 0 && (
-                                  <div className="text-xs text-gray-500 mt-1">Supplier: {Array.from(new Set(p.lines.map((l:any)=> l.supplierName).filter(Boolean))).join(', ') || '-'}</div>
+                  <button
+                    onClick={() => {
+                      const s = new Set(expandedDates);
+                      if (s.has(dk)) s.delete(dk);
+                      else s.add(dk);
+                      setExpandedDates(s);
+                    }}
+                    className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
+                    aria-expanded={expandedDates.has(dk)}
+                  >
+                    <span>
+                      {dk === "unknown"
+                        ? "-"
+                        : new Date(dk).toLocaleDateString("id-ID")}
+                    </span>
+                    <svg
+                      className={`h-4 w-4 transform ${
+                        expandedDates.has(dk) ? "rotate-180" : ""
+                      }`}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">Total</div>
+                  <div className="font-semibold text-green-700">
+                    Rp {Number(day.dateTotal || 0).toLocaleString("id-ID")}
+                  </div>
+                </div>
+              </div>
+              {expandedDates.has(dk) && (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Produk
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                          Qty
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                          Harga
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                          Total (Rp)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {productsArr.map((p: any) => (
+                        <tr key={String(p.productId ?? p.name)}>
+                          <td className="px-4 py-2">
+                            <div className="font-medium">{p.name}</div>
+                            {p.lines && p.lines.length > 0 && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Supplier:{" "}
+                                {Array.from(
+                                  new Set(
+                                    p.lines
+                                      .map((l: any) => l.supplierName)
+                                      .filter(Boolean)
+                                  )
+                                ).join(", ") || "-"}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-right font-medium">
+                            {p.qty}
+                          </td>
+                          <td className="px-4 py-2 text-right font-medium">
+                            {p.qty
+                              ? Number(
+                                  Math.round((p.total || 0) / p.qty)
+                                ).toLocaleString("id-ID")
+                              : "-"}
+                          </td>
+                          <td className="px-4 py-2 text-right font-semibold">
+                            {Number(p.total || 0).toLocaleString("id-ID")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      {(() => {
+                        const totalQty = productsArr.reduce(
+                          (s: any, it: any) => s + (Number(it.qty) || 0),
+                          0
+                        );
+                        const totalAmount = productsArr.reduce(
+                          (s: any, it: any) => s + (Number(it.total) || 0),
+                          0
+                        );
+                        return (
+                          <>
+                            <tr className="bg-gray-50">
+                              <td className="px-4 py-2 text-left font-medium">
+                                Subtotal
+                              </td>
+                              <td className="px-4 py-2 text-right font-medium">
+                                {String(totalQty)}
+                              </td>
+                              <td className="px-4 py-2 text-right font-medium">
+                                -
+                              </td>
+                              <td className="px-4 py-2 text-right font-semibold">
+                                {String(
+                                  Number(totalAmount).toLocaleString("id-ID")
                                 )}
                               </td>
-                              <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
-                              <td className="px-4 py-2 text-right font-medium">{p.qty ? Number(Math.round((p.total||0) / p.qty)).toLocaleString('id-ID') : '-'}</td>
-                              <td className="px-4 py-2 text-right font-semibold">{Number(p.total||0).toLocaleString('id-ID')}</td>
                             </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          {(() => {
-                            const totalQty = productsArr.reduce((s:any, it:any) => s + (Number(it.qty) || 0), 0);
-                            const totalAmount = productsArr.reduce((s:any, it:any) => s + (Number(it.total) || 0), 0);
-                            return (
-                              <>
-                                <tr className="bg-gray-50">
-                                  <td className="px-4 py-2 text-left font-medium">Subtotal</td>
-                                  <td className="px-4 py-2 text-right font-medium">{String(totalQty)}</td>
-                                  <td className="px-4 py-2 text-right font-medium">-</td>
-                                  <td className="px-4 py-2 text-right font-semibold">{String(Number(totalAmount).toLocaleString('id-ID'))}</td>
-                                </tr>
-                                <tr>
-                                  <td colSpan={3} className="px-4 py-2 text-right font-semibold">Grand Total</td>
-                                  <td className="px-4 py-2 text-right font-semibold">Rp {Number(totalAmount).toLocaleString('id-ID')}</td>
-                                </tr>
-                              </>
-                            );
-                          })()}
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
+                            <tr>
+                              <td
+                                colSpan={3}
+                                className="px-4 py-2 text-right font-semibold"
+                              >
+                                Grand Total
+                              </td>
+                              <td className="px-4 py-2 text-right font-semibold">
+                                Rp {Number(totalAmount).toLocaleString("id-ID")}
+                              </td>
+                            </tr>
+                          </>
+                        );
+                      })()}
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
           );
         })}
 
         {/* Grand total for all dates - shown as a footer inside the container */}
         {(() => {
-          const grand = Object.keys(rekapTanggalData).reduce((s:any, dk:any) => s + (Number(rekapTanggalData[dk]?.dateTotal) || 0), 0);
+          const grand = Object.keys(rekapTanggalData).reduce(
+            (s: any, dk: any) =>
+              s + (Number(rekapTanggalData[dk]?.dateTotal) || 0),
+            0
+          );
           // compute days and average per day if possible
-          const dateKeys = Object.keys(rekapTanggalData).filter((k) => k !== null && k !== undefined && String(k).trim() !== '');
+          const dateKeys = Object.keys(rekapTanggalData).filter(
+            (k) => k !== null && k !== undefined && String(k).trim() !== ""
+          );
           const days = dateKeys.length || 1;
           const avg = days ? Math.round((grand || 0) / days) : 0;
           return (
@@ -442,13 +743,21 @@ const Products: React.FC = () => {
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
                 <div>
                   <div className="text-sm text-gray-500">Total {days}-Hari</div>
-                  <div className="font-semibold text-gray-900">{rtPeriodLabel}</div>
+                  <div className="font-semibold text-gray-900">
+                    {rtPeriodLabel}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-gray-500">Grand Total</div>
-                  <div className="font-semibold text-green-700">Rp {Number(grand).toLocaleString('id-ID')}</div>
-                  <div className="text-sm text-gray-500 mt-2">Rata-rata / hari</div>
-                  <div className="font-medium text-gray-900">Rp {Number(avg).toLocaleString('id-ID')}</div>
+                  <div className="font-semibold text-green-700">
+                    Rp {Number(grand).toLocaleString("id-ID")}
+                  </div>
+                  <div className="text-sm text-gray-500 mt-2">
+                    Rata-rata / hari
+                  </div>
+                  <div className="font-medium text-gray-900">
+                    Rp {Number(avg).toLocaleString("id-ID")}
+                  </div>
                 </div>
               </div>
             </div>
@@ -459,29 +768,39 @@ const Products: React.FC = () => {
   };
 
   const renderRekapPerBarangTab = () => {
-    if (rekapPerBarangLoading) return <div className="text-sm text-gray-500">Memuat rekap per barang...</div>;
-    if (rekapPerBarangError) return <div className="text-sm text-red-500">{rekapPerBarangError}</div>;
+    if (rekapPerBarangLoading)
+      return (
+        <div className="text-sm text-gray-500">Memuat rekap per barang...</div>
+      );
+    if (rekapPerBarangError)
+      return <div className="text-sm text-red-500">{rekapPerBarangError}</div>;
     // Compute period label for this tab
     const periodLabel = (() => {
-      if (rekapPerBarangPeriod === 'range') {
+      if (rekapPerBarangPeriod === "range") {
         if (rekapPerBarangDateRange.start && rekapPerBarangDateRange.end) {
-          const s = new Date(rekapPerBarangDateRange.start).toLocaleDateString();
+          const s = new Date(
+            rekapPerBarangDateRange.start
+          ).toLocaleDateString();
           const e = new Date(rekapPerBarangDateRange.end).toLocaleDateString();
           return `${s} s.d. ${e}`;
         }
-        if (rekapPerBarangDateRange.start) return `Mulai ${new Date(rekapPerBarangDateRange.start).toLocaleDateString()}`;
-        return 'Rentang waktu (tidak lengkap)';
+        if (rekapPerBarangDateRange.start)
+          return `Mulai ${new Date(
+            rekapPerBarangDateRange.start
+          ).toLocaleDateString()}`;
+        return "Rentang waktu (tidak lengkap)";
       }
       switch (rekapPerBarangPeriod) {
-        case 'today': {
+        case "today": {
           const d = new Date();
           return `Hari Ini (${d.toLocaleDateString()})`;
         }
-        case 'yesterday': {
-          const d = new Date(); d.setDate(d.getDate() - 1);
+        case "yesterday": {
+          const d = new Date();
+          d.setDate(d.getDate() - 1);
           return `Kemarin (${d.toLocaleDateString()})`;
         }
-        case 'week': {
+        case "week": {
           const d0 = new Date();
           const dd = new Date(d0);
           const day = dd.getDay();
@@ -489,76 +808,117 @@ const Products: React.FC = () => {
           dd.setDate(dd.getDate() + diff);
           return `Minggu Ini (${dd.toLocaleDateString()} - ${new Date().toLocaleDateString()})`;
         }
-        case 'month': {
+        case "month": {
           const now = new Date();
           const start = new Date(now.getFullYear(), now.getMonth(), 1);
           const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
           return `Bulan Ini (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`;
         }
         default:
-          return 'Semua Waktu';
+          return "Semua Waktu";
       }
     })();
-    const productKeys = Object.keys(rekapPerBarangData).sort((a,b) => {
+    const productKeys = Object.keys(rekapPerBarangData).sort((a, b) => {
       const A = rekapPerBarangData[a];
       const B = rekapPerBarangData[b];
       return (B.total || 0) - (A.total || 0);
     });
-    if (productKeys.length === 0) return <div className="text-sm text-gray-500">Belum ada data pembelian.</div>;
+    if (productKeys.length === 0)
+      return (
+        <div className="text-sm text-gray-500">Belum ada data pembelian.</div>
+      );
     return (
       <div className="space-y-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty Total</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Produk
+                </th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                  Qty Total
+                </th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                  Harga
+                </th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                  Total (Rp)
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {productKeys.map(k => {
+              {productKeys.map((k) => {
                 const p = rekapPerBarangData[k];
-                const unitPrice = p.qty ? Math.round((Number(p.total) || 0) / p.qty) : 0;
+                const unitPrice = p.qty
+                  ? Math.round((Number(p.total) || 0) / p.qty)
+                  : 0;
                 return (
                   <tr key={k}>
                     <td className="px-4 py-2">
                       <div className="font-medium">{p.name}</div>
                       {p.lines && p.lines.length > 0 && (
-                        <div className="text-xs text-gray-500 mt-1">Supplier: {Array.from(new Set(p.lines.map((l:any)=> l.supplierName).filter(Boolean))).join(', ') || '-'}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Supplier:{" "}
+                          {Array.from(
+                            new Set(
+                              p.lines
+                                .map((l: any) => l.supplierName)
+                                .filter(Boolean)
+                            )
+                          ).join(", ") || "-"}
+                        </div>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
-                    <td className="px-4 py-2 text-right font-medium">{unitPrice ? unitPrice.toLocaleString('id-ID') : '-'}</td>
-                    <td className="px-4 py-2 text-right font-semibold">{Number(p.total||0).toLocaleString('id-ID')}</td>
+                    <td className="px-4 py-2 text-right font-medium">
+                      {p.qty}
+                    </td>
+                    <td className="px-4 py-2 text-right font-medium">
+                      {unitPrice ? unitPrice.toLocaleString("id-ID") : "-"}
+                    </td>
+                    <td className="px-4 py-2 text-right font-semibold">
+                      {Number(p.total || 0).toLocaleString("id-ID")}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
           {(() => {
-            const grandPerBarang = Object.keys(rekapPerBarangData).reduce((s:any,k)=> s + (Number(rekapPerBarangData[k].total)||0),0);
+            const grandPerBarang = Object.keys(rekapPerBarangData).reduce(
+              (s: any, k) => s + (Number(rekapPerBarangData[k].total) || 0),
+              0
+            );
             const keys = Object.keys(rekapPerBarangData);
             const daysCount = keys.length || 1;
-            const avgPer = daysCount ? Math.round((grandPerBarang || 0) / daysCount) : 0;
+            const avgPer = daysCount
+              ? Math.round((grandPerBarang || 0) / daysCount)
+              : 0;
             return (
               <div className="mt-3">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
-                    <div>
-                      <div className="text-sm text-gray-500">Total {keys.length}-Item</div>
-                      <div className="font-semibold text-gray-900">{periodLabel}</div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-gray-500">
+                      Total {keys.length}-Item
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">Grand Total</div>
-                      <div className="font-semibold text-green-700">Rp {Number(grandPerBarang).toLocaleString('id-ID')}</div>
-                      <div className="flex items-center justify-end gap-4 mt-2 text-sm text-gray-600">
-                        <div className="text-gray-500">Rata-rata / item</div>
-                        <div className="font-medium text-gray-900">Rp {Number(avgPer).toLocaleString('id-ID')}</div>
+                    <div className="font-semibold text-gray-900">
+                      {periodLabel}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500">Grand Total</div>
+                    <div className="font-semibold text-green-700">
+                      Rp {Number(grandPerBarang).toLocaleString("id-ID")}
+                    </div>
+                    <div className="flex items-center justify-end gap-4 mt-2 text-sm text-gray-600">
+                      <div className="text-gray-500">Rata-rata / item</div>
+                      <div className="font-medium text-gray-900">
+                        Rp {Number(avgPer).toLocaleString("id-ID")}
                       </div>
                     </div>
                   </div>
                 </div>
+              </div>
             );
           })()}
         </div>
@@ -592,11 +952,13 @@ const Products: React.FC = () => {
   const [stockCardProduct, setStockCardProduct] = useState<any | null>(null);
   const [stockHistory, setStockHistory] = useState<any[]>([]);
   const [stockHistoryLoading, setStockHistoryLoading] = useState(false);
-  const [stockHistoryError, setStockHistoryError] = useState<string | null>(null);
+  const [stockHistoryError, setStockHistoryError] = useState<string | null>(
+    null
+  );
   // Controlled inputs for Stock Card modal
   const [stockAdj, setStockAdj] = useState<number>(0);
-  const [stockAdjType, setStockAdjType] = useState<'in' | 'out'>('in');
-  const [stockNote, setStockNote] = useState<string>('');
+  const [stockAdjType, setStockAdjType] = useState<"in" | "out">("in");
+  const [stockNote, setStockNote] = useState<string>("");
   // pagination for stock history
   const [historyPage, setHistoryPage] = useState<number>(0);
   const HISTORY_PAGE_SIZE = 10;
@@ -625,7 +987,6 @@ const Products: React.FC = () => {
       return byName || byContact || byPhone;
     });
   }, [supplierSearchTerm, suppliers]);
-
 
   // Update totals when items change
   useEffect(() => {
@@ -702,19 +1063,25 @@ const Products: React.FC = () => {
   // State and fetch for sales (cashier transactions of type 'sale')
   const [sales, setSales] = useState<any[]>([]);
   // expanded product in Sales Summary (moved to top-level to avoid hook order mismatch)
-  const [expandedSalesProductKey, setExpandedSalesProductKey] = useState<string | null>(null);
+  const [expandedSalesProductKey, setExpandedSalesProductKey] = useState<
+    string | null
+  >(null);
   // expanded products within date-based report (key = `${dateKey}::${productKey}`)
-  const [expandedDateProducts, setExpandedDateProducts] = useState<Set<string>>(new Set());
+  const [expandedDateProducts, setExpandedDateProducts] = useState<Set<string>>(
+    new Set()
+  );
   // expanded dates for per-date report (key = dateKey)
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   useEffect(() => {
     const fetchSales = async () => {
       try {
         // fetch cashier transactions where type is 'sale'
-        const rows = (await db.select('cashier_transactions', '*', { type: 'sale' })) as any[];
+        const rows = (await db.select("cashier_transactions", "*", {
+          type: "sale",
+        })) as any[];
         setSales(rows || []);
       } catch (err: any) {
-        console.error('Gagal mengambil data penjualan', err?.message || err);
+        console.error("Gagal mengambil data penjualan", err?.message || err);
         setSales([]);
       }
     };
@@ -818,11 +1185,11 @@ const Products: React.FC = () => {
     const statusMatch =
       purchaseStatus === "all" || po.status === purchaseStatus;
 
-  // Hitung periode tanggal berdasarkan preset (gunakan daftarPeriod untuk subtab Daftar)
-  let start: Date | null = null;
-  let end: Date | null = null;
-  const now = new Date();
-  switch (daftarPeriod) {
+    // Hitung periode tanggal berdasarkan preset (gunakan daftarPeriod untuk subtab Daftar)
+    let start: Date | null = null;
+    let end: Date | null = null;
+    const now = new Date();
+    switch (daftarPeriod) {
       case "today": {
         start = new Date();
         start.setHours(0, 0, 0, 0);
@@ -854,7 +1221,7 @@ const Products: React.FC = () => {
         end.setHours(23, 59, 59, 999);
         break;
       }
-      case 'range': {
+      case "range": {
         if (daftarDateRange.start) {
           start = new Date(daftarDateRange.start);
           start.setHours(0, 0, 0, 0);
@@ -886,7 +1253,8 @@ const Products: React.FC = () => {
   // Filtered list for the Daftar Pembelian subtab (uses independent filter state)
   const filteredPurchaseOrdersForDaftar = purchaseOrders.filter((po) => {
     // Filter status (same as before)
-    const statusMatch = purchaseStatus === "all" || po.status === purchaseStatus;
+    const statusMatch =
+      purchaseStatus === "all" || po.status === purchaseStatus;
 
     // Hitung periode tanggal berdasarkan preset (use daftarPeriod/daftarDateRange)
     let start: Date | null = null;
@@ -1099,6 +1467,7 @@ const Products: React.FC = () => {
         min_stock: 0,
         barcode: "",
         description: "",
+        is_active: true,
       });
       setShowAddForm(false);
     } catch (err) {
@@ -1168,6 +1537,7 @@ const Products: React.FC = () => {
         min_stock: editProduct.min_stock,
         barcode: editProduct.barcode,
         description: editProduct.description,
+        is_active: editProduct.is_active,
       });
 
       Swal.fire({
@@ -1253,12 +1623,12 @@ const Products: React.FC = () => {
     setStockCardProduct(product);
     // reset controlled inputs
     setStockAdj(0);
-    setStockAdjType('in');
-    setStockNote('');
+    setStockAdjType("in");
+    setStockNote("");
     setShowStockCard(true);
     // fetch history
     fetchStockHistory(product.id, product.stock).catch((e) => {
-      console.error('fetchStockHistory error', e);
+      console.error("fetchStockHistory error", e);
     });
   };
 
@@ -1272,7 +1642,9 @@ const Products: React.FC = () => {
 
       // 1) incoming: purchase_order_items (assume field 'quantity' and 'created_at' or similar)
       try {
-        const poItems = (await db.select('purchase_order_items', '*', { product_id: productId })) as any[];
+        const poItems = (await db.select("purchase_order_items", "*", {
+          product_id: productId,
+        })) as any[];
         if (Array.isArray(poItems) && poItems.length > 0) {
           for (const r of poItems as any[]) {
             const qty = Number(r.quantity ?? r.qty ?? r.qty_received ?? 0);
@@ -1280,8 +1652,15 @@ const Products: React.FC = () => {
               id: (r as any).id,
               product_id: productId,
               quantity: qty, // positive = masuk
-              note: (r as any).note || (r as any).notes || `PO:${(r as any).po_id || (r as any).po_number || ''}`,
-              created_at: (r as any).created_at || (r as any).inserted_at || (r as any).timestamp || new Date().toISOString(),
+              note:
+                (r as any).note ||
+                (r as any).notes ||
+                `PO:${(r as any).po_id || (r as any).po_number || ""}`,
+              created_at:
+                (r as any).created_at ||
+                (r as any).inserted_at ||
+                (r as any).timestamp ||
+                new Date().toISOString(),
             });
           }
         }
@@ -1291,24 +1670,41 @@ const Products: React.FC = () => {
 
       // 2) outgoing: cashier_transactions (type = 'sale' or 'rental' etc.) - parse details JSON to find product quantities
       try {
-        const txs = (await db.select('cashier_transactions', '*', { type: 'sale' })) as any[];
+        const txs = (await db.select("cashier_transactions", "*", {
+          type: "sale",
+        })) as any[];
         if (Array.isArray(txs) && txs.length > 0) {
           for (const tx of txs as any[]) {
             const details = (tx as any).details;
             let parsed: any = details;
-            if (!parsed && (tx as any).details && typeof (tx as any).details === 'string') {
-              try { parsed = JSON.parse((tx as any).details); } catch (e) { parsed = null; }
+            if (
+              !parsed &&
+              (tx as any).details &&
+              typeof (tx as any).details === "string"
+            ) {
+              try {
+                parsed = JSON.parse((tx as any).details);
+              } catch (e) {
+                parsed = null;
+              }
             }
 
             // try several shapes: array of items, { items: [...] }, { products: [...] }
             const candidates = [] as any[];
             if (Array.isArray(parsed)) candidates.push(...parsed);
-            if (parsed && Array.isArray(parsed.items)) candidates.push(...parsed.items);
-            if (parsed && Array.isArray(parsed.products)) candidates.push(...parsed.products);
-            if (parsed && Array.isArray(parsed.cart)) candidates.push(...parsed.cart);
+            if (parsed && Array.isArray(parsed.items))
+              candidates.push(...parsed.items);
+            if (parsed && Array.isArray(parsed.products))
+              candidates.push(...parsed.products);
+            if (parsed && Array.isArray(parsed.cart))
+              candidates.push(...parsed.cart);
 
             // also some systems store details as object with keys being ids
-            if (candidates.length === 0 && parsed && typeof parsed === 'object') {
+            if (
+              candidates.length === 0 &&
+              parsed &&
+              typeof parsed === "object"
+            ) {
               // attempt to collect values that look like items
               for (const v of Object.values(parsed)) {
                 if (Array.isArray(v)) candidates.push(...v);
@@ -1316,17 +1712,32 @@ const Products: React.FC = () => {
             }
 
             for (const it of candidates) {
-              const pid = (it as any).product_id ?? (it as any).productId ?? (it as any).id ?? (it as any).item_id;
+              const pid =
+                (it as any).product_id ??
+                (it as any).productId ??
+                (it as any).id ??
+                (it as any).item_id;
               if (!pid) continue;
               if (String(pid) === String(productId)) {
-                const qty = Number((it as any).quantity ?? (it as any).qty ?? (it as any).q ?? 0);
+                const qty = Number(
+                  (it as any).quantity ?? (it as any).qty ?? (it as any).q ?? 0
+                );
                 if (qty === 0) continue;
                 rows.push({
                   id: (tx as any).id,
                   product_id: productId,
                   quantity: -Math.abs(qty), // negative = keluar
-                  note: (tx as any).description || (tx as any).note || (tx as any).reference_id || (tx as any).details?.note || null,
-                  created_at: (tx as any).timestamp || (tx as any).created_at || (tx as any).inserted_at || new Date().toISOString(),
+                  note:
+                    (tx as any).description ||
+                    (tx as any).note ||
+                    (tx as any).reference_id ||
+                    (tx as any).details?.note ||
+                    null,
+                  created_at:
+                    (tx as any).timestamp ||
+                    (tx as any).created_at ||
+                    (tx as any).inserted_at ||
+                    new Date().toISOString(),
                 });
               }
             }
@@ -1343,9 +1754,15 @@ const Products: React.FC = () => {
       }
 
       // sort ascending (oldest -> newest)
-      rows.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      rows.sort(
+        (a: any, b: any) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
 
-      const totalDelta = rows.reduce((s: number, r: any) => s + Number(r.quantity || 0), 0);
+      const totalDelta = rows.reduce(
+        (s: number, r: any) => s + Number(r.quantity || 0),
+        0
+      );
       const baseline = Number(currentStock || 0) - totalDelta;
       let running = baseline;
       const withBalance = rows.map((r: any) => {
@@ -1530,32 +1947,42 @@ const Products: React.FC = () => {
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm text-gray-600">Stok Saat Ini</label>
+                  <label className="block text-sm text-gray-600">
+                    Stok Saat Ini
+                  </label>
                   <div className="mt-1 font-semibold text-gray-900">
                     {stockCardProduct.stock} unit
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600">Min. Stok</label>
-                  <div className="mt-1 text-gray-900">{stockCardProduct.min_stock} unit</div>
+                  <label className="block text-sm text-gray-600">
+                    Min. Stok
+                  </label>
+                  <div className="mt-1 text-gray-900">
+                    {stockCardProduct.min_stock} unit
+                  </div>
                 </div>
               </div>
 
-                      <div className="mb-4">
-                        <label className="block text-sm text-gray-600 mb-1">Catatan</label>
-                        <textarea
-                          id="stockCardNote"
-                          value={stockNote}
-                          onChange={(e) => setStockNote(e.target.value)}
-                          placeholder="Catatan perubahan stok (opsional)"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          rows={3}
-                        />
-                      </div>
+              <div className="mb-4">
+                <label className="block text-sm text-gray-600 mb-1">
+                  Catatan
+                </label>
+                <textarea
+                  id="stockCardNote"
+                  value={stockNote}
+                  onChange={(e) => setStockNote(e.target.value)}
+                  placeholder="Catatan perubahan stok (opsional)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                />
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Tambah / Kurangi Stok</label>
+                  <label className="block text-sm text-gray-600 mb-1">
+                    Tambah / Kurangi Stok
+                  </label>
                   <input
                     id="stockAdjustment"
                     type="number"
@@ -1565,8 +1992,17 @@ const Products: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Tipe</label>
-                  <select id="stockAdjustmentType" value={stockAdjType} onChange={(e) => setStockAdjType(e.target.value as 'in' | 'out')} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <label className="block text-sm text-gray-600 mb-1">
+                    Tipe
+                  </label>
+                  <select
+                    id="stockAdjustmentType"
+                    value={stockAdjType}
+                    onChange={(e) =>
+                      setStockAdjType(e.target.value as "in" | "out")
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
                     <option value="in">Tambah</option>
                     <option value="out">Kurangi</option>
                   </select>
@@ -1582,7 +2018,9 @@ const Products: React.FC = () => {
               ) : stockHistoryError ? (
                 <div className="text-sm text-red-500">{stockHistoryError}</div>
               ) : stockHistory.length === 0 ? (
-                <div className="text-sm text-gray-500">Belum ada riwayat stok.</div>
+                <div className="text-sm text-gray-500">
+                  Belum ada riwayat stok.
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
@@ -1600,13 +2038,25 @@ const Products: React.FC = () => {
                       {(() => {
                         // stockHistory is newest-first; compute starting balance from last element
                         const rev = [...stockHistory].reverse(); // oldest -> newest
-                        const startBalance = rev.length > 0 ? rev[0]._balance - (rev[0]._qty || 0) : (stockCardProduct?.stock || 0);
+                        const startBalance =
+                          rev.length > 0
+                            ? rev[0]._balance - (rev[0]._qty || 0)
+                            : stockCardProduct?.stock || 0;
 
                         // pagination slice (on chronological list)
-                        const totalPages = Math.max(1, Math.ceil(rev.length / HISTORY_PAGE_SIZE));
-                        const page = Math.max(0, Math.min(historyPage, totalPages - 1));
+                        const totalPages = Math.max(
+                          1,
+                          Math.ceil(rev.length / HISTORY_PAGE_SIZE)
+                        );
+                        const page = Math.max(
+                          0,
+                          Math.min(historyPage, totalPages - 1)
+                        );
                         const start = page * HISTORY_PAGE_SIZE;
-                        const paged = rev.slice(start, start + HISTORY_PAGE_SIZE);
+                        const paged = rev.slice(
+                          start,
+                          start + HISTORY_PAGE_SIZE
+                        );
 
                         return (
                           <>
@@ -1614,35 +2064,75 @@ const Products: React.FC = () => {
                               <td className="px-2 py-2">-</td>
                               <td className="px-2 py-2 text-right">-</td>
                               <td className="px-2 py-2 text-right">-</td>
-                              <td className="px-2 py-2 text-right font-semibold">{startBalance}</td>
+                              <td className="px-2 py-2 text-right font-semibold">
+                                {startBalance}
+                              </td>
                               <td className="px-2 py-2">Saldo Awal</td>
                             </tr>
                             {paged.map((r) => (
-                              <tr key={r.id || `${r.created_at}-${r._qty}`} className="border-t">
-                                <td className="px-2 py-2">{new Date(r.created_at).toLocaleString('id-ID')}</td>
-                                <td className="px-2 py-2 text-right">{r._qty < 0 ? Math.abs(r._qty) : '-'}</td>
-                                <td className="px-2 py-2 text-right">{r._qty > 0 ? r._qty : '-'}</td>
-                                <td className="px-2 py-2 text-right">{r._balance}</td>
-                                <td className="px-2 py-2">{r.note || r.notes || '-'}</td>
+                              <tr
+                                key={r.id || `${r.created_at}-${r._qty}`}
+                                className="border-t"
+                              >
+                                <td className="px-2 py-2">
+                                  {new Date(r.created_at).toLocaleString(
+                                    "id-ID"
+                                  )}
+                                </td>
+                                <td className="px-2 py-2 text-right">
+                                  {r._qty < 0 ? Math.abs(r._qty) : "-"}
+                                </td>
+                                <td className="px-2 py-2 text-right">
+                                  {r._qty > 0 ? r._qty : "-"}
+                                </td>
+                                <td className="px-2 py-2 text-right">
+                                  {r._balance}
+                                </td>
+                                <td className="px-2 py-2">
+                                  {r.note || r.notes || "-"}
+                                </td>
                               </tr>
                             ))}
                             {/* pagination controls row */}
                             <tr>
                               <td colSpan={5} className="px-2 py-3">
                                 <div className="flex items-center justify-between">
-                                  <div className="text-xs text-gray-500">Menampilkan {start + 1} - {Math.min(start + HISTORY_PAGE_SIZE, rev.length)} dari {rev.length} entri</div>
+                                  <div className="text-xs text-gray-500">
+                                    Menampilkan {start + 1} -{" "}
+                                    {Math.min(
+                                      start + HISTORY_PAGE_SIZE,
+                                      rev.length
+                                    )}{" "}
+                                    dari {rev.length} entri
+                                  </div>
                                   <div className="flex gap-2">
                                     <button
-                                      onClick={() => setHistoryPage((p) => Math.max(0, p - 1))}
+                                      onClick={() =>
+                                        setHistoryPage((p) =>
+                                          Math.max(0, p - 1)
+                                        )
+                                      }
                                       disabled={page === 0}
-                                      className={`px-3 py-1 rounded-lg border ${page === 0 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                                      className={`px-3 py-1 rounded-lg border ${
+                                        page === 0
+                                          ? "text-gray-400 border-gray-200"
+                                          : "text-gray-700 border-gray-300 hover:bg-gray-50"
+                                      }`}
                                     >
                                       Prev
                                     </button>
                                     <button
-                                      onClick={() => setHistoryPage((p) => Math.min(totalPages - 1, p + 1))}
+                                      onClick={() =>
+                                        setHistoryPage((p) =>
+                                          Math.min(totalPages - 1, p + 1)
+                                        )
+                                      }
                                       disabled={page >= totalPages - 1}
-                                      className={`px-3 py-1 rounded-lg border ${page >= totalPages - 1 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                                      className={`px-3 py-1 rounded-lg border ${
+                                        page >= totalPages - 1
+                                          ? "text-gray-400 border-gray-200"
+                                          : "text-gray-700 border-gray-300 hover:bg-gray-50"
+                                      }`}
                                     >
                                       Next
                                     </button>
@@ -1669,11 +2159,12 @@ const Products: React.FC = () => {
               <button
                 onClick={async () => {
                   const adj = stockAdj || 0;
-                  const type = stockAdjType || 'in';
+                  const type = stockAdjType || "in";
 
                   const newProducts = products.map((p) => {
                     if (p.id === stockCardProduct.id) {
-                      const newStock = type === 'in' ? p.stock + adj : p.stock - adj;
+                      const newStock =
+                        type === "in" ? p.stock + adj : p.stock - adj;
                       return { ...p, stock: newStock < 0 ? 0 : newStock };
                     }
                     return p;
@@ -1683,29 +2174,35 @@ const Products: React.FC = () => {
                   // Persist to DB using helpers
                   try {
                     if (adj !== 0) {
-                      if (type === 'in') {
-                        await db.products.increaseStock(stockCardProduct.id, adj);
+                      if (type === "in") {
+                        await db.products.increaseStock(
+                          stockCardProduct.id,
+                          adj
+                        );
                       } else {
-                        await db.products.decreaseStock(stockCardProduct.id, adj);
+                        await db.products.decreaseStock(
+                          stockCardProduct.id,
+                          adj
+                        );
                       }
 
                       // Try to insert history row into candidate tables
                       const historyCandidates = [
-                        'stock_movements',
-                        'stock_movements_history',
-                        'inventory_movements',
-                        'product_stock_movements',
-                        'stock_changes',
-                        'stock_journal',
-                        'stock_logs',
-                        'stock_histories',
+                        "stock_movements",
+                        "stock_movements_history",
+                        "inventory_movements",
+                        "product_stock_movements",
+                        "stock_changes",
+                        "stock_journal",
+                        "stock_logs",
+                        "stock_histories",
                       ];
                       const noteVal = stockNote || null;
                       for (const tbl of historyCandidates) {
                         try {
                           await db.insert(tbl, {
                             product_id: stockCardProduct.id,
-                            quantity: type === 'in' ? adj : -adj,
+                            quantity: type === "in" ? adj : -adj,
                             note: noteVal,
                             created_at: new Date().toISOString(),
                           });
@@ -1716,18 +2213,26 @@ const Products: React.FC = () => {
                       }
                     }
                   } catch (err: any) {
-                    console.error('Persist stock error', err);
-                    Swal.fire({ icon: 'error', title: 'Gagal', text: err?.message || 'Gagal menyimpan perubahan stok' });
+                    console.error("Persist stock error", err);
+                    Swal.fire({
+                      icon: "error",
+                      title: "Gagal",
+                      text: err?.message || "Gagal menyimpan perubahan stok",
+                    });
                     return;
                   }
 
                   // reset controlled inputs
                   setStockAdj(0);
-                  setStockAdjType('in');
-                  setStockNote('');
+                  setStockAdjType("in");
+                  setStockNote("");
 
                   setShowStockCard(false);
-                  Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Stok diperbarui' });
+                  Swal.fire({
+                    icon: "success",
+                    title: "Berhasil",
+                    text: "Stok diperbarui",
+                  });
                 }}
                 className="px-6 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white"
               >
@@ -1970,8 +2475,6 @@ const Products: React.FC = () => {
     </div>
   );
 
-  
-
   // const paginatedPurchases = purchases.slice((purchasePage - 1) * purchasesPerPage, purchasePage * purchasesPerPage);
   // const totalPages = Math.ceil(totalPurchases / purchasesPerPage);
 
@@ -2019,7 +2522,7 @@ const Products: React.FC = () => {
 
       {/* Purchase Orders List */}
       <div className="space-y-4">
-                  {filteredPurchaseOrders.map((purchase) => {
+        {filteredPurchaseOrders.map((purchase) => {
           const supplier = suppliers.find((s) => s.id === purchase.supplier_id);
           return (
             <div
@@ -2085,7 +2588,9 @@ const Products: React.FC = () => {
                       {selectedPurchase === purchase.id
                         ? loadingPurchaseItems
                           ? "-"
-                          : `${purchaseOrderItems.length} / ${purchaseOrderItems.reduce(
+                          : `${
+                              purchaseOrderItems.length
+                            } / ${purchaseOrderItems.reduce(
                               (sum, item) => sum + Number(item.quantity || 0),
                               0
                             )}`
@@ -2247,8 +2752,6 @@ const Products: React.FC = () => {
             Tidak ada data purchase order ditemukan.
           </div>
         )}
-
-        
       </div>
     </div>
   );
@@ -2260,31 +2763,45 @@ const Products: React.FC = () => {
         {/* Subtabs for Daftar Pembelian */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setPurchaseTabView('daftar')}
-            className={`px-3 py-2 text-sm rounded ${purchaseTabView === 'daftar' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-gray-600 hover:text-gray-800'}`}
+            onClick={() => setPurchaseTabView("daftar")}
+            className={`px-3 py-2 text-sm rounded ${
+              purchaseTabView === "daftar"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
           >
             Daftar Pembelian
           </button>
           <button
-            onClick={() => setPurchaseTabView('rekapTanggalBarang')}
-            className={`px-3 py-2 text-sm rounded ${purchaseTabView === 'rekapTanggalBarang' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-gray-600 hover:text-gray-800'}`}
+            onClick={() => setPurchaseTabView("rekapTanggalBarang")}
+            className={`px-3 py-2 text-sm rounded ${
+              purchaseTabView === "rekapTanggalBarang"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
           >
             Rekap Pembelian (Per tanggal - Per Barang)
           </button>
           <button
-            onClick={() => setPurchaseTabView('rekapPerBarang')}
-            className={`px-3 py-2 text-sm rounded ${purchaseTabView === 'rekapPerBarang' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-gray-600 hover:text-gray-800'}`}
+            onClick={() => setPurchaseTabView("rekapPerBarang")}
+            className={`px-3 py-2 text-sm rounded ${
+              purchaseTabView === "rekapPerBarang"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
           >
             Rekap Per Barang
           </button>
         </div>
 
         {/* Daftar PO view */}
-        {purchaseTabView === 'daftar' && (
+        {purchaseTabView === "daftar" && (
           <>
             <div className="flex flex-col md:flex-row md:items-end gap-4">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Cari PO / Supplier</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Cari PO / Supplier
+                </label>
                 <input
                   type="text"
                   placeholder="Cari PO number atau nama supplier..."
@@ -2294,8 +2811,14 @@ const Products: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Periode</label>
-                <select value={daftarPeriod} onChange={(e) => setDaftarPeriod(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Periode
+                </label>
+                <select
+                  value={daftarPeriod}
+                  onChange={(e) => setDaftarPeriod(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
                   <option value="today">Hari Ini</option>
                   <option value="yesterday">Kemarin</option>
                   <option value="week">Minggu Ini</option>
@@ -2317,47 +2840,149 @@ const Products: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Number</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal Order</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      PO Number
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Tanggal Order
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Supplier
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Total
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Aksi
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
                   {filteredPurchaseOrdersForDaftar.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center text-gray-400 py-6">Tidak ada data purchase order ditemukan.</td>
+                      <td
+                        colSpan={6}
+                        className="text-center text-gray-400 py-6"
+                      >
+                        Tidak ada data purchase order ditemukan.
+                      </td>
                     </tr>
                   )}
                   {filteredPurchaseOrdersForDaftar.map((po) => {
-                    const supplier = suppliers.find((s) => s.id === po.supplier_id);
+                    const supplier = suppliers.find(
+                      (s) => s.id === po.supplier_id
+                    );
                     return (
                       <React.Fragment key={po.id}>
                         <tr>
                           <td className="px-4 py-3 font-mono text-xs text-gray-900">
-                            <button onClick={() => openPoDetail(po)} className="text-blue-600 hover:underline">{po.po_number}</button>
+                            <button
+                              onClick={() => openPoDetail(po)}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {po.po_number}
+                            </button>
                           </td>
-                          <td className="px-4 py-3">{po.order_date ? new Date(po.order_date).toLocaleDateString("id-ID") : "-"}</td>
+                          <td className="px-4 py-3">
+                            {po.order_date
+                              ? new Date(po.order_date).toLocaleDateString(
+                                  "id-ID"
+                                )
+                              : "-"}
+                          </td>
                           <td className="px-4 py-3">{supplier?.name || "-"}</td>
-                          <td className="px-4 py-3 font-semibold text-blue-700 text-right">Rp {Number(po.total_amount).toLocaleString("id-ID")}</td>
+                          <td className="px-4 py-3 font-semibold text-blue-700 text-right">
+                            Rp {Number(po.total_amount).toLocaleString("id-ID")}
+                          </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <button onClick={async () => {
-                                try {
-                                  const items = await db.select("purchase_order_items", "*", { po_id: po.id });
-                                  setNewPurchase({ supplierId: po.supplier_id, items: (items || []).map((it: any) => ({ id: it.id, productId: it.product_id, productName: it.product_name, quantity: Number(it.quantity) || 0, unitCost: Number(it.unit_cost) || 0, total: Number(it.total) || 0 })), notes: po.notes || "", expectedDate: po.expected_date ? new Date(po.expected_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0], orderDate: po.order_date ? new Date(po.order_date).toISOString() : new Date().toISOString() });
-                                  setEditingPoId(po.id);
-                                  setShowPurchaseForm(true);
-                                } catch (err: any) {
-                                  Swal.fire({ icon: "error", title: "Gagal membuka edit", text: (err?.message || "") + (err?.details ? "\n" + err.details : "") });
-                                }
-                              }} className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"><Edit className="h-4 w-4" /></button>
-                              <button onClick={async () => {
-                                const confirm = await Swal.fire({ title: "Hapus Purchase Order?", text: "Tindakan ini akan menghapus transaksi pembelian dan mengembalikan stok produk.", icon: "warning", showCancelButton: true, confirmButtonColor: "#d33", cancelButtonColor: "#6b7280", confirmButtonText: "Ya, hapus", cancelButtonText: "Batal" });
-                                if (!confirm.isConfirmed) return;
-                                try { await db.purchases.delete(po.id); await Swal.fire({ icon: "success", title: "Berhasil", text: "Purchase Order telah dihapus dan stok dikembalikan." }); if ((window as any).refreshPurchases) { await (window as any).refreshPurchases(); } } catch (err: any) { await Swal.fire({ icon: "error", title: "Gagal menghapus", text: (err?.message || "") + (err?.details ? "\n" + err.details : "") }); }
-                              }} className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"><Trash2 className="h-4 w-4" /></button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const items = await db.select(
+                                      "purchase_order_items",
+                                      "*",
+                                      { po_id: po.id }
+                                    );
+                                    setNewPurchase({
+                                      supplierId: po.supplier_id,
+                                      items: (items || []).map((it: any) => ({
+                                        id: it.id,
+                                        productId: it.product_id,
+                                        productName: it.product_name,
+                                        quantity: Number(it.quantity) || 0,
+                                        unitCost: Number(it.unit_cost) || 0,
+                                        total: Number(it.total) || 0,
+                                      })),
+                                      notes: po.notes || "",
+                                      expectedDate: po.expected_date
+                                        ? new Date(po.expected_date)
+                                            .toISOString()
+                                            .split("T")[0]
+                                        : new Date()
+                                            .toISOString()
+                                            .split("T")[0],
+                                      orderDate: po.order_date
+                                        ? new Date(po.order_date).toISOString()
+                                        : new Date().toISOString(),
+                                    });
+                                    setEditingPoId(po.id);
+                                    setShowPurchaseForm(true);
+                                  } catch (err: any) {
+                                    Swal.fire({
+                                      icon: "error",
+                                      title: "Gagal membuka edit",
+                                      text:
+                                        (err?.message || "") +
+                                        (err?.details
+                                          ? "\n" + err.details
+                                          : ""),
+                                    });
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const confirm = await Swal.fire({
+                                    title: "Hapus Purchase Order?",
+                                    text: "Tindakan ini akan menghapus transaksi pembelian dan mengembalikan stok produk.",
+                                    icon: "warning",
+                                    showCancelButton: true,
+                                    confirmButtonColor: "#d33",
+                                    cancelButtonColor: "#6b7280",
+                                    confirmButtonText: "Ya, hapus",
+                                    cancelButtonText: "Batal",
+                                  });
+                                  if (!confirm.isConfirmed) return;
+                                  try {
+                                    await db.purchases.delete(po.id);
+                                    await Swal.fire({
+                                      icon: "success",
+                                      title: "Berhasil",
+                                      text: "Purchase Order telah dihapus dan stok dikembalikan.",
+                                    });
+                                    if ((window as any).refreshPurchases) {
+                                      await (window as any).refreshPurchases();
+                                    }
+                                  } catch (err: any) {
+                                    await Swal.fire({
+                                      icon: "error",
+                                      title: "Gagal menghapus",
+                                      text:
+                                        (err?.message || "") +
+                                        (err?.details
+                                          ? "\n" + err.details
+                                          : ""),
+                                    });
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -2367,37 +2992,92 @@ const Products: React.FC = () => {
                               <div className="bg-white rounded-b-xl shadow-sm border border-t-0 border-gray-200 p-4">
                                 <div className="flex items-center justify-between mb-3">
                                   <div>
-                                    <div className="text-sm text-gray-500">PO Number</div>
-                                    <div className="font-semibold text-gray-900">{poDetail.po_number}</div>
+                                    <div className="text-sm text-gray-500">
+                                      PO Number
+                                    </div>
+                                    <div className="font-semibold text-gray-900">
+                                      {poDetail.po_number}
+                                    </div>
                                   </div>
                                   <div className="text-right">
-                                    <div className="text-sm text-gray-500">Tanggal Order</div>
-                                    <div className="font-semibold">{poDetail.order_date ? new Date(poDetail.order_date).toLocaleDateString('id-ID') : '-'}</div>
+                                    <div className="text-sm text-gray-500">
+                                      Tanggal Order
+                                    </div>
+                                    <div className="font-semibold">
+                                      {poDetail.order_date
+                                        ? new Date(
+                                            poDetail.order_date
+                                          ).toLocaleDateString("id-ID")
+                                        : "-"}
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="overflow-x-auto">
                                   <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                       <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Produk
+                                        </th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                          Qty
+                                        </th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                          Harga
+                                        </th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                          Total (Rp)
+                                        </th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-100">
-                                      {((poDetail.items || []) as any[]).map((it:any) => (
-                                        <tr key={it.id}>
-                                          <td className="px-4 py-2">{it.product_name || it.productName || 'Unknown'}</td>
-                                          <td className="px-4 py-2 text-right">{Number(it.quantity||it.qty||0)}</td>
-                                          <td className="px-4 py-2 text-right">{it.unit_cost ? Number(it.unit_cost).toLocaleString('id-ID') : (it.unitPrice ? Number(it.unitPrice).toLocaleString('id-ID') : '-')}</td>
-                                          <td className="px-4 py-2 text-right">{Number(it.total||0).toLocaleString('id-ID')}</td>
-                                        </tr>
-                                      ))}
+                                      {((poDetail.items || []) as any[]).map(
+                                        (it: any) => (
+                                          <tr key={it.id}>
+                                            <td className="px-4 py-2">
+                                              {it.product_name ||
+                                                it.productName ||
+                                                "Unknown"}
+                                            </td>
+                                            <td className="px-4 py-2 text-right">
+                                              {Number(
+                                                it.quantity || it.qty || 0
+                                              )}
+                                            </td>
+                                            <td className="px-4 py-2 text-right">
+                                              {it.unit_cost
+                                                ? Number(
+                                                    it.unit_cost
+                                                  ).toLocaleString("id-ID")
+                                                : it.unitPrice
+                                                ? Number(
+                                                    it.unitPrice
+                                                  ).toLocaleString("id-ID")
+                                                : "-"}
+                                            </td>
+                                            <td className="px-4 py-2 text-right">
+                                              {Number(
+                                                it.total || 0
+                                              ).toLocaleString("id-ID")}
+                                            </td>
+                                          </tr>
+                                        )
+                                      )}
                                     </tbody>
                                   </table>
                                 </div>
-                                <div className="mt-4 text-right font-semibold">Total: Rp {Number(poDetail.total_amount || poDetail.subtotal || ((poDetail.items || []).reduce((s:any,it:any)=> s + (Number(it.total)||0),0))).toLocaleString('id-ID')}</div>
+                                <div className="mt-4 text-right font-semibold">
+                                  Total: Rp{" "}
+                                  {Number(
+                                    poDetail.total_amount ||
+                                      poDetail.subtotal ||
+                                      (poDetail.items || []).reduce(
+                                        (s: any, it: any) =>
+                                          s + (Number(it.total) || 0),
+                                        0
+                                      )
+                                  ).toLocaleString("id-ID")}
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -2409,18 +3089,26 @@ const Products: React.FC = () => {
                 <tfoot>
                   <tr>
                     <td colSpan={3} />
-                    <td className="px-4 py-3 font-semibold text-blue-700 text-right">Grand Total: Rp {Number(filteredPurchaseOrdersForDaftar.reduce((s:any, it:any) => s + (Number(it.total_amount) || 0), 0)).toLocaleString('id-ID')}</td>
+                    <td className="px-4 py-3 font-semibold text-blue-700 text-right">
+                      Grand Total: Rp{" "}
+                      {Number(
+                        filteredPurchaseOrdersForDaftar.reduce(
+                          (s: any, it: any) =>
+                            s + (Number(it.total_amount) || 0),
+                          0
+                        )
+                      ).toLocaleString("id-ID")}
+                    </td>
                     <td />
                   </tr>
                 </tfoot>
               </table>
             </div>
-            
           </>
         )}
 
         {/* Rekap per tanggal view */}
-        {purchaseTabView === 'rekapTanggalBarang' && (
+        {purchaseTabView === "rekapTanggalBarang" && (
           <>
             <PurchaseFilters
               search={rekapTanggalSearch}
@@ -2435,7 +3123,7 @@ const Products: React.FC = () => {
         )}
 
         {/* Rekap per barang view */}
-        {purchaseTabView === 'rekapPerBarang' && (
+        {purchaseTabView === "rekapPerBarang" && (
           <>
             <PurchaseFilters
               search={rekapPerBarangSearch}
@@ -2455,12 +3143,18 @@ const Products: React.FC = () => {
   // Helper to open a PO detail (used by PO number link and Edit button)
   const openPoDetail = async (po: any) => {
     try {
-      const items = await db.select("purchase_order_items", "*", { po_id: po.id });
+      const items = await db.select("purchase_order_items", "*", {
+        po_id: po.id,
+      });
       const detail = { ...po, items: items || [] };
       setPoDetail(detail);
       setExpandedPoId((prev) => (prev === po.id ? null : po.id));
     } catch (err: any) {
-      Swal.fire({ icon: "error", title: "Gagal memuat detail PO", text: (err?.message || "") + (err?.details ? "\n" + err.details : "") });
+      Swal.fire({
+        icon: "error",
+        title: "Gagal memuat detail PO",
+        text: (err?.message || "") + (err?.details ? "\n" + err.details : ""),
+      });
     }
   };
 
@@ -2487,19 +3181,52 @@ const Products: React.FC = () => {
       return [];
     };
 
-  const groups: Record<string, { productMap: Record<string, { productId?: string; name: string; qty: number; total: number; lines?: Array<any> }>; dateTotal: number }> = {};
+    const groups: Record<
+      string,
+      {
+        productMap: Record<
+          string,
+          {
+            productId?: string;
+            name: string;
+            qty: number;
+            total: number;
+            lines?: Array<any>;
+          }
+        >;
+        dateTotal: number;
+      }
+    > = {};
 
     for (const txn of sales) {
       // prefer timestamp column from cashier_transactions per schema
-      const tsVal = txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
-      const dateKey = tsVal ? new Date(tsVal).toISOString().slice(0, 10) : 'unknown';
+      const tsVal =
+        txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
+      const dateKey = tsVal
+        ? new Date(tsVal).toISOString().slice(0, 10)
+        : "unknown";
       const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
-  if (!groups[dateKey]) groups[dateKey] = { productMap: {}, dateTotal: 0 };
+      if (!groups[dateKey]) groups[dateKey] = { productMap: {}, dateTotal: 0 };
       for (const it of items) {
-        const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? it.sku ?? null;
+        const productId =
+          it.product_id ??
+          it.productId ??
+          it.id ??
+          it.item_id ??
+          it.sku ??
+          null;
         // prefer product name from products table when available
-        const prod = productId ? products.find((p) => String(p.id) === String(productId)) : null;
-        const name = prod?.name || it.product_name || it.name || it.title || it.productName || (it.product && it.product.name) || String(it.sku || it.code || productId || '-');
+        const prod = productId
+          ? products.find((p) => String(p.id) === String(productId))
+          : null;
+        const name =
+          prod?.name ||
+          it.product_name ||
+          it.name ||
+          it.title ||
+          it.productName ||
+          (it.product && it.product.name) ||
+          String(it.sku || it.code || productId || "-");
         const qtyRaw = it.quantity ?? it.qty ?? it.qty_sold ?? it.q ?? 0;
         const qty = Number(qtyRaw) || 0;
         let totalRaw = 0;
@@ -2507,15 +3234,29 @@ const Products: React.FC = () => {
         else if (it.subtotal !== undefined) totalRaw = it.subtotal;
         else if (it.amount !== undefined) totalRaw = it.amount;
         else if (it.price_total !== undefined) totalRaw = it.price_total;
-        else if (it.unit_price !== undefined) totalRaw = qty * Number(it.unit_price);
+        else if (it.unit_price !== undefined)
+          totalRaw = qty * Number(it.unit_price);
         const total = Number(totalRaw) || 0;
 
         const key = String(productId ?? name);
-        if (!groups[dateKey].productMap[key]) groups[dateKey].productMap[key] = { productId, name, qty: 0, total: 0, lines: [] };
+        if (!groups[dateKey].productMap[key])
+          groups[dateKey].productMap[key] = {
+            productId,
+            name,
+            qty: 0,
+            total: 0,
+            lines: [],
+          };
         groups[dateKey].productMap[key].qty += qty;
         groups[dateKey].productMap[key].total += total;
         // store line for possible expansion in per-date view
-        groups[dateKey].productMap[key].lines!.push({ txId: txn.id ?? txn.transaction_id ?? null, ts: tsVal, qty, total, unitPrice: qty ? (total / qty) : 0 });
+        groups[dateKey].productMap[key].lines!.push({
+          txId: txn.id ?? txn.transaction_id ?? null,
+          ts: tsVal,
+          qty,
+          total,
+          unitPrice: qty ? total / qty : 0,
+        });
         groups[dateKey].dateTotal += total;
       }
     }
@@ -2527,72 +3268,94 @@ const Products: React.FC = () => {
     const now = new Date();
     switch (salesPeriod) {
       case "today":
-        start = new Date(); start.setHours(0,0,0,0);
-        end = new Date(); end.setHours(23,59,59,999);
+        start = new Date();
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
         break;
       case "yesterday":
-        start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0,0,0,0);
-        end = new Date(start); end.setHours(23,59,59,999);
+        start = new Date();
+        start.setDate(start.getDate() - 1);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(start);
+        end.setHours(23, 59, 59, 999);
         break;
       case "week":
         start = new Date();
         const day = start.getDay();
         const diff = (day === 0 ? -6 : 1) - day;
         start.setDate(start.getDate() + diff);
-        start.setHours(0,0,0,0);
-        end = new Date(); end.setHours(23,59,59,999);
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
         break;
       case "month":
         start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0); end.setHours(23,59,59,999);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999);
         break;
       case "range":
-        if (salesDateRange.start) { start = new Date(salesDateRange.start); start.setHours(0,0,0,0); }
-        if (salesDateRange.end) { end = new Date(salesDateRange.end); end.setHours(23,59,59,999); }
+        if (salesDateRange.start) {
+          start = new Date(salesDateRange.start);
+          start.setHours(0, 0, 0, 0);
+        }
+        if (salesDateRange.end) {
+          end = new Date(salesDateRange.end);
+          end.setHours(23, 59, 59, 999);
+        }
         break;
     }
 
     const filteredDateKeys = dateKeys.filter((dk) => {
-      const dkDate = dk === 'unknown' ? null : new Date(dk + 'T00:00:00');
+      const dkDate = dk === "unknown" ? null : new Date(dk + "T00:00:00");
       if (dkDate && start && dkDate < start) return false;
       if (dkDate && end && dkDate > end) return false;
       if (!salesSearch) return true;
       const st = salesSearch.toLowerCase();
       if (dk.includes(st)) return true;
-      return Object.values(groups[dk].productMap).some((p) => p.name.toLowerCase().includes(st));
+      return Object.values(groups[dk].productMap).some((p) =>
+        p.name.toLowerCase().includes(st)
+      );
     });
 
     // compute footer totals based on currently filtered dates
-    const footerTotals = filteredDateKeys.reduce((acc: any, dk: string) => {
-      const day = groups[dk];
-      acc.days += 1;
-      acc.amount += Number(day.dateTotal || 0);
-      return acc;
-    }, { days: 0, amount: 0 });
+    const footerTotals = filteredDateKeys.reduce(
+      (acc: any, dk: string) => {
+        const day = groups[dk];
+        acc.days += 1;
+        acc.amount += Number(day.dateTotal || 0);
+        return acc;
+      },
+      { days: 0, amount: 0 }
+    );
 
-    const averagePerDay = footerTotals.days ? Math.round(footerTotals.amount / footerTotals.days) : 0;
+    const averagePerDay = footerTotals.days
+      ? Math.round(footerTotals.amount / footerTotals.days)
+      : 0;
 
     // build human-friendly period label for this tab too
     const periodLabel = (() => {
-      if (salesPeriod === 'range') {
+      if (salesPeriod === "range") {
         if (salesDateRange.start && salesDateRange.end) {
           const s = new Date(salesDateRange.start).toLocaleDateString();
           const e = new Date(salesDateRange.end).toLocaleDateString();
           return `${s} s.d. ${e}`;
         }
-        if (salesDateRange.start) return `Mulai ${new Date(salesDateRange.start).toLocaleDateString()}`;
-        return 'Rentang waktu (tidak lengkap)';
+        if (salesDateRange.start)
+          return `Mulai ${new Date(salesDateRange.start).toLocaleDateString()}`;
+        return "Rentang waktu (tidak lengkap)";
       }
       switch (salesPeriod) {
-        case 'today': {
+        case "today": {
           const d = new Date();
           return `Hari Ini (${d.toLocaleDateString()})`;
         }
-        case 'yesterday': {
-          const d = new Date(); d.setDate(d.getDate() - 1);
+        case "yesterday": {
+          const d = new Date();
+          d.setDate(d.getDate() - 1);
           return `Kemarin (${d.toLocaleDateString()})`;
         }
-        case 'week': {
+        case "week": {
           const d0 = new Date();
           const dd = new Date(d0);
           const day = dd.getDay();
@@ -2600,14 +3363,14 @@ const Products: React.FC = () => {
           dd.setDate(dd.getDate() + diff);
           return `Minggu Ini (${dd.toLocaleDateString()} - ${new Date().toLocaleDateString()})`;
         }
-        case 'month': {
+        case "month": {
           const now = new Date();
           const start = new Date(now.getFullYear(), now.getMonth(), 1);
           const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
           return `Bulan Ini (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`;
         }
         default:
-          return 'Semua Waktu';
+          return "Semua Waktu";
       }
     })();
 
@@ -2615,13 +3378,23 @@ const Products: React.FC = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Laporan Penjualan (Per Tanggal & Per Barang)</h2>
-            <p className="text-gray-600">Rekap penjualan teragregasi per tanggal, lalu per produk.</p>
-              <div className="mt-2 text-sm text-gray-500">Periode: <span className="font-medium text-gray-700">{periodLabel}</span></div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Laporan Penjualan (Per Tanggal & Per Barang)
+            </h2>
+            <p className="text-gray-600">
+              Rekap penjualan teragregasi per tanggal, lalu per produk.
+            </p>
+            <div className="mt-2 text-sm text-gray-500">
+              Periode:{" "}
+              <span className="font-medium text-gray-700">{periodLabel}</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { if ((window as any).refreshSales) (window as any).refreshSales(); }}
+              onClick={() => {
+                if ((window as any).refreshSales)
+                  (window as any).refreshSales();
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
             >
               Refresh
@@ -2643,7 +3416,9 @@ const Products: React.FC = () => {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Periode</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Periode
+            </label>
             <select
               value={salesPeriod}
               onChange={(e) => setSalesPeriod(e.target.value)}
@@ -2656,19 +3431,23 @@ const Products: React.FC = () => {
               <option value="range">Rentang Waktu</option>
             </select>
           </div>
-          {salesPeriod === 'range' && (
+          {salesPeriod === "range" && (
             <div className="flex gap-2 items-center">
               <input
                 type="date"
                 value={salesDateRange.start}
-                onChange={(e) => setSalesDateRange((r) => ({ ...r, start: e.target.value }))}
+                onChange={(e) =>
+                  setSalesDateRange((r) => ({ ...r, start: e.target.value }))
+                }
                 className="px-3 py-2 border border-gray-300 rounded-lg"
               />
               <span className="self-center">-</span>
               <input
                 type="date"
                 value={salesDateRange.end}
-                onChange={(e) => setSalesDateRange((r) => ({ ...r, end: e.target.value }))}
+                onChange={(e) =>
+                  setSalesDateRange((r) => ({ ...r, end: e.target.value }))
+                }
                 className="px-3 py-2 border border-gray-300 rounded-lg"
               />
             </div>
@@ -2676,33 +3455,48 @@ const Products: React.FC = () => {
         </div>
 
         {filteredDateKeys.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center text-gray-500">Tidak ada data penjualan untuk filter ini.</div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center text-gray-500">
+            Tidak ada data penjualan untuk filter ini.
+          </div>
         )}
 
         {filteredDateKeys.map((dk) => {
           const day = groups[dk];
-          const productsArr = Object.values(day.productMap).sort((a, b) => b.total - a.total);
+          const productsArr = Object.values(day.productMap).sort(
+            (a, b) => b.total - a.total
+          );
           const dateExpanded = expandedDates.has(dk);
           return (
-            <div key={dk} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div
+              key={dk}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+            >
               <div className="flex items-center justify-between mb-3">
                 <div>
-                      <div className="text-sm text-gray-500">{new Date(dk).toLocaleDateString('id-ID', { weekday: 'long' })}</div>
-                      <button
-                        onClick={() => setExpandedDates((prev) => {
-                          const s = new Set(prev);
-                          if (s.has(dk)) s.delete(dk);
-                          else s.add(dk);
-                          return s;
-                        })}
-                        className="font-semibold text-left text-blue-600 hover:underline"
-                      >
-                        {new Date(dk).toLocaleDateString('id-ID')}
-                      </button>
+                  <div className="text-sm text-gray-500">
+                    {new Date(dk).toLocaleDateString("id-ID", {
+                      weekday: "long",
+                    })}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setExpandedDates((prev) => {
+                        const s = new Set(prev);
+                        if (s.has(dk)) s.delete(dk);
+                        else s.add(dk);
+                        return s;
+                      })
+                    }
+                    className="font-semibold text-left text-blue-600 hover:underline"
+                  >
+                    {new Date(dk).toLocaleDateString("id-ID")}
+                  </button>
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-gray-500">Total</div>
-                    <div className="font-semibold text-green-700">Rp {Number(day.dateTotal || 0).toLocaleString('id-ID')}</div>
+                  <div className="font-semibold text-green-700">
+                    Rp {Number(day.dateTotal || 0).toLocaleString("id-ID")}
+                  </div>
                 </div>
               </div>
 
@@ -2711,10 +3505,18 @@ const Products: React.FC = () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga (Rp)</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Produk
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                          Harga (Rp)
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                          Qty
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                          Total (Rp)
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
@@ -2723,60 +3525,150 @@ const Products: React.FC = () => {
                         const compoundKey = `${dk}::${productKey}`;
                         const detailCount = (p.lines || []).length;
                         const expanded = expandedDateProducts.has(compoundKey);
-                        const unit = p.qty ? Math.round((p.total || 0) / p.qty) : 0;
+                        const unit = p.qty
+                          ? Math.round((p.total || 0) / p.qty)
+                          : 0;
                         return (
                           <React.Fragment key={productKey}>
                             <tr>
                               <td className="px-4 py-2">
-                                <button onClick={() => {
-                                  setExpandedDateProducts((prev) => {
-                                    const s = new Set(prev);
-                                    if (s.has(compoundKey)) s.delete(compoundKey);
-                                    else s.add(compoundKey);
-                                    return s;
-                                  });
-                                }} className="text-left text-blue-600 hover:underline flex items-center gap-2" aria-expanded={expandedDateProducts.has(compoundKey)}>
+                                <button
+                                  onClick={() => {
+                                    setExpandedDateProducts((prev) => {
+                                      const s = new Set(prev);
+                                      if (s.has(compoundKey))
+                                        s.delete(compoundKey);
+                                      else s.add(compoundKey);
+                                      return s;
+                                    });
+                                  }}
+                                  className="text-left text-blue-600 hover:underline flex items-center gap-2"
+                                  aria-expanded={expandedDateProducts.has(
+                                    compoundKey
+                                  )}
+                                >
                                   <span>{p.name}</span>
-                                  <span className="text-xs text-gray-500">({detailCount})</span>
-                                  <svg className={`h-4 w-4 transform ${expandedDateProducts.has(compoundKey) ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                                  <span className="text-xs text-gray-500">
+                                    ({detailCount})
+                                  </span>
+                                  <svg
+                                    className={`h-4 w-4 transform ${
+                                      expandedDateProducts.has(compoundKey)
+                                        ? "rotate-180"
+                                        : ""
+                                    }`}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <polyline points="6 9 12 15 18 9" />
+                                  </svg>
                                 </button>
                               </td>
-                              <td className="px-4 py-2 text-right">{unit ? Number(unit).toLocaleString('id-ID') : '-'}</td>
-                              <td className="px-4 py-2 text-right font-medium">{p.qty}</td>
-                              <td className="px-4 py-2 text-right font-semibold">{Number(p.total || 0).toLocaleString('id-ID')}</td>
+                              <td className="px-4 py-2 text-right">
+                                {unit
+                                  ? Number(unit).toLocaleString("id-ID")
+                                  : "-"}
+                              </td>
+                              <td className="px-4 py-2 text-right font-medium">
+                                {p.qty}
+                              </td>
+                              <td className="px-4 py-2 text-right font-semibold">
+                                {Number(p.total || 0).toLocaleString("id-ID")}
+                              </td>
                             </tr>
                             {expanded && (
                               <tr>
-                                <td colSpan={4} className="px-0 py-0 bg-gray-50">
+                                <td
+                                  colSpan={4}
+                                  className="px-0 py-0 bg-gray-50"
+                                >
                                   <div className="w-full overflow-x-auto">
                                     <table className="min-w-full text-sm text-gray-700">
                                       <thead>
                                         <tr>
-                                          <th className="px-4 py-2 text-left text-xs text-gray-500">Waktu</th>
-                                          <th className="px-4 py-2 text-right text-xs text-gray-500">Harga (Rp)</th>
-                                          <th className="px-4 py-2 text-right text-xs text-gray-500">Qty</th>
-                                          <th className="px-4 py-2 text-right text-xs text-gray-500">Total (Rp)</th>
+                                          <th className="px-4 py-2 text-left text-xs text-gray-500">
+                                            Waktu
+                                          </th>
+                                          <th className="px-4 py-2 text-right text-xs text-gray-500">
+                                            Harga (Rp)
+                                          </th>
+                                          <th className="px-4 py-2 text-right text-xs text-gray-500">
+                                            Qty
+                                          </th>
+                                          <th className="px-4 py-2 text-right text-xs text-gray-500">
+                                            Total (Rp)
+                                          </th>
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {(p.lines || []).sort((a,b)=> (a.ts < b.ts ? 1 : -1)).map((ln: any, i: number) => (
-                                          <tr key={i} className="border-t">
-                                            <td className="px-4 py-1">{ln.ts ? new Date(ln.ts).toLocaleString('id-ID') : (ln.txId || '-')}</td>
-                                            <td className="px-4 py-1 text-right">{ln.unitPrice ? Number(Math.round(ln.unitPrice)).toLocaleString('id-ID') : '-'}</td>
-                                            <td className="px-4 py-1 text-right">{ln.qty}</td>
-                                            <td className="px-4 py-1 text-right">{ln.total ? Number(ln.total).toLocaleString('id-ID') : '-'}</td>
-                                          </tr>
-                                        ))}
+                                        {(p.lines || [])
+                                          .sort((a, b) =>
+                                            a.ts < b.ts ? 1 : -1
+                                          )
+                                          .map((ln: any, i: number) => (
+                                            <tr key={i} className="border-t">
+                                              <td className="px-4 py-1">
+                                                {ln.ts
+                                                  ? new Date(
+                                                      ln.ts
+                                                    ).toLocaleString("id-ID")
+                                                  : ln.txId || "-"}
+                                              </td>
+                                              <td className="px-4 py-1 text-right">
+                                                {ln.unitPrice
+                                                  ? Number(
+                                                      Math.round(ln.unitPrice)
+                                                    ).toLocaleString("id-ID")
+                                                  : "-"}
+                                              </td>
+                                              <td className="px-4 py-1 text-right">
+                                                {ln.qty}
+                                              </td>
+                                              <td className="px-4 py-1 text-right">
+                                                {ln.total
+                                                  ? Number(
+                                                      ln.total
+                                                    ).toLocaleString("id-ID")
+                                                  : "-"}
+                                              </td>
+                                            </tr>
+                                          ))}
                                         {/* subtotal for this product on this date */}
                                         {(() => {
-                                          const subtotalQty = (p.lines || []).reduce((s: number, d: any) => s + (d.qty || 0), 0);
-                                          const subtotalAmount = (p.lines || []).reduce((s: number, d: any) => s + (d.total || 0), 0);
+                                          const subtotalQty = (
+                                            p.lines || []
+                                          ).reduce(
+                                            (s: number, d: any) =>
+                                              s + (d.qty || 0),
+                                            0
+                                          );
+                                          const subtotalAmount = (
+                                            p.lines || []
+                                          ).reduce(
+                                            (s: number, d: any) =>
+                                              s + (d.total || 0),
+                                            0
+                                          );
                                           return (
                                             <tr className="border-t bg-gray-100 font-semibold">
-                                              <td className="px-4 py-1">Subtotal</td>
-                                              <td className="px-4 py-1 text-right">-</td>
-                                              <td className="px-4 py-1 text-right">{subtotalQty}</td>
-                                              <td className="px-4 py-1 text-right">{Number(subtotalAmount).toLocaleString('id-ID')}</td>
+                                              <td className="px-4 py-1">
+                                                Subtotal
+                                              </td>
+                                              <td className="px-4 py-1 text-right">
+                                                -
+                                              </td>
+                                              <td className="px-4 py-1 text-right">
+                                                {subtotalQty}
+                                              </td>
+                                              <td className="px-4 py-1 text-right">
+                                                {Number(
+                                                  subtotalAmount
+                                                ).toLocaleString("id-ID")}
+                                              </td>
                                             </tr>
                                           );
                                         })()}
@@ -2796,25 +3688,31 @@ const Products: React.FC = () => {
             </div>
           );
         })}
-          {/* Footer summary: total days, period label, grand total, average per day */}
-          {filteredDateKeys.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-gray-500">Total {footerTotals.days}-Hari</div>
-                  <div className="font-semibold text-gray-900">{periodLabel}</div>
+        {/* Footer summary: total days, period label, grand total, average per day */}
+        {filteredDateKeys.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-500">
+                  Total {footerTotals.days}-Hari
                 </div>
-                <div className="text-right">
-                  <div className="text-sm text-gray-500">Grand Total</div>
-                  <div className="font-semibold text-green-700">Rp {Number(footerTotals.amount).toLocaleString('id-ID')}</div>
-                  <div className="flex items-center justify-end gap-4 mt-2 text-sm text-gray-600">
-                    <div className="text-gray-500">Rata-rata / hari</div>
-                    <div className="font-medium text-gray-900">Rp {Number(averagePerDay).toLocaleString('id-ID')}</div>
+                <div className="font-semibold text-gray-900">{periodLabel}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-500">Grand Total</div>
+                <div className="font-semibold text-green-700">
+                  Rp {Number(footerTotals.amount).toLocaleString("id-ID")}
+                </div>
+                <div className="flex items-center justify-end gap-4 mt-2 text-sm text-gray-600">
+                  <div className="text-gray-500">Rata-rata / hari</div>
+                  <div className="font-medium text-gray-900">
+                    Rp {Number(averagePerDay).toLocaleString("id-ID")}
                   </div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
       </div>
     );
   };
@@ -2822,55 +3720,117 @@ const Products: React.FC = () => {
   // Function to print selected products price list
   const handlePrintPriceList = async () => {
     if (selectedProductsForPrint.length === 0) {
-      Swal.fire({ icon: 'warning', title: 'Pilih Produk', text: 'Silakan pilih produk yang akan dicetak' });
+      Swal.fire({
+        icon: "warning",
+        title: "Pilih Produk",
+        text: "Silakan pilih produk yang akan dicetak",
+      });
       return;
     }
     const selectedProducts: ProductPriceList[] = products
       .filter((p) => selectedProductsForPrint.includes(p.id))
-      .map((p) => ({ id: p.id, name: p.name, category: p.category, price: p.price }));
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+      }));
     try {
       await printPriceList(selectedProducts);
     } catch (err: any) {
-      Swal.fire({ icon: 'error', title: 'Gagal', text: err?.message || String(err) });
+      Swal.fire({
+        icon: "error",
+        title: "Gagal",
+        text: err?.message || String(err),
+      });
     }
   };
 
   // Render tab for sales summary (aggregate per product across sales)
   const renderSalesSummaryTab = () => {
     // Helper to compute date window from summary period
-    const computeWindow = (period: string, range: { start: string; end: string }) => {
+    const computeWindow = (
+      period: string,
+      range: { start: string; end: string }
+    ) => {
       let start: Date | null = null;
       let end: Date | null = null;
       const now = new Date();
       switch (period) {
-        case 'today': { start = new Date(); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break; }
-        case 'yesterday': { start = new Date(); start.setDate(start.getDate()-1); start.setHours(0,0,0,0); end = new Date(start); end.setHours(23,59,59,999); break; }
-        case 'week': { start = new Date(); const d = start.getDay(); const diff = (d === 0 ? -6 : 1) - d; start.setDate(start.getDate() + diff); start.setHours(0,0,0,0); end = new Date(); end.setHours(23,59,59,999); break; }
-        case 'month': { start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth()+1, 0); end.setHours(23,59,59,999); break; }
-        case 'range': { if (range.start) { start = new Date(range.start); start.setHours(0,0,0,0); } if (range.end) { end = new Date(range.end); end.setHours(23,59,59,999); } break; }
+        case "today": {
+          start = new Date();
+          start.setHours(0, 0, 0, 0);
+          end = new Date();
+          end.setHours(23, 59, 59, 999);
+          break;
+        }
+        case "yesterday": {
+          start = new Date();
+          start.setDate(start.getDate() - 1);
+          start.setHours(0, 0, 0, 0);
+          end = new Date(start);
+          end.setHours(23, 59, 59, 999);
+          break;
+        }
+        case "week": {
+          start = new Date();
+          const d = start.getDay();
+          const diff = (d === 0 ? -6 : 1) - d;
+          start.setDate(start.getDate() + diff);
+          start.setHours(0, 0, 0, 0);
+          end = new Date();
+          end.setHours(23, 59, 59, 999);
+          break;
+        }
+        case "month": {
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+          end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          end.setHours(23, 59, 59, 999);
+          break;
+        }
+        case "range": {
+          if (range.start) {
+            start = new Date(range.start);
+            start.setHours(0, 0, 0, 0);
+          }
+          if (range.end) {
+            end = new Date(range.end);
+            end.setHours(23, 59, 59, 999);
+          }
+          break;
+        }
       }
       return { start, end };
     };
     const parseItems = (details: any) => {
       if (!details) return [];
       let doc = details;
-      if (typeof doc === 'string') {
-        try { doc = JSON.parse(doc); } catch (e) { return []; }
+      if (typeof doc === "string") {
+        try {
+          doc = JSON.parse(doc);
+        } catch (e) {
+          return [];
+        }
       }
       if (Array.isArray(doc)) return doc;
       if (doc.items && Array.isArray(doc.items)) return doc.items;
       if (doc.lines && Array.isArray(doc.lines)) return doc.lines;
       if (doc.cart && Array.isArray(doc.cart)) return doc.cart;
       if (doc.products && Array.isArray(doc.products)) return doc.products;
-      for (const k of Object.keys(doc || {})) if (Array.isArray((doc as any)[k])) return (doc as any)[k];
+      for (const k of Object.keys(doc || {}))
+        if (Array.isArray((doc as any)[k])) return (doc as any)[k];
       return [];
     };
 
     // apply salesSummary filters (period + search)
-    const { start: ssStart, end: ssEnd } = computeWindow(salesSummaryPeriod, salesSummaryDateRange);
+    const { start: ssStart, end: ssEnd } = computeWindow(
+      salesSummaryPeriod,
+      salesSummaryDateRange
+    );
     const map: Record<string, any> = {};
     for (const txn of sales) {
-      const tsVal = txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
+      const tsVal =
+        txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
       const txnDate = tsVal ? new Date(tsVal) : null;
       if (txnDate) {
         if (ssStart && txnDate < ssStart) continue;
@@ -2878,23 +3838,42 @@ const Products: React.FC = () => {
       }
       const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
       for (const it of items) {
-        const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? null;
-        const name = productId ? (products.find((p) => String(p.id) === String(productId))?.name) ?? it.product_name ?? it.name : it.product_name || it.name || String(it.sku || it.code || productId || '-');
+        const productId =
+          it.product_id ?? it.productId ?? it.id ?? it.item_id ?? null;
+        const name = productId
+          ? products.find((p) => String(p.id) === String(productId))?.name ??
+            it.product_name ??
+            it.name
+          : it.product_name ||
+            it.name ||
+            String(it.sku || it.code || productId || "-");
         if (salesSummarySearch) {
           const st = salesSummarySearch.toLowerCase();
           if (!String(name).toLowerCase().includes(st)) continue;
         }
         const qty = Number(it.quantity ?? it.qty ?? it.q ?? 0) || 0;
-        const total = Number(it.total ?? it.subtotal ?? it.amount ?? (it.unit_price ? qty * Number(it.unit_price) : 0)) || 0;
+        const total =
+          Number(
+            it.total ??
+              it.subtotal ??
+              it.amount ??
+              (it.unit_price ? qty * Number(it.unit_price) : 0)
+          ) || 0;
         const key = String(productId ?? name);
-        if (!map[key]) map[key] = { productId: productId ?? null, name, qty: 0, total: 0 };
+        if (!map[key])
+          map[key] = { productId: productId ?? null, name, qty: 0, total: 0 };
         map[key].qty += qty;
         map[key].total += total;
       }
     }
 
-    const keys = Object.keys(map).sort((a,b) => (map[b].total || 0) - (map[a].total || 0));
-    if (keys.length === 0) return <div className="text-sm text-gray-500">Belum ada data penjualan.</div>;
+    const keys = Object.keys(map).sort(
+      (a, b) => (map[b].total || 0) - (map[a].total || 0)
+    );
+    if (keys.length === 0)
+      return (
+        <div className="text-sm text-gray-500">Belum ada data penjualan.</div>
+      );
     return (
       <div>
         <div className="mb-4">
@@ -2910,131 +3889,304 @@ const Products: React.FC = () => {
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produk</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Harga</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total (Rp)</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {keys.map(k => {
-              const item = map[k];
-              const unitPrice = item.qty ? Math.round((Number(item.total) || 0) / item.qty) : 0;
-              const isExpanded = expandedSalesProductKey === k;
-              return (
-                <React.Fragment key={k}>
-                  <tr>
-                    <td className="px-4 py-2">
-                      <button onClick={() => setExpandedSalesProductKey(isExpanded ? null : k)} className="text-blue-600 hover:underline text-left flex items-center gap-2" aria-expanded={isExpanded}><span>{item.name}</span><svg className={`h-4 w-4 transform ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg></button>
-                    </td>
-                    <td className="px-4 py-2 text-right font-medium">{item.qty}</td>
-                    <td className="px-4 py-2 text-right font-medium">{unitPrice ? unitPrice.toLocaleString('id-ID') : '-'}</td>
-                    <td className="px-4 py-2 text-right font-semibold">{Number(item.total||0).toLocaleString('id-ID')}</td>
-                  </tr>
-                  {isExpanded && (
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Produk
+                </th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                  Qty
+                </th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                  Harga
+                </th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                  Total (Rp)
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {keys.map((k) => {
+                const item = map[k];
+                const unitPrice = item.qty
+                  ? Math.round((Number(item.total) || 0) / item.qty)
+                  : 0;
+                const isExpanded = expandedSalesProductKey === k;
+                return (
+                  <React.Fragment key={k}>
                     <tr>
-                      <td colSpan={4} className="bg-gray-50 p-0">
-                        <div className="p-4">
-                          <div className="text-sm text-gray-600 mb-2">Detail penjualan per tanggal</div>
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-white">
-                                <tr>
-                                  <th className="px-4 py-2 text-left text-xs text-gray-500">Tanggal</th>
-                                  <th className="px-4 py-2 text-right text-xs text-gray-500">Harga (Rp)</th>
-                                  <th className="px-4 py-2 text-right text-xs text-gray-500">Qty</th>
-                                  <th className="px-4 py-2 text-right text-xs text-gray-500">Total (Rp)</th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white divide-y divide-gray-100">
-                                {(() => {
-                                  // compute per-date breakdown for product key k
-                                  const perDate: Record<string, { qty: number; total: number }> = {};
-                                  for (const txn of sales) {
-                                    const tsVal = txn.timestamp ?? txn.created_at ?? txn.inserted_at ?? txn.date ?? null;
-                                    const txnDate = tsVal ? new Date(tsVal) : null;
-                                    if (txnDate) {
-                                      if (ssStart && txnDate < ssStart) continue;
-                                      if (ssEnd && txnDate > ssEnd) continue;
-                                    }
-                                    const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
-                                    for (const it of items) {
-                                      const productId = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? null;
-                                      let name = productId ? (products.find((p) => String(p.id) === String(productId))?.name) ?? it.product_name ?? it.name : it.product_name || it.name || String(it.sku || it.code || productId || '-');
-                                      name = String(name || '').trim();
-                                      // build the same key used in the sales-summary map: String(productId ?? name)
-                                      const keyMatch = String(productId ?? name);
-                                      if (keyMatch !== k) continue;
-                                      const qty = Number(it.quantity ?? it.qty ?? 0) || 0;
-                                      const ttl = Number(it.total ?? it.subtotal ?? it.amount ?? (it.unit_price ? qty * Number(it.unit_price) : 0)) || 0;
-                                      const dkey = txnDate ? txnDate.toISOString().slice(0,10) : 'unknown';
-                                      if (!perDate[dkey]) perDate[dkey] = { qty: 0, total: 0 };
-                                      perDate[dkey].qty += qty;
-                                      perDate[dkey].total += ttl;
-                                    }
-                                  }
-                                  const dateKeys = Object.keys(perDate).sort((a,b) => a < b ? 1 : -1);
-                                  if (dateKeys.length === 0) return <tr><td colSpan={3} className="text-sm text-gray-500 py-3">Tidak ada data.</td></tr>;
-                                  const rows = dateKeys.map(dk => {
-                                    const qty = perDate[dk].qty || 0;
-                                    const totalAmt = perDate[dk].total || 0;
-                                    const unit = qty ? Math.round(totalAmt / qty) : 0;
-                                    return (
-                                    <tr key={dk}>
-                                      <td className="px-4 py-2">{new Date(dk).toLocaleDateString('id-ID')}</td>
-                                      <td className="px-4 py-2 text-right">{unit ? Number(unit).toLocaleString('id-ID') : '-'}</td>
-                                      <td className="px-4 py-2 text-right font-medium">{qty}</td>
-                                      <td className="px-4 py-2 text-right font-semibold">{Number(totalAmt||0).toLocaleString('id-ID')}</td>
-                                    </tr>
-                                  );
-                                  });
-
-                                  // compute footer totals for this product across dates
-                                  const footerQty = dateKeys.reduce((s, dk) => s + (perDate[dk].qty || 0), 0);
-                                  const footerAmount = dateKeys.reduce((s, dk) => s + (perDate[dk].total || 0), 0);
-                                  // Better transaction count: count number of sales lines across all sales that match key k
-                                  let realTxCount = 0;
-                                  for (const txn of sales) {
-                                    const items = parseItems(txn.details ?? txn.items ?? txn.lines ?? []);
-                                    for (const it of items) {
-                                      const pid = it.product_id ?? it.productId ?? it.id ?? it.item_id ?? null;
-                                      const nm = pid ? (products.find((pp) => String(pp.id) === String(pid))?.name) ?? it.product_name ?? it.name : it.product_name || it.name || String(it.sku || it.code || pid || '-');
-                                      const keyMatch2 = String(pid ?? String(nm || '').trim());
-                                      if (keyMatch2 === k) realTxCount++;
-                                    }
-                                  }
-
-                                  return (
-                                    <>
-                                      {rows}
-                                      <tr className="bg-gray-50 font-semibold">
-                                        <td className="px-4 py-2">Subtotal</td>
-                                        <td className="px-4 py-2 text-right">-</td>
-                                        <td className="px-4 py-2 text-right">{String(footerQty)}</td>
-                                        <td className="px-4 py-2 text-right">Rp {Number(footerAmount).toLocaleString('id-ID')}</td>
-                                      </tr>
-                                      <tr className="bg-white">
-                                        <td colSpan={4} className="px-4 py-2 text-sm text-gray-600">Jumlah transaksi: {realTxCount}</td>
-                                      </tr>
-                                    </>
-                                  );
-                                })()}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
+                      <td className="px-4 py-2">
+                        <button
+                          onClick={() =>
+                            setExpandedSalesProductKey(isExpanded ? null : k)
+                          }
+                          className="text-blue-600 hover:underline text-left flex items-center gap-2"
+                          aria-expanded={isExpanded}
+                        >
+                          <span>{item.name}</span>
+                          <svg
+                            className={`h-4 w-4 transform ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      </td>
+                      <td className="px-4 py-2 text-right font-medium">
+                        {item.qty}
+                      </td>
+                      <td className="px-4 py-2 text-right font-medium">
+                        {unitPrice ? unitPrice.toLocaleString("id-ID") : "-"}
+                      </td>
+                      <td className="px-4 py-2 text-right font-semibold">
+                        {Number(item.total || 0).toLocaleString("id-ID")}
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={4} className="bg-gray-50 p-0">
+                          <div className="p-4">
+                            <div className="text-sm text-gray-600 mb-2">
+                              Detail penjualan per tanggal
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-white">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs text-gray-500">
+                                      Tanggal
+                                    </th>
+                                    <th className="px-4 py-2 text-right text-xs text-gray-500">
+                                      Harga (Rp)
+                                    </th>
+                                    <th className="px-4 py-2 text-right text-xs text-gray-500">
+                                      Qty
+                                    </th>
+                                    <th className="px-4 py-2 text-right text-xs text-gray-500">
+                                      Total (Rp)
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                  {(() => {
+                                    // compute per-date breakdown for product key k
+                                    const perDate: Record<
+                                      string,
+                                      { qty: number; total: number }
+                                    > = {};
+                                    for (const txn of sales) {
+                                      const tsVal =
+                                        txn.timestamp ??
+                                        txn.created_at ??
+                                        txn.inserted_at ??
+                                        txn.date ??
+                                        null;
+                                      const txnDate = tsVal
+                                        ? new Date(tsVal)
+                                        : null;
+                                      if (txnDate) {
+                                        if (ssStart && txnDate < ssStart)
+                                          continue;
+                                        if (ssEnd && txnDate > ssEnd) continue;
+                                      }
+                                      const items = parseItems(
+                                        txn.details ??
+                                          txn.items ??
+                                          txn.lines ??
+                                          []
+                                      );
+                                      for (const it of items) {
+                                        const productId =
+                                          it.product_id ??
+                                          it.productId ??
+                                          it.id ??
+                                          it.item_id ??
+                                          null;
+                                        let name = productId
+                                          ? products.find(
+                                              (p) =>
+                                                String(p.id) ===
+                                                String(productId)
+                                            )?.name ??
+                                            it.product_name ??
+                                            it.name
+                                          : it.product_name ||
+                                            it.name ||
+                                            String(
+                                              it.sku ||
+                                                it.code ||
+                                                productId ||
+                                                "-"
+                                            );
+                                        name = String(name || "").trim();
+                                        // build the same key used in the sales-summary map: String(productId ?? name)
+                                        const keyMatch = String(
+                                          productId ?? name
+                                        );
+                                        if (keyMatch !== k) continue;
+                                        const qty =
+                                          Number(it.quantity ?? it.qty ?? 0) ||
+                                          0;
+                                        const ttl =
+                                          Number(
+                                            it.total ??
+                                              it.subtotal ??
+                                              it.amount ??
+                                              (it.unit_price
+                                                ? qty * Number(it.unit_price)
+                                                : 0)
+                                          ) || 0;
+                                        const dkey = txnDate
+                                          ? txnDate.toISOString().slice(0, 10)
+                                          : "unknown";
+                                        if (!perDate[dkey])
+                                          perDate[dkey] = { qty: 0, total: 0 };
+                                        perDate[dkey].qty += qty;
+                                        perDate[dkey].total += ttl;
+                                      }
+                                    }
+                                    const dateKeys = Object.keys(perDate).sort(
+                                      (a, b) => (a < b ? 1 : -1)
+                                    );
+                                    if (dateKeys.length === 0)
+                                      return (
+                                        <tr>
+                                          <td
+                                            colSpan={3}
+                                            className="text-sm text-gray-500 py-3"
+                                          >
+                                            Tidak ada data.
+                                          </td>
+                                        </tr>
+                                      );
+                                    const rows = dateKeys.map((dk) => {
+                                      const qty = perDate[dk].qty || 0;
+                                      const totalAmt = perDate[dk].total || 0;
+                                      const unit = qty
+                                        ? Math.round(totalAmt / qty)
+                                        : 0;
+                                      return (
+                                        <tr key={dk}>
+                                          <td className="px-4 py-2">
+                                            {new Date(dk).toLocaleDateString(
+                                              "id-ID"
+                                            )}
+                                          </td>
+                                          <td className="px-4 py-2 text-right">
+                                            {unit
+                                              ? Number(unit).toLocaleString(
+                                                  "id-ID"
+                                                )
+                                              : "-"}
+                                          </td>
+                                          <td className="px-4 py-2 text-right font-medium">
+                                            {qty}
+                                          </td>
+                                          <td className="px-4 py-2 text-right font-semibold">
+                                            {Number(
+                                              totalAmt || 0
+                                            ).toLocaleString("id-ID")}
+                                          </td>
+                                        </tr>
+                                      );
+                                    });
+
+                                    // compute footer totals for this product across dates
+                                    const footerQty = dateKeys.reduce(
+                                      (s, dk) => s + (perDate[dk].qty || 0),
+                                      0
+                                    );
+                                    const footerAmount = dateKeys.reduce(
+                                      (s, dk) => s + (perDate[dk].total || 0),
+                                      0
+                                    );
+                                    // Better transaction count: count number of sales lines across all sales that match key k
+                                    let realTxCount = 0;
+                                    for (const txn of sales) {
+                                      const items = parseItems(
+                                        txn.details ??
+                                          txn.items ??
+                                          txn.lines ??
+                                          []
+                                      );
+                                      for (const it of items) {
+                                        const pid =
+                                          it.product_id ??
+                                          it.productId ??
+                                          it.id ??
+                                          it.item_id ??
+                                          null;
+                                        const nm = pid
+                                          ? products.find(
+                                              (pp) =>
+                                                String(pp.id) === String(pid)
+                                            )?.name ??
+                                            it.product_name ??
+                                            it.name
+                                          : it.product_name ||
+                                            it.name ||
+                                            String(
+                                              it.sku || it.code || pid || "-"
+                                            );
+                                        const keyMatch2 = String(
+                                          pid ?? String(nm || "").trim()
+                                        );
+                                        if (keyMatch2 === k) realTxCount++;
+                                      }
+                                    }
+
+                                    return (
+                                      <>
+                                        {rows}
+                                        <tr className="bg-gray-50 font-semibold">
+                                          <td className="px-4 py-2">
+                                            Subtotal
+                                          </td>
+                                          <td className="px-4 py-2 text-right">
+                                            -
+                                          </td>
+                                          <td className="px-4 py-2 text-right">
+                                            {String(footerQty)}
+                                          </td>
+                                          <td className="px-4 py-2 text-right">
+                                            Rp{" "}
+                                            {Number(
+                                              footerAmount
+                                            ).toLocaleString("id-ID")}
+                                          </td>
+                                        </tr>
+                                        <tr className="bg-white">
+                                          <td
+                                            colSpan={4}
+                                            className="px-4 py-2 text-sm text-gray-600"
+                                          >
+                                            Jumlah transaksi: {realTxCount}
+                                          </td>
+                                        </tr>
+                                      </>
+                                    );
+                                  })()}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
     );
   };
 
@@ -3212,8 +4364,6 @@ const Products: React.FC = () => {
           </table>
         </div>
       )}
-
-      
     </div>
   );
 
@@ -3247,7 +4397,10 @@ const Products: React.FC = () => {
                   label: "Laporan Penjualan",
                   icon: DollarSign,
                   children: [
-                    { id: "sales", label: "Laporan Penjualan (Per Tanggal & Per Barang)" },
+                    {
+                      id: "sales",
+                      label: "Laporan Penjualan (Per Tanggal & Per Barang)",
+                    },
                     { id: "salesSummary", label: "Laporan Rekap Per Barang" },
                   ],
                 },
@@ -3255,14 +4408,14 @@ const Products: React.FC = () => {
               ].map((tab: any) => {
                 if (tab.children && Array.isArray(tab.children)) {
                   const Icon = tab.icon as any;
-                  const isParentActive = activeTab === 'reports';
+                  const isParentActive = activeTab === "reports";
                   // Render only the parent tab in the main nav. Sub-tabs will appear inside the reports content.
                   return (
                     <button
                       key={tab.id}
                       onClick={() => {
-                        setActiveTab('reports' as any);
-                        setReportTab('sales');
+                        setActiveTab("reports" as any);
+                        setReportTab("sales");
                         setSearchTerm("");
                       }}
                       className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
@@ -3301,36 +4454,44 @@ const Products: React.FC = () => {
         </div>
 
         {/* Tab Content */}
-  {activeTab === "products" && renderProductsTab()}
-  {activeTab === "purchases" && renderPurchasesTab()}
-  {activeTab === "purchaseList" && renderPurchaseListTab()}
-  {/* Reports parent: sub-nav + child content */}
-  {activeTab === "reports" && (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setReportTab('sales')}
-          className={`px-3 py-2 text-sm rounded ${reportTab === 'sales' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-gray-600 hover:text-gray-800'}`}
-        >
-          Laporan Penjualan (Per Tanggal & Per Barang)
-        </button>
-        <button
-          onClick={() => setReportTab('salesSummary')}
-          className={`px-3 py-2 text-sm rounded ${reportTab === 'salesSummary' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'text-gray-600 hover:text-gray-800'}`}
-        >
-          Laporan Rekap Per Barang
-        </button>
-      </div>
+        {activeTab === "products" && renderProductsTab()}
+        {activeTab === "purchases" && renderPurchasesTab()}
+        {activeTab === "purchaseList" && renderPurchaseListTab()}
+        {/* Reports parent: sub-nav + child content */}
+        {activeTab === "reports" && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setReportTab("sales")}
+                className={`px-3 py-2 text-sm rounded ${
+                  reportTab === "sales"
+                    ? "bg-blue-50 text-blue-700 border border-blue-100"
+                    : "text-gray-600 hover:text-gray-800"
+                }`}
+              >
+                Laporan Penjualan (Per Tanggal & Per Barang)
+              </button>
+              <button
+                onClick={() => setReportTab("salesSummary")}
+                className={`px-3 py-2 text-sm rounded ${
+                  reportTab === "salesSummary"
+                    ? "bg-blue-50 text-blue-700 border border-blue-100"
+                    : "text-gray-600 hover:text-gray-800"
+                }`}
+              >
+                Laporan Rekap Per Barang
+              </button>
+            </div>
 
-      <div>
-        {reportTab === 'sales' ? renderSalesListTab() : renderSalesSummaryTab()}
-      </div>
-    </div>
-  )}
-  {activeTab === "suppliers" && renderSuppliersTab()}
-  {activeTab === 'stokOpname' && (
-    <StokOpname products={products} />
-  )}
+            <div>
+              {reportTab === "sales"
+                ? renderSalesListTab()
+                : renderSalesSummaryTab()}
+            </div>
+          </div>
+        )}
+        {activeTab === "suppliers" && renderSuppliersTab()}
+        {activeTab === "stokOpname" && <StokOpname products={products} />}
 
         {/* Add Product Modal */}
         {showAddForm && (
@@ -3486,6 +4647,24 @@ const Products: React.FC = () => {
                       rows={3}
                       placeholder="Deskripsi produk"
                     />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newProduct.is_active}
+                        onChange={(e) =>
+                          setNewProduct({
+                            ...newProduct,
+                            is_active: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">
+                        Produk Aktif
+                      </span>
+                    </label>
                   </div>
                 </form>
 
@@ -3819,7 +4998,7 @@ const Products: React.FC = () => {
                             (error?.message || "") +
                             (error?.details ? "\n" + error.details : ""),
                         });
-                         
+
                         console.error("PO Error:", error);
                       } finally {
                         setIsSavingPurchase(false);
@@ -4136,6 +5315,24 @@ const Products: React.FC = () => {
                       placeholder="Deskripsi produk"
                     />
                   </div>
+                  <div>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editProduct.is_active}
+                        onChange={(e) =>
+                          setEditProduct({
+                            ...editProduct,
+                            is_active: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">
+                        Produk Aktif
+                      </span>
+                    </label>
+                  </div>
                   <div className="flex gap-3 mt-6">
                     <button
                       type="button"
@@ -4209,7 +5406,10 @@ const Products: React.FC = () => {
                               p.id
                             );
                           }
-                          setShowProductSelectModal({ open: false, index: null });
+                          setShowProductSelectModal({
+                            open: false,
+                            index: null,
+                          });
                           setProductSearchTerm("");
                         }}
                         className="w-full text-left p-4 hover:bg-gray-50 transition-colors"

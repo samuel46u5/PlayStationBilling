@@ -391,41 +391,15 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
 
   const endSessionWithESP32Check = async (session: MemberCardSession, isModeESP32?: boolean) => {
     try {
-      // Cek apakah session menggunakan mode ESP32
-      if (!isModeESP32) {
-        console.log(`Session ${session.id} tidak menggunakan mode ESP32, langsung mengakhiri sesi.`);
-        await endSessionDueToInsufficientBalance(session);
+      // Jika mode ESP32, JANGAN akhiri sesi otomatis 
+      if (isModeESP32) {
+        console.log(`Session ${session.id} menggunakan mode ESP32, skip auto end karena saldo habis.`);
         return;
       }
 
-      // Ambil data console untuk mendapatkan IP ESP32
-      const { data: consoleData, error: consoleError } = await supabase
-        .from('consoles')
-        .select('ip_esp32')
-        .eq('id', session.console_id)
-        .single();
-
-      if (consoleError || !consoleData) {
-        console.error(`Error fetching console data for session ${session.id}:`, consoleError);
-        await endSessionDueToInsufficientBalance(session);
-        return;
-      }
-
-      // Jika ada IP ESP32, cek konektivitas
-      if (consoleData.ip_esp32 && consoleData.ip_esp32.trim() !== '') {
-        console.log(`Mengecek konektivitas ESP32 di IP ${consoleData.ip_esp32}...`);
-        const isESP32Active = await pingESP32(consoleData.ip_esp32.trim(), 3000);
-
-        if (!isESP32Active) {
-          console.warn(`ESP32 di IP ${consoleData.ip_esp32} tidak aktif/timeout untuk session ${session.id}. Mengakhiri sesi.`);
-          await endSessionDueToInsufficientBalance(session);
-        } else {
-          console.log(`ESP32 di IP ${consoleData.ip_esp32} aktif. Sesi tetap berjalan untuk session ${session.id}.`);
-        }
-      } else {
-        console.warn(`Tidak ada IP ESP32 yang dikonfigurasi untuk console ${session.console_id}. Mengakhiri sesi.`);
-        await endSessionDueToInsufficientBalance(session);
-      }
+      // Bukan mode ESP32, maka langsung akhiri sesi
+      console.log(`Session ${session.id} tidak menggunakan mode ESP32, langsung mengakhiri sesi.`);
+      await endSessionDueToInsufficientBalance(session);
     } catch (error) {
       console.error(`Error dalam endSessionWithESP32Check untuk session ${session.id}:`, error);
       try {
