@@ -840,7 +840,7 @@ const Consoles: React.FC = () => {
                         <option value="maintenance">Pemeliharaan</option>
                       </select>
                     </div>
-                    <div>
+                    {/* <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Lokasi
                       </label>
@@ -856,6 +856,26 @@ const Consoles: React.FC = () => {
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
+                    </div> */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Lokasi
+                      </label>
+                      <select
+                        id="add-location"
+                        value={addForm.location}
+                        onChange={(e) =>
+                          setAddForm((p) => ({
+                            ...p,
+                            location: e.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Pilih Lokasi</option>
+                        <option value="Lantai 1">Lantai 1</option>
+                        <option value="Lantai 2">Lantai 2</option>
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1207,7 +1227,7 @@ const Consoles: React.FC = () => {
                             <option value="maintenance">Pemeliharaan</option>
                           </select>
                         </div>
-                        <div>
+                        {/* <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Lokasi
                           </label>
@@ -1222,6 +1242,25 @@ const Consoles: React.FC = () => {
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
+                        </div> */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Lokasi
+                          </label>
+                          <select
+                            value={editConsoleData.location || ""}
+                            onChange={(e) =>
+                              setEditConsoleData((prev: any) => ({
+                                ...prev,
+                                location: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="">Pilih Lokasi</option>
+                            <option value="Lantai 1">Lantai 1</option>
+                            <option value="Lantai 2">Lantai 2</option>
+                          </select>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -7195,269 +7195,344 @@ const ActiveRentals: React.FC = () => {
       ) : null}
       {/* Console Grid */}
       {viewMode === "simple" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {(consoleFilter === "all"
-            ? consoles
-            : consoles.filter((c) => c.status === consoleFilter)
-          )
-            .filter((c) =>
+        <div className="space-y-6">
+          {(() => {
+            // Group consoles by location
+            const filteredConsoles = (
+              consoleFilter === "all"
+                ? consoles
+                : consoles.filter((c) => c.status === consoleFilter)
+            ).filter((c) =>
               c.name.toLowerCase().includes(searchConsole.toLowerCase())
-            )
-            .sort((a, b) => {
-              const sa = activeSessions.find((s) => s.console_id === a.id);
-              const sb = activeSessions.find((s) => s.console_id === b.id);
+            );
 
-              // Fungsi untuk menghitung sisa waktu prepaid
-              const getRemainingTime = (session: any) => {
-                if (
-                  !session ||
-                  !session.duration_minutes ||
-                  !session.start_time
-                ) {
-                  return Number.POSITIVE_INFINITY;
-                }
-                return Math.max(
-                  0,
-                  Number(session.duration_minutes) * 60 -
-                    Math.floor(
-                      (Date.now() - new Date(session.start_time).getTime()) /
-                        1000
-                    )
-                );
-              };
-
-              // Fungsi untuk menghitung durasi play-as-you-go
-              const getElapsedTime = (session: any) => {
-                if (
-                  !session ||
-                  session.duration_minutes ||
-                  !session.start_time
-                ) {
-                  return 0;
-                }
-                return Math.floor(
-                  (Date.now() - new Date(session.start_time).getTime()) / 1000
-                );
-              };
-
-              // Kategorisasi konsol
-              const getCategory = (console: any, session: any) => {
-                if (!session) return 0; // Available console
-                if (session.duration_minutes) return 1; // Prepaid console
-                return 2; // Pay-as-you-go console
-              };
-
-              const catA = getCategory(a, sa);
-              const catB = getCategory(b, sb);
-
-              // Sort by category first (0: available, 1: prepaid, 2: pay-as-you-go)
-              if (catA !== catB) {
-                return catA - catB;
+            const groupedConsoles = filteredConsoles.reduce((acc, console) => {
+              const location = console.location || "Lantai 1"; // Default to Lantai 1 if no location
+              if (!acc[location]) {
+                acc[location] = [];
               }
+              acc[location].push(console);
+              return acc;
+            }, {} as Record<string, typeof filteredConsoles>);
 
-              // Within same category, sort differently
-              if (catA === 0) {
-                // Available consoles: sort by name
-                return a.name.localeCompare(b.name, "id", { numeric: true });
-              } else if (catA === 1) {
-                // Prepaid consoles: sort by remaining time (ascending - least time first)
-                const remA = getRemainingTime(sa);
-                const remB = getRemainingTime(sb);
-                if (remA !== remB) return remA - remB;
-                return a.name.localeCompare(b.name, "id", { numeric: true });
-              } else {
-                // Pay-as-you-go consoles: sort by elapsed time (descending - longest play first)
-                const elapsedA = getElapsedTime(sa);
-                const elapsedB = getElapsedTime(sb);
-                if (elapsedA !== elapsedB) return elapsedB - elapsedA; // Note: reversed for descending
-                return a.name.localeCompare(b.name, "id", { numeric: true });
+            // Sort locations: Lantai 1 first, then Lantai 2, then others
+            const sortedLocations = Object.keys(groupedConsoles).sort(
+              (a, b) => {
+                if (a === "Lantai 1") return -1;
+                if (b === "Lantai 1") return 1;
+                if (a === "Lantai 2") return -1;
+                if (b === "Lantai 2") return 1;
+                return a.localeCompare(b);
               }
-            })
-            .map((console) => {
-              const isActive = console.status === "rented";
-              const activeSession = activeSessions.find(
-                (s) => s.console_id === console.id
-              );
-              const rateProfile = getConsoleRateProfile(console.id);
-              return (
-                <div
-                  key={console.id}
-                  className={`rounded-lg shadow border text-xs p-2 flex flex-col items-stretch min-w-0 ${
-                    console.status === "available"
-                      ? "border-green-200 bg-white"
-                      : console.status === "rented"
-                      ? "border-blue-200 bg-white"
-                      : "border-red-200 bg-white"
-                  }`}
-                  style={{ minWidth: 0 }}
-                >
-                  {/* Header */}
-                  <div
-                    className={`flex items-center gap-1 px-2 py-1 rounded-t-lg ${
-                      console.status === "available"
-                        ? "bg-purple-600"
-                        : console.status === "rented"
-                        ? "bg-purple-600"
-                        : "bg-purple-600"
-                    } text-white`}
-                    style={{ fontSize: "0.95em" }}
-                  >
-                    <Gamepad2 className="h-4 w-4" />
-                    <span className="font-semibold truncate">
-                      {console.name}
-                    </span>
-                    {console.location && (
-                      <span className="text-[10px] opacity-80 ml-auto">
-                        {console.location}
-                      </span>
-                    )}
-                  </div>
+            );
 
-                  {/* Body */}
-                  <div className="flex-1 flex flex-col gap-1 p-2">
-                    {/* Tarif & Status */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500 flex items-center gap-1">
-                        <DollarSign className="h-3 w-3" />
-                        {rateProfile
-                          ? rateProfile.hourly_rate.toLocaleString("id-ID")
-                          : "0"}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            console.status === "available"
-                              ? "bg-green-500 text-white"
-                              : console.status === "rented"
-                              ? "bg-blue-500 text-white"
-                              : "bg-red-500 text-white"
-                          }`}
-                        >
-                          {console.status === "available"
-                            ? "READY"
-                            : console.status === "rented"
-                            ? "ACTIVE"
-                            : "MAINT."}
-                        </span>
-                        {console.auto_shutdown_enabled ? (
-                          <Lock className="h-4 w-4 text-green-700" />
-                        ) : (
-                          <Unlock className="h-4 w-4 text-red-700" />
-                        )}
-                        {activeSession?.is_voucher_used && (
-                          <button
-                            className="rounded-md p-1"
-                            onClick={async () => {
-                              setScannedCardUID(activeSession.card_uid!);
-                              await fetchCardHistory(scannedCardUID);
-                              setShowHistoryPointModal(true);
-                            }}
-                          >
-                            <Info className="h-4 w-4 text-gray-600" />
-                          </button>
-                        )}
+            return (
+              <>
+                {sortedLocations.map((location) => {
+                  const locationConsoles = groupedConsoles[location].sort(
+                    (a, b) => {
+                      const sa = activeSessions.find(
+                        (s) => s.console_id === a.id
+                      );
+                      const sb = activeSessions.find(
+                        (s) => s.console_id === b.id
+                      );
+
+                      // Fungsi untuk menghitung sisa waktu prepaid
+                      const getRemainingTime = (session: any) => {
+                        if (
+                          !session ||
+                          !session.duration_minutes ||
+                          !session.start_time
+                        ) {
+                          return Number.POSITIVE_INFINITY;
+                        }
+                        return Math.max(
+                          0,
+                          Number(session.duration_minutes) * 60 -
+                            Math.floor(
+                              (Date.now() -
+                                new Date(session.start_time).getTime()) /
+                                1000
+                            )
+                        );
+                      };
+
+                      // Fungsi untuk menghitung durasi play-as-you-go
+                      const getElapsedTime = (session: any) => {
+                        if (
+                          !session ||
+                          session.duration_minutes ||
+                          !session.start_time
+                        ) {
+                          return 0;
+                        }
+                        return Math.floor(
+                          (Date.now() -
+                            new Date(session.start_time).getTime()) /
+                            1000
+                        );
+                      };
+
+                      // Kategorisasi konsol
+                      const getCategory = (console: any, session: any) => {
+                        if (!session) return 0; // Available console
+                        if (session.duration_minutes) return 1; // Prepaid console
+                        return 2; // Pay-as-you-go console
+                      };
+
+                      const catA = getCategory(a, sa);
+                      const catB = getCategory(b, sb);
+
+                      // Sort by category first (0: available, 1: prepaid, 2: pay-as-you-go)
+                      if (catA !== catB) {
+                        return catA - catB;
+                      }
+
+                      // Within same category, sort differently
+                      if (catA === 0) {
+                        // Available consoles: sort by name
+                        return a.name.localeCompare(b.name, "id", {
+                          numeric: true,
+                        });
+                      } else if (catA === 1) {
+                        // Prepaid consoles: sort by remaining time (ascending - least time first)
+                        const remA = getRemainingTime(sa);
+                        const remB = getRemainingTime(sb);
+                        if (remA !== remB) return remA - remB;
+                        return a.name.localeCompare(b.name, "id", {
+                          numeric: true,
+                        });
+                      } else {
+                        // Pay-as-you-go consoles: sort by elapsed time (descending - longest play first)
+                        const elapsedA = getElapsedTime(sa);
+                        const elapsedB = getElapsedTime(sb);
+                        if (elapsedA !== elapsedB) return elapsedB - elapsedA; // Note: reversed for descending
+                        return a.name.localeCompare(b.name, "id", {
+                          numeric: true,
+                        });
+                      }
+                    }
+                  );
+
+                  return (
+                    <div key={location}>
+                      {/* Location Header */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex-1 h-px bg-gray-300"></div>
+                        <h3 className="text-lg font-semibold text-gray-700 px-4 py-2 bg-gray-100 rounded-lg">
+                          {location}
+                        </h3>
+                        <div className="flex-1 h-px bg-gray-300"></div>
                       </div>
-                    </div>
 
-                    {/* Active Session Info (simple) */}
-                    {isActive && activeSession && (
-                      <div className="mt-1 mb-1 p-1 bg-blue-50 rounded border border-blue-100 flex flex-col gap-1">
-                        <div className="flex items-center gap-1">
-                          <User className="h-3 w-3 text-blue-600" />
-                          <span className="truncate font-semibold text-blue-800">
-                            {activeSession.customers?.name}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[11px]">
-                          <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
-                          <Countdown
-                            sessionId={activeSession.id}
-                            startTimeMs={new Date(
-                              activeSession.start_time
-                            ).getTime()}
-                            endTimeMs={
-                              activeSession.duration_minutes
-                                ? new Date(activeSession.start_time).getTime() +
-                                  activeSession.duration_minutes * 60 * 1000
-                                : null
-                            }
-                            isPrepaid={!!activeSession.duration_minutes}
-                            onComplete={() => {}}
-                          />
-                        </div>
-                        <div className="flex items-center gap-1 text-[11px]">
-                          <span>
-                            {activeSession.is_voucher_used ? (
-                              <>
-                                <RealtimeCost session={activeSession} /> Points
-                              </>
-                            ) : (
-                              <>
-                                Rp <RealtimeCost session={activeSession} />
-                              </>
-                            )}
-                          </span>
-                          <span
-                            className={`ml-auto font-bold text-[10px] px-2 py-0.5 rounded-full ${
-                              activeSession.duration_minutes
-                                ? "bg-purple-100 text-purple-700 border border-purple-300"
-                                : activeSession.is_voucher_used
-                                ? "bg-yellow-100 text-yellow-700 border border-yellow-300"
-                                : "bg-green-100 text-green-700 border border-green-300"
-                            }`}
-                          >
-                            {activeSession.duration_minutes
-                              ? "BAYAR DIMUKA"
-                              : activeSession.is_voucher_used
-                              ? "MEMBER CARD"
-                              : "PAY AS YOU GO"}
-                          </span>
-                        </div>
-                        {/* Status Relay dan power tv command */}
-                      </div>
-                    )}
+                      {/* Console Grid for this location */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {locationConsoles.map((console) => {
+                          const isActive = console.status === "rented";
+                          const activeSession = activeSessions.find(
+                            (s) => s.console_id === console.id
+                          );
+                          const rateProfile = getConsoleRateProfile(console.id);
+                          return (
+                            <div
+                              key={console.id}
+                              className={`rounded-lg shadow border text-xs p-2 flex flex-col items-stretch min-w-0 ${
+                                console.status === "available"
+                                  ? "border-green-200 bg-white"
+                                  : console.status === "rented"
+                                  ? "border-blue-200 bg-white"
+                                  : "border-red-200 bg-white"
+                              }`}
+                              style={{ minWidth: 0 }}
+                            >
+                              {/* Header */}
+                              <div
+                                className={`flex items-center gap-1 px-2 py-1 rounded-t-lg ${
+                                  console.status === "available"
+                                    ? "bg-purple-600"
+                                    : console.status === "rented"
+                                    ? "bg-purple-600"
+                                    : "bg-purple-600"
+                                } text-white`}
+                                style={{ fontSize: "0.95em" }}
+                              >
+                                <Gamepad2 className="h-4 w-4" />
+                                <span className="font-semibold truncate">
+                                  {console.name}
+                                </span>
+                                {console.location && (
+                                  <span className="text-[10px] opacity-80 ml-auto">
+                                    {console.location}
+                                  </span>
+                                )}
+                              </div>
 
-                    {/* Info Mode Persiapan */}
-                    {preparationMode[console.id]?.isActive && (
-                      <div className="w-full text-[15px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 mb-1">
-                        Mode persiapan akan berakhir pada:
-                        <span className="ml-1 font-semibold">
-                          {new Date(
-                            preparationMode[console.id]!.endAtMs
-                          ).toLocaleTimeString("id-ID", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                    )}
+                              {/* Body */}
+                              <div className="flex-1 flex flex-col gap-1 p-2">
+                                {/* Tarif & Status */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-500 flex items-center gap-1">
+                                    <DollarSign className="h-3 w-3" />
+                                    {rateProfile
+                                      ? rateProfile.hourly_rate.toLocaleString(
+                                          "id-ID"
+                                        )
+                                      : "0"}
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        console.status === "available"
+                                          ? "bg-green-500 text-white"
+                                          : console.status === "rented"
+                                          ? "bg-blue-500 text-white"
+                                          : "bg-red-500 text-white"
+                                      }`}
+                                    >
+                                      {console.status === "available"
+                                        ? "READY"
+                                        : console.status === "rented"
+                                        ? "ACTIVE"
+                                        : "MAINT."}
+                                    </span>
+                                    {console.auto_shutdown_enabled ? (
+                                      <Lock className="h-4 w-4 text-green-700" />
+                                    ) : (
+                                      <Unlock className="h-4 w-4 text-red-700" />
+                                    )}
+                                    {activeSession?.is_voucher_used && (
+                                      <button
+                                        className="rounded-md p-1"
+                                        onClick={async () => {
+                                          setScannedCardUID(
+                                            activeSession.card_uid!
+                                          );
+                                          await fetchCardHistory(
+                                            scannedCardUID
+                                          );
+                                          setShowHistoryPointModal(true);
+                                        }}
+                                      >
+                                        <Info className="h-4 w-4 text-gray-600" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
 
-                    {/* Action Buttons  */}
-                    <div className="flex gap-1 mt-auto">
-                      {console.status === "available" ? (
-                        <button
-                          onClick={() => {
-                            if (!ensureCashierActive()) return;
-                            setShowStartRentalModal(console.id);
-                          }}
-                          disabled={preparationMode[console.id]?.isActive}
-                          className={`flex-1 py-1 rounded flex items-center justify-center text-xs ${
-                            preparationMode[console.id]?.isActive
-                              ? "bg-gray-400 cursor-not-allowed text-gray-200"
-                              : "bg-green-600 hover:bg-green-700 text-white"
-                          }`}
-                          title={
-                            preparationMode[console.id]?.isActive
-                              ? "Console sedang dalam mode persiapan"
-                              : "Start Rental"
-                          }
-                        >
-                          <Play className="h-4 w-4" />
-                        </button>
-                      ) : activeSession ? (
-                        <>
-                          {/* Tombol Pause/Resume */}
-                          {/* {activeSession.status === "paused" ? (
+                                {/* Active Session Info (simple) */}
+                                {isActive && activeSession && (
+                                  <div className="mt-1 mb-1 p-1 bg-blue-50 rounded border border-blue-100 flex flex-col gap-1">
+                                    <div className="flex items-center gap-1">
+                                      <User className="h-3 w-3 text-blue-600" />
+                                      <span className="truncate font-semibold text-blue-800">
+                                        {activeSession.customers?.name}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-[11px]">
+                                      <Clock className="h-3 w-3 text-purple-600 animate-pulse" />
+                                      <Countdown
+                                        sessionId={activeSession.id}
+                                        startTimeMs={new Date(
+                                          activeSession.start_time
+                                        ).getTime()}
+                                        endTimeMs={
+                                          activeSession.duration_minutes
+                                            ? new Date(
+                                                activeSession.start_time
+                                              ).getTime() +
+                                              activeSession.duration_minutes *
+                                                60 *
+                                                1000
+                                            : null
+                                        }
+                                        isPrepaid={
+                                          !!activeSession.duration_minutes
+                                        }
+                                        onComplete={() => {}}
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1 text-[11px]">
+                                      <span>
+                                        {activeSession.is_voucher_used ? (
+                                          <>
+                                            <RealtimeCost
+                                              session={activeSession}
+                                            />{" "}
+                                            Points
+                                          </>
+                                        ) : (
+                                          <>
+                                            Rp{" "}
+                                            <RealtimeCost
+                                              session={activeSession}
+                                            />
+                                          </>
+                                        )}
+                                      </span>
+                                      <span
+                                        className={`ml-auto font-bold text-[10px] px-2 py-0.5 rounded-full ${
+                                          activeSession.duration_minutes
+                                            ? "bg-purple-100 text-purple-700 border border-purple-300"
+                                            : activeSession.is_voucher_used
+                                            ? "bg-yellow-100 text-yellow-700 border border-yellow-300"
+                                            : "bg-green-100 text-green-700 border border-green-300"
+                                        }`}
+                                      >
+                                        {activeSession.duration_minutes
+                                          ? "BAYAR DIMUKA"
+                                          : activeSession.is_voucher_used
+                                          ? "MEMBER CARD"
+                                          : "PAY AS YOU GO"}
+                                      </span>
+                                    </div>
+                                    {/* Status Relay dan power tv command */}
+                                  </div>
+                                )}
+
+                                {/* Info Mode Persiapan */}
+                                {preparationMode[console.id]?.isActive && (
+                                  <div className="w-full text-[15px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 mb-1">
+                                    Mode persiapan akan berakhir pada:
+                                    <span className="ml-1 font-semibold">
+                                      {new Date(
+                                        preparationMode[console.id]!.endAtMs
+                                      ).toLocaleTimeString("id-ID", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Action Buttons  */}
+                                <div className="flex gap-1 mt-auto">
+                                  {console.status === "available" ? (
+                                    <button
+                                      onClick={() => {
+                                        if (!ensureCashierActive()) return;
+                                        setShowStartRentalModal(console.id);
+                                      }}
+                                      disabled={
+                                        preparationMode[console.id]?.isActive
+                                      }
+                                      className={`flex-1 py-1 rounded flex items-center justify-center text-xs ${
+                                        preparationMode[console.id]?.isActive
+                                          ? "bg-gray-400 cursor-not-allowed text-gray-200"
+                                          : "bg-green-600 hover:bg-green-700 text-white"
+                                      }`}
+                                      title={
+                                        preparationMode[console.id]?.isActive
+                                          ? "Console sedang dalam mode persiapan"
+                                          : "Start Rental"
+                                      }
+                                    >
+                                      <Play className="h-4 w-4" />
+                                    </button>
+                                  ) : activeSession ? (
+                                    <>
+                                      {/* Tombol Pause/Resume */}
+                                      {/* {activeSession.status === "paused" ? (
                             <button
                               onClick={() =>
                                 handleResumeSession(activeSession.id)
@@ -7479,207 +7554,229 @@ const ActiveRentals: React.FC = () => {
                             </button>
                           )} */}
 
-                          {/* Tombol Add Time */}
-                          {activeSession?.duration_minutes && (
-                            <button
-                              onClick={() => {
-                                if (!ensureCashierActive()) return;
-                                const rateProfile = getConsoleRateProfile(
-                                  console.id
-                                );
-                                setShowAddTimeModal({
-                                  session: activeSession,
-                                  console: console,
-                                  currentDuration:
-                                    activeSession.duration_minutes,
-                                  hourlyRate: rateProfile?.hourly_rate || 0,
-                                });
-                              }}
-                              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-1 rounded flex items-center justify-center text-xs"
-                              title="Tambah Waktu"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          )}
+                                      {/* Tombol Add Time */}
+                                      {activeSession?.duration_minutes && (
+                                        <button
+                                          onClick={() => {
+                                            if (!ensureCashierActive()) return;
+                                            const rateProfile =
+                                              getConsoleRateProfile(console.id);
+                                            setShowAddTimeModal({
+                                              session: activeSession,
+                                              console: console,
+                                              currentDuration:
+                                                activeSession.duration_minutes,
+                                              hourlyRate:
+                                                rateProfile?.hourly_rate || 0,
+                                            });
+                                          }}
+                                          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-1 rounded flex items-center justify-center text-xs"
+                                          title="Tambah Waktu"
+                                        >
+                                          <Plus className="h-4 w-4" />
+                                        </button>
+                                      )}
 
-                          {/* Tombol End Rental */}
-                          <button
-                            onClick={() => handleEndSession(activeSession.id)}
-                            className={`flex-1 bg-red-600 hover:bg-red-700 text-white py-1 rounded flex items-center justify-center text-xs ${
-                              endingSessionIds.has(activeSession.id)
-                                ? "opacity-60 cursor-not-allowed"
-                                : ""
-                            }`}
-                            title="End Rental"
-                            disabled={endingSessionIds.has(activeSession.id)}
-                          >
-                            <Square className="h-4 w-4" />
-                          </button>
+                                      {/* Tombol End Rental */}
+                                      <button
+                                        onClick={() =>
+                                          handleEndSession(activeSession.id)
+                                        }
+                                        className={`flex-1 bg-red-600 hover:bg-red-700 text-white py-1 rounded flex items-center justify-center text-xs ${
+                                          endingSessionIds.has(activeSession.id)
+                                            ? "opacity-60 cursor-not-allowed"
+                                            : ""
+                                        }`}
+                                        title="End Rental"
+                                        disabled={endingSessionIds.has(
+                                          activeSession.id
+                                        )}
+                                      >
+                                        <Square className="h-4 w-4" />
+                                      </button>
 
-                          {/* Tombol Move */}
-                          <button
-                            onClick={() => {
-                              if (!ensureCashierActive()) return;
-                              setShowMoveModal({
-                                sessionId: activeSession.id,
-                                fromConsoleId: console.id,
-                              });
-                            }}
-                            className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-1 rounded flex items-center justify-center text-xs"
-                            title="Pindah Unit"
-                          >
-                            <ArrowRightLeft className="h-4 w-4" />
-                          </button>
-                        </>
-                      ) : console.status === "maintenance" ? (
-                        <button
-                          disabled
-                          className="flex-1 bg-gray-400 text-white py-1 rounded flex items-center justify-center text-xs cursor-not-allowed"
-                          title="In Maintenance"
-                        >
-                          <Wrench className="h-4 w-4" />
-                        </button>
-                      ) : null}
+                                      {/* Tombol Move */}
+                                      <button
+                                        onClick={() => {
+                                          if (!ensureCashierActive()) return;
+                                          setShowMoveModal({
+                                            sessionId: activeSession.id,
+                                            fromConsoleId: console.id,
+                                          });
+                                        }}
+                                        className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                                        title="Pindah Unit"
+                                      >
+                                        <ArrowRightLeft className="h-4 w-4" />
+                                      </button>
+                                    </>
+                                  ) : console.status === "maintenance" ? (
+                                    <button
+                                      disabled
+                                      className="flex-1 bg-gray-400 text-white py-1 rounded flex items-center justify-center text-xs cursor-not-allowed"
+                                      title="In Maintenance"
+                                    >
+                                      <Wrench className="h-4 w-4" />
+                                    </button>
+                                  ) : null}
 
-                      {/* Tombol Tes TV */}
-                      <button
-                        onClick={async () => {
-                          if (console.power_tv_command) {
-                            try {
-                              const response = await fetch(
-                                console.power_tv_command
-                              );
-                              if (response.ok) {
-                                Swal.fire(
-                                  "Tes TV",
-                                  "Perintah power ON dikirim ke TV.",
-                                  "success"
-                                );
-                              } else {
-                                const text = await response.text();
-                                console.error(
-                                  "Tes TV error:",
-                                  response.status,
-                                  text
-                                );
-                                Swal.fire(
-                                  "Tes TV",
-                                  `Gagal mengirim perintah ke TV. Status: ${response.status}`,
-                                  "error"
-                                );
-                              }
-                            } catch (err) {
-                              console.error("Tes TV fetch error:", err);
-                              Swal.fire(
-                                "Tes TV",
-                                "Gagal mengirim perintah ke TV (fetch error).",
-                                "error"
-                              );
-                            }
-                          } else {
-                            Swal.fire(
-                              "Tes TV",
-                              "Perintah power ON tidak tersedia.",
-                              "info"
-                            );
-                          }
-                        }}
-                        className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-1 rounded flex items-center justify-center text-xs"
-                        title="Tes TV (Power ON)"
-                      >
-                        <Power className="h-4 w-4" />
-                      </button>
+                                  {/* Tombol Tes TV */}
+                                  <button
+                                    onClick={async () => {
+                                      if (console.power_tv_command) {
+                                        try {
+                                          const response = await fetch(
+                                            console.power_tv_command
+                                          );
+                                          if (response.ok) {
+                                            Swal.fire(
+                                              "Tes TV",
+                                              "Perintah power ON dikirim ke TV.",
+                                              "success"
+                                            );
+                                          } else {
+                                            const text = await response.text();
+                                            console.error(
+                                              "Tes TV error:",
+                                              response.status,
+                                              text
+                                            );
+                                            Swal.fire(
+                                              "Tes TV",
+                                              `Gagal mengirim perintah ke TV. Status: ${response.status}`,
+                                              "error"
+                                            );
+                                          }
+                                        } catch (err) {
+                                          console.error(
+                                            "Tes TV fetch error:",
+                                            err
+                                          );
+                                          Swal.fire(
+                                            "Tes TV",
+                                            "Gagal mengirim perintah ke TV (fetch error).",
+                                            "error"
+                                          );
+                                        }
+                                      } else {
+                                        Swal.fire(
+                                          "Tes TV",
+                                          "Perintah power ON tidak tersedia.",
+                                          "info"
+                                        );
+                                      }
+                                    }}
+                                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                                    title="Tes TV (Power ON)"
+                                  >
+                                    <Power className="h-4 w-4" />
+                                  </button>
 
-                      {/* Tombol Tambah Saldo (member-card) */}
-                      {activeSession &&
-                        activeSession.status === "active" &&
-                        activeSession.is_voucher_used &&
-                        activeSession.card_uid && (
-                          <button
-                            onClick={async () => {
-                              if (!ensureCashierActive()) return;
-                              try {
-                                setSelectedVoucherId("");
-                                setVoucherQuantity(1);
-                                setScannedCardUID(activeSession.card_uid!);
-                                await fetchCardData(activeSession.card_uid!);
-                                setShowSellVoucherModal(true);
-                              } catch (e) {
-                                window.console.error(
-                                  "Open Sell Voucher error:",
-                                  e
-                                );
-                                Swal.fire(
-                                  "Error",
-                                  "Gagal membuka penjualan voucher",
-                                  "error"
-                                );
-                              }
-                            }}
-                            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-1 rounded flex items-center justify-center text-xs"
-                            title="Tambah Saldo Points"
-                          >
-                            <CreditCard className="h-4 w-4" />
-                          </button>
-                        )}
+                                  {/* Tombol Tambah Saldo (member-card) */}
+                                  {activeSession &&
+                                    activeSession.status === "active" &&
+                                    activeSession.is_voucher_used &&
+                                    activeSession.card_uid && (
+                                      <button
+                                        onClick={async () => {
+                                          if (!ensureCashierActive()) return;
+                                          try {
+                                            setSelectedVoucherId("");
+                                            setVoucherQuantity(1);
+                                            setScannedCardUID(
+                                              activeSession.card_uid!
+                                            );
+                                            await fetchCardData(
+                                              activeSession.card_uid!
+                                            );
+                                            setShowSellVoucherModal(true);
+                                          } catch (e) {
+                                            window.console.error(
+                                              "Open Sell Voucher error:",
+                                              e
+                                            );
+                                            Swal.fire(
+                                              "Error",
+                                              "Gagal membuka penjualan voucher",
+                                              "error"
+                                            );
+                                          }
+                                        }}
+                                        className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-1 rounded flex items-center justify-center text-xs"
+                                        title="Tambah Saldo Points"
+                                      >
+                                        <CreditCard className="h-4 w-4" />
+                                      </button>
+                                    )}
 
-                      {/* Tombol Add Products - hanya tampil jika console rented */}
-                      {activeSession &&
-                        console.status === "rented" &&
-                        !activeSession.duration_minutes &&
-                        !activeSession.is_voucher_used && (
-                          <button
-                            onClick={() => {
-                              if (!ensureCashierActive()) return;
-                              if (
-                                console.status === "rented" &&
-                                activeSession &&
-                                activeSession.status === "active" &&
-                                !activeSession?.duration_minutes &&
-                                !activeSession.is_voucher_used
-                              ) {
-                                setShowProductModal(activeSession.id);
-                              } else {
-                                Swal.fire(
-                                  "Info",
-                                  "Konsol harus dalam status aktif untuk menambahkan produk",
-                                  "info"
-                                );
-                              }
-                            }}
-                            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-1 rounded flex items-center justify-center text-xs"
-                            title="Add Products"
-                          >
-                            <ShoppingCart className="h-4 w-4" />
-                          </button>
-                        )}
+                                  {/* Tombol Add Products - hanya tampil jika console rented */}
+                                  {activeSession &&
+                                    console.status === "rented" &&
+                                    !activeSession.duration_minutes &&
+                                    !activeSession.is_voucher_used && (
+                                      <button
+                                        onClick={() => {
+                                          if (!ensureCashierActive()) return;
+                                          if (
+                                            console.status === "rented" &&
+                                            activeSession &&
+                                            activeSession.status === "active" &&
+                                            !activeSession?.duration_minutes &&
+                                            !activeSession.is_voucher_used
+                                          ) {
+                                            setShowProductModal(
+                                              activeSession.id
+                                            );
+                                          } else {
+                                            Swal.fire(
+                                              "Info",
+                                              "Konsol harus dalam status aktif untuk menambahkan produk",
+                                              "info"
+                                            );
+                                          }
+                                        }}
+                                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                                        title="Add Products"
+                                      >
+                                        <ShoppingCart className="h-4 w-4" />
+                                      </button>
+                                    )}
 
-                      {/* Tombol Persiapan / Berhenti Persiapan */}
-                      {console.status !== "rented" &&
-                        (preparationMode[console.id]?.isActive ? (
-                          <button
-                            onClick={() => handleStopPreparationManual(console)}
-                            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-1 rounded flex items-center justify-center text-xs"
-                            title="Berhenti Persiapan"
-                          >
-                            <Square className="h-4 w-4" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              handleSingleConsolePersiapan(console)
-                            }
-                            className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-1 rounded flex items-center justify-center text-xs"
-                            title="Mode Persiapan"
-                          >
-                            <Clock className="h-4 w-4" />
-                          </button>
-                        ))}
+                                  {/* Tombol Persiapan / Berhenti Persiapan */}
+                                  {console.status !== "rented" &&
+                                    (preparationMode[console.id]?.isActive ? (
+                                      <button
+                                        onClick={() =>
+                                          handleStopPreparationManual(console)
+                                        }
+                                        className="flex-1 bg-red-500 hover:bg-red-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                                        title="Berhenti Persiapan"
+                                      >
+                                        <Square className="h-4 w-4" />
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() =>
+                                          handleSingleConsolePersiapan(console)
+                                        }
+                                        className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-1 rounded flex items-center justify-center text-xs"
+                                        title="Mode Persiapan"
+                                      >
+                                        <Clock className="h-4 w-4" />
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </>
+            );
+          })()}
         </div>
       ) : viewMode === "list" ? (
         // LIST MODE: Tampilkan dalam bentuk list
