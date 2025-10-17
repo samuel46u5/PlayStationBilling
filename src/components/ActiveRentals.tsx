@@ -1459,11 +1459,6 @@ const ActiveRentals: React.FC = () => {
 
       const productData = await db.products.getActiveProducts();
 
-      // if (productError) {
-      //   console.error("Error fetching products:", productError);
-      //   throw productError;
-      // }
-
       // Fetch customers
       // const { data: customerData, error: customerError } = await supabase
       //   .from("customers")
@@ -4257,7 +4252,7 @@ const ActiveRentals: React.FC = () => {
           points_amount: pointsToAdd,
           balance_before: currentCardData.balance_points,
           balance_after: newBalance,
-          notes: `Voucher purchase: ${selectedVoucher.name} (${selectedVoucher.voucher_code}) - Payment: ${paymentMethod} by ${cashierSessionInfo}`,
+          notes: `Voucher purchase: ${selectedVoucher.name} (${selectedVoucher.voucher_code}) x${qty} (+${pointsToAdd} points) - Payment: ${paymentMethod} by ${cashierSessionInfo}`,
         });
 
       if (logError) {

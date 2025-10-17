@@ -1601,9 +1601,31 @@ const Bookkeeping: React.FC = () => {
                               item.product_name ??
                               item.title ??
                               "Item";
+                            const profit = Number(item.profit ?? 0);
                             const qty = Number(item.qty ?? item.quantity ?? 1);
                             const unit = Number(item.price ?? 0);
                             const total = Number(item.total ?? unit * qty) || 0;
+
+                            let durationMinutes: number | null = null;
+                            if (item.type === "rental") {
+                              durationMinutes =
+                                Number(
+                                  t?.details?.rental?.duration_minutes ?? null
+                                ) || null;
+                              if (!durationMinutes && item.description) {
+                                const m = item.description.match(
+                                  /(\d{1,2}):(\d{2}):(\d{2})/
+                                );
+                                if (m) {
+                                  const h = Number(m[1]);
+                                  const mm = Number(m[2]);
+                                  const s = Number(m[3]);
+                                  durationMinutes = Math.round(
+                                    h * 60 + mm + s / 60
+                                  );
+                                }
+                              }
+                            }
 
                             return (
                               <div
@@ -1613,8 +1635,15 @@ const Bookkeeping: React.FC = () => {
                                 <span className="text-gray-700">
                                   {/* {name} x @{qty}{" "} */}
                                   {item.type === "rental"
-                                    ? name
-                                    : `${name} x @${qty}`}
+                                    ? `${name} (${
+                                        t.details.rental.duration_minutes ??
+                                        durationMinutes
+                                      } menit - Rp ${total.toLocaleString(
+                                        "id-ID"
+                                      )})`
+                                    : `${name} x @${qty} (Rp ${(
+                                        profit / qty
+                                      ).toLocaleString("id-ID")})`}
                                   {t.details.discount?.amount &&
                                     t.details.discount.amount > 0 &&
                                     item.type === "rental" && (
