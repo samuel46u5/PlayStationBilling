@@ -678,6 +678,15 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         },
       });
 
+      await supabase
+      .from("rfid_cards")
+      .update({ 
+        avg_nilai_point: 0,
+        total_poin_ever: 0,
+        total_uang_ever: 0
+      })
+      .eq("uid", session.card_uid);
+
       // Trigger UI refresh dengan custom event
       window.dispatchEvent(
         new CustomEvent("memberCardSessionEnded", {

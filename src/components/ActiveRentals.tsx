@@ -314,11 +314,22 @@ const ActiveRentals: React.FC = () => {
     try {
       const { error } = await supabase
         .from("rfid_cards")
-        .update({ balance_points: 0 })
+        .update({
+          balance_points: 0,
+          avg_nilai_point: 0,
+          total_poin_ever: 0,
+          total_uang_ever: 0,
+        })
         .eq("uid", scannedCardUID);
 
       if (!error) {
-        setScannedCardData({ ...scannedCardData, balance_points: 0 });
+        setScannedCardData({
+          ...scannedCardData,
+          balance_points: 0,
+          avg_nilai_point: 0,
+          total_poin_ever: 0,
+          total_uang_ever: 0,
+        });
         Swal.fire("Berhasil", "Points berhasil direset menjadi 0", "success");
       } else {
         Swal.fire("Gagal", "Gagal mereset points", "error");
