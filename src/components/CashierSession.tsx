@@ -711,6 +711,9 @@ const CashierSessionComponent: React.FC = () => {
         hours =
           rental.metadata?.duration_hours ||
           rental.details?.duration_hours ||
+          (rental.details?.elapsed_minutes
+            ? rental.details.elapsed_minutes / 60
+            : 0) ||
           0;
       }
 
