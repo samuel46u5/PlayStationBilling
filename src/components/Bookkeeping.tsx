@@ -1403,7 +1403,9 @@ const Bookkeeping: React.FC = () => {
                   {activeView === "jurnal"
                     ? summary.totalIncome?.toLocaleString("id-ID")
                     : activeView === "laba_rugi"
-                    ? summary.totalRental?.toLocaleString("id-ID")
+                    ? Math.ceil(summary.totalRental ?? 0).toLocaleString(
+                        "id-ID"
+                      )
                     : sourceList
                         .filter(
                           (t: any) =>
@@ -1461,7 +1463,7 @@ const Bookkeeping: React.FC = () => {
                 >
                   Rp{" "}
                   {(activeView === "laba_rugi"
-                    ? summary.netProfit
+                    ? Math.ceil(summary.netProfit)
                     : activeView === "jurnal"
                     ? summary.netProfit
                     : sourceList
