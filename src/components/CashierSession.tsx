@@ -137,8 +137,8 @@ const CashierSessionComponent: React.FC = () => {
           .from("cashier_transactions")
           .select("*")
           .eq("session_id", currentSession.id)
-          .gte("timestamp", start.toISOString())
-          .lt("timestamp", end.toISOString())
+          // .gte("timestamp", start.toISOString())
+          // .lt("timestamp", end.toISOString())
           .order("timestamp", { ascending: false }),
       ]);
 
