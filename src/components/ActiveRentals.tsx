@@ -5805,6 +5805,7 @@ const ActiveRentals: React.FC = () => {
 
           <button
             onClick={() => {
+              if (!ensureCashierActive()) return;
               setShowSellVoucherModal(true);
               setVoucherQuantity(1);
             }}
