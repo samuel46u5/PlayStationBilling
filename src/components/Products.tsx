@@ -17,8 +17,9 @@ import {
   DollarSign,
   List as ListIcon,
   LayoutGrid,
+  RefreshCw,
 } from "lucide-react";
-import { db } from "../lib/supabase"; // Hanya import db
+import { db, supabase } from "../lib/supabase"; // Hanya import db
 import { printPriceList, ProductPriceList } from "../utils/receipt";
 import Swal from "sweetalert2";
 import PurchaseFilters from "./PurchaseFilters";
@@ -1018,8 +1019,27 @@ const Products: React.FC = () => {
       }
     };
     fetchProducts();
+
+    const subscription = supabase
+      .channel("products_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "products",
+        },
+        () => {
+          fetchProducts();
+        }
+      )
+      .subscribe();
     // expose for refresh
     (window as any).refreshProducts = fetchProducts;
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Fetch suppliers from Supabase
@@ -5363,15 +5383,28 @@ const Products: React.FC = () => {
                   <h3 className="text-xl font-semibold text-gray-900">
                     Pilih Produk
                   </h3>
-                  <button
-                    onClick={() => {
-                      setShowProductSelectModal({ open: false, index: null });
-                      setProductSearchTerm("");
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <XCircle className="h-6 w-6" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        if ((window as any).refreshProducts) {
+                          await (window as any).refreshProducts();
+                        }
+                      }}
+                      className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                      title="Refresh data produk"
+                    >
+                      <RefreshCw className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowProductSelectModal({ open: false, index: null });
+                        setProductSearchTerm("");
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <XCircle className="h-6 w-6" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="relative mb-4">
