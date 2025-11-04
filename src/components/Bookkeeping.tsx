@@ -191,26 +191,59 @@ const Bookkeeping: React.FC = () => {
 
         if (selectedPeriod !== "all") {
           const now = new Date();
-          let startDateCalc = new Date();
+          let start: Date | null = new Date();
+          let end: Date | null = null;
+
           switch (selectedPeriod) {
-            case "today":
-              startDateCalc.setHours(0, 0, 0, 0);
+            case "today": {
+              start = new Date();
+              start.setHours(0, 0, 0, 0);
+              end = new Date();
+              end.setHours(23, 59, 59, 999);
               break;
-            case "yesterday":
-              startDateCalc.setDate(now.getDate() - 1);
-              startDateCalc.setHours(0, 0, 0, 0);
+            }
+            case "yesterday": {
+              start = new Date();
+              start.setDate(start.getDate() - 1);
+              start.setHours(0, 0, 0, 0);
+              end = new Date(start);
+              end.setHours(23, 59, 59, 999);
               break;
-            case "week":
-              startDateCalc.setDate(now.getDate() - 7);
+            }
+            case "week": {
+              start = new Date();
+              const day = start.getDay();
+              const diff = (day === 0 ? -6 : 1) - day;
+              start.setDate(start.getDate() + diff);
+              start.setHours(0, 0, 0, 0);
+              end = new Date();
+              end.setHours(23, 59, 59, 999);
               break;
-            case "month":
-              startDateCalc.setMonth(now.getMonth() - 1);
+            }
+            case "month": {
+              start = new Date(now.getFullYear(), now.getMonth(), 1);
+              end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+              end.setHours(23, 59, 59, 999);
               break;
-            case "year":
-              startDateCalc.setFullYear(now.getFullYear() - 1);
+            }
+            case "range": {
+              if (startDate) {
+                start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+              }
+              if (endDate) {
+                end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+              }
               break;
+            }
           }
-          query = query.gte("timestamp", startDateCalc.toISOString());
+          if (start) {
+            query = query.gte("timestamp", start.toISOString());
+          }
+          if (end) {
+            query = query.lte("timestamp", end.toISOString());
+          }
         }
       } else if (activeView === "laporan_kasir") {
         if (selectedSessionId) {
