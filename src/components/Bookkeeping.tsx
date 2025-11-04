@@ -1578,13 +1578,13 @@ const Bookkeeping: React.FC = () => {
                       <div className="text-right">
                         <p className="text-lg font-bold text-green-600">
                           +{" "}
-                          {(t.details?.items || [])
-                            .reduce(
+                          {Math.ceil(
+                            (t.details?.items || []).reduce(
                               (sum: number, item: any) =>
                                 sum + (Number(item.profit) || 0),
                               0
                             )
-                            .toLocaleString("id-ID")}
+                          ).toLocaleString("id-ID")}
                         </p>
                         <p className="text-sm text-gray-600 capitalize">
                           Profit
