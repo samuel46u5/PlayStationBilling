@@ -9442,7 +9442,7 @@ const ActiveRentals: React.FC = () => {
                               const perMinuteRate = hourlyRate / 60;
                               totalAmount =
                                 hourlyRate +
-                                Math.ceil(extraMinutes * perMinuteRate);
+                                Math.round(extraMinutes * perMinuteRate);
                             }
                             return `Rp ${totalAmount.toLocaleString("id-ID")}`;
                           })()}
