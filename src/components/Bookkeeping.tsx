@@ -68,8 +68,9 @@ const Bookkeeping: React.FC = () => {
     "jurnal" | "laba_rugi" | "laporan_kasir"
   >("jurnal");
   const [activeTab, setActiveTab] = useState<
-    "all" | "income" | "expense" | "rental" | "sale" | "voucher"
+    "all" | "income" | "expense" | "rental" | "sale" | "voucher" | "rekap"
   >("all");
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
 
   // Laporan Kasir states
   const [sessions, setSessions] = useState<any[]>([]);
@@ -564,6 +565,46 @@ const Bookkeeping: React.FC = () => {
     (currentPage - 1) * entriesPerPage,
     currentPage * entriesPerPage
   );
+
+  // Rekap laba rugi per tanggal (untuk tab rekap di laba_rugi)
+  const rekapByDate = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        rentalProfit: number;
+        cafeProfit: number;
+        voucherProfit: number;
+        totalProfit: number;
+        count: number;
+      }
+    > = {};
+    for (const t of transactions as any[]) {
+      if (!t || !t.timestamp) continue;
+      const type = String(t.type || "");
+      if (type !== "rental" && type !== "sale" && type !== "voucher") continue;
+      const dk = new Date(t.timestamp).toISOString().slice(0, 10);
+      const profit = (t?.details?.items || []).reduce(
+        (s: number, it: any) => s + (Number(it?.profit) || 0),
+        0
+      );
+      if (!map[dk]) {
+        map[dk] = {
+          rentalProfit: 0,
+          cafeProfit: 0,
+          voucherProfit: 0,
+          totalProfit: 0,
+          count: 0,
+        };
+      }
+      if (type === "rental") map[dk].rentalProfit += profit;
+      else if (type === "sale") map[dk].cafeProfit += profit;
+      else if (type === "voucher") map[dk].voucherProfit += profit;
+      map[dk].totalProfit += profit;
+      map[dk].count += 1;
+    }
+    const dateKeys = Object.keys(map).sort((a, b) => (a < b ? 1 : -1));
+    return { map, dateKeys };
+  }, [transactions]);
 
   //Transaction profit calculation
   const profitSummary: Summary = useMemo(() => {
@@ -1305,6 +1346,18 @@ const Bookkeeping: React.FC = () => {
                   Voucher ({voucherCount})
                 </button>
               )}
+              {activeView === "laba_rugi" && (
+                <button
+                  onClick={() => setActiveTab("rekap")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === "rekap"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Rekap Per Tanggal
+                </button>
+              )}
               {activeView === "laporan_kasir" && activeTab === "income" && (
                 <div className="flex items-center gap-2 ml-4">
                   <label className="text-sm text-gray-600">Pembayaran:</label>
@@ -1526,7 +1579,285 @@ const Bookkeeping: React.FC = () => {
 
         {activeView === "laba_rugi" ? (
           <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
-            {paginatedData.length === 0 ? (
+            {activeTab === "rekap" ? (
+              <div className="space-y-4 p-4">
+                {rekapByDate.dateKeys.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">
+                      Tidak ada transaksi ditemukan
+                    </p>
+                  </div>
+                ) : (
+                  rekapByDate.dateKeys.map((dk) => {
+                    const day = rekapByDate.map[dk];
+                    const isOpen = expandedDates.has(dk);
+                    return (
+                      <div
+                        key={dk}
+                        className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm text-gray-500">
+                              {new Date(dk).toLocaleDateString("id-ID", {
+                                weekday: "long",
+                              })}
+                            </div>
+                            <button
+                              onClick={() => {
+                                const next = new Set(expandedDates);
+                                if (next.has(dk)) next.delete(dk);
+                                else next.add(dk);
+                                setExpandedDates(next);
+                              }}
+                              className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
+                              aria-expanded={isOpen}
+                            >
+                              <span>
+                                {new Date(dk).toLocaleDateString("id-ID")}
+                              </span>
+                              <svg
+                                className={`h-4 w-4 transform ${
+                                  isOpen ? "rotate-180" : ""
+                                }`}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-right">
+                            <div>
+                              <div className="text-xs text-gray-500">
+                                Profit Rental
+                              </div>
+                              <div className="font-semibold text-green-700">
+                                Rp{" "}
+                                {Math.ceil(day.rentalProfit).toLocaleString(
+                                  "id-ID"
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500">
+                                Profit Cafe
+                              </div>
+                              <div className="font-semibold text-red-700">
+                                Rp{" "}
+                                {Math.ceil(day.cafeProfit).toLocaleString(
+                                  "id-ID"
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500">
+                                Profit Voucher
+                              </div>
+                              <div className="font-semibold text-purple-700">
+                                Rp{" "}
+                                {Math.ceil(day.voucherProfit).toLocaleString(
+                                  "id-ID"
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500">
+                                Laba Bruto
+                              </div>
+                              <div className="font-bold text-blue-700">
+                                Rp{" "}
+                                {Math.ceil(day.totalProfit).toLocaleString(
+                                  "id-ID"
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        {isOpen &&
+                          (() => {
+                            // Filter transaksi untuk tanggal ini
+                            const dayTransactions = (transactions as any[])
+                              .filter((t: any) => {
+                                if (!t || !t.timestamp) return false;
+                                const txDate = new Date(t.timestamp)
+                                  .toISOString()
+                                  .slice(0, 10);
+                                return txDate === dk;
+                              })
+                              .sort(
+                                (a: any, b: any) =>
+                                  new Date(b.timestamp).getTime() -
+                                  new Date(a.timestamp).getTime()
+                              );
+
+                            return (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <div className="mb-3 text-sm text-gray-600">
+                                  Total {dayTransactions.length} transaksi
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Waktu
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Tipe
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Deskripsi
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Detail Items
+                                        </th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                          Total Profit
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-100">
+                                      {dayTransactions.map((t: any) => {
+                                        const transactionProfit = (
+                                          t?.details?.items || []
+                                        ).reduce(
+                                          (sum: number, item: any) =>
+                                            sum + (Number(item.profit) || 0),
+                                          0
+                                        );
+                                        const items = t?.details?.items || [];
+
+                                        return (
+                                          <tr
+                                            key={t.id}
+                                            className="hover:bg-gray-50"
+                                          >
+                                            <td className="px-4 py-2 text-sm">
+                                              {new Date(
+                                                t.timestamp
+                                              ).toLocaleString("id-ID", {
+                                                day: "numeric",
+                                                month: "numeric",
+                                                year: "numeric",
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                                hour12: false,
+                                              })}
+                                            </td>
+                                            <td className="px-4 py-2">
+                                              <span
+                                                className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                                                  t.type === "rental"
+                                                    ? "bg-green-100 text-green-800"
+                                                    : t.type === "sale"
+                                                    ? "bg-red-100 text-red-800"
+                                                    : "bg-purple-100 text-purple-800"
+                                                }`}
+                                              >
+                                                {(t.type || "")
+                                                  .toString()
+                                                  .toUpperCase()}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-900">
+                                              {t.description || "-"}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                              {items.length > 0 ? (
+                                                <div className="space-y-1">
+                                                  {items
+                                                    // .slice(0, 2)
+                                                    .map(
+                                                      (
+                                                        item: any,
+                                                        idx: number
+                                                      ) => {
+                                                        const name =
+                                                          item.name ??
+                                                          item.product_name ??
+                                                          item.title ??
+                                                          "Item";
+                                                        const profit = Number(
+                                                          item.profit ?? 0
+                                                        );
+                                                        const qty = Number(
+                                                          item.qty ??
+                                                            item.quantity ??
+                                                            1
+                                                        );
+                                                        return (
+                                                          <div
+                                                            key={idx}
+                                                            className="text-xs"
+                                                          >
+                                                            {name}{" "}
+                                                            {qty > 1
+                                                              ? `x${qty}`
+                                                              : ""}{" "}
+                                                            - Rp{" "}
+                                                            {profit.toLocaleString(
+                                                              "id-ID"
+                                                            )}
+                                                          </div>
+                                                        );
+                                                      }
+                                                    )}
+                                                  {/* {items.length > 2 && (
+                                                    <div className="text-xs text-gray-500">
+                                                      +{items.length - 2} item
+                                                      lainnya
+                                                    </div>
+                                                  )} */}
+                                                </div>
+                                              ) : (
+                                                <span className="text-gray-400">
+                                                  -
+                                                </span>
+                                              )}
+                                            </td>
+                                            <td className="px-4 py-2 text-right font-semibold text-green-600">
+                                              Rp{" "}
+                                              {Math.ceil(
+                                                transactionProfit
+                                              ).toLocaleString("id-ID")}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="bg-gray-50">
+                                        <td
+                                          colSpan={4}
+                                          className="px-4 py-2 text-right font-semibold text-gray-900"
+                                        >
+                                          Grand Total
+                                        </td>
+                                        <td className="px-4 py-2 text-right font-bold text-blue-700">
+                                          Rp{" "}
+                                          {Math.ceil(
+                                            day.totalProfit
+                                          ).toLocaleString("id-ID")}
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : paginatedData.length === 0 ? (
               <div className="p-12 text-center">
                 <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">Tidak ada transaksi ditemukan</p>
@@ -2066,7 +2397,7 @@ const Bookkeeping: React.FC = () => {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {activeTab !== "rekap" && totalPages > 1 && (
         <div className="px-6 py-4 border-t border-gray-200">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-700">
