@@ -2622,7 +2622,15 @@ const ActiveRentals: React.FC = () => {
         rental: {
           session_id: session.id,
           console: session.consoles?.name,
-          duration_minutes: session.duration_minutes ?? null,
+          // duration_minutes: session.duration_minutes ?? null,
+          duration_minutes:
+            session.duration_minutes ??
+            (session.start_time
+              ? Math.ceil(
+                  (Date.now() - new Date(session.start_time).getTime()) /
+                    (1000 * 60)
+                )
+              : 0),
         },
         discount:
           discountAmount > 0

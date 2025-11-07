@@ -65,7 +65,7 @@ const Bookkeeping: React.FC = () => {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editEntry, setEditEntry] = useState<BookkeepingEntry | null>(null);
   const [activeView, setActiveView] = useState<
-    "jurnal" | "laba_rugi" | "laporan_kasir" | "rekap_kasir"
+    "jurnal" | "laba_rugi" | "laporan_kasir" | "rekap_kasir" | "rekap_console"
   >("jurnal");
   const [activeTab, setActiveTab] = useState<
     "all" | "income" | "expense" | "rental" | "sale" | "voucher" | "rekap"
@@ -75,6 +75,9 @@ const Bookkeeping: React.FC = () => {
     new Set()
   );
   const [expandedSessionBuckets, setExpandedSessionBuckets] = useState<
+    Set<string>
+  >(new Set());
+  const [expandedConsoleBuckets, setExpandedConsoleBuckets] = useState<
     Set<string>
   >(new Set());
 
@@ -316,6 +319,63 @@ const Bookkeeping: React.FC = () => {
         //   end.setHours(23, 59, 59, 999);
         //   query = query.lte("timestamp", end.toISOString());
         // }
+      } else if (activeView === "rekap_console") {
+        query = query
+          .eq("type", "rental")
+          .not("reference_id", "ilike", "MOVE_RENTAL-%");
+
+        if (selectedPeriod !== "all") {
+          const now = new Date();
+          let start: Date | null = new Date();
+          let end: Date | null = null;
+
+          switch (selectedPeriod) {
+            case "today": {
+              start = new Date();
+              start.setHours(0, 0, 0, 0);
+              end = new Date();
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
+            case "yesterday": {
+              start = new Date();
+              start.setDate(start.getDate() - 1);
+              start.setHours(0, 0, 0, 0);
+              end = new Date(start);
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
+            case "week": {
+              start = new Date();
+              const day = start.getDay();
+              const diff = (day === 0 ? -6 : 1) - day;
+              start.setDate(start.getDate() + diff);
+              start.setHours(0, 0, 0, 0);
+              end = new Date();
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
+            case "month": {
+              start = new Date(now.getFullYear(), now.getMonth(), 1);
+              end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
+            case "range": {
+              if (startDate) {
+                start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+              }
+              if (endDate) {
+                end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+              }
+              break;
+            }
+          }
+          if (start) query = query.gte("timestamp", start.toISOString());
+          if (end) query = query.lte("timestamp", end.toISOString());
+        }
       }
 
       const { data, error } = await query;
@@ -420,7 +480,11 @@ const Bookkeeping: React.FC = () => {
 
   // Load data on component mount and filter changes
   useEffect(() => {
-    if (activeView === "laba_rugi" || activeView === "rekap_kasir") {
+    if (
+      activeView === "laba_rugi" ||
+      activeView === "rekap_kasir" ||
+      activeView === "rekap_console"
+    ) {
       fetchTransaction();
     } else if (activeView === "laporan_kasir") {
       if (selectedSessionId) {
@@ -650,6 +714,45 @@ const Bookkeeping: React.FC = () => {
       byDate[dk].sessions[sid].totalAmount +=
         t.type === "expense" ? -Number(t.amount || 0) : Number(t.amount || 0);
       byDate[dk].sessions[sid].count += 1;
+    }
+    const dateKeys = Object.keys(byDate).sort((a, b) => (a < b ? 1 : -1));
+    return { map: byDate, dateKeys };
+  }, [transactions]);
+
+  // Rekap console per tanggal -> per console name (durasi)
+  const rekapConsoleByDate = useMemo(() => {
+    const byDate: Record<
+      string,
+      {
+        consoles: Record<
+          string,
+          { list: any[]; totalDurationMinutes: number; count: number }
+        >;
+      }
+    > = {};
+    for (const t of transactions as any[]) {
+      if (!t || !t.timestamp || t.type !== "rental") continue;
+      const dk = new Date(t.timestamp).toISOString().slice(0, 10);
+      const consoleName =
+        t.details?.rental?.console ||
+        t.details?.items?.[0]?.name ||
+        t.details?.items?.[0]?.product_name ||
+        "Unknown Console";
+      const durationMinutes =
+        t.details?.rental?.duration_minutes ||
+        t.details?.duration_minutes ||
+        t.details?.additional_duration_minutes ||
+        0;
+      if (!byDate[dk]) byDate[dk] = { consoles: {} };
+      if (!byDate[dk].consoles[consoleName])
+        byDate[dk].consoles[consoleName] = {
+          list: [],
+          totalDurationMinutes: 0,
+          count: 0,
+        };
+      byDate[dk].consoles[consoleName].list.push(t);
+      byDate[dk].consoles[consoleName].totalDurationMinutes += durationMinutes;
+      byDate[dk].consoles[consoleName].count += 1;
     }
     const dateKeys = Object.keys(byDate).sort((a, b) => (a < b ? 1 : -1));
     return { map: byDate, dateKeys };
@@ -1443,6 +1546,17 @@ const Bookkeeping: React.FC = () => {
               <Calendar className="h-4 w-4" />
               Rekap Transaksi Kasir
             </button>
+            <button
+              onClick={() => setActiveView("rekap_console")}
+              className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
+                activeView === "rekap_console"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <Gamepad className="h-4 w-4" />
+              Rekap Console
+            </button>
           </div>
         </div>
       </div>
@@ -1457,19 +1571,22 @@ const Bookkeeping: React.FC = () => {
                   ? "Laporan Laba Rugi"
                   : activeView === "rekap_kasir"
                   ? "Rekap Per Tanggal (Kasir)"
+                  : activeView === "rekap_console"
+                  ? "Rekap Per Tanggal (Console)"
                   : activeView === "laporan_kasir"
                   ? "Laporan Transaksi Kasir"
                   : "Riwayat Transaksi"}
               </h2>
-              {activeView !== "rekap_kasir" && (
-                <p className="text-sm text-gray-600 mt-1">
-                  Menampilkan {paginatedData.length} transaksi dari{" "}
-                  {filteredByTab.length}
-                </p>
-              )}
+              {activeView !== "rekap_kasir" &&
+                activeView !== "rekap_console" && (
+                  <p className="text-sm text-gray-600 mt-1">
+                    Menampilkan {paginatedData.length} transaksi dari{" "}
+                    {filteredByTab.length}
+                  </p>
+                )}
             </div>
 
-            {activeView !== "rekap_kasir" && (
+            {activeView !== "rekap_kasir" && activeView !== "rekap_console" && (
               <div className="flex bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => setActiveTab("all")}
@@ -1695,107 +1812,195 @@ const Bookkeeping: React.FC = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-green-800">
-                  {activeView === "jurnal"
-                    ? "Total Pemasukan"
-                    : activeView === "laba_rugi"
-                    ? "Total Rental"
-                    : "Total Pemasukan"}
-                </span>
-                <span className="text-lg font-bold text-green-600">
-                  Rp{" "}
-                  {activeView === "jurnal"
-                    ? summary.totalIncome?.toLocaleString("id-ID")
-                    : activeView === "laba_rugi"
-                    ? Math.ceil(summary.totalRental ?? 0).toLocaleString(
-                        "id-ID"
-                      )
-                    : sourceList
-                        .filter(
-                          (t: any) =>
-                            t.type === "income" ||
-                            t.type === "sale" ||
-                            t.type === "rental" ||
-                            t.type === "voucher"
+          {activeView !== "rekap_console" ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-green-800">
+                    {activeView === "jurnal"
+                      ? "Total Pemasukan"
+                      : activeView === "laba_rugi"
+                      ? "Total Rental"
+                      : "Total Pemasukan"}
+                  </span>
+                  <span className="text-lg font-bold text-green-600">
+                    Rp{" "}
+                    {activeView === "jurnal"
+                      ? summary.totalIncome?.toLocaleString("id-ID")
+                      : activeView === "laba_rugi"
+                      ? Math.ceil(summary.totalRental ?? 0).toLocaleString(
+                          "id-ID"
                         )
-                        .reduce(
-                          (s: number, t: any) => s + (Number(t.amount) || 0),
-                          0
-                        )
-                        .toLocaleString("id-ID")}
-                </span>
+                      : sourceList
+                          .filter(
+                            (t: any) =>
+                              t.type === "income" ||
+                              t.type === "sale" ||
+                              t.type === "rental" ||
+                              t.type === "voucher"
+                          )
+                          .reduce(
+                            (s: number, t: any) => s + (Number(t.amount) || 0),
+                            0
+                          )
+                          .toLocaleString("id-ID")}
+                  </span>
+                </div>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-red-800">
+                    {activeView === "jurnal"
+                      ? "Total Pengeluaran"
+                      : activeView === "laba_rugi"
+                      ? "Total Cafe"
+                      : "Total Pengeluaran"}
+                  </span>
+                  <span className="text-lg font-bold text-red-600">
+                    Rp{" "}
+                    {activeView === "jurnal"
+                      ? summary.totalExpense?.toLocaleString("id-ID")
+                      : activeView === "laba_rugi"
+                      ? summary.totalCafe?.toLocaleString("id-ID")
+                      : sourceList
+                          .filter((t: any) => t.type === "expense")
+                          .reduce(
+                            (s: number, t: any) => s + (Number(t.amount) || 0),
+                            0
+                          )
+                          .toLocaleString("id-ID")}
+                  </span>
+                </div>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-blue-800">
+                    {activeView === "jurnal"
+                      ? "Profit"
+                      : activeView === "laba_rugi"
+                      ? "Laba Bruto"
+                      : "Saldo Net"}
+                  </span>
+                  <span
+                    className={`text-lg font-bold ${
+                      summary.netProfit >= 0 ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
+                    Rp{" "}
+                    {(activeView === "laba_rugi"
+                      ? Math.ceil(summary.netProfit)
+                      : activeView === "jurnal"
+                      ? summary.netProfit
+                      : sourceList
+                          .filter(
+                            (t: any) =>
+                              t.type === "income" ||
+                              t.type === "sale" ||
+                              t.type === "rental" ||
+                              t.type === "voucher"
+                          )
+                          .reduce(
+                            (s: number, t: any) => s + (Number(t.amount) || 0),
+                            0
+                          ) -
+                        sourceList
+                          .filter((t: any) => t.type === "expense")
+                          .reduce(
+                            (s: number, t: any) => s + (Number(t.amount) || 0),
+                            0
+                          )
+                    ).toLocaleString("id-ID")}
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-red-800">
-                  {activeView === "jurnal"
-                    ? "Total Pengeluaran"
-                    : activeView === "laba_rugi"
-                    ? "Total Cafe"
-                    : "Total Pengeluaran"}
-                </span>
-                <span className="text-lg font-bold text-red-600">
-                  Rp{" "}
-                  {activeView === "jurnal"
-                    ? summary.totalExpense?.toLocaleString("id-ID")
-                    : activeView === "laba_rugi"
-                    ? summary.totalCafe?.toLocaleString("id-ID")
-                    : sourceList
-                        .filter((t: any) => t.type === "expense")
-                        .reduce(
-                          (s: number, t: any) => s + (Number(t.amount) || 0),
-                          0
-                        )
-                        .toLocaleString("id-ID")}
-                </span>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              {/* Total Durasi */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-blue-800">
+                    Total Durasi
+                  </span>
+                  <span className="text-lg font-bold text-blue-600">
+                    {(() => {
+                      const totalMinutes = Object.values(
+                        rekapConsoleByDate.map
+                      ).reduce(
+                        (sum: number, day: any) =>
+                          sum +
+                          Object.values(day.consoles).reduce(
+                            (daySum: number, console: any) =>
+                              daySum + console.totalDurationMinutes,
+                            0
+                          ),
+                        0
+                      );
+                      const hours = Math.floor(totalMinutes / 60);
+                      const minutes = totalMinutes % 60;
+                      return `${hours}j ${minutes}m`;
+                    })()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Console Terpakai */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-green-800">
+                    Total Console
+                  </span>
+                  <span className="text-lg font-bold text-green-600">
+                    {Object.values(rekapConsoleByDate.map).reduce(
+                      (sum: number, day: any) =>
+                        sum + Object.keys(day.consoles).length,
+                      0
+                    )}{" "}
+                    unit
+                  </span>
+                </div>
+              </div>
+
+              {/* Rata-rata Durasi */}
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-purple-800">
+                    Rata-rata Durasi
+                  </span>
+                  <span className="text-lg font-bold text-purple-600">
+                    {(() => {
+                      const totalConsoles = Object.values(
+                        rekapConsoleByDate.map
+                      ).reduce(
+                        (sum: number, day: any) =>
+                          sum + Object.keys(day.consoles).length,
+                        0
+                      );
+                      const totalMinutes = Object.values(
+                        rekapConsoleByDate.map
+                      ).reduce(
+                        (sum: number, day: any) =>
+                          sum +
+                          Object.values(day.consoles).reduce(
+                            (daySum: number, console: any) =>
+                              daySum + console.totalDurationMinutes,
+                            0
+                          ),
+                        0
+                      );
+                      const avgMinutes =
+                        totalConsoles > 0
+                          ? Math.round(totalMinutes / totalConsoles)
+                          : 0;
+                      const hours = Math.floor(avgMinutes / 60);
+                      const minutes = avgMinutes % 60;
+                      return `${hours}j ${minutes}m`;
+                    })()}
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-blue-800">
-                  {activeView === "jurnal"
-                    ? "Profit"
-                    : activeView === "laba_rugi"
-                    ? "Laba Bruto"
-                    : "Saldo Net"}
-                </span>
-                <span
-                  className={`text-lg font-bold ${
-                    summary.netProfit >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  Rp{" "}
-                  {(activeView === "laba_rugi"
-                    ? Math.ceil(summary.netProfit)
-                    : activeView === "jurnal"
-                    ? summary.netProfit
-                    : sourceList
-                        .filter(
-                          (t: any) =>
-                            t.type === "income" ||
-                            t.type === "sale" ||
-                            t.type === "rental" ||
-                            t.type === "voucher"
-                        )
-                        .reduce(
-                          (s: number, t: any) => s + (Number(t.amount) || 0),
-                          0
-                        ) -
-                      sourceList
-                        .filter((t: any) => t.type === "expense")
-                        .reduce(
-                          (s: number, t: any) => s + (Number(t.amount) || 0),
-                          0
-                        )
-                  ).toLocaleString("id-ID")}
-                </span>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {activeView === "laba_rugi" ? (
@@ -2841,6 +3046,237 @@ const Bookkeeping: React.FC = () => {
                           </div>
                         );
                       })()}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : activeView === "rekap_console" ? (
+          <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+            {rekapConsoleByDate.dateKeys.length === 0 ? (
+              <div className="p-12 text-center">
+                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">Tidak ada transaksi ditemukan</p>
+              </div>
+            ) : (
+              rekapConsoleByDate.dateKeys.map((dk) => {
+                const isDateOpen = expandedDates.has(dk);
+                const consolesMap = rekapConsoleByDate.map[dk]?.consoles || {};
+                const consoleNames = Object.keys(consolesMap);
+                const formatDuration = (minutes: number) => {
+                  const hours = Math.floor(minutes / 60);
+                  const mins = minutes % 60;
+                  if (hours === 0) return `${mins} menit`;
+                  if (mins === 0) return `${hours} jam`;
+                  return `${hours} jam ${mins} menit`;
+                };
+                return (
+                  <div
+                    key={dk}
+                    className="p-6 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-gray-500">
+                          {new Date(dk).toLocaleDateString("id-ID", {
+                            weekday: "long",
+                          })}
+                        </div>
+                        <button
+                          onClick={() => {
+                            const next = new Set(expandedDates);
+                            if (next.has(dk)) next.delete(dk);
+                            else next.add(dk);
+                            setExpandedDates(next);
+                          }}
+                          className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
+                          aria-expanded={isDateOpen}
+                        >
+                          <span>
+                            {new Date(dk).toLocaleDateString("id-ID")}
+                          </span>
+                          <svg
+                            className={`h-4 w-4 transform ${
+                              isDateOpen ? "rotate-180" : ""
+                            }`}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                        <div className="text-sm text-gray-600">
+                          {consoleNames.length} console
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        {(() => {
+                          const validConsoles = Object.entries(consolesMap)
+                            .map(([name, data]) => ({ name, ...data }))
+                            .sort(
+                              (a, b) =>
+                                b.totalDurationMinutes - a.totalDurationMinutes
+                            );
+
+                          const totalAllMinutes = validConsoles.reduce(
+                            (sum, c) => sum + c.totalDurationMinutes,
+                            0
+                          );
+
+                          return (
+                            <div className="flex gap-2">
+                              <div>
+                                <div className="text-xs text-gray-500">
+                                  Total Durasi
+                                </div>
+                                <div className="font-bold text-green-700">
+                                  {formatDuration(totalAllMinutes)}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    {isDateOpen && (
+                      <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                        {consoleNames
+                          .sort(
+                            (a, b) =>
+                              consolesMap[b].totalDurationMinutes -
+                              consolesMap[a].totalDurationMinutes
+                          )
+                          .map((consoleName) => {
+                            const key = `${dk}|${consoleName}`;
+                            const open = expandedConsoleBuckets.has(key);
+                            const cdata = consolesMap[consoleName];
+                            return (
+                              <div
+                                key={consoleName}
+                                className="border rounded-lg"
+                              >
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(
+                                      expandedConsoleBuckets
+                                    );
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    setExpandedConsoleBuckets(next);
+                                  }}
+                                  className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
+                                  aria-expanded={open}
+                                >
+                                  <div className="text-left">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {consoleName}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {cdata.count} transaksi
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-sm font-semibold text-blue-700">
+                                      {formatDuration(
+                                        cdata.totalDurationMinutes
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                                {open && (
+                                  <div className="p-3 overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-white">
+                                        <tr>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                            Waktu
+                                          </th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                            Console
+                                          </th>
+                                          <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                            Durasi
+                                          </th>
+                                          {/* <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                            Harga per Jam
+                                          </th> */}
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-100">
+                                        {cdata.list.map((t: any) => {
+                                          const durationMinutes =
+                                            t.details?.rental
+                                              ?.duration_minutes ||
+                                            t.details?.duration_minutes ||
+                                            t.details
+                                              ?.additional_duration_minutes ||
+                                            0;
+                                          const consoleName =
+                                            t.details.items[0]?.name ||
+                                            t.details?.rental?.console ||
+                                            "-";
+                                          // const hourlyRate =
+                                          //   t.details?.rental
+                                          //     ?.hourly_rate_snapshot ||
+                                          //   t.details?.items?.[0]?.price ||
+                                          //   0;
+                                          return (
+                                            <tr
+                                              key={t.id}
+                                              className="hover:bg-gray-50"
+                                            >
+                                              <td className="px-3 py-2 text-sm">
+                                                {new Date(
+                                                  t.timestamp
+                                                ).toLocaleString("id-ID", {
+                                                  hour12: false,
+                                                })}
+                                              </td>
+                                              <td className="px-3 py-2 text-sm text-gray-900">
+                                                {consoleName}
+                                              </td>
+                                              <td className="px-3 py-2 text-sm text-right text-gray-900">
+                                                {formatDuration(
+                                                  durationMinutes
+                                                )}
+                                              </td>
+                                              {/* <td className="px-3 py-2 text-right text-sm">
+                                                Rp{" "}
+                                                {Number(
+                                                  hourlyRate
+                                                ).toLocaleString("id-ID")}
+                                              </td> */}
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                      <tfoot>
+                                        <tr className="bg-gray-50">
+                                          <td
+                                            colSpan={2}
+                                            className="px-3 py-2 text-right font-semibold text-gray-900"
+                                          >
+                                            Subtotal Console
+                                          </td>
+                                          <td className="px-3 py-2 text-sm text-right font-semibold text-blue-700">
+                                            {formatDuration(
+                                              cdata.totalDurationMinutes
+                                            )}
+                                          </td>
+                                        </tr>
+                                      </tfoot>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 );
               })
