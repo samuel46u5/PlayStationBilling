@@ -2189,7 +2189,7 @@ const ActiveRentals: React.FC = () => {
         amount: 0,
         paymentMethod,
         referenceId: `MOVE_RENTAL-${Date.now()}`,
-        description: `Pindah unit ${fromConsole.name} -> ${targetConsole.name} (${session.customers?.name})`,
+        description: `Pindah unit ${fromConsole.name} -> ${targetConsole.name}`,
         details: {
           action: "move_session",
           session_id: session.id,
