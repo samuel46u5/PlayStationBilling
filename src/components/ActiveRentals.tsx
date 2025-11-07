@@ -5175,24 +5175,18 @@ const ActiveRentals: React.FC = () => {
         {
           const results = await Promise.allSettled(
             selectedConsoles.map(async (device) => {
-              // Untuk perintah relay OFF, abaikan CORS error seperti di Consoles.tsx
               let res = null;
               try {
                 res = await fetch(device.relay_command_off);
               } catch (fetchErr) {
-                // CORS error diabaikan, anggap berhasil
                 return { device, status: "success" };
               }
               if (res && res.ok) {
-                // Jika response ok, coba baca response tapi abaikan error
                 try {
                   await res.text();
-                } catch (textErr) {
-                  // Ignore text parsing error
-                }
+                } catch (textErr) {}
                 return { device, status: "success" };
               } else {
-                // Response tidak ok tapi tetap anggap berhasil
                 return { device, status: "success" };
               }
             })
@@ -5249,24 +5243,18 @@ const ActiveRentals: React.FC = () => {
         {
           const results = await Promise.allSettled(
             selectedConsoles.map(async (device) => {
-              // Untuk perintah relay ON, abaikan CORS error seperti di Consoles.tsx
               let res = null;
               try {
                 res = await fetch(device.relay_command_on);
               } catch (fetchErr) {
-                // CORS error diabaikan, anggap berhasil
                 return { device, status: "success" };
               }
               if (res && res.ok) {
-                // Jika response ok, coba baca response tapi abaikan error
                 try {
                   await res.text();
-                } catch (textErr) {
-                  // Ignore text parsing error
-                }
+                } catch (textErr) {}
                 return { device, status: "success" };
               } else {
-                // Response tidak ok tapi tetap anggap berhasil
                 return { device, status: "success" };
               }
             })
