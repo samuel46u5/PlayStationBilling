@@ -2821,15 +2821,15 @@ const Bookkeeping: React.FC = () => {
                                 <polyline points="6 9 12 15 18 9" />
                               </svg>
                             </button>
+                            <div className="text-sm text-gray-600">
+                              {filteredSessionIds.length} sesi
+                            </div>
                           </div>
                           <div className="mt-4">
                             <div className="text-xs text-gray-500">Total</div>
                             <div className="font-bold text-green-700">
                               Rp {Number(totalAll).toLocaleString("id-ID")}
                             </div>
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {filteredSessionIds.length} sesi
                           </div>
                         </div>
 
