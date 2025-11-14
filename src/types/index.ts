@@ -682,13 +682,12 @@ export interface ActivityLog {
   ipAddress: string;
 }
 
-// Card Usage Logs - New interface for card-based system
 export interface CardUsageLog {
   id: string;
   card_uid: string;
   session_id?: string;
-  used_by_name?: string; // Name of person using the card
-  used_by_phone?: string; // Phone number of person using the card
+  used_by_name?: string; 
+  used_by_phone?: string; 
   action_type:
     | "rental_start"
     | "rental_end"
@@ -707,7 +706,6 @@ export interface CardUsageLog {
   notes?: string;
 }
 
-// Card Balance Summary - View interface
 export interface CardBalanceSummary {
   uid: string;
   alias?: string;

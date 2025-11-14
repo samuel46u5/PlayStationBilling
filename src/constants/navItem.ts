@@ -6,6 +6,7 @@ export const NAV_ITEMS = [
   { id: "bookings", label: "Scheduled Bookings" },
   // { id: "customers", label: "Customers" },
   { id: "products", label: "Products" },
+  { id: "assembly", label:"Assembly" },
   { id: "sales", label: "Sales Report" },
   // { id: "payments", label: "Payments", icon: DollarSign },
   { id: "bookkeeping", label: "Bookkeeping" },

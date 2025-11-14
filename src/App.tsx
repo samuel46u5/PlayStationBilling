@@ -10,6 +10,7 @@ import Customers from "./components/Customers";
 import Products from "./components/Products";
 import Sales from "./components/Sales";
 import Payments from "./components/Payments";
+import Assembly from "./components/Assembly";
 import Bookkeeping from "./components/Bookkeeping";
 import Consoles from "./components/Consoles";
 import EquipmentManagement from "./components/EquipmentManagement";
@@ -66,6 +67,8 @@ const AppLayout: React.FC = () => {
       //   return <Customers />;
       case "products":
         return <Products />;
+      case "assembly":
+        return <Assembly />;
       case "sales":
         return <Sales />;
       // case "payments":

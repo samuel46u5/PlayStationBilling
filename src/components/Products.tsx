@@ -48,6 +48,7 @@ const Products: React.FC = () => {
   const [newProduct, setNewProduct] = useState({
     name: "",
     category: "beverage" as "beverage" | "food" | "snack" | "other",
+    product_type: "",
     price: 0,
     cost: 0,
     stock: 0,
@@ -1481,6 +1482,7 @@ const Products: React.FC = () => {
       setNewProduct({
         name: "",
         category: "beverage",
+        product_type: "",
         price: 0,
         cost: 0,
         stock: 0,
@@ -1536,7 +1538,7 @@ const Products: React.FC = () => {
     }
   };
 
-  const [editProduct, setEditProduct] = useState<any | null>(null); // State produk yang diedit
+  const [editProduct, setEditProduct] = useState<any | null>(null);
 
   const handleEditProduct = async () => {
     if (!editProduct.name || editProduct.price <= 0) {
@@ -1551,6 +1553,7 @@ const Products: React.FC = () => {
       await db.products.update(editProduct.id, {
         name: editProduct.name,
         category: editProduct.category,
+        product_type: editProduct.product_type,
         price: editProduct.price,
         cost: editProduct.cost,
         stock: editProduct.stock,
@@ -4559,6 +4562,25 @@ const Products: React.FC = () => {
                     </select>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tipe
+                    </label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={newProduct.product_type}
+                      onChange={(e) =>
+                        setNewProduct({
+                          ...newProduct,
+                          product_type: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="raw_material">Bahan Baku</option>
+                      <option value="finished_good">Produk Jadi</option>
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -5227,6 +5249,24 @@ const Products: React.FC = () => {
                       <option value="food">Makanan</option>
                       <option value="snack">Snack</option>
                       <option value="other">Lainnya</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tipe
+                    </label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={editProduct.product_type}
+                      onChange={(e) =>
+                        setEditProduct({
+                          ...editProduct,
+                          product_type: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="raw_material">Bahan Baku</option>
+                      <option value="finished_good">Produk Jadi</option>
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">

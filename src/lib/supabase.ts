@@ -149,7 +149,30 @@ export const db = {
       if (error) throw error;
       return data;
     },
-
+    async getRawMaterials() {
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          suppliers(name)
+        `)
+        .eq("product_type","raw_material")
+      
+      if (error) throw error;
+      return data;
+    },
+    async getFinishedGoods() {
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          suppliers(name)
+        `)
+        .eq("product_type","finished_good")
+      
+      if (error) throw error;
+      return data;
+    },
     async getActiveProducts() {
       const { data, error } = await supabase
         .from('products')
