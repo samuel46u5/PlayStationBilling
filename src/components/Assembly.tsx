@@ -31,7 +31,7 @@ interface AssemblyIngredient {
   product_id: string;
   product_name: string;
   quantity_required: number;
-  // unit: string;
+  unit: string;
 }
 
 interface AssemblyTransaction {
@@ -166,7 +166,7 @@ const Assembly: React.FC = () => {
         .select(
           `
           *,
-          recipe:assembly_recipes(product_name)
+          recipe:assembly_recipes(product_name, product_id, product:products(unit))
         `
         )
         .order("assembled_at", { ascending: false })
@@ -361,7 +361,7 @@ const Assembly: React.FC = () => {
             "Error",
             `Stok ${
               ingredient.product_name
-            } tidak cukup. Dibutuhkan: ${required} unit
+            } tidak cukup. Dibutuhkan: ${required} ${ingredient.unit}
             }, Tersedia: ${product?.stock || 0}`,
             "error"
           );
@@ -401,7 +401,7 @@ const Assembly: React.FC = () => {
           product_id: ing.product_id,
           product_name: ing.product_name,
           quantity_used: ing.quantity_required * assembleForm.quantity,
-          // unit: ing.unit,
+          unit: ing.unit,
         })),
       });
 
@@ -603,7 +603,7 @@ const Assembly: React.FC = () => {
                   </p>
                   {recipe.ingredients.slice(0, 3).map((ing, idx) => (
                     <div key={idx} className="text-sm text-gray-500">
-                      • {ing.quantity_required} unit {ing.product_name}
+                      • {ing.quantity_required} {ing.unit} {ing.product_name}
                     </div>
                   ))}
                   {recipe.ingredients.length > 3 && (
@@ -706,7 +706,8 @@ const Assembly: React.FC = () => {
                       {log.recipe?.product_name || "Unknown Product"}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {log.quantity_produced} unit •{" "}
+                      {log.quantity_produced}{" "}
+                      {log.recipe?.product?.unit || "pcs"} •{" "}
                       {new Date(log.assembled_at).toLocaleDateString("id-ID")}
                     </p>
                   </div>
@@ -815,6 +816,9 @@ const Assembly: React.FC = () => {
                         }
                         className="w-20 border border-gray-300 rounded px-2 py-1 text-sm"
                       />
+                      <span className="text-sm text-gray-600 px-2">
+                        {ingredient.unit}
+                      </span>
                       {/* <select
                         value={ingredient.unit}
                         onChange={(e) =>
@@ -987,8 +991,8 @@ const Assembly: React.FC = () => {
                     );
                     return recipe?.ingredients.map((ing, idx) => (
                       <div key={idx} className="text-sm text-gray-600">
-                        • {ing.quantity_required * assembleForm.quantity} unit{" "}
-                        {ing.product_name}
+                        • {ing.quantity_required * assembleForm.quantity}{" "}
+                        {ing.unit} {ing.product_name}
                       </div>
                     ));
                   })()}
@@ -1049,7 +1053,7 @@ const Assembly: React.FC = () => {
                       >
                         <span>{ing.product_name}</span>
                         <span className="text-sm text-gray-600">
-                          {ing.quantity_required} unit
+                          {ing.quantity_required} {ing.unit}
                         </span>
                       </div>
                     ))}
@@ -1071,7 +1075,8 @@ const Assembly: React.FC = () => {
                         <div key={idx} className="p-3 border rounded-lg">
                           <div className="flex justify-between items-start mb-2">
                             <span className="font-medium">
-                              {log.quantity_produced} unit
+                              {log.quantity_produced}{" "}
+                              {log.recipe?.product?.unit}
                             </span>
                             <span className="text-sm text-gray-500">
                               {new Date(log.assembled_at).toLocaleDateString(
@@ -1272,7 +1277,7 @@ const Assembly: React.FC = () => {
                                 product_id: material.id,
                                 product_name: material.name,
                                 quantity_required: 0,
-                                // unit: "pcs",
+                                unit: material.unit || "pcs",
                               },
                             ],
                           }));

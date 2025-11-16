@@ -49,6 +49,7 @@ const Products: React.FC = () => {
     name: "",
     category: "beverage" as "beverage" | "food" | "snack" | "other",
     product_type: "",
+    unit: "pcs" as "gram" | "liter" | "pcs",
     price: 0,
     cost: 0,
     stock: 0,
@@ -1483,6 +1484,7 @@ const Products: React.FC = () => {
         name: "",
         category: "beverage",
         product_type: "",
+        unit: "pcs",
         price: 0,
         cost: 0,
         stock: 0,
@@ -1554,6 +1556,7 @@ const Products: React.FC = () => {
         name: editProduct.name,
         category: editProduct.category,
         product_type: editProduct.product_type,
+        unit: editProduct.unit,
         price: editProduct.price,
         cost: editProduct.cost,
         stock: editProduct.stock,
@@ -1974,7 +1977,7 @@ const Products: React.FC = () => {
                     Stok Saat Ini
                   </label>
                   <div className="mt-1 font-semibold text-gray-900">
-                    {stockCardProduct.stock} unit
+                    {stockCardProduct.stock} {stockCardProduct.unit}
                   </div>
                 </div>
                 <div>
@@ -1982,7 +1985,7 @@ const Products: React.FC = () => {
                     Min. Stok
                   </label>
                   <div className="mt-1 text-gray-900">
-                    {stockCardProduct.min_stock} unit
+                    {stockCardProduct.min_stock} {stockCardProduct.unit}
                   </div>
                 </div>
               </div>
@@ -2352,13 +2355,13 @@ const Products: React.FC = () => {
                             : "text-blue-600"
                         }`}
                       >
-                        {product.stock} unit
+                        {product.stock} {product.unit}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500">Min. Stok</p>
                       <p className="font-medium text-gray-700">
-                        {product.min_stock} unit
+                        {product.min_stock} {product.unit}
                       </p>
                     </div>
                   </div>
@@ -4581,6 +4584,26 @@ const Products: React.FC = () => {
                     </select>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Satuan
+                    </label>
+                    <select
+                      value={newProduct.unit}
+                      onChange={(e) =>
+                        setNewProduct({
+                          ...newProduct,
+                          unit: e.target.value as "gram" | "liter" | "pcs",
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="gram">Gram</option>
+                      <option value="liter">Liter</option>
+                      <option value="pcs">Pcs</option>
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -4625,6 +4648,7 @@ const Products: React.FC = () => {
                       </label>
                       <input
                         type="number"
+                        step="0.01"
                         value={newProduct.stock}
                         onChange={(e) =>
                           setNewProduct({
@@ -4642,6 +4666,7 @@ const Products: React.FC = () => {
                       </label>
                       <input
                         type="number"
+                        step="0.01"
                         value={newProduct.min_stock}
                         onChange={(e) =>
                           setNewProduct({
@@ -5269,6 +5294,25 @@ const Products: React.FC = () => {
                       <option value="finished_good">Produk Jadi</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Satuan
+                    </label>
+                    <select
+                      value={editProduct.unit || "pcs"}
+                      onChange={(e) =>
+                        setEditProduct({
+                          ...editProduct,
+                          unit: e.target.value as "gram" | "liter" | "pcs",
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="gram">Gram</option>
+                      <option value="liter">Liter</option>
+                      <option value="pcs">Pcs</option>
+                    </select>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -5312,6 +5356,7 @@ const Products: React.FC = () => {
                       </label>
                       <input
                         type="number"
+                        step="0.01"
                         value={editProduct.stock}
                         onChange={(e) =>
                           setEditProduct({
@@ -5329,6 +5374,7 @@ const Products: React.FC = () => {
                       </label>
                       <input
                         type="number"
+                        step="0.01"
                         value={editProduct.min_stock}
                         onChange={(e) =>
                           setEditProduct({
