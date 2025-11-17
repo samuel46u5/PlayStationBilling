@@ -455,20 +455,20 @@ const StokOpname: React.FC<{
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const computeSummary = (s: any) => {
-    const rows = s?.rows || [];
-    let totalSystem = 0;
-    let totalPhysical = 0;
-    let totalDiff = 0;
-    for (const r of rows) {
-      const sys = Number(r.systemStock || 0);
-      const phy = Number(r.physicalStock ?? 0);
-      totalSystem += sys;
-      totalPhysical += phy;
-      totalDiff += phy - sys;
-    }
-    return { totalSystem, totalPhysical, totalDiff };
-  };
+  // const computeSummary = (s: any) => {
+  //   const rows = s?.rows || [];
+  //   let totalSystem = 0;
+  //   let totalPhysical = 0;
+  //   let totalDiff = 0;
+  //   for (const r of rows) {
+  //     const sys = Number(r.systemStock || 0);
+  //     const phy = Number(r.physicalStock ?? 0);
+  //     totalSystem += sys;
+  //     totalPhysical += phy;
+  //     totalDiff += phy - sys;
+  //   }
+  //   return { totalSystem, totalPhysical, totalDiff };
+  // };
 
   const computeTotalsWithNominal = (s: any) => {
     const rows = s?.rows || [];

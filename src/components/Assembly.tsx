@@ -87,6 +87,7 @@ const Assembly: React.FC = () => {
     product_id: "",
     product_name: "",
     ingredients: [] as AssemblyIngredient[],
+    cost: 0,
   });
 
   const [assembleForm, setAssembleForm] = useState({
@@ -219,18 +220,24 @@ const Assembly: React.FC = () => {
 
     try {
       // Calculate cost
-      let totalCost = 0;
-      for (const ingredient of newRecipe.ingredients) {
-        const material = rawMaterials.find(
-          (m) => m.id === ingredient.product_id
-        );
-        if (material) {
-          totalCost += material.cost * ingredient.quantity_required;
+      let finalCost = newRecipe.cost;
+      if (finalCost === 0) {
+        let estimatedCost = 0;
+        for (const ingredient of newRecipe.ingredients) {
+          const material = rawMaterials.find(
+            (m) => m.id === ingredient.product_id
+          );
+          if (material) {
+            estimatedCost += material.cost * ingredient.quantity_required;
+          }
         }
+        finalCost = estimatedCost;
       }
 
       // Update cost
-      await db.products.update(newRecipe.product_id, { cost: totalCost });
+      if (finalCost > 0) {
+        await db.products.update(newRecipe.product_id, { cost: finalCost });
+      }
 
       const { error } = await supabase
         .from("assembly_recipes")
@@ -248,7 +255,12 @@ const Assembly: React.FC = () => {
       setShowAddRecipeForm(false);
       setIsEditMode(false);
       setEditingRecipe(null);
-      setNewRecipe({ product_id: "", product_name: "", ingredients: [] });
+      setNewRecipe({
+        product_id: "",
+        product_name: "",
+        ingredients: [],
+        cost: 0,
+      });
       fetchData();
     } catch (error) {
       console.error("Error editing recipe:", error);
@@ -307,18 +319,24 @@ const Assembly: React.FC = () => {
     }
 
     try {
-      let totalCost = 0;
-      for (const ingredient of newRecipe.ingredients) {
-        const material = rawMaterials.find(
-          (m) => m.id === ingredient.product_id
-        );
-        if (material) {
-          totalCost += material.cost * ingredient.quantity_required;
+      let finalCost = newRecipe.cost;
+      if (finalCost === 0) {
+        let estimatedCost = 0;
+        for (const ingredient of newRecipe.ingredients) {
+          const material = rawMaterials.find(
+            (m) => m.id === ingredient.product_id
+          );
+          if (material) {
+            estimatedCost += material.cost * ingredient.quantity_required;
+          }
         }
+        finalCost = estimatedCost;
       }
 
       // Update cost
-      await db.products.update(newRecipe.product_id, { cost: totalCost });
+      if (finalCost > 0) {
+        await db.products.update(newRecipe.product_id, { cost: finalCost });
+      }
 
       const { error } = await supabase.from("assembly_recipes").insert({
         product_id: newRecipe.product_id,
@@ -331,7 +349,12 @@ const Assembly: React.FC = () => {
 
       Swal.fire("Berhasil", "Resep berhasil ditambahkan", "success");
       setShowAddRecipeForm(false);
-      setNewRecipe({ product_id: "", product_name: "", ingredients: [] });
+      setNewRecipe({
+        product_id: "",
+        product_name: "",
+        ingredients: [],
+        cost: 0,
+      });
       fetchData();
     } catch (error) {
       console.error("Error adding recipe:", error);
@@ -563,6 +586,10 @@ const Assembly: React.FC = () => {
                           product_id: recipe.product_id,
                           product_name: recipe.product_name,
                           ingredients: [...recipe.ingredients],
+                          cost:
+                            finishedGoods.find(
+                              (p) => p.id === recipe.product_id
+                            )?.cost || 0,
                         });
                         setShowAddRecipeForm(true);
                       }}
@@ -843,25 +870,51 @@ const Assembly: React.FC = () => {
                 </div>
                 {/* Preview Cost */}
                 {newRecipe.ingredients.length > 0 && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                    <div className="text-sm text-blue-800">
-                      <strong>Estimasi Cost Produk Jadi:</strong>
-                      <div className="mt-1">
-                        Rp{" "}
-                        {(() => {
-                          let total = 0;
-                          for (const ingredient of newRecipe.ingredients) {
-                            const material = rawMaterials.find(
-                              (m) => m.id === ingredient.product_id
-                            );
-                            if (material) {
-                              total +=
-                                material.cost * ingredient.quantity_required;
+                  <div className="mt-4 space-y-3">
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <div className="text-sm text-blue-800">
+                        <strong>Estimasi Cost Produk Jadi:</strong>
+                        <div className="mt-1 text-lg font-semibold">
+                          Rp{" "}
+                          {(() => {
+                            let total = 0;
+                            for (const ingredient of newRecipe.ingredients) {
+                              const material = rawMaterials.find(
+                                (m) => m.id === ingredient.product_id
+                              );
+                              if (material) {
+                                total +=
+                                  material.cost * ingredient.quantity_required;
+                              }
                             }
-                          }
-                          return total.toLocaleString("id-ID");
-                        })()}
+                            return total.toLocaleString("id-ID");
+                          })()}
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Cost Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Cost Produk Jadi (Rp)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Masukkan cost produk jadi"
+                        value={newRecipe.cost || ""}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          setNewRecipe((prev) => ({
+                            ...prev,
+                            cost: value,
+                          }));
+                        }}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Kosongkan untuk menggunakan estimasi cost
+                      </p>
                     </div>
                   </div>
                 )}
@@ -878,6 +931,7 @@ const Assembly: React.FC = () => {
                       product_id: "",
                       product_name: "",
                       ingredients: [],
+                      cost: 0,
                     });
                   }}
                   className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
