@@ -347,6 +347,7 @@ const StokOpname: React.FC<{
       physicalStock: 0,
       note: "",
       unitCost: Number(product?.cost || product?.price || 0),
+      unit: product?.unit || "pcs",
     };
     setCurrent((c: any) => ({ ...c, rows: [...(c?.rows || []), row] }));
   };
@@ -505,6 +506,7 @@ const StokOpname: React.FC<{
         barcode: p.barcode || "",
         systemStock: Number(p.stock || 0),
         unitCost,
+        unit: p.unit || "pcs",
       };
       return { ...c, rows: items };
     });
@@ -728,41 +730,47 @@ const StokOpname: React.FC<{
                         Stok Komputer
                       </label>
                       <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium text-right">
-                        {Number(item.systemStock || 0).toLocaleString()}
+                        {Number(item.systemStock || 0).toLocaleString()}{" "}
+                        {item.unit}
                       </div>
                     </div>
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Stok Fisik
                       </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        data-row-id={item.id}
-                        data-field="physicalStock"
-                        value={item.physicalStock ?? ""}
-                        ref={(el) => {
-                          inputRefs.current[item.id] = el;
-                        }}
-                        autoFocus={true}
-                        onFocus={(e) => {
-                          const target = e.target as HTMLInputElement;
-                          focusedRef.current = {
-                            id: item.id,
-                            field: "physicalStock",
-                            start: target.selectionStart,
-                            end: target.selectionEnd,
-                          };
-                        }}
-                        onChange={(e) => {
-                          const raw = String(e.target.value || "");
-                          const cleaned = raw.replace(/[^0-9.-]/g, "");
-                          const v = cleaned === "" ? 0 : Number(cleaned);
-                          updateRow(item.id, { physicalStock: v });
-                        }}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-right"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          data-row-id={item.id}
+                          data-field="physicalStock"
+                          value={item.physicalStock ?? ""}
+                          ref={(el) => {
+                            inputRefs.current[item.id] = el;
+                          }}
+                          autoFocus={true}
+                          onFocus={(e) => {
+                            const target = e.target as HTMLInputElement;
+                            focusedRef.current = {
+                              id: item.id,
+                              field: "physicalStock",
+                              start: target.selectionStart,
+                              end: target.selectionEnd,
+                            };
+                          }}
+                          onChange={(e) => {
+                            const raw = String(e.target.value || "");
+                            const cleaned = raw.replace(/[^0-9.-]/g, "");
+                            const v = cleaned === "" ? 0 : Number(cleaned);
+                            updateRow(item.id, { physicalStock: v });
+                          }}
+                          className="w-full px-2 py-1 pr-10 border border-gray-300 rounded text-sm text-right"
+                        />
+                        <span className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-500">
+                          {item.unit}
+                        </span>
+                      </div>
                     </div>
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1736,11 +1744,19 @@ const StokOpname: React.FC<{
                                             {Number(
                                               it.systemStock || 0
                                             ).toLocaleString("id-ID")}
+                                            <span className="text-xs text-gray-500">
+                                              {" "}
+                                              {it.unit}
+                                            </span>
                                           </td>
                                           <td className="px-4 py-2 text-right">
                                             {Number(
                                               it.physicalStock || 0
                                             ).toLocaleString("id-ID")}
+                                            <span className="text-xs text-gray-500">
+                                              {" "}
+                                              {it.unit}
+                                            </span>
                                           </td>
                                           <td
                                             className={`px-4 py-2 text-right font-medium ${
@@ -1755,6 +1771,10 @@ const StokOpname: React.FC<{
                                               Number(it.physicalStock || 0) -
                                               Number(it.systemStock || 0)
                                             ).toLocaleString("id-ID")}
+                                            <span className="text-xs text-gray-500">
+                                              {" "}
+                                              {it.unit}
+                                            </span>
                                           </td>
                                           <td className="px-4 py-2 font-semibold text-blue-700 text-right">
                                             {(

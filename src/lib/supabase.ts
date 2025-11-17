@@ -654,7 +654,10 @@ export const db = {
 
       const { data: items, error: itemsError } = await supabase
         .from('stock_opname_items')
-        .select('*')
+        .select(`
+          *,
+          products(unit)
+        `)
         .eq('session_id', sessionId);
         // .order('created_at', { ascending: true });
       
@@ -670,6 +673,7 @@ export const db = {
           systemStock: item.system_stock,
           physicalStock: item.physical_stock,
           unitCost: item.unit_cost,
+          unit: item.products?.unit,
           note: '', // items table doesn't have note field, but we can add it later if needed
           code: item.barcode || item.product_name || '',
         }))

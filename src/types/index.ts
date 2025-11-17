@@ -536,6 +536,8 @@ export interface Product {
   image?: string;
   description?: string;
   isActive: boolean;
+  unit?:string;
+  product_type?:string;
 }
 
 export interface Sale {
