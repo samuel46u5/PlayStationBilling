@@ -180,7 +180,8 @@ export const db = {
           *,
           suppliers(name)
         `)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq("product_type", "finished_good");
       
       if (error) throw error;
       return data;
