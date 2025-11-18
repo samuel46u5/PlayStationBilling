@@ -1357,6 +1357,21 @@ const Products: React.FC = () => {
     }
   };
 
+  const getProductTypeInfo = (productType: string) => {
+    switch (productType) {
+      case "finished_good":
+        return {
+          label: "Produk Jadi",
+          color: "bg-purple-100 text-purple-800",
+        };
+      case "raw_material":
+        return {
+          label: "Bahan Baku",
+          color: "bg-amber-100 text-amber-800",
+        };
+    }
+  };
+
   // const getStatusColor = (status: string) => {
   //   switch (status) {
   //     case "pending":
@@ -2287,6 +2302,13 @@ const Products: React.FC = () => {
                   >
                     {product.category}
                   </span>
+                  <span
+                    className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                      getProductTypeInfo(product.product_type).color
+                    }`}
+                  >
+                    {getProductTypeInfo(product.product_type).label}
+                  </span>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setShowEditForm(product.id)}
@@ -2407,6 +2429,9 @@ const Products: React.FC = () => {
                   Kategori
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Tipe Produk
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Harga Jual
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -2439,6 +2464,16 @@ const Products: React.FC = () => {
                       )}`}
                     >
                       {product.category}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        getProductTypeInfo(product.product_type).color
+                      }`}
+                    >
+                      {getProductTypeInfo(product.product_type).icon}{" "}
+                      {getProductTypeInfo(product.product_type).label}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-green-600 font-semibold">
