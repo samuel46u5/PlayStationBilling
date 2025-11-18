@@ -275,6 +275,12 @@ const ActiveRentals: React.FC = () => {
     new Set()
   );
   const [showVoucherPaymentModal, setShowVoucherPaymentModal] = useState(false);
+  const [consoleHistorySessions, setConsoleHistorySessions] = useState<
+    RentalSession[]
+  >([]);
+  const [showConsoleHistoryModal, setShowConsoleHistoryModal] = useState(false);
+  const [selectedConsoleForHistory, setSelectedConsoleForHistory] =
+    useState<string>("");
 
   // State untuk modal paket
   const [showPackageModal, setShowPackageModal] = useState(false);
@@ -1297,6 +1303,41 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
+  const loadConsoleHistoryToday = async (consoleId: string) => {
+    setLoadingHistory(true);
+    try {
+      const today = new Date();
+      const startOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      ).toISOString();
+      const endOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+        23,
+        59,
+        59
+      ).toISOString();
+
+      const { data, error } = await supabase
+        .from("rental_sessions")
+        .select(`*, consoles(name, location)`)
+        .eq("console_id", consoleId)
+        .gte("start_time", startOfDay)
+        .lte("start_time", endOfDay)
+        .order("start_time", { ascending: false });
+
+      if (error) throw error;
+      setConsoleHistorySessions(data || []);
+    } catch (error) {
+      Swal.fire("Error", "Gagal memuat history console", "error");
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   useEffect(() => {
     loadHistorySessions(historyStartDate, historyEndDate);
   }, [currentPage, historyStartDate, historyEndDate]);
@@ -1463,11 +1504,6 @@ const ActiveRentals: React.FC = () => {
       const rentalData = globalActiveSessions;
 
       // Fetch products from database
-      // const { data: productData, error: productError } = await supabase
-      //   .from("products")
-      //   .select("*")
-      //   .eq("is_active", true);
-
       const productData = await db.products.getActiveProducts();
 
       // Fetch customers
@@ -6634,6 +6670,151 @@ const ActiveRentals: React.FC = () => {
         </div>
       )}
 
+      {/* Console History Modal */}
+      {showConsoleHistoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  History Console Hari Ini - {selectedConsoleForHistory}
+                </h2>
+                <button
+                  onClick={() => setShowConsoleHistoryModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {loadingHistory ? (
+                <div className="text-center py-8 text-gray-500">
+                  Memuat data...
+                </div>
+              ) : consoleHistorySessions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  Tidak ada transaksi hari ini untuk console ini.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm border">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="px-3 py-2 border">Waktu Mulai</th>
+                        <th className="px-3 py-2 border">Waktu Selesai</th>
+                        <th className="px-3 py-2 border">UID Card</th>
+                        <th className="px-3 py-2 border">Durasi</th>
+                        <th className="px-3 py-2 border">Total</th>
+                        <th className="px-3 py-2 border">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {consoleHistorySessions.map((session) => {
+                        const start = new Date(session.start_time);
+                        const end = session.end_time
+                          ? new Date(session.end_time)
+                          : null;
+                        const duration = end
+                          ? Math.round(
+                              (end.getTime() - start.getTime()) / 60000
+                            )
+                          : null;
+                        return (
+                          <tr
+                            key={session.id}
+                            className={`border-b hover:bg-gray-50 ${
+                              session.status === "cancelled"
+                                ? "bg-red-100 text-red-700"
+                                : ""
+                            }`}
+                          >
+                            <td className="px-3 py-2 border font-mono">
+                              <div className="flex items-center justify-between">
+                                <span>
+                                  {start.toLocaleString("id-ID", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "2-digit",
+                                  })}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const console = consoles.find(
+                                      (c) => c.id === session.console_id
+                                    );
+                                    if (console && session.start_time) {
+                                      printRentalProof({
+                                        customerName: "Customer",
+                                        unitNumber: console.name,
+                                        startTimestamp: new Date(
+                                          session.start_time
+                                        ).toLocaleString("id-ID"),
+                                        mode: session.duration_minutes
+                                          ? "prepaid"
+                                          : "pay-as-you-go",
+                                      });
+                                    }
+                                  }}
+                                  className="ml-2 p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                                  title="Cetak bukti rental"
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 border font-mono">
+                              {end
+                                ? end.toLocaleString("id-ID", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "2-digit",
+                                  })
+                                : "-"}
+                            </td>
+                            <td className="px-3 py-2 border">
+                              {session.card_uid || "-"}
+                            </td>
+                            <td className="px-3 py-2 border">
+                              {duration !== null
+                                ? `${Math.floor(duration / 60)}j ${
+                                    duration % 60
+                                  }m`
+                                : "-"}
+                            </td>
+                            <td className="px-3 py-2 border">
+                              {session.total_amount !== 0 ? (
+                                <>
+                                  Rp{" "}
+                                  {session.total_amount.toLocaleString("id-ID")}
+                                </>
+                              ) : (
+                                <>
+                                  {session.total_points_deducted?.toLocaleString(
+                                    "id-ID"
+                                  )}{" "}
+                                  points
+                                </>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 border">
+                              {session.status.toUpperCase()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search Voucher Modal */}
       {showVoucherModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -7562,20 +7743,36 @@ const ActiveRentals: React.FC = () => {
                                       <Unlock className="h-4 w-4 text-red-700" />
                                     )}
                                     {activeSession?.is_voucher_used && (
-                                      <button
-                                        className="rounded-md p-1"
-                                        onClick={async () => {
-                                          setScannedCardUID(
-                                            activeSession.card_uid!
-                                          );
-                                          await fetchCardHistory(
-                                            scannedCardUID
-                                          );
-                                          setShowHistoryPointModal(true);
-                                        }}
-                                      >
-                                        <Info className="h-4 w-4 text-gray-600" />
-                                      </button>
+                                      <div className="flex gap-1">
+                                        <button
+                                          className="rounded-md p-1"
+                                          onClick={async () => {
+                                            setScannedCardUID(
+                                              activeSession.card_uid!
+                                            );
+                                            await fetchCardHistory(
+                                              activeSession.card_uid!
+                                            );
+                                            setShowHistoryPointModal(true);
+                                          }}
+                                        >
+                                          <Info className="h-4 w-4 text-gray-600" />
+                                        </button>
+                                        <button
+                                          className="rounded-md p-1"
+                                          onClick={async () => {
+                                            setSelectedConsoleForHistory(
+                                              console.name
+                                            );
+                                            await loadConsoleHistoryToday(
+                                              console.id
+                                            );
+                                            setShowConsoleHistoryModal(true);
+                                          }}
+                                        >
+                                          <History className="h-4 w-4 text-blue-600" />
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -8056,16 +8253,28 @@ const ActiveRentals: React.FC = () => {
                         <Unlock className="h-4 w-4 text-red-700" />
                       )}
                       {activeSession?.is_voucher_used && (
-                        <button
-                          className="rounded-md p-1"
-                          onClick={async () => {
-                            setScannedCardUID(activeSession.card_uid!);
-                            await fetchCardHistory(scannedCardUID);
-                            setShowHistoryPointModal(true);
-                          }}
-                        >
-                          <Info className="h-4 w-4 text-gray-600" />
-                        </button>
+                        <div className="flex gap-1">
+                          <button
+                            className="rounded-md p-1"
+                            onClick={async () => {
+                              setScannedCardUID(activeSession.card_uid!);
+                              await fetchCardHistory(activeSession.card_uid!);
+                              setShowHistoryPointModal(true);
+                            }}
+                          >
+                            <Info className="h-4 w-4 text-gray-600" />
+                          </button>
+                          <button
+                            className="rounded-md p-1"
+                            onClick={async () => {
+                              setSelectedConsoleForHistory(console.name);
+                              await loadConsoleHistoryToday(console.id);
+                              setShowConsoleHistoryModal(true);
+                            }}
+                          >
+                            <History className="h-4 w-4 text-blue-600" />
+                          </button>
+                        </div>
                       )}
                     </div>
                     <div className="text-sm text-gray-600 flex flex-wrap gap-4">
@@ -8488,16 +8697,28 @@ const ActiveRentals: React.FC = () => {
                         </span>
                       )} */}
                       {activeSession?.is_voucher_used && (
-                        <button
-                          className="rounded-md p-1"
-                          onClick={async () => {
-                            setScannedCardUID(activeSession.card_uid!);
-                            await fetchCardHistory(activeSession.card_uid!);
-                            setShowHistoryPointModal(true);
-                          }}
-                        >
-                          <Info className="h-5 w-5 text-white-600" />
-                        </button>
+                        <div>
+                          <button
+                            className="rounded-md p-1"
+                            onClick={async () => {
+                              setScannedCardUID(activeSession.card_uid!);
+                              await fetchCardHistory(activeSession.card_uid!);
+                              setShowHistoryPointModal(true);
+                            }}
+                          >
+                            <Info className="h-5 w-5 text-white-600" />
+                          </button>
+                          <button
+                            className="rounded-md p-1"
+                            onClick={async () => {
+                              setSelectedConsoleForHistory(console.name);
+                              await loadConsoleHistoryToday(console.id);
+                              setShowConsoleHistoryModal(true);
+                            }}
+                          >
+                            <History className="h-5 w-5 text-blue-600" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

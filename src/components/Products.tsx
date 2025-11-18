@@ -2472,7 +2472,6 @@ const Products: React.FC = () => {
                         getProductTypeInfo(product.product_type).color
                       }`}
                     >
-                      {getProductTypeInfo(product.product_type).icon}{" "}
                       {getProductTypeInfo(product.product_type).label}
                     </span>
                   </td>
