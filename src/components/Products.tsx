@@ -48,7 +48,7 @@ const Products: React.FC = () => {
   const [newProduct, setNewProduct] = useState({
     name: "",
     category: "beverage" as "beverage" | "food" | "snack" | "other",
-    product_type: "",
+    product_type: "finished_good",
     unit: "pcs" as "gram" | "liter" | "pcs",
     price: 0,
     cost: 0,
@@ -1483,7 +1483,7 @@ const Products: React.FC = () => {
       setNewProduct({
         name: "",
         category: "beverage",
-        product_type: "",
+        product_type: "finished_good",
         unit: "pcs",
         price: 0,
         cost: 0,
