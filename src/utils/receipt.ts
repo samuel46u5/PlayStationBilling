@@ -37,6 +37,7 @@ export interface ProductPriceList {
   name: string;
   category: string;
   price: number;
+  stock: number;
 }
 
 export interface StockOpnameData {
@@ -203,6 +204,71 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   </html>`;
 };
 
+export const generatePriceListText = async (products: ProductPriceList[]) => {
+  const settings = await db.settings.get();
+  const generalSettings = settings?.general || {}; 
+  const printerSettings = settings?.printer || {};
+  const lineWidth = printerSettings.receiptWidth || 40;
+
+  const pad = (
+    text: string,
+    width: number,
+    align: "left" | "right" = "left"
+  ) => {
+    if (align === "right") return text.toString().padStart(width);
+    return text.toString().padEnd(width);
+  };
+
+  const center = (text: string) => {
+    const space = Math.max(0, Math.floor((lineWidth - text.length) / 2));
+    return " ".repeat(space) + text;
+  };
+
+  const formatMoney = (amount: number) =>
+    "Rp " + amount.toLocaleString("id-ID");
+
+  const lines: string[] = [];
+
+  const currentDate = new Date().toLocaleDateString("id-ID", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  // HEADER
+  lines.push("=".repeat(lineWidth));
+  lines.push(center("DAFTAR HARGA PRODUK"));
+  lines.push(
+    center(
+      generalSettings.businessName?.toUpperCase() || "GAMING & BILLIARD CENTER"
+    )
+  );
+  if (generalSettings.businessAddress)
+    lines.push(center(generalSettings.businessAddress));
+  if (generalSettings.businessPhone)
+    lines.push(center(`Telp: ${generalSettings.businessPhone}`));
+  lines.push(center(`Tanggal: ${currentDate}`));
+  lines.push("=".repeat(lineWidth));
+
+  // TABLE HEADER
+  lines.push(pad("NAMA PRODUK", 15) + pad("HARGA", 12, "right") + pad("STOK", 8, "right"));
+  lines.push("-".repeat(lineWidth));
+
+  // PRODUCT LIST
+  products.forEach((product: ProductPriceList) => {
+    const name = product.name.length > 15 ? product.name.slice(0, 15) : product.name;
+    const price = formatMoney(product.price);
+    const stock = product.stock?.toString() || "0";
+    lines.push(pad(name, 15) + pad(price, 12, "right") + pad(stock, 8, "right"));
+  });
+
+  lines.push("-".repeat(lineWidth));
+  lines.push(pad(`TOTAL PRODUK: ${products.length} item`, lineWidth));
+  lines.push("=".repeat(lineWidth));
+
+  return lines.join("\n");
+};
+
 export const generateRentalProofHTML = async (data: RentalProofData) => {
   const settings = await db.settings.get();
   const generalSettings = settings?.general || {};
@@ -341,16 +407,16 @@ export const generatePriceListHTMLTextMode = async (
   lines.push("=".repeat(lineWidth));
 
   // TABLE HEADER
-  lines.push(pad("NAMA PRODUK", 20) + pad("HARGA", 20, "right"));
+  lines.push(pad("NAMA PRODUK", 15) + pad("HARGA", 12, "right") + pad("STOK", 8, "right"));
   lines.push("-".repeat(lineWidth));
 
   // PRODUCT LIST
   products.forEach((product: ProductPriceList) => {
-    const name =
-      product.name.length > 20 ? product.name.slice(0, 20) : product.name;
+    const name = product.name.length > 15 ? product.name.slice(0, 15) : product.name;
     // const category = product.category?.length > 10 ? product.category.slice(0, 10) : product.category;
     const price = formatMoney(product.price);
-    lines.push(pad(name, 20) + pad(price, 20, "right"));
+    const stock = product.stock?.toString() || "0";
+    lines.push(pad(name, 15) + pad(price, 12, "right") + pad(stock, 8, "right"));
   });
 
   lines.push("-".repeat(lineWidth));

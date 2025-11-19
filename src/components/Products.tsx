@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import {
   Plus,
   X,
+  Copy,
   Minus,
   Search,
   Package,
@@ -1972,7 +1973,7 @@ const Products: React.FC = () => {
             className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             <Minus className="h-5 w-5" />
-            Kurangi Stok
+            Gunakan Stok
           </button>
           <button
             onClick={() => setShowAddForm(true)}
@@ -2422,23 +2423,27 @@ const Products: React.FC = () => {
                   Kategori
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Barcode
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Tipe Produk
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Harga Jual
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Modal
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Stok
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Min. Stok
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Barcode
+                  Stok
                 </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  Modal
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  Nilai Stok
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  Harga Jual
+                </th>
+
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Aksi
                 </th>
@@ -2459,6 +2464,9 @@ const Products: React.FC = () => {
                       {product.category}
                     </span>
                   </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-700">
+                    {product.barcode || "-"}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -2468,12 +2476,7 @@ const Products: React.FC = () => {
                       {getProductTypeInfo(product.product_type).label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-green-600 font-semibold">
-                    Rp {product.price.toLocaleString("id-ID")}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">
-                    Rp {product.cost.toLocaleString("id-ID")}
-                  </td>
+                  <td className="px-4 py-3">{product.min_stock}</td>
                   <td
                     className={`px-4 py-3 font-semibold ${
                       product.stock <= product.min_stock
@@ -2481,12 +2484,18 @@ const Products: React.FC = () => {
                         : "text-blue-600"
                     }`}
                   >
-                    {product.stock}
+                    {product.stock} {product.unit}
                   </td>
-                  <td className="px-4 py-3">{product.min_stock}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                    {product.barcode || "-"}
+                  <td className="px-4 py-3 text-gray-700 text-right">
+                    Rp {product.cost.toLocaleString("id-ID")}
                   </td>
+                  <td className="px-4 py-3 font-semibold text-gray-700 text-right">
+                    Rp {(product.cost * product.stock).toLocaleString("id-ID")}
+                  </td>
+                  <td className="px-4 py-3 text-green-600 font-semibold text-right">
+                    Rp {product.price.toLocaleString("id-ID")}
+                  </td>
+
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button
@@ -2522,6 +2531,24 @@ const Products: React.FC = () => {
                 </tr>
               ))}
             </tbody>
+            {/* Total Row */}
+            <tr className="bg-gray-50 font-semibold border-t-2 border-gray-300">
+              <td colSpan={7} className="px-4 py-3 text-right text-gray-900">
+                Total Nilai Stock:
+              </td>
+              <td className="px-4 py-3 text-gray-900 text-right">
+                Rp{" "}
+                {(() => {
+                  const total = filteredProducts.reduce(
+                    (sum, product) =>
+                      sum + (product.stock || 0) * (product.cost || 0),
+                    0
+                  );
+                  return total.toLocaleString("id-ID");
+                })()}
+              </td>
+              <td></td>
+            </tr>
           </table>
         </div>
       )}
@@ -3787,9 +3814,52 @@ const Products: React.FC = () => {
         name: p.name,
         category: p.category,
         price: p.price,
+        stock: p.stock,
       }));
     try {
       await printPriceList(selectedProducts);
+    } catch (err: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Gagal",
+        text: err?.message || String(err),
+      });
+    }
+  };
+
+  const handleCopyPriceList = async () => {
+    if (selectedProductsForPrint.length === 0) {
+      Swal.fire({
+        icon: "warning",
+        title: "Pilih Produk",
+        text: "Silakan pilih produk yang akan disalin",
+      });
+      return;
+    }
+
+    const selectedProducts: ProductPriceList[] = products
+      .filter((p) => selectedProductsForPrint.includes(p.id))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        stock: p.stock,
+      }));
+
+    try {
+      const { generatePriceListText } = await import("../utils/receipt");
+      const priceListText = await generatePriceListText(selectedProducts);
+
+      await navigator.clipboard.writeText(priceListText);
+
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: "Daftar harga berhasil disalin ke clipboard",
+        timer: 2000,
+        showConfirmButton: false,
+      });
     } catch (err: any) {
       Swal.fire({
         icon: "error",
@@ -6244,7 +6314,9 @@ const Products: React.FC = () => {
                     checked={selectLowStockProducts}
                     onChange={(e) => {
                       const lowStockProducts = products.filter(
-                        (p) => p.stock <= p.min_stock
+                        (p) =>
+                          p.stock <= p.min_stock &&
+                          p.product_type === "raw_material"
                       );
                       setSelectLowStockProducts(e.target.checked);
                       if (e.target.checked) {
@@ -6267,7 +6339,14 @@ const Products: React.FC = () => {
                   <span className="font-medium text-orange-900 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4" />
                     Pilih Produk Stok Rendah (
-                    {products.filter((p) => p.stock <= p.min_stock).length})
+                    {
+                      products.filter(
+                        (p) =>
+                          p.stock <= p.min_stock &&
+                          p.product_type === "raw_material"
+                      ).length
+                    }
+                    )
                   </span>
                 </label>
               </div>
@@ -6303,7 +6382,8 @@ const Products: React.FC = () => {
                         </div>
                         <div className="text-sm text-gray-600">
                           {product.category} • Rp{" "}
-                          {product.price.toLocaleString("id-ID")}
+                          {product.price.toLocaleString("id-ID")} •{" "}
+                          {product.stock} {product.unit}
                         </div>
                       </div>
                     </div>
@@ -6326,6 +6406,18 @@ const Products: React.FC = () => {
                     className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
                   >
                     Batal
+                  </button>
+                  <button
+                    onClick={handleCopyPriceList}
+                    disabled={selectedProductsForPrint.length === 0}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                      selectedProductsForPrint.length === 0
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                    }`}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy ({selectedProductsForPrint.length})
                   </button>
                   <button
                     onClick={handlePrintPriceList}
