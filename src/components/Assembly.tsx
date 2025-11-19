@@ -846,6 +846,32 @@ const Assembly: React.FC = () => {
                       <span className="text-sm text-gray-600 px-2">
                         {ingredient.unit}
                       </span>
+                      <div className="text-right w-28">
+                        <div className="text-sm font-medium text-gray-900">
+                          Rp{" "}
+                          {(() => {
+                            const material = rawMaterials.find(
+                              (m) => m.id === ingredient.product_id
+                            );
+                            const cost = material?.cost || 0;
+                            const total =
+                              cost * (ingredient.quantity_required || 0);
+                            return total.toLocaleString("id-ID");
+                          })()}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          @ Rp{" "}
+                          {(() => {
+                            const material = rawMaterials.find(
+                              (m) => m.id === ingredient.product_id
+                            );
+                            return (material?.cost || 0).toLocaleString(
+                              "id-ID"
+                            );
+                          })()}
+                          /{ingredient.unit}
+                        </div>
+                      </div>
                       {/* <select
                         value={ingredient.unit}
                         onChange={(e) =>
@@ -1002,7 +1028,7 @@ const Assembly: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Jumlah yang akan dirakit
+                    Jumlah resep yang akan dirakit
                   </label>
                   <input
                     type="number"

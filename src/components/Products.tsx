@@ -38,6 +38,7 @@ const Products: React.FC = () => {
   >("products");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedProductType, setSelectedProductType] = useState<string>("all");
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState<string | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
@@ -958,10 +959,6 @@ const Products: React.FC = () => {
   const [stockHistoryError, setStockHistoryError] = useState<string | null>(
     null
   );
-  // Controlled inputs for Stock Card modal
-  const [stockAdj, setStockAdj] = useState<number>(0);
-  const [stockAdjType, setStockAdjType] = useState<"in" | "out">("in");
-  const [stockNote, setStockNote] = useState<string>("");
   // pagination for stock history
   const [historyPage, setHistoryPage] = useState<number>(0);
   const HISTORY_PAGE_SIZE = 10;
@@ -1180,13 +1177,22 @@ const Products: React.FC = () => {
     { value: "other", label: "Lainnya" },
   ];
 
+  const productTypes = [
+    { value: "all", label: "Semua Tipe" },
+    { value: "finished_good", label: "Produk Jadi" },
+    { value: "raw_material", label: "Bahan Baku" },
+  ];
+
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.barcode?.includes(searchTerm);
     const matchesCategory =
       selectedCategory === "all" || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const matchesProductType =
+      selectedProductType === "all" ||
+      product.product_type === selectedProductType;
+    return matchesSearch && matchesCategory && matchesProductType;
   });
 
   // const filteredPurchases = mockPurchaseOrders.filter(purchase => {
@@ -1662,10 +1668,6 @@ const Products: React.FC = () => {
   const handleOpenStockCard = (product: any) => {
     // open React modal instead of Swal to allow richer UI
     setStockCardProduct(product);
-    // reset controlled inputs
-    setStockAdj(0);
-    setStockAdjType("in");
-    setStockNote("");
     setShowStockCard(true);
     // fetch history
     fetchStockHistory(product.id, product.stock).catch((e) => {
@@ -1788,6 +1790,47 @@ const Products: React.FC = () => {
         // ignore if table missing or error
       }
 
+      // 3) outgoing: assembly_logs (raw material usage in assembly process)
+      try {
+        const { data: assemblyLogs } = await supabase.from("assembly_logs")
+          .select(`
+          *,
+          recipe:assembly_recipes(product_name)
+        `);
+        if (Array.isArray(assemblyLogs) && assemblyLogs.length > 0) {
+          for (const log of assemblyLogs as any[]) {
+            const ingredientsUsed = log.ingredients_used;
+            if (Array.isArray(ingredientsUsed)) {
+              for (const ingredient of ingredientsUsed) {
+                const ingredientProductId =
+                  ingredient.product_id || ingredient.productId;
+                if (String(ingredientProductId) === String(productId)) {
+                  const qty = Number(
+                    ingredient.quantity_used || ingredient.quantityUsed || 0
+                  );
+                  if (qty === 0) continue;
+
+                  rows.push({
+                    id: `assembly_${log.id}_${ingredientProductId}`,
+                    product_id: productId,
+                    quantity: -Math.abs(qty),
+                    note: `Assembly: ${
+                      log.recipe?.product_name || `Recipe ID: ${log.recipe_id}`
+                    }`,
+                    created_at:
+                      log.created_at ||
+                      log.timestamp ||
+                      new Date().toISOString(),
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // ignore if table missing or error
+      }
+
       if (rows.length === 0) {
         setStockHistory([]);
         setStockHistoryLoading(false);
@@ -1817,7 +1860,7 @@ const Products: React.FC = () => {
       });
 
       // store newest-first for UI (existing code expects newest-first then we reverse when rendering)
-      setStockHistory(withBalance.reverse());
+      setStockHistory(withBalance);
     } catch (error: any) {
       setStockHistoryError(error?.message || String(error));
     } finally {
@@ -1951,6 +1994,17 @@ const Products: React.FC = () => {
             </option>
           ))}
         </select>
+        <select
+          value={selectedProductType}
+          onChange={(e) => setSelectedProductType(e.target.value)}
+          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        >
+          {productTypes.map((type) => (
+            <option key={type.value} value={type.value}>
+              {type.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Low Stock Alert */}
@@ -2005,7 +2059,7 @@ const Products: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mb-4">
+              {/* <div className="mb-4">
                 <label className="block text-sm text-gray-600 mb-1">
                   Catatan
                 </label>
@@ -2017,9 +2071,9 @@ const Products: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   rows={3}
                 />
-              </div>
+              </div> */}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
                     Tambah / Kurangi Stok
@@ -2048,7 +2102,7 @@ const Products: React.FC = () => {
                     <option value="out">Kurangi</option>
                   </select>
                 </div>
-              </div>
+              </div> */}
             </div>
 
             {/* History Section */}
@@ -2103,9 +2157,9 @@ const Products: React.FC = () => {
                           <>
                             <tr className="border-t">
                               <td className="px-2 py-2">-</td>
-                              <td className="px-2 py-2 text-right">-</td>
-                              <td className="px-2 py-2 text-right">-</td>
-                              <td className="px-2 py-2 text-right font-semibold">
+                              <td className="px-2 py-2">-</td>
+                              <td className="px-2 py-2 ">-</td>
+                              <td className="px-2 py-2 font-semibold">
                                 {startBalance}
                               </td>
                               <td className="px-2 py-2">Saldo Awal</td>
@@ -2120,15 +2174,13 @@ const Products: React.FC = () => {
                                     "id-ID"
                                   )}
                                 </td>
-                                <td className="px-2 py-2 text-right">
+                                <td className="px-2 py-2 ">
                                   {r._qty < 0 ? Math.abs(r._qty) : "-"}
                                 </td>
-                                <td className="px-2 py-2 text-right">
+                                <td className="px-2 py-2 ">
                                   {r._qty > 0 ? r._qty : "-"}
                                 </td>
-                                <td className="px-2 py-2 text-right">
-                                  {r._balance}
-                                </td>
+                                <td className="px-2 py-2 ">{r._balance}</td>
                                 <td className="px-2 py-2">
                                   {r.note || r.notes || "-"}
                                 </td>
@@ -2193,91 +2245,9 @@ const Products: React.FC = () => {
             <div className="p-6 border-t border-gray-200 bg-gray-50 flex gap-3">
               <button
                 onClick={() => setShowStockCard(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
-              >
-                Batal
-              </button>
-              <button
-                onClick={async () => {
-                  const adj = stockAdj || 0;
-                  const type = stockAdjType || "in";
-
-                  const newProducts = products.map((p) => {
-                    if (p.id === stockCardProduct.id) {
-                      const newStock =
-                        type === "in" ? p.stock + adj : p.stock - adj;
-                      return { ...p, stock: newStock < 0 ? 0 : newStock };
-                    }
-                    return p;
-                  });
-                  setProducts(newProducts);
-
-                  // Persist to DB using helpers
-                  try {
-                    if (adj !== 0) {
-                      if (type === "in") {
-                        await db.products.increaseStock(
-                          stockCardProduct.id,
-                          adj
-                        );
-                      } else {
-                        await db.products.decreaseStock(
-                          stockCardProduct.id,
-                          adj
-                        );
-                      }
-
-                      // Try to insert history row into candidate tables
-                      const historyCandidates = [
-                        "stock_movements",
-                        "stock_movements_history",
-                        "inventory_movements",
-                        "product_stock_movements",
-                        "stock_changes",
-                        "stock_journal",
-                        "stock_logs",
-                        "stock_histories",
-                      ];
-                      const noteVal = stockNote || null;
-                      for (const tbl of historyCandidates) {
-                        try {
-                          await db.insert(tbl, {
-                            product_id: stockCardProduct.id,
-                            quantity: type === "in" ? adj : -adj,
-                            note: noteVal,
-                            created_at: new Date().toISOString(),
-                          });
-                          break; // inserted to first available table
-                        } catch (err) {
-                          // ignore and try next
-                        }
-                      }
-                    }
-                  } catch (err: any) {
-                    console.error("Persist stock error", err);
-                    Swal.fire({
-                      icon: "error",
-                      title: "Gagal",
-                      text: err?.message || "Gagal menyimpan perubahan stok",
-                    });
-                    return;
-                  }
-
-                  // reset controlled inputs
-                  setStockAdj(0);
-                  setStockAdjType("in");
-                  setStockNote("");
-
-                  setShowStockCard(false);
-                  Swal.fire({
-                    icon: "success",
-                    title: "Berhasil",
-                    text: "Stok diperbarui",
-                  });
-                }}
                 className="px-6 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white"
               >
-                Simpan
+                OK
               </button>
             </div>
           </div>

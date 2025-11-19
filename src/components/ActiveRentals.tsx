@@ -7742,8 +7742,8 @@ const ActiveRentals: React.FC = () => {
                                     ) : (
                                       <Unlock className="h-4 w-4 text-red-700" />
                                     )}
-                                    {activeSession?.is_voucher_used && (
-                                      <div className="flex gap-1">
+                                    <div className="flex gap-1">
+                                      {activeSession?.is_voucher_used && (
                                         <button
                                           className="rounded-md p-1"
                                           onClick={async () => {
@@ -7758,22 +7758,22 @@ const ActiveRentals: React.FC = () => {
                                         >
                                           <Info className="h-4 w-4 text-gray-600" />
                                         </button>
-                                        <button
-                                          className="rounded-md p-1"
-                                          onClick={async () => {
-                                            setSelectedConsoleForHistory(
-                                              console.name
-                                            );
-                                            await loadConsoleHistoryToday(
-                                              console.id
-                                            );
-                                            setShowConsoleHistoryModal(true);
-                                          }}
-                                        >
-                                          <History className="h-4 w-4 text-blue-600" />
-                                        </button>
-                                      </div>
-                                    )}
+                                      )}
+                                      <button
+                                        className="rounded-md p-1"
+                                        onClick={async () => {
+                                          setSelectedConsoleForHistory(
+                                            console.name
+                                          );
+                                          await loadConsoleHistoryToday(
+                                            console.id
+                                          );
+                                          setShowConsoleHistoryModal(true);
+                                        }}
+                                      >
+                                        <History className="h-4 w-4 text-blue-600" />
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
 
@@ -8252,8 +8252,8 @@ const ActiveRentals: React.FC = () => {
                       ) : (
                         <Unlock className="h-4 w-4 text-red-700" />
                       )}
-                      {activeSession?.is_voucher_used && (
-                        <div className="flex gap-1">
+                      <div className="flex gap-1">
+                        {activeSession?.is_voucher_used && (
                           <button
                             className="rounded-md p-1"
                             onClick={async () => {
@@ -8264,18 +8264,18 @@ const ActiveRentals: React.FC = () => {
                           >
                             <Info className="h-4 w-4 text-gray-600" />
                           </button>
-                          <button
-                            className="rounded-md p-1"
-                            onClick={async () => {
-                              setSelectedConsoleForHistory(console.name);
-                              await loadConsoleHistoryToday(console.id);
-                              setShowConsoleHistoryModal(true);
-                            }}
-                          >
-                            <History className="h-4 w-4 text-blue-600" />
-                          </button>
-                        </div>
-                      )}
+                        )}
+                        <button
+                          className="rounded-md p-1"
+                          onClick={async () => {
+                            setSelectedConsoleForHistory(console.name);
+                            await loadConsoleHistoryToday(console.id);
+                            setShowConsoleHistoryModal(true);
+                          }}
+                        >
+                          <History className="h-4 w-4 text-blue-600" />
+                        </button>
+                      </div>
                     </div>
                     <div className="text-sm text-gray-600 flex flex-wrap gap-4">
                       <div className="flex items-center gap-1">
@@ -8696,8 +8696,8 @@ const ActiveRentals: React.FC = () => {
                           {console.location}
                         </span>
                       )} */}
-                      {activeSession?.is_voucher_used && (
-                        <div>
+                      <div className="flex gap-1">
+                        {activeSession?.is_voucher_used && (
                           <button
                             className="rounded-md p-1"
                             onClick={async () => {
@@ -8708,18 +8708,18 @@ const ActiveRentals: React.FC = () => {
                           >
                             <Info className="h-5 w-5 text-white-600" />
                           </button>
-                          <button
-                            className="rounded-md p-1"
-                            onClick={async () => {
-                              setSelectedConsoleForHistory(console.name);
-                              await loadConsoleHistoryToday(console.id);
-                              setShowConsoleHistoryModal(true);
-                            }}
-                          >
-                            <History className="h-5 w-5 text-blue-600" />
-                          </button>
-                        </div>
-                      )}
+                        )}
+                        <button
+                          className="rounded-md p-1"
+                          onClick={async () => {
+                            setSelectedConsoleForHistory(console.name);
+                            await loadConsoleHistoryToday(console.id);
+                            setShowConsoleHistoryModal(true);
+                          }}
+                        >
+                          <History className="h-5 w-5 text-white-600" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
