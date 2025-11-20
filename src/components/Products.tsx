@@ -2038,10 +2038,18 @@ const Products: React.FC = () => {
             <AlertTriangle className="h-5 w-5 text-red-600" />
             <h3 className="font-semibold text-red-800">Stok Menipis</h3>
           </div>
-          <p className="text-red-700 text-sm">
+          {/* <p className="text-red-700 text-sm">
             {lowStockProducts.length} produk memiliki stok di bawah minimum:{" "}
             {lowStockProducts.map((p) => p.name).join(", ")}
-          </p>
+          </p> */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-1">
+            {lowStockProducts.map((product, index) => (
+              <div key={product.id} className="flex items-start gap-1">
+                <span className="text-red-500">•</span>
+                <span className="text-red-700 text-sm">{product.name}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
