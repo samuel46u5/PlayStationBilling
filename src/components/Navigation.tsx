@@ -106,7 +106,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
 
   return (
     <nav className="bg-slate-800 text-white w-64 min-h-screen p-6 flex flex-col">
-      <div className="mb-8">
+      <div className="mb-1">
         <div className="flex items-center gap-3 mb-2">
           <Gamepad2 className="h-8 w-8 text-blue-400" />
           <div>
@@ -114,6 +114,32 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
             <p className="text-slate-400 text-xs">Rental + Mini Cafe POS</p>
           </div>
         </div>
+        {/* User Profile Section */}
+        <div className="mt-6 pt-6 border-t border-slate-700">
+          <div className="flex items-center gap-3 px-4 py-2 mb-2">
+            <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
+              <User className="h-5 w-5 text-slate-300" />
+            </div>
+            <div className="overflow-hidden">
+              <p className="font-medium text-sm text-white truncate">
+                {user?.full_name}
+              </p>
+              <p className="text-xs text-slate-400 truncate">
+                {user?.roles?.name}
+              </p>
+            </div>
+          </div>
+        </div>
+        {user && (
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-red-400 hover:bg-slate-700 hover:text-red-500"
+          >
+            <LogOut className="h-5 w-5" />
+            <span className="font-medium text-sm">Logout</span>
+          </button>
+        )}
+        <div className="mb-6 pb-6 border-b border-slate-700"></div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -139,32 +165,6 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
           })}
         </ul>
       </div>
-
-      {/* User Profile Section */}
-      <div className="mt-6 pt-6 border-t border-slate-700">
-        <div className="flex items-center gap-3 px-4 py-2 mb-2">
-          <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
-            <User className="h-5 w-5 text-slate-300" />
-          </div>
-          <div className="overflow-hidden">
-            <p className="font-medium text-sm text-white truncate">
-              {user?.full_name}
-            </p>
-            <p className="text-xs text-slate-400 truncate">
-              {user?.roles?.name}
-            </p>
-          </div>
-        </div>
-      </div>
-      {user && (
-        <button
-          onClick={logout}
-          className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-red-400 hover:bg-slate-700 hover:text-red-500"
-        >
-          <LogOut className="h-5 w-5" />
-          <span className="font-medium text-sm">Logout</span>
-        </button>
-      )}
     </nav>
   );
 };
