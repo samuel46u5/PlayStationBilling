@@ -2043,7 +2043,7 @@ const Products: React.FC = () => {
             {lowStockProducts.map((p) => p.name).join(", ")}
           </p> */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-1">
-            {lowStockProducts.map((product, index) => (
+            {lowStockProducts.map((product) => (
               <div key={product.id} className="flex items-start gap-1">
                 <span className="text-red-500">•</span>
                 <span className="text-red-700 text-sm">{product.name}</span>

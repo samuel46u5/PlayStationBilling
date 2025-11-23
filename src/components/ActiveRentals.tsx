@@ -9998,8 +9998,23 @@ const ActiveRentals: React.FC = () => {
                 {filteredProducts.map((product) => (
                   <div
                     key={product.id}
-                    onClick={() => addToCart(product)}
-                    className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => {
+                      if (product.stock <= 0) {
+                        Swal.fire({
+                          icon: "warning",
+                          title: "Stok Habis",
+                          text: `Produk "${product.name}" tidak dapat dipilih karena stok habis.`,
+                          confirmButtonText: "OK",
+                        });
+                        return;
+                      }
+                      addToCart(product);
+                    }}
+                    className={`bg-white border border-gray-200 rounded-lg p-4 transition-shadow ${
+                      product.stock <= 0
+                        ? "cursor-not-allowed opacity-50 hover:shadow-none"
+                        : "cursor-pointer hover:shadow-md"
+                    }`}
                   >
                     <div className="mb-3">
                       <span
@@ -10019,8 +10034,14 @@ const ActiveRentals: React.FC = () => {
                       <span className="text-lg font-bold text-blue-600">
                         Rp {product.price.toLocaleString("id-ID")}
                       </span>
-                      <span className="text-sm text-gray-500">
-                        Stock: {product.stock}
+                      <span
+                        className={`text-sm ${
+                          product.stock <= 0
+                            ? "text-red-500 font-medium"
+                            : "text-gray-500"
+                        }`}
+                      >
+                        Stock: {product.stock <= 0 ? "HABIS" : product.stock}
                       </span>
                     </div>
                   </div>
