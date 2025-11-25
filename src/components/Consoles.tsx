@@ -19,7 +19,7 @@ const Consoles: React.FC = () => {
   const [equipmentTypes, setEquipmentTypes] = useState<any[]>([]);
   const [addForm, setAddForm] = useState({
     name: "",
-    equipment_type_id: "",
+    equipment_type_id: equipmentTypes[0],
     status: "available" as "available" | "rented" | "maintenance",
     location: "",
     serial_number: "",
@@ -803,7 +803,11 @@ const Consoles: React.FC = () => {
                       </label>
                       <select
                         id="add-equipment-type"
-                        value={addForm.equipment_type_id}
+                        value={
+                          addForm.equipment_type_id ||
+                          equipmentTypes[0]?.id ||
+                          ""
+                        }
                         onChange={(e) =>
                           setAddForm((p) => ({
                             ...p,
@@ -985,7 +989,7 @@ const Consoles: React.FC = () => {
                         onChange={(e) =>
                           setAddForm((p) => ({
                             ...p,
-                            ips_esp32: e.target.value,
+                            ip_esp32: e.target.value,
                           }))
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

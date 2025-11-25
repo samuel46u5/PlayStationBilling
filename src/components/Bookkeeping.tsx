@@ -3308,15 +3308,32 @@ const Bookkeeping: React.FC = () => {
                                 (sum, c) => sum + c.totalDurationMinutes,
                                 0
                               );
+                              const operatingMinutes =
+                                validConsoles.length * 14 * 60;
+                              const occupancyRate =
+                                operatingMinutes > 0
+                                  ? Math.round(
+                                      (totalAllMinutes / operatingMinutes) * 100
+                                    )
+                                  : 0;
 
                               return (
-                                <div className="flex gap-2">
+                                <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <div className="text-xs text-gray-500">
                                       Total Durasi
                                     </div>
                                     <div className="font-bold text-green-700">
                                       {formatDuration(totalAllMinutes)}
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <div className="text-xs text-gray-500">
+                                      Okupansi Harian
+                                    </div>
+                                    <div className="font-bold text-orange-700">
+                                      {occupancyRate}%
                                     </div>
                                   </div>
                                 </div>
@@ -3518,6 +3535,22 @@ const Bookkeeping: React.FC = () => {
                             </div>
                             <div className="text-xs text-gray-500">
                               {sortedDates.length} hari aktif
+                            </div>
+                            <div className="text-xs text-blue-600 font-medium">
+                              Okupansi:{" "}
+                              {(() => {
+                                const operatingMinutes =
+                                  sortedDates.length * 14 * 60;
+                                const occupancyRate =
+                                  operatingMinutes > 0
+                                    ? Math.round(
+                                        (consoleData.totalDurationMinutes /
+                                          operatingMinutes) *
+                                          100
+                                      )
+                                    : 0;
+                                return `${occupancyRate}%`;
+                              })()}
                             </div>
                           </div>
                         </button>
