@@ -2032,26 +2032,61 @@ const Products: React.FC = () => {
       </div>
 
       {/* Low Stock Alert */}
-      {lowStockProducts.length > 0 && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <h3 className="font-semibold text-red-800">Stok Menipis</h3>
-          </div>
-          {/* <p className="text-red-700 text-sm">
-            {lowStockProducts.length} produk memiliki stok di bawah minimum:{" "}
-            {lowStockProducts.map((p) => p.name).join(", ")}
-          </p> */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-1">
-            {lowStockProducts.map((product) => (
-              <div key={product.id} className="flex items-start gap-1">
-                <span className="text-red-500">•</span>
-                <span className="text-red-700 text-sm">{product.name}</span>
+      {/* Raw Material Low Stock */}
+      {(() => {
+        const rawMaterialLowStock = products.filter(
+          (p) => p.stock <= p.min_stock && p.product_type === "raw_material"
+        );
+        return (
+          rawMaterialLowStock.length > 0 && (
+            <div className="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                <h3 className="font-semibold text-orange-800">
+                  Bahan Baku Stok Rendah
+                </h3>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-1">
+                {rawMaterialLowStock.map((product) => (
+                  <div key={product.id} className="flex items-start gap-1">
+                    <span className="text-orange-500">•</span>
+                    <span className="text-orange-700 text-sm">
+                      {product.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        );
+      })()}
+
+      {/* Finished Goods Low Stock */}
+      {(() => {
+        const finishedGoodsLowStock = products.filter(
+          (p) => p.stock <= p.min_stock && p.product_type === "finished_good"
+        );
+        return (
+          finishedGoodsLowStock.length > 0 && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                <h3 className="font-semibold text-red-800">
+                  Produk Jadi Stok Rendah
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-1">
+                {finishedGoodsLowStock.map((product) => (
+                  <div key={product.id} className="flex items-start gap-1">
+                    <span className="text-red-500">•</span>
+                    <span className="text-red-700 text-sm">{product.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        );
+      })()}
 
       {/* Stock Card Modal */}
       {showStockCard && stockCardProduct && (
@@ -6322,9 +6357,7 @@ const Products: React.FC = () => {
                     checked={selectLowStockProducts}
                     onChange={(e) => {
                       const lowStockProducts = products.filter(
-                        (p) =>
-                          p.stock <= p.min_stock &&
-                          p.product_type === "raw_material"
+                        (p) => p.stock <= p.min_stock
                       );
                       setSelectLowStockProducts(e.target.checked);
                       if (e.target.checked) {
@@ -6347,14 +6380,7 @@ const Products: React.FC = () => {
                   <span className="font-medium text-orange-900 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4" />
                     Pilih Produk Stok Rendah (
-                    {
-                      products.filter(
-                        (p) =>
-                          p.stock <= p.min_stock &&
-                          p.product_type === "raw_material"
-                      ).length
-                    }
-                    )
+                    {products.filter((p) => p.stock <= p.min_stock).length})
                   </span>
                 </label>
               </div>
