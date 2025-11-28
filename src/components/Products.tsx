@@ -4992,19 +4992,30 @@ const Products: React.FC = () => {
                             <label className="block text-xs font-medium text-gray-700 mb-1">
                               Qty
                             </label>
-                            <input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updatePurchaseItem(
-                                  index,
-                                  "quantity",
-                                  Number(e.target.value)
-                                )
-                              }
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              min="1"
-                            />
+                            <div className="grid grid-cols-3 gap-2">
+                              <input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  updatePurchaseItem(
+                                    index,
+                                    "quantity",
+                                    Number(e.target.value)
+                                  )
+                                }
+                                className="col-span-2 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                min="1"
+                                placeholder="0"
+                              />
+                              <span className="text-sm font-medium text-gray-600 px-2 py-1 bg-gray-100 rounded text-center flex items-center justify-center">
+                                {(() => {
+                                  const selectedProduct = products.find(
+                                    (p) => p.id === item.productId
+                                  );
+                                  return selectedProduct?.unit || "Unit";
+                                })()}
+                              </span>
+                            </div>
                           </div>
                           <div className="col-span-2">
                             <label className="block text-xs font-medium text-gray-700 mb-1">

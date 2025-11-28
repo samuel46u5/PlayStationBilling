@@ -145,6 +145,16 @@ type AddTimeModalState = {
   hourlyRate: number;
 } | null;
 
+const getConsoleColorByRate = (console: any) => {
+  const hourlyRate = console.rate_profiles?.hourly_rate;
+
+  if (hourlyRate <= 6000) return "bg-green-700";
+  if (hourlyRate <= 8000) return "bg-purple-700";
+  if (hourlyRate <= 10000) return "bg-yellow-700";
+  if (hourlyRate <= 20000) return "bg-orange-700";
+  // return "bg-purple-900";
+};
+
 const getCurrentCashierSession = async () => {
   try {
     const { data } = await supabase.auth.getUser();
@@ -1400,7 +1410,7 @@ const ActiveRentals: React.FC = () => {
     const fetchConsoles = async () => {
       const { data: consoleData, error: consoleError } = await supabase
         .from("consoles")
-        .select("*, rate_profiles(capital)")
+        .select("*, rate_profiles(capital, hourly_rate)")
         .eq("is_active", true);
 
       setConsoles(consoleData || []);
@@ -7689,13 +7699,9 @@ const ActiveRentals: React.FC = () => {
                             >
                               {/* Header */}
                               <div
-                                className={`flex items-center gap-1 px-2 py-1 rounded-t-lg ${
-                                  console.status === "available"
-                                    ? "bg-purple-600"
-                                    : console.status === "rented"
-                                    ? "bg-purple-600"
-                                    : "bg-purple-600"
-                                } text-white`}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-t-lg 
+                                  ${getConsoleColorByRate(console)}
+                                 text-white`}
                                 style={{ fontSize: "0.95em" }}
                               >
                                 <Gamepad2 className="h-4 w-4" />
@@ -8622,12 +8628,8 @@ const ActiveRentals: React.FC = () => {
                 >
                   {/* Header */}
                   <div
-                    className={`p-4 ${
-                      console.status === "available"
-                        ? "bg-purple-600"
-                        : console.status === "rented"
-                        ? "bg-purple-600"
-                        : "bg-purple-600"
+                    className={`p-4 
+                      ${getConsoleColorByRate(console)}
                     } text-white`}
                   >
                     <div className="flex items-center gap-3 justify-between">
