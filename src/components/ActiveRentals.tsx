@@ -11,7 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import RealTimeClock from "./RealTimeClock";
 import Countdown from "./Countdown";
 import { printReceipt, printRentalProof } from "../utils/receipt";
@@ -475,6 +475,9 @@ const ActiveRentals: React.FC = () => {
   }>({});
   const [isUpdatingAutoShutdown, setIsUpdatingAutoShutdown] =
     useState<boolean>(false);
+  const [updatingConsoleIds, setUpdatingConsoleIds] = useState<Set<string>>(
+    new Set()
+  );
   const [showAutoShutdownModal, setShowAutoShutdownModal] =
     useState<boolean>(false);
   const [showToolsModal, setShowToolsModal] = useState<boolean>(false);
@@ -1001,7 +1004,7 @@ const ActiveRentals: React.FC = () => {
   };
 
   // Auto shutdown protection functions
-  const loadConsoleAutoShutdownStates = async () => {
+  const loadConsoleAutoShutdownStates = useCallback(async () => {
     try {
       const { data: consolesData, error } = await supabase
         .from("consoles")
@@ -1026,81 +1029,81 @@ const ActiveRentals: React.FC = () => {
     } catch (error) {
       console.error("Error loading console auto shutdown states:", error);
     }
-  };
-  const updateConsoleAutoShutdown = async (
-    consoleId: string,
-    enabled: boolean
-  ) => {
-    setIsUpdatingAutoShutdown(true);
-    try {
-      const { error } = await supabase
-        .from("consoles")
-        .update({ auto_shutdown_enabled: enabled })
-        .eq("id", consoleId);
+  }, []);
 
-      if (error) {
+  const updateConsoleAutoShutdown = useCallback(
+    async (consoleId: string, enabled: boolean) => {
+      if (updatingConsoleIds.has(consoleId)) {
+        return;
+      }
+      const originalStates = { ...consoleAutoShutdownStates };
+      const originalGlobalState = autoShutdownEnabled;
+
+      const newStates = { ...originalStates, [consoleId]: enabled };
+      const newGlobalState = Object.values(newStates).some((state) => state);
+
+      setConsoleAutoShutdownStates(newStates);
+      setAutoShutdownEnabled(newGlobalState);
+      setUpdatingConsoleIds((prev) => new Set(prev).add(consoleId));
+
+      try {
+        const { error } = await supabase
+          .from("consoles")
+          .update({ auto_shutdown_enabled: enabled })
+          .eq("id", consoleId);
+
+        if (error) {
+          throw error;
+        }
+
+        try {
+          await triggerUnusedConsolesCheck();
+        } catch {}
+
+        Swal.fire(
+          "Sukses",
+          `Auto shutdown ${
+            enabled ? "diaktifkan" : "dinonaktifkan"
+          } untuk console ini`,
+          "success"
+        );
+      } catch (error) {
         console.error("Error updating console auto shutdown:", error);
+
+        setConsoleAutoShutdownStates(originalStates);
+        setAutoShutdownEnabled(originalGlobalState);
+
         Swal.fire(
           "Error",
           "Gagal mengupdate status auto shutdown console",
           "error"
         );
+      } finally {
+        setUpdatingConsoleIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(consoleId);
+          return newSet;
+        });
+      }
+    },
+    [
+      consoleAutoShutdownStates,
+      autoShutdownEnabled,
+      updatingConsoleIds,
+      triggerUnusedConsolesCheck,
+    ]
+  );
+
+  const toggleAllConsolesAutoShutdown = useCallback(
+    async (enabled: boolean) => {
+      if (isUpdatingAutoShutdown) {
         return;
       }
 
-      // Update local state
-      setConsoleAutoShutdownStates((prev) => ({
-        ...prev,
-        [consoleId]: enabled,
-      }));
+      setIsUpdatingAutoShutdown(true);
+      const originalStates = { ...consoleAutoShutdownStates };
+      const originalGlobalState = autoShutdownEnabled;
 
-      // Update global state
-      const newStates = { ...consoleAutoShutdownStates, [consoleId]: enabled };
-      const anyEnabled = Object.values(newStates).some((state) => state);
-      setAutoShutdownEnabled(anyEnabled);
-
-      Swal.fire(
-        "Sukses",
-        `Auto shutdown ${
-          enabled ? "diaktifkan" : "dinonaktifkan"
-        } untuk console ini`,
-        "success"
-      );
-
-      try {
-        await triggerUnusedConsolesCheck();
-      } catch {}
-    } catch (error) {
-      console.error("Error updating console auto shutdown:", error);
-      Swal.fire(
-        "Error",
-        "Gagal mengupdate status auto shutdown console",
-        "error"
-      );
-    } finally {
-      setIsUpdatingAutoShutdown(false);
-    }
-  };
-
-  const toggleAllConsolesAutoShutdown = async (enabled: boolean) => {
-    setIsUpdatingAutoShutdown(true);
-    try {
-      const { error } = await supabase
-        .from("consoles")
-        .update({ auto_shutdown_enabled: enabled })
-        .eq("is_active", true);
-
-      if (error) {
-        console.error("Error updating all consoles auto shutdown:", error);
-        Swal.fire(
-          "Error",
-          "Gagal mengupdate status auto shutdown semua console",
-          "error"
-        );
-        return;
-      }
-
-      // Update all local states
       const newStates: { [key: string]: boolean } = {};
       consoles.forEach((console) => {
         newStates[console.id] = enabled;
@@ -1109,28 +1112,50 @@ const ActiveRentals: React.FC = () => {
       setConsoleAutoShutdownStates(newStates);
       setAutoShutdownEnabled(enabled);
 
-      Swal.fire(
-        "Sukses",
-        `Auto shutdown ${
-          enabled ? "diaktifkan" : "dinonaktifkan"
-        } untuk semua console`,
-        "success"
-      );
-      // Trigger immediate background check
       try {
-        await triggerUnusedConsolesCheck();
-      } catch {}
-    } catch (error) {
-      console.error("Error updating all consoles auto shutdown:", error);
-      Swal.fire(
-        "Error",
-        "Gagal mengupdate status auto shutdown semua console",
-        "error"
-      );
-    } finally {
-      setIsUpdatingAutoShutdown(false);
-    }
-  };
+        const { error } = await supabase
+          .from("consoles")
+          .update({ auto_shutdown_enabled: enabled })
+          .eq("is_active", true);
+
+        if (error) {
+          throw error;
+        }
+
+        try {
+          await triggerUnusedConsolesCheck();
+        } catch {}
+
+        Swal.fire(
+          "Sukses",
+          `Auto shutdown ${
+            enabled ? "diaktifkan" : "dinonaktifkan"
+          } untuk semua console`,
+          "success"
+        );
+      } catch (error) {
+        console.error("Error updating all consoles auto shutdown:", error);
+
+        setConsoleAutoShutdownStates(originalStates);
+        setAutoShutdownEnabled(originalGlobalState);
+
+        Swal.fire(
+          "Error",
+          "Gagal mengupdate status auto shutdown semua console",
+          "error"
+        );
+      } finally {
+        setIsUpdatingAutoShutdown(false);
+      }
+    },
+    [
+      isUpdatingAutoShutdown,
+      consoleAutoShutdownStates,
+      autoShutdownEnabled,
+      consoles,
+      triggerUnusedConsolesCheck,
+    ]
+  );
 
   // Function untuk sinkronisasi status console dan rental session
   const syncConsoleAndSessionStatus = async () => {
@@ -1441,8 +1466,11 @@ const ActiveRentals: React.FC = () => {
   }, [refreshActiveSessions]);
 
   useEffect(() => {
+    let isSubscribed = true;
+    let updateTimeout: NodeJS.Timeout;
+
     const consolesChannel = supabase
-      .channel("consoles_auto_shutdown_realtime")
+      .channel("consoles_auto_shutdown_realtime_optimized")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "consoles" },
@@ -1450,31 +1478,43 @@ const ActiveRentals: React.FC = () => {
           try {
             console.log("Console change detected in ActiveRentals:", payload);
 
-            if (payload.eventType === "UPDATE" && payload.new && payload.old) {
+            if (
+              payload.eventType === "UPDATE" &&
+              payload.new &&
+              payload.old &&
+              isSubscribed
+            ) {
               const consoleId = payload.new.id;
               const oldAutoShutdown = payload.old.auto_shutdown_enabled;
               const newAutoShutdown = payload.new.auto_shutdown_enabled;
 
-              if (oldAutoShutdown !== newAutoShutdown) {
+              if (
+                oldAutoShutdown !== newAutoShutdown &&
+                !updatingConsoleIds.has(consoleId)
+              ) {
                 console.log(
-                  `Updating auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`
+                  `External update: auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`
                 );
 
-                setConsoleAutoShutdownStates((prev) => {
-                  const newStates = {
-                    ...prev,
-                    [consoleId]: newAutoShutdown ?? true,
-                  };
-                  const anyEnabled = Object.values(newStates).some(
-                    (state) => state
-                  );
-                  setAutoShutdownEnabled(anyEnabled);
-                  return newStates;
-                });
+                clearTimeout(updateTimeout);
+                updateTimeout = setTimeout(() => {
+                  if (isSubscribed) {
+                    setConsoleAutoShutdownStates((prev) => {
+                      const newStates = {
+                        ...prev,
+                        [consoleId]: newAutoShutdown ?? true,
+                      };
+
+                      const anyEnabled = Object.values(newStates).some(
+                        (state) => state
+                      );
+                      setAutoShutdownEnabled(anyEnabled);
+                      return newStates;
+                    });
+                  }
+                }, 100);
               }
             }
-
-            await loadConsoleAutoShutdownStates();
           } catch (e) {
             console.error(
               "Console realtime refresh error in ActiveRentals:",
@@ -1486,9 +1526,11 @@ const ActiveRentals: React.FC = () => {
       .subscribe();
 
     return () => {
+      isSubscribed = false;
+      clearTimeout(updateTimeout);
       supabase.removeChannel(consolesChannel);
     };
-  }, [loadConsoleAutoShutdownStates]);
+  }, [updatingConsoleIds]);
 
   const loadData = async () => {
     setLoading(true);
@@ -7743,7 +7785,8 @@ const ActiveRentals: React.FC = () => {
                                         ? "ACTIVE"
                                         : "MAINT."}
                                     </span>
-                                    {console.auto_shutdown_enabled ? (
+                                    {consoleAutoShutdownStates[console.id] ??
+                                    console.auto_shutdown_enabled ? (
                                       <Lock className="h-4 w-4 text-green-700" />
                                     ) : (
                                       <Unlock className="h-4 w-4 text-red-700" />
@@ -10856,7 +10899,10 @@ const ActiveRentals: React.FC = () => {
                             !consoleAutoShutdownStates[console.id]
                           )
                         }
-                        disabled={isUpdatingAutoShutdown}
+                        disabled={
+                          isUpdatingAutoShutdown ||
+                          updatingConsoleIds.has(console.id)
+                        }
                         className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                           consoleAutoShutdownStates[console.id]
                             ? "bg-red-100 text-red-700 border border-red-300 hover:bg-red-200"
@@ -10867,7 +10913,9 @@ const ActiveRentals: React.FC = () => {
                             : ""
                         }`}
                       >
-                        {consoleAutoShutdownStates[console.id]
+                        {updatingConsoleIds.has(console.id)
+                          ? "Updating..."
+                          : consoleAutoShutdownStates[console.id]
                           ? "Nonaktifkan"
                           : "Aktifkan"}
                       </button>
