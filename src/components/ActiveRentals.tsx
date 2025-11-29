@@ -149,7 +149,7 @@ const getConsoleColorByRate = (console: any) => {
   const hourlyRate = console.rate_profiles?.hourly_rate;
 
   if (hourlyRate <= 6000) return "bg-green-700";
-  if (hourlyRate <= 8000) return "bg-purple-700";
+  if (hourlyRate <= 8000) return "bg-blue-700";
   if (hourlyRate <= 10000) return "bg-yellow-700";
   if (hourlyRate <= 20000) return "bg-orange-700";
   // return "bg-purple-900";
