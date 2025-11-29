@@ -349,7 +349,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
 
   // Fungsi pengecekan TV yang tidak rented
   const checkAndShutdownUnusedConsoles = useCallback(async () => {
-    // Hanya device yang authorized yang boleh melakukan shutdown
     if (!isAuthorizedDevice) {
       console.log("Device tidak authorized untuk melakukan shutdown console");
       return;
@@ -363,72 +362,80 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
         )
         .eq("is_active", true)
         .eq("auto_shutdown_enabled", true);
-      if (error) {
-        console.error("Gagal fetch consoles:", error);
-        return;
-      }
-      if (!consoles) return;
-      for (const c of consoles) {
-        if (c.status !== "rented") {
-          let tvIsOn = false;
-          if (c.perintah_cek_power_tv) {
-            try {
-              const res = await fetch(c.perintah_cek_power_tv);
-              const tvStatusJson = await res.json();
-              const obj =
-                typeof tvStatusJson === "string"
-                  ? JSON.parse(tvStatusJson)
-                  : tvStatusJson;
-              const status =
-                typeof obj === "object" && obj !== null && "status" in obj
-                  ? obj.status
-                  : undefined;
-              if (typeof status === "string") {
-                tvIsOn = status.trim().toUpperCase() === "ON";
-              }
-            } catch (err) {
-              console.warn(`Gagal cek status TV untuk console ${c.id}`);
-            }
-          }
-          // Jika TV menyala, matikan
-          if (tvIsOn) {
-            let errorCount = shutdownErrorCount[c.id] || 0;
-            let errorHappened = false;
-            if (c.power_tv_command) {
+
+      if (error || !consoles) return;
+
+      const shutdownPromises = consoles
+        .filter((c) => c.status !== "rented")
+        .map(async (c) => {
+          try {
+            let tvIsOn = false;
+
+            if (c.perintah_cek_power_tv) {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 detik timeout
+
               try {
-                await fetch(c.power_tv_command);
-                console.log(`Perintah matikan TV dikirim ke console ${c.id}`);
-                errorCount = 0;
+                const res = await fetch(c.perintah_cek_power_tv, {
+                  signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
+
+                const tvStatusJson = await res.json();
+                const obj =
+                  typeof tvStatusJson === "string"
+                    ? JSON.parse(tvStatusJson)
+                    : tvStatusJson;
+
+                if (typeof obj?.status === "string") {
+                  tvIsOn = obj.status.trim().toUpperCase() === "ON";
+                }
               } catch (err) {
-                errorCount++;
-                errorHappened = true;
-                console.error(
-                  `Gagal mengirim perintah matikan TV ke console ${c.id}`
-                );
+                clearTimeout(timeoutId);
+                console.warn(`TV check timeout untuk console ${c.id}`);
               }
             }
-            // Update error count state
-            setShutdownErrorCount((prev) => ({ ...prev, [c.id]: errorCount }));
-            // Tampilkan notifikasi jika error lebih dari 1 kali
-            if (errorHappened && errorCount > 1) {
-              showShutdownErrorNotification(c.id);
+
+            if (tvIsOn && c.power_tv_command) {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+              try {
+                await fetch(c.power_tv_command, {
+                  signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
+                console.log(`TV dimatikan untuk console ${c.id}`);
+
+                setShutdownErrorCount((prev) => {
+                  const copy = { ...prev };
+                  delete copy[c.id];
+                  return copy;
+                });
+              } catch (err) {
+                clearTimeout(timeoutId);
+
+                const newErrorCount = (shutdownErrorCount[c.id] || 0) + 1;
+                setShutdownErrorCount((prev) => ({
+                  ...prev,
+                  [c.id]: newErrorCount,
+                }));
+
+                if (newErrorCount > 1) {
+                  showShutdownErrorNotification(c.id);
+                }
+              }
             }
-          } else {
-            // Reset error count jika TV sudah mati
-            if (shutdownErrorCount[c.id]) {
-              setShutdownErrorCount((prev) => {
-                const copy = { ...prev };
-                delete copy[c.id];
-                return copy;
-              });
-            }
+          } catch (err) {
+            console.error(`Error processing console ${c.id}:`, err);
           }
-        }
-      }
+        });
+
+      await Promise.allSettled(shutdownPromises);
     } catch (err) {
       console.error("Error checkAndShutdownUnusedConsoles:", err);
     }
-  }, [shutdownErrorCount, showShutdownErrorNotification, isAuthorizedDevice]);
+  }, [isAuthorizedDevice, shutdownErrorCount, showShutdownErrorNotification]);
 
   // Initialize timer on mount
   useEffect(() => {
@@ -506,7 +513,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     setIsTimerRunning(true);
     const interval = setInterval(() => {
       checkAllSessions();
-    }, 30000); // Check every 30 seconds
+    }, 60000); // Check every 60 seconds
 
     return () => {
       clearInterval(interval);
@@ -517,7 +524,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   useEffect(() => {
     const consoleInterval = setInterval(() => {
       checkAndShutdownUnusedConsoles();
-    }, 60000);
+    }, 120000);
 
     return () => clearInterval(consoleInterval);
   }, [checkAndShutdownUnusedConsoles]);

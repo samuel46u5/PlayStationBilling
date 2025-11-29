@@ -11,7 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import RealTimeClock from "./RealTimeClock";
 import Countdown from "./Countdown";
 import { printReceipt, printRentalProof } from "../utils/receipt";
@@ -297,6 +297,7 @@ const ActiveRentals: React.FC = () => {
   const [availablePackages, setAvailablePackages] = useState<any[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [packageLoading, setPackageLoading] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(0);
 
   const fetchCardData = async (uid: string) => {
     if (!uid) {
@@ -1056,10 +1057,6 @@ const ActiveRentals: React.FC = () => {
           throw error;
         }
 
-        try {
-          await triggerUnusedConsolesCheck();
-        } catch {}
-
         Swal.fire(
           "Sukses",
           `Auto shutdown ${
@@ -1067,6 +1064,15 @@ const ActiveRentals: React.FC = () => {
           } untuk console ini`,
           "success"
         );
+
+        if (enabled) {
+          const console = consoles.find((c) => c.id === consoleId);
+          if (console?.status !== "rented") {
+            try {
+              await triggerUnusedConsolesCheck();
+            } catch {}
+          }
+        }
       } catch (error) {
         console.error("Error updating console auto shutdown:", error);
 
@@ -1680,25 +1686,87 @@ const ActiveRentals: React.FC = () => {
     }
   };
 
+  // const RealtimeCost: React.FC<{
+  //   session: RentalSession;
+  //   productsTotal?: number;
+  //   refreshMs?: number;
+  // }> = ({ session, productsTotal, refreshMs = 60000 }) => {
+  //   // const [tick, setTick] = useState(0);
+  //   const [realTimeCost, setRealTimeCost] = useState(0);
+  //   const isPrepaid = !!session.duration_minutes;
+
+  //   // useEffect(() => {
+  //   //   if (isPrepaid) return;
+  //   //   const id = setInterval(() => setTick((t) => t + 1), refreshMs);
+  //   //   return () => clearInterval(id);
+  //   // }, [isPrepaid, refreshMs, session.id]);
+
+  //   // Untuk member-card, gunakan total_points_deducted dari database
+  //   useEffect(() => {
+  //     if (session.is_voucher_used && !isPrepaid) {
+  //       // Fetch fresh data dari database untuk sinkronisasi dengan billing system
+  //       const fetchFreshSessionData = async () => {
+  //         try {
+  //           const { data: freshSession } = await supabase
+  //             .from("rental_sessions")
+  //             .select("total_points_deducted")
+  //             .eq("id", session.id)
+  //             .single();
+
+  //           if (freshSession) {
+  //             setRealTimeCost(freshSession.total_points_deducted || 0);
+  //           } else {
+  //             // Fallback ke data session yang ada
+  //             setRealTimeCost(session.total_points_deducted || 0);
+  //           }
+  //         } catch (error) {
+  //           console.error("Error fetching fresh session data:", error);
+  //           // Fallback ke data session yang ada
+  //           setRealTimeCost(session.total_points_deducted || 0);
+  //         }
+  //       };
+
+  //       fetchFreshSessionData();
+
+  //       // Listen for billing updates
+  //       const handleBillingUpdate = (event: Event) => {
+  //         const customEvent = event as CustomEvent;
+  //         if (customEvent.detail?.sessionId === session.id) {
+  //           setRealTimeCost(customEvent.detail.newTotalDeducted);
+  //         }
+  //       };
+
+  //       window.addEventListener("memberCardBillingUpdate", handleBillingUpdate);
+
+  //       // Refresh setiap 30 detik untuk sinkronisasi dengan billing
+  //       const interval = setInterval(fetchFreshSessionData, 30000);
+
+  //       return () => {
+  //         clearInterval(interval);
+  //         window.removeEventListener(
+  //           "memberCardBillingUpdate",
+  //           handleBillingUpdate
+  //         );
+  //       };
+  //     } else {
+  //       // Untuk pay-as-you-go dan prepaid, gunakan perhitungan real-time
+  //       setRealTimeCost(calculateCurrentCost(session));
+  //     }
+  //   }, [session.is_voucher_used, session.id, isPrepaid, tick]);
+
+  //   return <>{(realTimeCost + (productsTotal || 0)).toLocaleString("id-ID")}</>;
+  // };
+
   const RealtimeCost: React.FC<{
     session: RentalSession;
     productsTotal?: number;
     refreshMs?: number;
   }> = ({ session, productsTotal, refreshMs = 60000 }) => {
-    const [tick, setTick] = useState(0);
     const [realTimeCost, setRealTimeCost] = useState(0);
     const isPrepaid = !!session.duration_minutes;
 
     useEffect(() => {
-      if (isPrepaid) return;
-      const id = setInterval(() => setTick((t) => t + 1), refreshMs);
-      return () => clearInterval(id);
-    }, [isPrepaid, refreshMs, session.id]);
-
-    // Untuk member-card, gunakan total_points_deducted dari database
-    useEffect(() => {
       if (session.is_voucher_used && !isPrepaid) {
-        // Fetch fresh data dari database untuk sinkronisasi dengan billing system
         const fetchFreshSessionData = async () => {
           try {
             const { data: freshSession } = await supabase
@@ -1710,43 +1778,23 @@ const ActiveRentals: React.FC = () => {
             if (freshSession) {
               setRealTimeCost(freshSession.total_points_deducted || 0);
             } else {
-              // Fallback ke data session yang ada
               setRealTimeCost(session.total_points_deducted || 0);
             }
           } catch (error) {
             console.error("Error fetching fresh session data:", error);
-            // Fallback ke data session yang ada
             setRealTimeCost(session.total_points_deducted || 0);
           }
         };
 
         fetchFreshSessionData();
 
-        // Listen for billing updates
-        const handleBillingUpdate = (event: Event) => {
-          const customEvent = event as CustomEvent;
-          if (customEvent.detail?.sessionId === session.id) {
-            setRealTimeCost(customEvent.detail.newTotalDeducted);
-          }
-        };
+        const interval = setInterval(fetchFreshSessionData, 60000);
 
-        window.addEventListener("memberCardBillingUpdate", handleBillingUpdate);
-
-        // Refresh setiap 30 detik untuk sinkronisasi dengan billing
-        const interval = setInterval(fetchFreshSessionData, 30000);
-
-        return () => {
-          clearInterval(interval);
-          window.removeEventListener(
-            "memberCardBillingUpdate",
-            handleBillingUpdate
-          );
-        };
+        return () => clearInterval(interval);
       } else {
-        // Untuk pay-as-you-go dan prepaid, gunakan perhitungan real-time
         setRealTimeCost(calculateCurrentCost(session));
       }
-    }, [session.is_voucher_used, session.id, isPrepaid, tick]);
+    }, [session.is_voucher_used, session.id, isPrepaid]);
 
     return <>{(realTimeCost + (productsTotal || 0)).toLocaleString("id-ID")}</>;
   };
@@ -4826,23 +4874,55 @@ const ActiveRentals: React.FC = () => {
     };
 
     try {
-      // Cek status TV
+      const promises = [];
+
+      // TV status check
       if (console.perintah_cek_power_tv) {
-        const tvRes = await fetch(console.perintah_cek_power_tv);
-        if (tvRes.ok) {
-          const tvData = await tvRes.json();
-          status.tv = tvData.status === "on";
-        }
+        const tvPromise = (async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 detik timeout
+
+          try {
+            const tvRes = await fetch(console.perintah_cek_power_tv, {
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            if (tvRes.ok) {
+              const tvData = await tvRes.json();
+              status.tv = tvData.status === "on";
+            }
+          } catch (err) {
+            clearTimeout(timeoutId);
+          }
+        })();
+        promises.push(tvPromise);
       }
 
-      // Cek status relay/lampu
+      // Relay status check
       if (console.relay_command_status) {
-        const relayRes = await fetch(console.relay_command_status);
-        if (relayRes.ok) {
-          const relayData = await relayRes.json();
-          status.lamp = relayData.POWER === "ON";
-        }
+        const relayPromise = (async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+          try {
+            const relayRes = await fetch(console.relay_command_status, {
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            if (relayRes.ok) {
+              const relayData = await relayRes.json();
+              status.lamp = relayData.POWER === "ON";
+            }
+          } catch (err) {
+            clearTimeout(timeoutId);
+          }
+        })();
+        promises.push(relayPromise);
       }
+
+      await Promise.allSettled(promises);
     } catch (error) {
       console.error(`Error fetching status for ${console.name}:`, error);
     }
@@ -4850,20 +4930,51 @@ const ActiveRentals: React.FC = () => {
     return status;
   };
 
-  const refreshConsoleStatuses = async () => {
+  const refreshConsoleStatuses = useCallback(async () => {
+    if (isRefreshingStatuses) return;
+
     setIsRefreshingStatuses(true);
     try {
       const newStatuses: { [key: string]: any } = {};
 
-      for (const console of consoles) {
-        newStatuses[console.id] = await fetchConsoleStatus(console);
-      }
+      const statusPromises = consoles.map(async (console) => {
+        try {
+          const status = await fetchConsoleStatus(console);
+          return { consoleId: console.id, status };
+        } catch (error) {
+          console.error(`Failed to fetch status for ${console.name}:`, error);
+          return {
+            consoleId: console.id,
+            status: { tv: false, lamp: false, volume: 50 },
+          };
+        }
+      });
+
+      const results = await Promise.allSettled(statusPromises);
+
+      results.forEach((result) => {
+        if (result.status === "fulfilled") {
+          const { consoleId, status } = result.value;
+          newStatuses[consoleId] = status;
+        }
+      });
 
       setConsoleStatuses(newStatuses);
     } finally {
       setIsRefreshingStatuses(false);
     }
-  };
+  }, [consoles, isRefreshingStatuses]);
+
+  const debouncedRefreshConsoleStatuses = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastRefreshTime < 3000) {
+      return;
+    }
+
+    setLastRefreshTime(now);
+    await refreshConsoleStatuses();
+  }, [lastRefreshTime, refreshConsoleStatuses]);
+
   const runCommand = async () => {
     if (!selectedCommand) {
       await Swal.fire({
@@ -7226,7 +7337,7 @@ const ActiveRentals: React.FC = () => {
                 <h2 className="text-xl font-semibold text-gray-900">Tools</h2>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={refreshConsoleStatuses}
+                    onClick={debouncedRefreshConsoleStatuses}
                     disabled={isRefreshingStatuses}
                     className={`px-3 py-1 text-sm rounded transition-colors ${
                       isRefreshingStatuses
@@ -7408,7 +7519,7 @@ const ActiveRentals: React.FC = () => {
                                           await fetch(c.power_tv_command);
                                           // Refresh status setelah command
                                           setTimeout(() => {
-                                            refreshConsoleStatuses();
+                                            debouncedRefreshConsoleStatuses();
                                           }, 1000);
                                         }
                                       } else {
@@ -7417,7 +7528,7 @@ const ActiveRentals: React.FC = () => {
                                           await fetch(c.power_tv_command);
                                           // Refresh status setelah command
                                           setTimeout(() => {
-                                            refreshConsoleStatuses();
+                                            debouncedRefreshConsoleStatuses();
                                           }, 1000);
                                         }
                                       }
@@ -7494,7 +7605,7 @@ const ActiveRentals: React.FC = () => {
                                           await fetch(c.relay_command_off);
                                           // Refresh status setelah command
                                           setTimeout(() => {
-                                            refreshConsoleStatuses();
+                                            debouncedRefreshConsoleStatuses();
                                           }, 1000);
                                         }
                                       } else {
@@ -7503,7 +7614,7 @@ const ActiveRentals: React.FC = () => {
                                           await fetch(c.relay_command_on);
                                           // Refresh status setelah command
                                           setTimeout(() => {
-                                            refreshConsoleStatuses();
+                                            debouncedRefreshConsoleStatuses();
                                           }, 1000);
                                         }
                                       }
@@ -7592,13 +7703,31 @@ const ActiveRentals: React.FC = () => {
         <div className="space-y-6">
           {(() => {
             // Group consoles by location
-            const filteredConsoles = (
-              consoleFilter === "all"
-                ? consoles
-                : consoles.filter((c) => c.status === consoleFilter)
-            ).filter((c) =>
-              c.name.toLowerCase().includes(searchConsole.toLowerCase())
-            );
+            const filteredConsoles = useMemo(() => {
+              let filtered = consoles;
+
+              // Filter by status
+              if (consoleFilter !== "all") {
+                filtered = filtered.filter((c) => c.status === consoleFilter);
+              }
+
+              // Filter by search
+              if (searchConsole.trim()) {
+                const searchLower = searchConsole.toLowerCase();
+                filtered = filtered.filter(
+                  (c) =>
+                    c.name.toLowerCase().includes(searchLower) ||
+                    c.location?.toLowerCase().includes(searchLower)
+                );
+              }
+
+              // Sort by console number
+              return filtered.sort((a, b) => {
+                const aNum = parseInt(a.name) || 0;
+                const bNum = parseInt(b.name) || 0;
+                return aNum - bNum;
+              });
+            }, [consoles, consoleFilter, searchConsole]);
 
             const groupedConsoles = filteredConsoles.reduce((acc, console) => {
               const location = console.location || "Lantai 1";
