@@ -11,7 +11,13 @@ import {
   Loader2,
 } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import RealTimeClock from "./RealTimeClock";
 import Countdown from "./Countdown";
 import { printReceipt, printRentalProof } from "../utils/receipt";
@@ -3516,21 +3522,105 @@ const ActiveRentals: React.FC = () => {
     const [localDiscountValue, setLocalDiscountValue] = useState<number>(0);
     const [localDiscountAmount, setLocalDiscountAmount] = useState<number>(0);
 
-    // Reset state saat modal dibuka
+    const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+    const paymentProcessingRef = useRef(false);
+
     useEffect(() => {
       if (open) {
         setPaymentAmount(subtotal);
         setLocalDiscountValue(0);
         setLocalDiscountAmount(0);
         setLocalDiscountType("amount");
+        setIsPaymentProcessing(false);
+        paymentProcessingRef.current = false;
       }
     }, [open, subtotal]);
 
+    const handlePayment = useCallback(async () => {
+      if (isPaymentProcessing || paymentProcessingRef.current || loading) {
+        console.log("Payment already in progress");
+        return;
+      }
+
+      const finalTotal = Math.max(0, subtotal - localDiscountAmount);
+
+      if (paymentAmount < finalTotal) {
+        Swal.fire({
+          icon: "warning",
+          title: "Pembayaran Kurang",
+          text: `Jumlah pembayaran kurang. Total yang harus dibayar: Rp ${finalTotal.toLocaleString(
+            "id-ID"
+          )}`,
+        });
+        return;
+      }
+
+      setIsPaymentProcessing(true);
+      paymentProcessingRef.current = true;
+
+      try {
+        await Promise.race([
+          onConfirm(
+            paymentMethod,
+            paymentAmount,
+            localDiscountAmount,
+            localDiscountType,
+            localDiscountValue
+          ),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Payment timeout")), 30000)
+          ),
+        ]);
+      } catch (error) {
+        console.error("Payment error:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Pembayaran Gagal",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Terjadi kesalahan saat memproses pembayaran",
+        });
+      } finally {
+        setTimeout(() => {
+          setIsPaymentProcessing(false);
+          paymentProcessingRef.current = false;
+        }, 2000);
+      }
+    }, [
+      isPaymentProcessing,
+      paymentProcessingRef,
+      loading,
+      subtotal,
+      localDiscountAmount,
+      paymentAmount,
+      paymentMethod,
+      localDiscountType,
+      localDiscountValue,
+      onConfirm,
+    ]);
+
     if (!open) return null;
+
+    const finalTotal = Math.max(0, subtotal - localDiscountAmount);
+    const isValidPayment = paymentAmount >= finalTotal;
+    const isProcessing = loading || isPaymentProcessing;
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 relative">
+          {isProcessing && (
+            <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-20 rounded-xl">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                <p className="text-sm text-gray-600 font-medium">
+                  Memproses pembayaran...
+                </p>
+                <p className="text-xs text-gray-500">Mohon tunggu sebentar</p>
+              </div>
+            </div>
+          )}
+
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
               <div className="text-xl font-bold text-gray-700">Total:</div>
@@ -3541,10 +3631,7 @@ const ActiveRentals: React.FC = () => {
                   </div>
                 )}
                 <div className="text-2xl font-bold text-blue-700">
-                  Rp{" "}
-                  {Math.max(0, subtotal - localDiscountAmount).toLocaleString(
-                    "id-ID"
-                  )}
+                  Rp {finalTotal.toLocaleString("id-ID")}
                 </div>
               </div>
             </div>
@@ -3594,7 +3681,7 @@ const ActiveRentals: React.FC = () => {
                       : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
                   }`}
                   onClick={() => setPaymentMethod("cash")}
-                  disabled={loading}
+                  disabled={isProcessing}
                 >
                   <span className="inline-block mr-1">💵</span> Cash
                 </button>
@@ -3606,14 +3693,13 @@ const ActiveRentals: React.FC = () => {
                       : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
                   }`}
                   onClick={() => setPaymentMethod("qris")}
-                  disabled={loading}
+                  disabled={isProcessing}
                 >
                   <span className="inline-block mr-1">🏧</span> QRIS
                 </button>
               </div>
             </div>
 
-            {/* DISKON SECTION */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium text-gray-700">Diskon</div>
@@ -3630,6 +3716,7 @@ const ActiveRentals: React.FC = () => {
                       setLocalDiscountValue(0);
                       setLocalDiscountAmount(0);
                     }}
+                    disabled={isProcessing}
                   >
                     Rp
                   </button>
@@ -3645,6 +3732,7 @@ const ActiveRentals: React.FC = () => {
                       setLocalDiscountValue(0);
                       setLocalDiscountAmount(0);
                     }}
+                    disabled={isProcessing}
                   >
                     %
                   </button>
@@ -3655,6 +3743,7 @@ const ActiveRentals: React.FC = () => {
                       setLocalDiscountValue(0);
                       setLocalDiscountAmount(0);
                     }}
+                    disabled={isProcessing}
                   >
                     × Clear
                   </button>
@@ -3680,6 +3769,7 @@ const ActiveRentals: React.FC = () => {
                   }}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
                   placeholder={localDiscountType === "percentage" ? "0" : "0"}
+                  disabled={isProcessing}
                 />
                 <span className="self-center text-gray-600 font-medium">
                   {localDiscountType === "percentage" ? "%" : "Rp"}
@@ -3703,7 +3793,6 @@ const ActiveRentals: React.FC = () => {
               )}
             </div>
 
-            {/* Jumlah Bayar */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium text-gray-700">Jumlah Bayar</div>
@@ -3716,6 +3805,7 @@ const ActiveRentals: React.FC = () => {
                         : "bg-white border-gray-300 text-gray-700"
                     }`}
                     onClick={() => setIsManualInput(false)}
+                    disabled={isProcessing}
                   >
                     Quick
                   </button>
@@ -3727,6 +3817,7 @@ const ActiveRentals: React.FC = () => {
                         : "bg-white border-gray-300 text-gray-700"
                     }`}
                     onClick={() => setIsManualInput(true)}
+                    disabled={isProcessing}
                   >
                     Manual
                   </button>
@@ -3734,11 +3825,13 @@ const ActiveRentals: React.FC = () => {
                     type="button"
                     className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 ml-2"
                     onClick={() => setPaymentAmount(0)}
+                    disabled={isProcessing}
                   >
                     × Clear
                   </button>
                 </div>
               </div>
+
               {!isManualInput ? (
                 <>
                   <div className="grid grid-cols-3 gap-2 mb-2">
@@ -3746,8 +3839,9 @@ const ActiveRentals: React.FC = () => {
                       <button
                         key={nom}
                         type="button"
-                        className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100"
+                        className="py-3 rounded font-bold border border-green-200 text-green-800 text-base bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={() => setPaymentAmount((prev) => prev + nom)}
+                        disabled={isProcessing}
                       >
                         {nom >= 1000 ? `${nom / 1000}K` : nom}
                       </button>
@@ -3755,18 +3849,11 @@ const ActiveRentals: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
-                    onClick={() =>
-                      setPaymentAmount(
-                        Math.max(0, subtotal - localDiscountAmount)
-                      )
-                    }
+                    className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => setPaymentAmount(finalTotal)}
+                    disabled={isProcessing}
                   >
-                    LUNAS (Rp{" "}
-                    {Math.max(0, subtotal - localDiscountAmount).toLocaleString(
-                      "id-ID"
-                    )}
-                    )
+                    LUNAS (Rp {finalTotal.toLocaleString("id-ID")})
                   </button>
                 </>
               ) : (
@@ -3778,25 +3865,22 @@ const ActiveRentals: React.FC = () => {
                     const val = parseInt(e.target.value) || 0;
                     setPaymentAmount(val);
                   }}
-                  className="w-full px-3 py-3 border rounded text-center text-2xl font-mono mb-2"
+                  className="w-full px-3 py-3 border rounded text-center text-2xl font-mono mb-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Masukkan nominal bayar"
+                  disabled={isProcessing}
                 />
               )}
+
               <div className="text-center text-3xl font-mono font-bold py-2 border-b border-gray-200 mb-2">
                 Rp {paymentAmount.toLocaleString("id-ID")}
               </div>
             </div>
 
-            {/* Kembalian */}
             <div className="mb-4">
               <div className="font-medium text-gray-700 mb-1">Kembalian</div>
               <div className="text-2xl font-mono font-bold text-green-700 text-center">
                 Rp{" "}
                 {(() => {
-                  const finalTotal = Math.max(
-                    0,
-                    subtotal - localDiscountAmount
-                  );
                   const change = paymentAmount - finalTotal;
                   return change > 0 ? change.toLocaleString("id-ID") : 0;
                 })()}
@@ -3806,31 +3890,58 @@ const ActiveRentals: React.FC = () => {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isProcessing}
               >
                 Batal
               </button>
               <button
-                onClick={() =>
-                  onConfirm(
-                    paymentMethod,
-                    paymentAmount,
-                    localDiscountAmount,
-                    localDiscountType,
-                    localDiscountValue
-                  )
-                }
-                className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${
-                  paymentAmount < Math.max(0, subtotal - localDiscountAmount)
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-                }`}
-                disabled={
-                  loading ||
-                  paymentAmount < Math.max(0, subtotal - localDiscountAmount)
-                }
+                onClick={handlePayment}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                  !isValidPayment || isProcessing
+                    ? "bg-gray-400 cursor-not-allowed opacity-60"
+                    : "bg-green-600 hover:bg-green-700 active:bg-green-800"
+                } text-white`}
+                disabled={!isValidPayment || isProcessing}
               >
-                {loading ? "Memproses..." : "Bayar"}
+                {isProcessing ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <span>Memproses...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    <span>Bayar</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
