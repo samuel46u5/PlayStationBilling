@@ -149,7 +149,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
           // Find console for relay commands
           const { data: consoleData } = await supabase
             .from("consoles")
-            .select("*")
+            .select("id, name, power_tv_command, relay_command_off")
             .eq("id", session.console_id)
             .single();
 
@@ -181,6 +181,14 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
           //   })
           //   .eq("id", session.id);
 
+          // Update console status with guard: only if no other active sessions exist for this console
+          const { data: otherActiveSessions, error: activeErr } = await supabase
+            .from("rental_sessions")
+            .select("id")
+            .eq("console_id", session.console_id)
+            .eq("status", "active")
+            .limit(1);
+
           const updateRentalSession = supabase
             .from("rental_sessions")
             .update({
@@ -195,13 +203,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
             .eq("id", session.console_id);
 
           await Promise.all([updateRentalSession, updateConsoleStatus]);
-          // Update console status with guard: only if no other active sessions exist for this console
-          const { data: otherActiveSessions, error: activeErr } = await supabase
-            .from("rental_sessions")
-            .select("id")
-            .eq("console_id", session.console_id)
-            .eq("status", "active")
-            .limit(1);
 
           if (
             !activeErr &&
@@ -282,16 +283,29 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
       if (prodErr) throw prodErr;
 
       // Reduce stock according to quantities
-      for (const product of products || []) {
-        const used = qtyByProduct[product.id] || 0;
-        const current = Number(product.stock) || 0;
-        const newStock = current - used;
-        const { error: updStockErr } = await supabase
-          .from("products")
-          .update({ stock: newStock })
-          .eq("id", product.id);
-        if (updStockErr) throw updStockErr;
-      }
+      // for (const product of products || []) {
+      //   const used = qtyByProduct[product.id] || 0;
+      //   const current = Number(product.stock) || 0;
+      //   const newStock = current - used;
+      //   const { error: updStockErr } = await supabase
+      //     .from("products")
+      //     .update({ stock: newStock })
+      //     .eq("id", product.id);
+      //   if (updStockErr) throw updStockErr;
+      // }
+
+      const updates = products.map((product) => ({
+        id: product.id,
+        stock: product.stock - qtyByProduct[product.id],
+      }));
+      await Promise.all(
+        updates.map((update) =>
+          supabase
+            .from("products")
+            .update({ stock: update.stock })
+            .eq("id", update.id)
+        )
+      );
     } catch (error) {
       console.error("finalizeProductsAndStock error:", error);
     }

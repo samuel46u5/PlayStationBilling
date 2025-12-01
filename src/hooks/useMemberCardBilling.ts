@@ -554,27 +554,41 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       );
 
       // Ambil total points terbaru dari database dan hitung balance yang benar
-      const { data: freshSessionData } = await supabase
-        .from("rental_sessions")
-        .select("total_points_deducted")
-        .eq("id", session.id)
-        .single();
+      // const { data: freshSessionData } = await supabase
+      //   .from("rental_sessions")
+      //   .select("total_points_deducted")
+      //   .eq("id", session.id)
+      //   .single();
+
+      const [
+        { data: freshSessionData },
+        { data: cardData },
+        { data: consoleData },
+        { data: cardInfo },
+        { data: capitalRow }
+      ] = await Promise.all([
+        supabase.from("rental_sessions").select("total_points_deducted").eq("id", session.id).single(),
+        supabase.from("rfid_cards").select("uid, balance_points").eq("uid", session.card_uid).single(),
+        supabase.from("consoles").select("name, power_tv_command, relay_command_off").eq("id", session.console_id).single(),
+        supabase.from("rfid_cards").select("avg_nilai_point").eq("uid", session.card_uid).single(),
+        supabase.from("consoles").select("rate_profiles(capital)").eq("id", session.console_id).single()
+      ]);
 
       const totalPoints = freshSessionData?.total_points_deducted || 0;
 
       // Ambil data kartu dan console untuk details
-      const [{ data: cardData }, { data: consoleData }] = await Promise.all([
-        supabase
-          .from("rfid_cards")
-          .select("uid, balance_points")
-          .eq("uid", session.card_uid)
-          .single(),
-        supabase
-          .from("consoles")
-          .select("name, power_tv_command, relay_command_off")
-          .eq("id", session.console_id)
-          .single(),
-      ]);
+      // const [{ data: cardData }, { data: consoleData }] = await Promise.all([
+      //   supabase
+      //     .from("rfid_cards")
+      //     .select("uid, balance_points")
+      //     .eq("uid", session.card_uid)
+      //     .single(),
+      //   supabase
+      //     .from("consoles")
+      //     .select("name, power_tv_command, relay_command_off")
+      //     .eq("id", session.console_id)
+      //     .single(),
+      // ]);
 
       // Update session status
       await supabase
@@ -603,18 +617,18 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
 
       // Note: Final logging removed - already handled by partial deduction logging above
 
-      const { data: cardInfo } = await supabase
-        .from("rfid_cards")
-        .select("avg_nilai_point")
-        .eq("uid", session.card_uid)
-        .single();
+      // const { data: cardInfo } = await supabase
+      //   .from("rfid_cards")
+      //   .select("avg_nilai_point")
+      //   .eq("uid", session.card_uid)
+      //   .single();
 
       const avgNilaiPoint = cardInfo?.avg_nilai_point ?? 0;
-      const { data: capitalRow } = await supabase
-        .from("consoles")
-        .select("rate_profiles(capital)")
-        .eq("id", session.console_id)
-        .single();
+      // const { data: capitalRow } = await supabase
+      //   .from("consoles")
+      //   .select("rate_profiles(capital)")
+      //   .eq("id", session.console_id)
+      //   .single();
       const capitalPerHour = (capitalRow as any)?.rate_profiles?.capital ?? 0;
       const durationHours = elapsedMinutes / 60;
       const totalCapitalCost = capitalPerHour * durationHours;

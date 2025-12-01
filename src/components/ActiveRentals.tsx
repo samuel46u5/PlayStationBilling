@@ -1310,27 +1310,25 @@ const ActiveRentals: React.FC = () => {
     setLoadingHistory(true);
     try {
       // Get total count for pagination
-      let countQuery = supabase
-        .from("rental_sessions")
-        .select("id", { count: "exact", head: true });
-      // .in("status", ["completed", "cancelled"]);
-      if (startDate) {
-        countQuery = countQuery.gte("start_time", startDate + "T00:00:00");
-      }
-      if (endDate) {
-        countQuery = countQuery.lte("start_time", endDate + "T23:59:59");
-      }
-      const { count, error: countError } = await countQuery;
-      if (countError) throw countError;
-      setTotalItems(count || 0);
-      setTotalPages(Math.max(1, Math.ceil((count || 0) / 10)));
+      // let countQuery = supabase
+      //   .from("rental_sessions")
+      //   .select("id", { count: "exact", head: true });
+      // // .in("status", ["completed", "cancelled"]);
+      // if (startDate) {
+      //   countQuery = countQuery.gte("start_time", startDate + "T00:00:00");
+      // }
+      // if (endDate) {
+      //   countQuery = countQuery.lte("start_time", endDate + "T23:59:59");
+      // }
+      // const { count, error: countError } = await countQuery;
+      // if (countError) throw countError;
 
       // Fetch paginated data
       const startIdx = (currentPage - 1) * 10;
       const endIdx = startIdx + 9;
       let query = supabase
         .from("rental_sessions")
-        .select(`*, consoles(name, location)`)
+        .select(`*, consoles(name, location)`, { count: "exact" })
         // .in("status", ["completed", "cancelled"])
         .order("start_time", { ascending: false })
         .range(startIdx, endIdx);
@@ -1340,9 +1338,11 @@ const ActiveRentals: React.FC = () => {
       if (endDate) {
         query = query.lte("start_time", endDate + "T23:59:59");
       }
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
       setHistorySessions(data || []);
+      setTotalItems(count || 0);
+      setTotalPages(Math.max(1, Math.ceil((count || 0) / 10)));
     } catch (error) {
       Swal.fire("Error", "Gagal memuat history rental", "error");
     } finally {
@@ -1548,27 +1548,43 @@ const ActiveRentals: React.FC = () => {
     setLoading(true);
     try {
       // Fetch consoles
-      const { data: consoleData, error: consoleError } = await supabase
-        .from("consoles")
-        .select("*, rate_profiles(capital)")
-        .eq("is_active", true);
+      // const { data: consoleData, error: consoleError } = await supabase
+      //   .from("consoles")
+      //   .select("*, rate_profiles(capital)")
+      //   .eq("is_active", true);
 
-      if (consoleError) throw consoleError;
+      // if (consoleError) throw consoleError;
 
       // Fetch rate profiles
-      const { data: rateData, error: rateError } = await supabase
-        .from("rate_profiles")
-        .select(
-          "id, name, hourly_rate, minimum_minutes, minimum_minutes_member"
-        );
+      // const { data: rateData, error: rateError } = await supabase
+      //   .from("rate_profiles")
+      //   .select(
+      //     "id, name, hourly_rate, minimum_minutes, minimum_minutes_member"
+      //   );
 
-      if (rateError) throw rateError;
+      // if (rateError) throw rateError;
 
       // Use global active sessions from TimerContext instead of fetching separately
       const rentalData = globalActiveSessions;
 
       // Fetch products from database
-      const productData = await db.products.getActiveProducts();
+      // const productData = await db.products.getActiveProducts();
+
+      const [consoleResult, rateResult, productData] = await Promise.all([
+        supabase
+          .from("consoles")
+          .select("*, rate_profiles(capital)")
+          .eq("is_active", true),
+        supabase
+          .from("rate_profiles")
+          .select(
+            "id, name, hourly_rate, minimum_minutes, minimum_minutes_member"
+          ),
+        db.products.getActiveProducts(),
+      ]);
+
+      const consoleData = consoleResult.data;
+      const rateData = rateResult.data;
 
       // Fetch customers
       // const { data: customerData, error: customerError } = await supabase
