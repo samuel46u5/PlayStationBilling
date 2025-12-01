@@ -3,7 +3,7 @@ export const NAV_ITEMS = [
   // { id: "cashier", label: "Kasir POS", icon: CreditCard },
   { id: "cashier-session", label: "Pembukuan Kasir" },
   { id: "rentals", label: "Active Rentals" },
-  { id: "bookings", label: "Scheduled Bookings" },
+  // { id: "bookings", label: "Scheduled Bookings" },
   // { id: "customers", label: "Customers" },
   { id: "products", label: "Products" },
   { id: "assembly", label:"Assembly" },

@@ -17,6 +17,7 @@ import {
   Ticket,
   Trash,
   CreditCard,
+  BarChart3,
   Banknote,
   User,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import { supabase, db } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
 import Swal from "sweetalert2";
 import { printReceipt } from "../utils/receipt";
+import OccupancyCalendar from "./OccupancyCalendar";
 
 type Summary = {
   totalRental?: number;
@@ -66,7 +68,12 @@ const Bookkeeping: React.FC = () => {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editEntry, setEditEntry] = useState<BookkeepingEntry | null>(null);
   const [activeView, setActiveView] = useState<
-    "jurnal" | "laba_rugi" | "laporan_kasir" | "rekap_kasir" | "rekap_console"
+    | "jurnal"
+    | "laba_rugi"
+    | "laporan_kasir"
+    | "rekap_kasir"
+    | "rekap_console"
+    | "rekap_okupansi"
   >("jurnal");
   const [activeTab, setActiveTab] = useState<
     "all" | "income" | "expense" | "rental" | "sale" | "voucher" | "rekap"
@@ -1503,88 +1510,89 @@ const Bookkeeping: React.FC = () => {
             <p className="text-gray-600">Kelola catatan keuangan bisnis</p>
           </div>
 
-          <div className="flex gap-x-4">
-            {/* Period Filter / Date range for laporan_kasir */}
-            {activeView !== "laporan_kasir" ? (
-              <div className="flex items-center gap-2">
-                <select
-                  value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {periods.map((period) => (
-                    <option key={period.value} value={period.value}>
-                      {period.label}
-                    </option>
-                  ))}
-                </select>
-                {selectedPeriod === "range" && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <span className="text-gray-500">s/d</span>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              // <div className="flex items-center gap-2">
-              //   <input
-              //     type="date"
-              //     value={startDate}
-              //     defaultValue={new Date().toISOString().split("T")[0]}
-              //     onChange={(e) => setStartDate(e.target.value)}
-              //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              //   />
-              //   <span className="text-gray-500">s/d</span>
-              //   <input
-              //     type="date"
-              //     value={endDate}
-              //     onChange={(e) => setEndDate(e.target.value)}
-              //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              //   />
-              // </div>
-              <div className="px-6 pb-4">
-                <div className="flex flex-col">
-                  <label className="text-sm text-gray-600 mb-1">
-                    Pilih Sesi Kasir
-                  </label>
-
-                  <button
-                    onClick={() => setShowSessionModal(true)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50 transition-colors"
+          {activeView !== "rekap_okupansi" && (
+            <div className="flex gap-x-4">
+              {/* Period Filter / Date range for laporan_kasir */}
+              {activeView !== "laporan_kasir" ? (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedPeriod}
+                    onChange={(e) => setSelectedPeriod(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    {selectedSessionId
-                      ? sessions.find((s) => s.id === selectedSessionId)
-                        ? `${
-                            sessions.find((s) => s.id === selectedSessionId)
-                              ?.cashier_name || "Kasir"
-                          } - ${new Date(
-                            sessions.find(
-                              (s) => s.id === selectedSessionId
-                            )?.start_time
-                          ).toLocaleString("id-ID", {
-                            day: "numeric",
-                            month: "numeric",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          })}`
-                        : "Pilih Sesi Kasir"
-                      : "Pilih Sesi Kasir"}
-                  </button>
+                    {periods.map((period) => (
+                      <option key={period.value} value={period.value}>
+                        {period.label}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedPeriod === "range" && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-500">s/d</span>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
                 </div>
-                {/* {selectedSessionId && (
+              ) : (
+                // <div className="flex items-center gap-2">
+                //   <input
+                //     type="date"
+                //     value={startDate}
+                //     defaultValue={new Date().toISOString().split("T")[0]}
+                //     onChange={(e) => setStartDate(e.target.value)}
+                //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                //   />
+                //   <span className="text-gray-500">s/d</span>
+                //   <input
+                //     type="date"
+                //     value={endDate}
+                //     onChange={(e) => setEndDate(e.target.value)}
+                //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                //   />
+                // </div>
+                <div className="px-6 pb-4">
+                  <div className="flex flex-col">
+                    <label className="text-sm text-gray-600 mb-1">
+                      Pilih Sesi Kasir
+                    </label>
+
+                    <button
+                      onClick={() => setShowSessionModal(true)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50 transition-colors"
+                    >
+                      {selectedSessionId
+                        ? sessions.find((s) => s.id === selectedSessionId)
+                          ? `${
+                              sessions.find((s) => s.id === selectedSessionId)
+                                ?.cashier_name || "Kasir"
+                            } - ${new Date(
+                              sessions.find(
+                                (s) => s.id === selectedSessionId
+                              )?.start_time
+                            ).toLocaleString("id-ID", {
+                              day: "numeric",
+                              month: "numeric",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            })}`
+                          : "Pilih Sesi Kasir"
+                        : "Pilih Sesi Kasir"}
+                    </button>
+                  </div>
+                  {/* {selectedSessionId && (
                   <div className="flex items-end text-sm text-gray-600">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
@@ -1592,18 +1600,19 @@ const Bookkeeping: React.FC = () => {
                     </div>
                   </div>
                 )} */}
-              </div>
-            )}
-            {activeView === "jurnal" && (
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                <Plus className="h-5 w-5" />
-                Tambah Transaksi
-              </button>
-            )}
-          </div>
+                </div>
+              )}
+              {activeView === "jurnal" && (
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
+                  <Plus className="h-5 w-5" />
+                  Tambah Transaksi
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Error Display */}
@@ -1715,6 +1724,17 @@ const Bookkeeping: React.FC = () => {
               <Gamepad className="h-4 w-4" />
               Rekap Console
             </button>
+            <button
+              onClick={() => setActiveView("rekap_okupansi")}
+              className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
+                activeView === "rekap_okupansi"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <BarChart3 className="h-4 w-4" />
+              Rekap Okupansi
+            </button>
           </div>
         </div>
       </div>
@@ -1733,102 +1753,112 @@ const Bookkeeping: React.FC = () => {
                   ? "Rekap Console"
                   : activeView === "laporan_kasir"
                   ? "Laporan Transaksi Kasir"
+                  : activeView === "rekap_okupansi"
+                  ? "Rekap Okupansi"
                   : "Riwayat Transaksi"}
               </h2>
               {activeView !== "rekap_kasir" &&
-                activeView !== "rekap_console" && (
+                activeView !== "rekap_console" &&
+                activeView !== "rekap_okupansi" && (
                   <p className="text-sm text-gray-600 mt-1">
                     Menampilkan {paginatedData.length} transaksi dari{" "}
                     {filteredByTab.length}
                   </p>
                 )}
+              {activeView === "rekap_okupansi" && (
+                <p className="text-sm text-gray-600 mt-1">
+                  Menampilkan data okupansi console gaming
+                </p>
+              )}
             </div>
 
-            {activeView !== "rekap_kasir" && activeView !== "rekap_console" && (
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setActiveTab("all")}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === "all"
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Semua ({sourceList.length})
-                </button>
-                <button
-                  onClick={() =>
-                    setActiveTab(
-                      activeView === "jurnal"
-                        ? "income"
-                        : activeView === "laba_rugi"
-                        ? "rental"
-                        : "income"
+            {activeView !== "rekap_kasir" &&
+              activeView !== "rekap_console" &&
+              activeView !== "rekap_okupansi" && (
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setActiveTab("all")}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      activeTab === "all"
+                        ? "bg-white text-gray-900 shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Semua ({sourceList.length})
+                  </button>
+                  <button
+                    onClick={() =>
+                      setActiveTab(
+                        activeView === "jurnal"
+                          ? "income"
+                          : activeView === "laba_rugi"
+                          ? "rental"
+                          : "income"
+                      )
+                    }
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                      activeTab === "income" || activeTab === "rental"
+                        ? "bg-white text-green-600 shadow-sm"
+                        : "text-gray-600 hover:text-green-600"
+                    }`}
+                  >
+                    {activeView === "jurnal" ? (
+                      <TrendingUp className="h-4 w-4" />
+                    ) : activeView === "laba_rugi" ? (
+                      <Gamepad className="h-4 w-4" />
+                    ) : (
+                      <TrendingUp className="h-4 w-4" />
+                    )}
+                    {activeView === "jurnal"
+                      ? "Pemasukan"
+                      : activeView === "laba_rugi"
+                      ? "Rental"
+                      : "Pemasukan"}{" "}
+                    (
+                    {activeView === "jurnal"
+                      ? incomeCount
+                      : activeView === "laba_rugi"
+                      ? rentalCount
+                      : incomeCount}
                     )
-                  }
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                    activeTab === "income" || activeTab === "rental"
-                      ? "bg-white text-green-600 shadow-sm"
-                      : "text-gray-600 hover:text-green-600"
-                  }`}
-                >
-                  {activeView === "jurnal" ? (
-                    <TrendingUp className="h-4 w-4" />
-                  ) : activeView === "laba_rugi" ? (
-                    <Gamepad className="h-4 w-4" />
-                  ) : (
-                    <TrendingUp className="h-4 w-4" />
-                  )}
-                  {activeView === "jurnal"
-                    ? "Pemasukan"
-                    : activeView === "laba_rugi"
-                    ? "Rental"
-                    : "Pemasukan"}{" "}
-                  (
-                  {activeView === "jurnal"
-                    ? incomeCount
-                    : activeView === "laba_rugi"
-                    ? rentalCount
-                    : incomeCount}
-                  )
-                </button>
-                <button
-                  onClick={() =>
-                    setActiveTab(
-                      activeView === "jurnal"
-                        ? "expense"
-                        : activeView === "laba_rugi"
-                        ? "sale"
-                        : "expense"
+                  </button>
+                  <button
+                    onClick={() =>
+                      setActiveTab(
+                        activeView === "jurnal"
+                          ? "expense"
+                          : activeView === "laba_rugi"
+                          ? "sale"
+                          : "expense"
+                      )
+                    }
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                      activeTab === "expense" || activeTab === "sale"
+                        ? "bg-white text-red-600 shadow-sm"
+                        : "text-gray-600 hover:text-red-600"
+                    }`}
+                  >
+                    {activeView === "jurnal" ? (
+                      <TrendingDown className="h-4 w-4" />
+                    ) : activeView === "laba_rugi" ? (
+                      <Coffee className="h-4 w-4" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4" />
+                    )}
+                    {activeView === "jurnal"
+                      ? "Pengeluaran"
+                      : activeView === "laba_rugi"
+                      ? "Cafe"
+                      : "Pengeluaran"}{" "}
+                    (
+                    {activeView === "jurnal"
+                      ? expenseCount
+                      : activeView === "laba_rugi"
+                      ? saleCount
+                      : expenseCount}
                     )
-                  }
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                    activeTab === "expense" || activeTab === "sale"
-                      ? "bg-white text-red-600 shadow-sm"
-                      : "text-gray-600 hover:text-red-600"
-                  }`}
-                >
-                  {activeView === "jurnal" ? (
-                    <TrendingDown className="h-4 w-4" />
-                  ) : activeView === "laba_rugi" ? (
-                    <Coffee className="h-4 w-4" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4" />
-                  )}
-                  {activeView === "jurnal"
-                    ? "Pengeluaran"
-                    : activeView === "laba_rugi"
-                    ? "Cafe"
-                    : "Pengeluaran"}{" "}
-                  (
-                  {activeView === "jurnal"
-                    ? expenseCount
-                    : activeView === "laba_rugi"
-                    ? saleCount
-                    : expenseCount}
-                  )
-                </button>
-                {/* {activeView === "laba_rugi" && (
+                  </button>
+                  {/* {activeView === "laba_rugi" && (
                 <button
                   onClick={() => setActiveTab("voucher")}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
@@ -1841,36 +1871,38 @@ const Bookkeeping: React.FC = () => {
                   Voucher ({voucherCount})
                 </button>
               )} */}
-                {activeView === "laba_rugi" && (
-                  <button
-                    onClick={() => setActiveTab("rekap")}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      activeTab === "rekap"
-                        ? "bg-white text-gray-900 shadow-sm"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    Rekap Per Tanggal
-                  </button>
-                )}
-                {activeView === "laporan_kasir" && activeTab === "income" && (
-                  <div className="flex items-center gap-2 ml-4">
-                    <label className="text-sm text-gray-600">Pembayaran:</label>
-                    <select
-                      value={paymentMethodFilter}
-                      onChange={(e) =>
-                        setPaymentMethodFilter(e.target.value as any)
-                      }
-                      className="px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                  {activeView === "laba_rugi" && (
+                    <button
+                      onClick={() => setActiveTab("rekap")}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        activeTab === "rekap"
+                          ? "bg-white text-gray-900 shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
                     >
-                      <option value="all">Semua</option>
-                      <option value="cash">Tunai</option>
-                      <option value="non-cash">Non Tunai</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
+                      Rekap Per Tanggal
+                    </button>
+                  )}
+                  {activeView === "laporan_kasir" && activeTab === "income" && (
+                    <div className="flex items-center gap-2 ml-4">
+                      <label className="text-sm text-gray-600">
+                        Pembayaran:
+                      </label>
+                      <select
+                        value={paymentMethodFilter}
+                        onChange={(e) =>
+                          setPaymentMethodFilter(e.target.value as any)
+                        }
+                        className="px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                      >
+                        <option value="all">Semua</option>
+                        <option value="cash">Tunai</option>
+                        <option value="non-cash">Non Tunai</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
           </div>
 
           {activeView === "laporan_kasir" && activeTab === "income" && (
@@ -1970,109 +2002,117 @@ const Bookkeeping: React.FC = () => {
             </div>
           )}
 
-          {activeView !== "rekap_console" ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-green-800">
-                    {activeView === "jurnal"
-                      ? "Total Pemasukan"
-                      : activeView === "laba_rugi"
-                      ? "Total Rental"
-                      : "Total Pemasukan"}
-                  </span>
-                  <span className="text-lg font-bold text-green-600">
-                    Rp{" "}
-                    {activeView === "jurnal"
-                      ? summary.totalIncome?.toLocaleString("id-ID")
-                      : activeView === "laba_rugi"
-                      ? Math.ceil(summary.totalRental ?? 0).toLocaleString(
-                          "id-ID"
-                        )
-                      : sourceList
-                          .filter(
-                            (t: any) =>
-                              t.type === "income" ||
-                              t.type === "sale" ||
-                              t.type === "rental" ||
-                              t.type === "voucher"
+          {activeView !== "rekap_console" &&
+            activeView !== "rekap_okupansi" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-green-800">
+                      {activeView === "jurnal"
+                        ? "Total Pemasukan"
+                        : activeView === "laba_rugi"
+                        ? "Total Rental"
+                        : "Total Pemasukan"}
+                    </span>
+                    <span className="text-lg font-bold text-green-600">
+                      Rp{" "}
+                      {activeView === "jurnal"
+                        ? summary.totalIncome?.toLocaleString("id-ID")
+                        : activeView === "laba_rugi"
+                        ? Math.ceil(summary.totalRental ?? 0).toLocaleString(
+                            "id-ID"
                           )
-                          .reduce(
-                            (s: number, t: any) => s + (Number(t.amount) || 0),
-                            0
-                          )
-                          .toLocaleString("id-ID")}
-                  </span>
+                        : sourceList
+                            .filter(
+                              (t: any) =>
+                                t.type === "income" ||
+                                t.type === "sale" ||
+                                t.type === "rental" ||
+                                t.type === "voucher"
+                            )
+                            .reduce(
+                              (s: number, t: any) =>
+                                s + (Number(t.amount) || 0),
+                              0
+                            )
+                            .toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-red-800">
+                      {activeView === "jurnal"
+                        ? "Total Pengeluaran"
+                        : activeView === "laba_rugi"
+                        ? "Total Cafe"
+                        : "Total Pengeluaran"}
+                    </span>
+                    <span className="text-lg font-bold text-red-600">
+                      Rp{" "}
+                      {activeView === "jurnal"
+                        ? summary.totalExpense?.toLocaleString("id-ID")
+                        : activeView === "laba_rugi"
+                        ? summary.totalCafe?.toLocaleString("id-ID")
+                        : sourceList
+                            .filter((t: any) => t.type === "expense")
+                            .reduce(
+                              (s: number, t: any) =>
+                                s + (Number(t.amount) || 0),
+                              0
+                            )
+                            .toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-blue-800">
+                      {activeView === "jurnal"
+                        ? "Profit"
+                        : activeView === "laba_rugi"
+                        ? "Laba Bruto"
+                        : "Saldo Net"}
+                    </span>
+                    <span
+                      className={`text-lg font-bold ${
+                        summary.netProfit >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      Rp{" "}
+                      {(activeView === "laba_rugi"
+                        ? Math.ceil(summary.netProfit)
+                        : activeView === "jurnal"
+                        ? summary.netProfit
+                        : sourceList
+                            .filter(
+                              (t: any) =>
+                                t.type === "income" ||
+                                t.type === "sale" ||
+                                t.type === "rental" ||
+                                t.type === "voucher"
+                            )
+                            .reduce(
+                              (s: number, t: any) =>
+                                s + (Number(t.amount) || 0),
+                              0
+                            ) -
+                          sourceList
+                            .filter((t: any) => t.type === "expense")
+                            .reduce(
+                              (s: number, t: any) =>
+                                s + (Number(t.amount) || 0),
+                              0
+                            )
+                      ).toLocaleString("id-ID")}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-red-800">
-                    {activeView === "jurnal"
-                      ? "Total Pengeluaran"
-                      : activeView === "laba_rugi"
-                      ? "Total Cafe"
-                      : "Total Pengeluaran"}
-                  </span>
-                  <span className="text-lg font-bold text-red-600">
-                    Rp{" "}
-                    {activeView === "jurnal"
-                      ? summary.totalExpense?.toLocaleString("id-ID")
-                      : activeView === "laba_rugi"
-                      ? summary.totalCafe?.toLocaleString("id-ID")
-                      : sourceList
-                          .filter((t: any) => t.type === "expense")
-                          .reduce(
-                            (s: number, t: any) => s + (Number(t.amount) || 0),
-                            0
-                          )
-                          .toLocaleString("id-ID")}
-                  </span>
-                </div>
-              </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-blue-800">
-                    {activeView === "jurnal"
-                      ? "Profit"
-                      : activeView === "laba_rugi"
-                      ? "Laba Bruto"
-                      : "Saldo Net"}
-                  </span>
-                  <span
-                    className={`text-lg font-bold ${
-                      summary.netProfit >= 0 ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    Rp{" "}
-                    {(activeView === "laba_rugi"
-                      ? Math.ceil(summary.netProfit)
-                      : activeView === "jurnal"
-                      ? summary.netProfit
-                      : sourceList
-                          .filter(
-                            (t: any) =>
-                              t.type === "income" ||
-                              t.type === "sale" ||
-                              t.type === "rental" ||
-                              t.type === "voucher"
-                          )
-                          .reduce(
-                            (s: number, t: any) => s + (Number(t.amount) || 0),
-                            0
-                          ) -
-                        sourceList
-                          .filter((t: any) => t.type === "expense")
-                          .reduce(
-                            (s: number, t: any) => s + (Number(t.amount) || 0),
-                            0
-                          )
-                    ).toLocaleString("id-ID")}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : (
+            )}
+          {activeView === "rekap_console" && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               {/* Total Durasi */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -3934,6 +3974,8 @@ const Bookkeeping: React.FC = () => {
               )}
             </div>
           </>
+        ) : activeView === "rekap_okupansi" ? (
+          <OccupancyCalendar />
         ) : (
           <>
             <div className="divide-y divide-gray-200">
