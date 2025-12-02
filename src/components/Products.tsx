@@ -5159,8 +5159,11 @@ const Products: React.FC = () => {
                       if (isSavingPurchase) return;
                       setIsSavingPurchase(true);
                       try {
+                        let poId: string;
+                        let poData: any;
+
                         if (editingPoId) {
-                          await db.purchases.update(editingPoId, {
+                          poData = await db.purchases.update(editingPoId, {
                             supplier_id: newPurchase.supplierId,
                             items: newPurchase.items,
                             notes: newPurchase.notes,
@@ -5169,13 +5172,15 @@ const Products: React.FC = () => {
                             subtotal: purchaseSubtotal,
                             total_amount: purchaseTotal,
                           });
+                          poId = editingPoId;
+
                           Swal.fire({
                             icon: "success",
                             title: "Berhasil!",
                             text: `Purchase Order berhasil diperbarui.`,
                           });
                         } else {
-                          await db.purchases.create({
+                          poData = await db.purchases.create({
                             supplier_id: newPurchase.supplierId,
                             items: newPurchase.items,
                             notes: newPurchase.notes,
@@ -5184,6 +5189,8 @@ const Products: React.FC = () => {
                             subtotal: purchaseSubtotal,
                             total_amount: purchaseTotal,
                           });
+                          poId = poData.id;
+
                           Swal.fire({
                             icon: "success",
                             title: "Berhasil!",
@@ -5191,6 +5198,76 @@ const Products: React.FC = () => {
                               "id-ID"
                             )}`,
                           });
+                        }
+
+                        const reference = `PO-${poId}`;
+                        const supplier = suppliers.find(
+                          (s) => s.id === newPurchase.supplierId
+                        );
+
+                        const { data: existingEntry, error: fetchError } =
+                          await supabase
+                            .from("bookkeeping_entries")
+                            .select("id")
+                            .eq("reference", reference)
+                            .single();
+
+                        if (fetchError && fetchError.code !== "PGRST116") {
+                          console.error(
+                            "Error checking existing bookkeeping entry:",
+                            fetchError
+                          );
+                        }
+
+                        if (existingEntry) {
+                          const { error: updateError } = await supabase
+                            .from("bookkeeping_entries")
+                            .update({
+                              amount: purchaseTotal,
+                              notes: `Purchase Order ${
+                                poData.po_number || poId
+                              } - ${supplier?.name || "Unknown Supplier"}${
+                                newPurchase.notes
+                                  ? ` (${newPurchase.notes})`
+                                  : ""
+                              }`,
+                              entry_date: newPurchase.orderDate.split("T")[0], // Update date if order date changed
+                            })
+                            .eq("id", existingEntry.id);
+
+                          if (updateError) {
+                            console.error(
+                              "Error updating bookkeeping entry:",
+                              updateError
+                            );
+                          }
+                        } else {
+                          const { error: insertError } = await supabase
+                            .from("bookkeeping_entries")
+                            .insert([
+                              {
+                                entry_date: newPurchase.orderDate.split("T")[0],
+                                type: "expense",
+                                category: "inventory",
+                                description: `Purchase Order - ${
+                                  supplier?.name || "Unknown Supplier"
+                                }`,
+                                amount: purchaseTotal,
+                                reference: reference,
+                                notes: `PO ${poData.po_number || poId}${
+                                  newPurchase.notes
+                                    ? ` - ${newPurchase.notes}`
+                                    : ""
+                                }`,
+                              },
+                            ]);
+
+                          if (insertError) {
+                            console.error(
+                              "Error inserting bookkeeping entry:",
+                              insertError
+                            );
+                          }
                         }
 
                         setShowPurchaseForm(false);

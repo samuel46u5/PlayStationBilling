@@ -495,6 +495,33 @@ const CashierSessionComponent: React.FC = () => {
       updated_at: new Date().toISOString(),
     });
 
+    if (todayTotalRevenue > 0) {
+      const { error: bookkeepingError } = await supabase
+        .from("bookkeeping_entries")
+        .insert([
+          {
+            entry_date: new Date().toISOString().split("T")[0],
+            type: "income",
+            category: "rental",
+            description: `Pendapatan Sesi Kasir - ${currentSession.cashierName}`,
+            amount: todayTotalRevenue,
+            reference: `SESSION-${currentSession.id}`,
+            notes: `Cafe: Rp ${todayTotalSales.toLocaleString(
+              "id-ID"
+            )} | Rental: Rp ${todayTotalRentals.toLocaleString(
+              "id-ID"
+            )} | Voucher: Rp ${todayTotalVouchers.toLocaleString("id-ID")}`,
+          },
+        ]);
+
+      if (bookkeepingError) {
+        console.error(
+          "Error inserting revenue to bookkeeping:",
+          bookkeepingError
+        );
+      }
+    }
+
     const receiptData = {
       id: `SESSION-${currentSession.id}`,
       timestamp: new Date().toLocaleString("id-ID"),
