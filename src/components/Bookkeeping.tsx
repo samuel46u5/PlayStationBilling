@@ -17,7 +17,6 @@ import {
   Ticket,
   Trash,
   CreditCard,
-  BarChart3,
   Banknote,
   User,
 } from "lucide-react";
@@ -26,6 +25,8 @@ import { BookkeepingEntry } from "../types";
 import Swal from "sweetalert2";
 import { printReceipt } from "../utils/receipt";
 import OccupancyCalendar from "./OccupancyCalendar";
+import ProfitCalendar from "./ProfitCalendar";
+import CashierCalendar from "./CashierCalendar";
 
 type Summary = {
   totalRental?: number;
@@ -68,12 +69,7 @@ const Bookkeeping: React.FC = () => {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editEntry, setEditEntry] = useState<BookkeepingEntry | null>(null);
   const [activeView, setActiveView] = useState<
-    | "jurnal"
-    | "laba_rugi"
-    | "laporan_kasir"
-    | "rekap_kasir"
-    | "rekap_console"
-    | "rekap_okupansi"
+    "jurnal" | "laba_rugi" | "laporan_kasir" | "rekap_kasir" | "rekap_console"
   >("jurnal");
   const [activeTab, setActiveTab] = useState<
     "all" | "income" | "expense" | "rental" | "sale" | "voucher" | "rekap"
@@ -103,6 +99,106 @@ const Bookkeeping: React.FC = () => {
   const [rekapConsoleSubTab, setRekapConsoleSubTab] = useState<
     "per_tanggal" | "per_console"
   >("per_tanggal");
+  const [labaRugiSubTab, setLabaRugiSubTab] = useState<"detail" | "rekap">(
+    "detail"
+  );
+  const [transaksiKasirSubTab, setTransaksiKasirSubTab] = useState<
+    "detail" | "rekap"
+  >("detail");
+  const [rekapConsoleViewSubTab, setRekapConsoleViewSubTab] = useState<
+    "detail" | "rekap"
+  >("detail");
+
+  const renderDetailRekapNav = () => {
+    if (activeView === "laba_rugi") {
+      return (
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => setLabaRugiSubTab("detail")}
+            className={`px-3 py-2 text-sm rounded ${
+              labaRugiSubTab === "detail"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Detail Laba Rugi
+          </button>
+          <button
+            onClick={() => setLabaRugiSubTab("rekap")}
+            className={`px-3 py-2 text-sm rounded ${
+              labaRugiSubTab === "rekap"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Rekap Laba Rugi
+          </button>
+        </div>
+      );
+    }
+
+    if (activeView === "rekap_kasir") {
+      return (
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => setTransaksiKasirSubTab("detail")}
+            className={`px-3 py-2 text-sm rounded ${
+              transaksiKasirSubTab === "detail"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Detail Transaksi Kasir
+          </button>
+          <button
+            onClick={() => setTransaksiKasirSubTab("rekap")}
+            className={`px-3 py-2 text-sm rounded ${
+              transaksiKasirSubTab === "rekap"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Rekap Transaksi Kasir
+          </button>
+        </div>
+      );
+    }
+
+    if (activeView === "rekap_console") {
+      return (
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => setRekapConsoleViewSubTab("detail")}
+            className={`px-3 py-2 text-sm rounded ${
+              rekapConsoleViewSubTab === "detail"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Detail Rekap Console
+          </button>
+          <button
+            onClick={() => setRekapConsoleViewSubTab("rekap")}
+            className={`px-3 py-2 text-sm rounded ${
+              rekapConsoleViewSubTab === "rekap"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Rekap Console
+          </button>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const renderRekapPlaceholder = (message: string) => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 text-center text-gray-500">
+      {message}
+    </div>
+  );
 
   // Laporan Kasir states
   const [sessions, setSessions] = useState<any[]>([]);
@@ -125,8 +221,30 @@ const Bookkeeping: React.FC = () => {
   const periods = [
     { value: "today", label: "Hari Ini" },
     { value: "yesterday", label: "Kemarin" },
-    { value: "week", label: "Minggu Ini" },
-    { value: "month", label: "Bulan Ini" },
+    {
+      value: "week",
+      label: `Minggu Ini`,
+    },
+    {
+      value: "last_week",
+      label: `Minggu Lalu`,
+    },
+    {
+      value: "month",
+      label: `Bulan Ini (${new Date().toLocaleDateString("id-ID", {
+        month: "long",
+      })})`,
+    },
+    {
+      value: "last_month",
+      label: `Bulan Lalu (${new Date(
+        new Date().getFullYear(),
+        new Date().getMonth() - 1,
+        1
+      ).toLocaleDateString("id-ID", {
+        month: "long",
+      })})`,
+    },
     { value: "range", label: "Rentang Waktu" },
   ];
 
@@ -177,9 +295,24 @@ const Bookkeeping: React.FC = () => {
         end.setHours(23, 59, 59, 999);
         break;
       }
+      case "last_week": {
+        start = new Date();
+        start.setDate(start.getDate() - 7);
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setDate(end.getDate() - 1);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
       case "month": {
         start = new Date(now.getFullYear(), now.getMonth(), 1);
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "last_month": {
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        end = new Date(now.getFullYear(), now.getMonth(), 0);
         end.setHours(23, 59, 59, 999);
         break;
       }
@@ -253,9 +386,24 @@ const Bookkeeping: React.FC = () => {
               end.setHours(23, 59, 59, 999);
               break;
             }
+            case "last_week": {
+              start = new Date();
+              start.setDate(start.getDate() - 7);
+              start.setHours(0, 0, 0, 0);
+              end = new Date();
+              end.setDate(end.getDate() - 1);
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
             case "month": {
               start = new Date(now.getFullYear(), now.getMonth(), 1);
               end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
+            case "last_month": {
+              start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+              end = new Date(now.getFullYear(), now.getMonth(), 0);
               end.setHours(23, 59, 59, 999);
               break;
             }
@@ -310,9 +458,24 @@ const Bookkeeping: React.FC = () => {
               end.setHours(23, 59, 59, 999);
               break;
             }
+            case "last_week": {
+              start = new Date();
+              start.setDate(start.getDate() - 7);
+              start.setHours(0, 0, 0, 0);
+              end = new Date();
+              end.setDate(end.getDate() - 1);
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
             case "month": {
               start = new Date(now.getFullYear(), now.getMonth(), 1);
               end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
+            case "last_month": {
+              start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+              end = new Date(now.getFullYear(), now.getMonth(), 0);
               end.setHours(23, 59, 59, 999);
               break;
             }
@@ -379,9 +542,33 @@ const Bookkeeping: React.FC = () => {
               end.setHours(23, 59, 59, 999);
               break;
             }
+            case "last_week": {
+              start = new Date();
+              start.setDate(start.getDate() - 7);
+              start.setHours(0, 0, 0, 0);
+              end = new Date();
+              end.setDate(end.getDate() - 1);
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
             case "month": {
               start = new Date(now.getFullYear(), now.getMonth(), 1);
               end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+              end.setHours(23, 59, 59, 999);
+              break;
+            }
+            case "last_month": {
+              const currentDate = new Date();
+              start = new Date(
+                currentDate.getFullYear(),
+                currentDate.getMonth() - 1,
+                1
+              );
+              end = new Date(
+                currentDate.getFullYear(),
+                currentDate.getMonth(),
+                0
+              );
               end.setHours(23, 59, 59, 999);
               break;
             }
@@ -451,16 +638,31 @@ const Bookkeeping: React.FC = () => {
           case "week": {
             start = new Date();
             const day = start.getDay();
-            const diff = (day === 0 ? -6 : 1) - day; // Senin sebagai awal minggu
+            const diff = (day === 0 ? -6 : 1) - day;
             start.setDate(start.getDate() + diff);
             start.setHours(0, 0, 0, 0);
             end = new Date();
             end.setHours(23, 59, 59, 999);
             break;
           }
+          case "last_week": {
+            start = new Date();
+            start.setDate(start.getDate() - 7);
+            start.setHours(0, 0, 0, 0);
+            end = new Date();
+            end.setDate(end.getDate() - 1);
+            end.setHours(23, 59, 59, 999);
+            break;
+          }
           case "month": {
             start = new Date(now.getFullYear(), now.getMonth(), 1);
             end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            end.setHours(23, 59, 59, 999);
+            break;
+          }
+          case "last_month": {
+            start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            end = new Date(now.getFullYear(), now.getMonth(), 0);
             end.setHours(23, 59, 59, 999);
             break;
           }
@@ -520,6 +722,12 @@ const Bookkeeping: React.FC = () => {
       fetchEntries();
     }
   }, [selectedPeriod, activeView, selectedSessionId, startDate, endDate]);
+
+  useEffect(() => {
+    setLabaRugiSubTab("detail");
+    setTransaksiKasirSubTab("detail");
+    setRekapConsoleViewSubTab("detail");
+  }, [activeView]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1510,10 +1718,12 @@ const Bookkeeping: React.FC = () => {
             <p className="text-gray-600">Kelola catatan keuangan bisnis</p>
           </div>
 
-          {activeView !== "rekap_okupansi" && (
-            <div className="flex gap-x-4">
-              {/* Period Filter / Date range for laporan_kasir */}
-              {activeView !== "laporan_kasir" ? (
+          <div className="flex gap-x-4">
+            {/* Period Filter / Date range for laporan_kasir */}
+            {activeView !== "laporan_kasir" &&
+              rekapConsoleViewSubTab !== "rekap" &&
+              transaksiKasirSubTab !== "rekap" &&
+              labaRugiSubTab !== "rekap" && (
                 <div className="flex items-center gap-2">
                   <select
                     value={selectedPeriod}
@@ -1544,55 +1754,41 @@ const Bookkeeping: React.FC = () => {
                     </div>
                   )}
                 </div>
-              ) : (
-                // <div className="flex items-center gap-2">
-                //   <input
-                //     type="date"
-                //     value={startDate}
-                //     defaultValue={new Date().toISOString().split("T")[0]}
-                //     onChange={(e) => setStartDate(e.target.value)}
-                //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                //   />
-                //   <span className="text-gray-500">s/d</span>
-                //   <input
-                //     type="date"
-                //     value={endDate}
-                //     onChange={(e) => setEndDate(e.target.value)}
-                //     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                //   />
-                // </div>
-                <div className="px-6 pb-4">
-                  <div className="flex flex-col">
-                    <label className="text-sm text-gray-600 mb-1">
-                      Pilih Sesi Kasir
-                    </label>
+              )}
 
-                    <button
-                      onClick={() => setShowSessionModal(true)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50 transition-colors"
-                    >
-                      {selectedSessionId
-                        ? sessions.find((s) => s.id === selectedSessionId)
-                          ? `${
-                              sessions.find((s) => s.id === selectedSessionId)
-                                ?.cashier_name || "Kasir"
-                            } - ${new Date(
-                              sessions.find(
-                                (s) => s.id === selectedSessionId
-                              )?.start_time
-                            ).toLocaleString("id-ID", {
-                              day: "numeric",
-                              month: "numeric",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: false,
-                            })}`
-                          : "Pilih Sesi Kasir"
-                        : "Pilih Sesi Kasir"}
-                    </button>
-                  </div>
-                  {/* {selectedSessionId && (
+            {activeView === "laporan_kasir" && (
+              <div className="px-6 pb-4">
+                <div className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">
+                    Pilih Sesi Kasir
+                  </label>
+
+                  <button
+                    onClick={() => setShowSessionModal(true)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left bg-white hover:bg-gray-50 transition-colors"
+                  >
+                    {selectedSessionId
+                      ? sessions.find((s) => s.id === selectedSessionId)
+                        ? `${
+                            sessions.find((s) => s.id === selectedSessionId)
+                              ?.cashier_name || "Kasir"
+                          } - ${new Date(
+                            sessions.find(
+                              (s) => s.id === selectedSessionId
+                            )?.start_time
+                          ).toLocaleString("id-ID", {
+                            day: "numeric",
+                            month: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: false,
+                          })}`
+                        : "Pilih Sesi Kasir"
+                      : "Pilih Sesi Kasir"}
+                  </button>
+                </div>
+                {/* {selectedSessionId && (
                   <div className="flex items-end text-sm text-gray-600">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
@@ -1600,19 +1796,19 @@ const Bookkeeping: React.FC = () => {
                     </div>
                   </div>
                 )} */}
-                </div>
-              )}
-              {activeView === "jurnal" && (
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-                >
-                  <Plus className="h-5 w-5" />
-                  Tambah Transaksi
-                </button>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+
+            {activeView === "jurnal" && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus className="h-5 w-5" />
+                Tambah Transaksi
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Error Display */}
@@ -1711,7 +1907,7 @@ const Bookkeeping: React.FC = () => {
               }`}
             >
               <Calendar className="h-4 w-4" />
-              Rekap Transaksi Kasir
+              Transaksi Kasir
             </button>
             <button
               onClick={() => setActiveView("rekap_console")}
@@ -1722,9 +1918,9 @@ const Bookkeeping: React.FC = () => {
               }`}
             >
               <Gamepad className="h-4 w-4" />
-              Rekap Console
+              Console
             </button>
-            <button
+            {/* <button
               onClick={() => setActiveView("rekap_okupansi")}
               className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
                 activeView === "rekap_okupansi"
@@ -1734,131 +1930,156 @@ const Bookkeeping: React.FC = () => {
             >
               <BarChart3 className="h-4 w-4" />
               Rekap Okupansi
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
 
-      {/* Transactions List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {activeView === "laba_rugi"
-                  ? "Laporan Laba Rugi"
-                  : activeView === "rekap_kasir"
-                  ? "Rekap Kasir"
-                  : activeView === "rekap_console"
-                  ? "Rekap Console"
-                  : activeView === "laporan_kasir"
-                  ? "Laporan Transaksi Kasir"
-                  : activeView === "rekap_okupansi"
-                  ? "Rekap Okupansi"
-                  : "Riwayat Transaksi"}
-              </h2>
-              {activeView !== "rekap_kasir" &&
-                activeView !== "rekap_console" &&
-                activeView !== "rekap_okupansi" && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    Menampilkan {paginatedData.length} transaksi dari{" "}
-                    {filteredByTab.length}
-                  </p>
-                )}
-              {activeView === "rekap_okupansi" && (
-                <p className="text-sm text-gray-600 mt-1">
-                  Menampilkan data okupansi console gaming
-                </p>
-              )}
-            </div>
+      {/* {activeView === "laba_rugi" && (
+        <div className="flex items-center gap-3 mb-6">
+          <button
+            onClick={() => setLabaRugiSubTab("detail")}
+            className={`px-3 py-2 text-sm rounded ${
+              labaRugiSubTab === "detail"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Detail Laba Rugi
+          </button>
+          <button
+            onClick={() => setLabaRugiSubTab("rekap")}
+            className={`px-3 py-2 text-sm rounded ${
+              labaRugiSubTab === "rekap"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Rekap Laba Rugi
+          </button>
+        </div>
+      )} */}
+      {renderDetailRekapNav()}
 
-            {activeView !== "rekap_kasir" &&
-              activeView !== "rekap_console" &&
-              activeView !== "rekap_okupansi" && (
-                <div className="flex bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => setActiveTab("all")}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      activeTab === "all"
-                        ? "bg-white text-gray-900 shadow-sm"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    Semua ({sourceList.length})
-                  </button>
-                  <button
-                    onClick={() =>
-                      setActiveTab(
-                        activeView === "jurnal"
-                          ? "income"
-                          : activeView === "laba_rugi"
-                          ? "rental"
-                          : "income"
-                      )
-                    }
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                      activeTab === "income" || activeTab === "rental"
-                        ? "bg-white text-green-600 shadow-sm"
-                        : "text-gray-600 hover:text-green-600"
-                    }`}
-                  >
-                    {activeView === "jurnal" ? (
-                      <TrendingUp className="h-4 w-4" />
-                    ) : activeView === "laba_rugi" ? (
-                      <Gamepad className="h-4 w-4" />
-                    ) : (
-                      <TrendingUp className="h-4 w-4" />
+      {/* Transactions List */}
+      {rekapConsoleViewSubTab !== "rekap" &&
+        labaRugiSubTab !== "rekap" &&
+        transaksiKasirSubTab !== "rekap" && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    {activeView === "laba_rugi"
+                      ? "Laporan Laba Rugi"
+                      : activeView === "rekap_kasir"
+                      ? "Rekap Kasir"
+                      : activeView === "rekap_console"
+                      ? "Rekap Console"
+                      : activeView === "laporan_kasir"
+                      ? "Laporan Transaksi Kasir"
+                      : "Riwayat Transaksi"}
+                  </h2>
+                  {activeView !== "rekap_kasir" &&
+                    activeView !== "rekap_console" && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        Menampilkan {paginatedData.length} transaksi dari{" "}
+                        {filteredByTab.length}
+                      </p>
                     )}
-                    {activeView === "jurnal"
-                      ? "Pemasukan"
-                      : activeView === "laba_rugi"
-                      ? "Rental"
-                      : "Pemasukan"}{" "}
-                    (
-                    {activeView === "jurnal"
-                      ? incomeCount
-                      : activeView === "laba_rugi"
-                      ? rentalCount
-                      : incomeCount}
-                    )
-                  </button>
-                  <button
-                    onClick={() =>
-                      setActiveTab(
-                        activeView === "jurnal"
-                          ? "expense"
+                  {/* {activeView === "rekap_okupansi" && (
+                    <p className="text-sm text-gray-600 mt-1">
+                      Menampilkan data okupansi console gaming
+                    </p>
+                  )} */}
+                </div>
+
+                {activeView !== "rekap_kasir" &&
+                  activeView !== "rekap_console" && (
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setActiveTab("all")}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab === "all"
+                            ? "bg-white text-gray-900 shadow-sm"
+                            : "text-gray-600 hover:text-gray-900"
+                        }`}
+                      >
+                        Semua ({sourceList.length})
+                      </button>
+                      <button
+                        onClick={() =>
+                          setActiveTab(
+                            activeView === "jurnal"
+                              ? "income"
+                              : activeView === "laba_rugi"
+                              ? "rental"
+                              : "income"
+                          )
+                        }
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                          activeTab === "income" || activeTab === "rental"
+                            ? "bg-white text-green-600 shadow-sm"
+                            : "text-gray-600 hover:text-green-600"
+                        }`}
+                      >
+                        {activeView === "jurnal" ? (
+                          <TrendingUp className="h-4 w-4" />
+                        ) : activeView === "laba_rugi" ? (
+                          <Gamepad className="h-4 w-4" />
+                        ) : (
+                          <TrendingUp className="h-4 w-4" />
+                        )}
+                        {activeView === "jurnal"
+                          ? "Pemasukan"
                           : activeView === "laba_rugi"
-                          ? "sale"
-                          : "expense"
-                      )
-                    }
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                      activeTab === "expense" || activeTab === "sale"
-                        ? "bg-white text-red-600 shadow-sm"
-                        : "text-gray-600 hover:text-red-600"
-                    }`}
-                  >
-                    {activeView === "jurnal" ? (
-                      <TrendingDown className="h-4 w-4" />
-                    ) : activeView === "laba_rugi" ? (
-                      <Coffee className="h-4 w-4" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4" />
-                    )}
-                    {activeView === "jurnal"
-                      ? "Pengeluaran"
-                      : activeView === "laba_rugi"
-                      ? "Cafe"
-                      : "Pengeluaran"}{" "}
-                    (
-                    {activeView === "jurnal"
-                      ? expenseCount
-                      : activeView === "laba_rugi"
-                      ? saleCount
-                      : expenseCount}
-                    )
-                  </button>
-                  {/* {activeView === "laba_rugi" && (
+                          ? "Rental"
+                          : "Pemasukan"}{" "}
+                        (
+                        {activeView === "jurnal"
+                          ? incomeCount
+                          : activeView === "laba_rugi"
+                          ? rentalCount
+                          : incomeCount}
+                        )
+                      </button>
+                      <button
+                        onClick={() =>
+                          setActiveTab(
+                            activeView === "jurnal"
+                              ? "expense"
+                              : activeView === "laba_rugi"
+                              ? "sale"
+                              : "expense"
+                          )
+                        }
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                          activeTab === "expense" || activeTab === "sale"
+                            ? "bg-white text-red-600 shadow-sm"
+                            : "text-gray-600 hover:text-red-600"
+                        }`}
+                      >
+                        {activeView === "jurnal" ? (
+                          <TrendingDown className="h-4 w-4" />
+                        ) : activeView === "laba_rugi" ? (
+                          <Coffee className="h-4 w-4" />
+                        ) : (
+                          <TrendingDown className="h-4 w-4" />
+                        )}
+                        {activeView === "jurnal"
+                          ? "Pengeluaran"
+                          : activeView === "laba_rugi"
+                          ? "Cafe"
+                          : "Pengeluaran"}{" "}
+                        (
+                        {activeView === "jurnal"
+                          ? expenseCount
+                          : activeView === "laba_rugi"
+                          ? saleCount
+                          : expenseCount}
+                        )
+                      </button>
+                      {/* {activeView === "laba_rugi" && (
                 <button
                   onClick={() => setActiveTab("voucher")}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
@@ -1871,415 +2092,416 @@ const Bookkeeping: React.FC = () => {
                   Voucher ({voucherCount})
                 </button>
               )} */}
-                  {activeView === "laba_rugi" && (
-                    <button
-                      onClick={() => setActiveTab("rekap")}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                        activeTab === "rekap"
-                          ? "bg-white text-gray-900 shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
-                      }`}
-                    >
-                      Rekap Per Tanggal
-                    </button>
-                  )}
-                  {activeView === "laporan_kasir" && activeTab === "income" && (
-                    <div className="flex items-center gap-2 ml-4">
-                      <label className="text-sm text-gray-600">
-                        Pembayaran:
-                      </label>
-                      <select
-                        value={paymentMethodFilter}
-                        onChange={(e) =>
-                          setPaymentMethodFilter(e.target.value as any)
-                        }
-                        className="px-2 py-1 border border-gray-300 rounded-lg text-sm"
-                      >
-                        <option value="all">Semua</option>
-                        <option value="cash">Tunai</option>
-                        <option value="non-cash">Non Tunai</option>
-                      </select>
+                      {activeView === "laba_rugi" && (
+                        <button
+                          onClick={() => setActiveTab("rekap")}
+                          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                            activeTab === "rekap"
+                              ? "bg-white text-gray-900 shadow-sm"
+                              : "text-gray-600 hover:text-gray-900"
+                          }`}
+                        >
+                          Rekap Per Tanggal
+                        </button>
+                      )}
+                      {activeView === "laporan_kasir" &&
+                        activeTab === "income" && (
+                          <div className="flex items-center gap-2 ml-4">
+                            <label className="text-sm text-gray-600">
+                              Pembayaran:
+                            </label>
+                            <select
+                              value={paymentMethodFilter}
+                              onChange={(e) =>
+                                setPaymentMethodFilter(e.target.value as any)
+                              }
+                              className="px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                            >
+                              <option value="all">Semua</option>
+                              <option value="cash">Tunai</option>
+                              <option value="non-cash">Non Tunai</option>
+                            </select>
+                          </div>
+                        )}
                     </div>
                   )}
+              </div>
+
+              {activeView === "laporan_kasir" && activeTab === "income" && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Pembayaran Tunai
+                      </h3>
+                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <Banknote className="h-5 w-5 text-green-600" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-2xl font-bold text-gray-900">
+                        Rp {todayCashSales.toLocaleString("id-ID")}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {paymentCounts.cash} transaksi hari ini
+                      </p>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${
+                              todayTotalRevenue > 0
+                                ? (todayCashSales / todayTotalRevenue) * 100
+                                : 0
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Pembayaran Kartu
+                      </h3>
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="h-5 w-5 text-blue-600" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-2xl font-bold text-gray-900">
+                        Rp {todayCardSales.toLocaleString("id-ID")}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {paymentCounts.card} transaksi hari ini
+                      </p>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${
+                              todayTotalRevenue > 0
+                                ? (todayCardSales / todayTotalRevenue) * 100
+                                : 0
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Transfer
+                      </h3>
+                      <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="h-5 w-5 text-purple-600" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-2xl font-bold text-gray-900">
+                        Rp {todayTransferSales.toLocaleString("id-ID")}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {paymentCounts.transfer} transaksi hari ini
+                      </p>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${
+                              todayTotalRevenue > 0
+                                ? (todayTransferSales / todayTotalRevenue) * 100
+                                : 0
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
-          </div>
 
-          {activeView === "laporan_kasir" && activeTab === "income" && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Pembayaran Tunai
-                  </h3>
-                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <Banknote className="h-5 w-5 text-green-600" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold text-gray-900">
-                    Rp {todayCashSales.toLocaleString("id-ID")}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {paymentCounts.cash} transaksi hari ini
-                  </p>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${
-                          todayTotalRevenue > 0
-                            ? (todayCashSales / todayTotalRevenue) * 100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Pembayaran Kartu
-                  </h3>
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <CreditCard className="h-5 w-5 text-blue-600" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold text-gray-900">
-                    Rp {todayCardSales.toLocaleString("id-ID")}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {paymentCounts.card} transaksi hari ini
-                  </p>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${
-                          todayTotalRevenue > 0
-                            ? (todayCardSales / todayTotalRevenue) * 100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Transfer
-                  </h3>
-                  <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                    <CreditCard className="h-5 w-5 text-purple-600" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold text-gray-900">
-                    Rp {todayTransferSales.toLocaleString("id-ID")}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {paymentCounts.transfer} transaksi hari ini
-                  </p>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${
-                          todayTotalRevenue > 0
-                            ? (todayTransferSales / todayTotalRevenue) * 100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeView !== "rekap_console" &&
-            activeView !== "rekap_okupansi" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-green-800">
-                      {activeView === "jurnal"
-                        ? "Total Pemasukan"
-                        : activeView === "laba_rugi"
-                        ? "Total Rental"
-                        : "Total Pemasukan"}
-                    </span>
-                    <span className="text-lg font-bold text-green-600">
-                      Rp{" "}
-                      {activeView === "jurnal"
-                        ? summary.totalIncome?.toLocaleString("id-ID")
-                        : activeView === "laba_rugi"
-                        ? Math.ceil(summary.totalRental ?? 0).toLocaleString(
-                            "id-ID"
-                          )
-                        : sourceList
-                            .filter(
-                              (t: any) =>
-                                t.type === "income" ||
-                                t.type === "sale" ||
-                                t.type === "rental" ||
-                                t.type === "voucher"
+              {activeView !== "rekap_console" && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-green-800">
+                        {activeView === "jurnal"
+                          ? "Total Pemasukan"
+                          : activeView === "laba_rugi"
+                          ? "Total Rental"
+                          : "Total Pemasukan"}
+                      </span>
+                      <span className="text-lg font-bold text-green-600">
+                        Rp{" "}
+                        {activeView === "jurnal"
+                          ? summary.totalIncome?.toLocaleString("id-ID")
+                          : activeView === "laba_rugi"
+                          ? Math.ceil(summary.totalRental ?? 0).toLocaleString(
+                              "id-ID"
                             )
-                            .reduce(
-                              (s: number, t: any) =>
-                                s + (Number(t.amount) || 0),
-                              0
-                            )
-                            .toLocaleString("id-ID")}
-                    </span>
+                          : sourceList
+                              .filter(
+                                (t: any) =>
+                                  t.type === "income" ||
+                                  t.type === "sale" ||
+                                  t.type === "rental" ||
+                                  t.type === "voucher"
+                              )
+                              .reduce(
+                                (s: number, t: any) =>
+                                  s + (Number(t.amount) || 0),
+                                0
+                              )
+                              .toLocaleString("id-ID")}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-red-800">
-                      {activeView === "jurnal"
-                        ? "Total Pengeluaran"
-                        : activeView === "laba_rugi"
-                        ? "Total Cafe"
-                        : "Total Pengeluaran"}
-                    </span>
-                    <span className="text-lg font-bold text-red-600">
-                      Rp{" "}
-                      {activeView === "jurnal"
-                        ? summary.totalExpense?.toLocaleString("id-ID")
-                        : activeView === "laba_rugi"
-                        ? summary.totalCafe?.toLocaleString("id-ID")
-                        : sourceList
-                            .filter((t: any) => t.type === "expense")
-                            .reduce(
-                              (s: number, t: any) =>
-                                s + (Number(t.amount) || 0),
-                              0
-                            )
-                            .toLocaleString("id-ID")}
-                    </span>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-red-800">
+                        {activeView === "jurnal"
+                          ? "Total Pengeluaran"
+                          : activeView === "laba_rugi"
+                          ? "Total Cafe"
+                          : "Total Pengeluaran"}
+                      </span>
+                      <span className="text-lg font-bold text-red-600">
+                        Rp{" "}
+                        {activeView === "jurnal"
+                          ? summary.totalExpense?.toLocaleString("id-ID")
+                          : activeView === "laba_rugi"
+                          ? summary.totalCafe?.toLocaleString("id-ID")
+                          : sourceList
+                              .filter((t: any) => t.type === "expense")
+                              .reduce(
+                                (s: number, t: any) =>
+                                  s + (Number(t.amount) || 0),
+                                0
+                              )
+                              .toLocaleString("id-ID")}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-blue-800">
-                      {activeView === "jurnal"
-                        ? "Profit"
-                        : activeView === "laba_rugi"
-                        ? "Laba Bruto"
-                        : "Saldo Net"}
-                    </span>
-                    <span
-                      className={`text-lg font-bold ${
-                        summary.netProfit >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      Rp{" "}
-                      {(activeView === "laba_rugi"
-                        ? Math.ceil(summary.netProfit)
-                        : activeView === "jurnal"
-                        ? summary.netProfit
-                        : sourceList
-                            .filter(
-                              (t: any) =>
-                                t.type === "income" ||
-                                t.type === "sale" ||
-                                t.type === "rental" ||
-                                t.type === "voucher"
-                            )
-                            .reduce(
-                              (s: number, t: any) =>
-                                s + (Number(t.amount) || 0),
-                              0
-                            ) -
-                          sourceList
-                            .filter((t: any) => t.type === "expense")
-                            .reduce(
-                              (s: number, t: any) =>
-                                s + (Number(t.amount) || 0),
-                              0
-                            )
-                      ).toLocaleString("id-ID")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          {activeView === "rekap_console" && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              {/* Total Durasi */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-blue-800">
-                    Total Durasi
-                  </span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {(() => {
-                      const totalMinutes = Object.values(
-                        rekapConsoleByDate.map
-                      ).reduce(
-                        (sum: number, day: any) =>
-                          sum +
-                          Object.values(day.consoles).reduce(
-                            (daySum: number, console: any) =>
-                              daySum + console.totalDurationMinutes,
-                            0
-                          ),
-                        0
-                      );
-                      const hours = Math.floor(totalMinutes / 60);
-                      const minutes = totalMinutes % 60;
-                      return `${hours}j ${minutes}m`;
-                    })()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Console Terpakai */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-green-800">
-                    Total Console
-                  </span>
-                  <span className="text-lg font-bold text-green-600">
-                    {Object.values(rekapConsoleByDate.map).reduce(
-                      (sum: number, day: any) =>
-                        sum + Object.keys(day.consoles).length,
-                      0
-                    )}{" "}
-                    unit
-                  </span>
-                </div>
-              </div>
-
-              {/* Rata-rata Durasi */}
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-purple-800">
-                    Rata-rata Durasi
-                  </span>
-                  <span className="text-lg font-bold text-purple-600">
-                    {(() => {
-                      const totalConsoles = Object.values(
-                        rekapConsoleByDate.map
-                      ).reduce(
-                        (sum: number, day: any) =>
-                          sum + Object.keys(day.consoles).length,
-                        0
-                      );
-                      const totalMinutes = Object.values(
-                        rekapConsoleByDate.map
-                      ).reduce(
-                        (sum: number, day: any) =>
-                          sum +
-                          Object.values(day.consoles).reduce(
-                            (daySum: number, console: any) =>
-                              daySum + console.totalDurationMinutes,
-                            0
-                          ),
-                        0
-                      );
-                      const avgMinutes =
-                        totalConsoles > 0
-                          ? Math.round(totalMinutes / totalConsoles)
-                          : 0;
-                      const hours = Math.floor(avgMinutes / 60);
-                      const minutes = avgMinutes % 60;
-                      return `${hours}j ${minutes}m`;
-                    })()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {activeView === "laba_rugi" ? (
-          <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
-            {activeTab === "rekap" ? (
-              <div className="space-y-4 p-4">
-                {rekapByDate.dateKeys.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">
-                      Tidak ada transaksi ditemukan
-                    </p>
-                  </div>
-                ) : (
-                  rekapByDate.dateKeys.map((dk) => {
-                    const day = rekapByDate.map[dk];
-                    const isOpen = expandedDates.has(dk);
-                    return (
-                      <div
-                        key={dk}
-                        className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-blue-800">
+                        {activeView === "jurnal"
+                          ? "Profit"
+                          : activeView === "laba_rugi"
+                          ? "Laba Bruto"
+                          : "Saldo Net"}
+                      </span>
+                      <span
+                        className={`text-lg font-bold ${
+                          summary.netProfit >= 0
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm text-gray-500">
-                              {new Date(dk).toLocaleDateString("id-ID", {
-                                weekday: "long",
-                              })}
-                            </div>
-                            <button
-                              onClick={() => {
-                                const next = new Set(expandedDates);
-                                if (next.has(dk)) next.delete(dk);
-                                else next.add(dk);
-                                setExpandedDates(next);
-                              }}
-                              className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
-                              aria-expanded={isOpen}
-                            >
-                              <span>
-                                {new Date(dk).toLocaleDateString("id-ID")}
-                              </span>
-                              <svg
-                                className={`h-4 w-4 transform ${
-                                  isOpen ? "rotate-180" : ""
-                                }`}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="6 9 12 15 18 9" />
-                              </svg>
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-right">
-                            <div>
-                              <div className="text-xs text-gray-500">
-                                Profit Rental
+                        Rp{" "}
+                        {(activeView === "laba_rugi"
+                          ? Math.ceil(summary.netProfit)
+                          : activeView === "jurnal"
+                          ? summary.netProfit
+                          : sourceList
+                              .filter(
+                                (t: any) =>
+                                  t.type === "income" ||
+                                  t.type === "sale" ||
+                                  t.type === "rental" ||
+                                  t.type === "voucher"
+                              )
+                              .reduce(
+                                (s: number, t: any) =>
+                                  s + (Number(t.amount) || 0),
+                                0
+                              ) -
+                            sourceList
+                              .filter((t: any) => t.type === "expense")
+                              .reduce(
+                                (s: number, t: any) =>
+                                  s + (Number(t.amount) || 0),
+                                0
+                              )
+                        ).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeView === "rekap_console" &&
+                rekapConsoleViewSubTab === "detail" && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    {/* Total Durasi */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-blue-800">
+                          Total Durasi
+                        </span>
+                        <span className="text-lg font-bold text-blue-600">
+                          {(() => {
+                            const totalMinutes = Object.values(
+                              rekapConsoleByDate.map
+                            ).reduce(
+                              (sum: number, day: any) =>
+                                sum +
+                                Object.values(day.consoles).reduce(
+                                  (daySum: number, console: any) =>
+                                    daySum + console.totalDurationMinutes,
+                                  0
+                                ),
+                              0
+                            );
+                            const hours = Math.floor(totalMinutes / 60);
+                            const minutes = totalMinutes % 60;
+                            return `${hours}j ${minutes}m`;
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Console Terpakai */}
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-green-800">
+                          Total Console
+                        </span>
+                        <span className="text-lg font-bold text-green-600">
+                          {Object.values(rekapConsoleByDate.map).reduce(
+                            (sum: number, day: any) =>
+                              sum + Object.keys(day.consoles).length,
+                            0
+                          )}{" "}
+                          unit
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Rata-rata Durasi */}
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-purple-800">
+                          Rata-rata Durasi
+                        </span>
+                        <span className="text-lg font-bold text-purple-600">
+                          {(() => {
+                            const totalConsoles = Object.values(
+                              rekapConsoleByDate.map
+                            ).reduce(
+                              (sum: number, day: any) =>
+                                sum + Object.keys(day.consoles).length,
+                              0
+                            );
+                            const totalMinutes = Object.values(
+                              rekapConsoleByDate.map
+                            ).reduce(
+                              (sum: number, day: any) =>
+                                sum +
+                                Object.values(day.consoles).reduce(
+                                  (daySum: number, console: any) =>
+                                    daySum + console.totalDurationMinutes,
+                                  0
+                                ),
+                              0
+                            );
+                            const avgMinutes =
+                              totalConsoles > 0
+                                ? Math.round(totalMinutes / totalConsoles)
+                                : 0;
+                            const hours = Math.floor(avgMinutes / 60);
+                            const minutes = avgMinutes % 60;
+                            return `${hours}j ${minutes}m`;
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+            </div>
+
+            {activeView === "laba_rugi" ? (
+              <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+                {activeTab === "rekap" ? (
+                  <div className="space-y-4 p-4">
+                    {rekapByDate.dateKeys.length === 0 ? (
+                      <div className="p-12 text-center">
+                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">
+                          Tidak ada transaksi ditemukan
+                        </p>
+                      </div>
+                    ) : (
+                      rekapByDate.dateKeys.map((dk) => {
+                        const day = rekapByDate.map[dk];
+                        const isOpen = expandedDates.has(dk);
+                        return (
+                          <div
+                            key={dk}
+                            className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  {new Date(dk).toLocaleDateString("id-ID", {
+                                    weekday: "long",
+                                  })}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(expandedDates);
+                                    if (next.has(dk)) next.delete(dk);
+                                    else next.add(dk);
+                                    setExpandedDates(next);
+                                  }}
+                                  className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
+                                  aria-expanded={isOpen}
+                                >
+                                  <span>
+                                    {new Date(dk).toLocaleDateString("id-ID")}
+                                  </span>
+                                  <svg
+                                    className={`h-4 w-4 transform ${
+                                      isOpen ? "rotate-180" : ""
+                                    }`}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <polyline points="6 9 12 15 18 9" />
+                                  </svg>
+                                </button>
                               </div>
-                              <div className="font-semibold text-green-700">
-                                Rp{" "}
-                                {Math.ceil(day.rentalProfit).toLocaleString(
-                                  "id-ID"
-                                )}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-gray-500">
-                                Profit Cafe
-                              </div>
-                              <div className="font-semibold text-red-700">
-                                Rp{" "}
-                                {Math.ceil(day.cafeProfit).toLocaleString(
-                                  "id-ID"
-                                )}
-                              </div>
-                            </div>
-                            {/* <div>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-right">
+                                <div>
+                                  <div className="text-xs text-gray-500">
+                                    Profit Rental
+                                  </div>
+                                  <div className="font-semibold text-green-700">
+                                    Rp{" "}
+                                    {Math.ceil(day.rentalProfit).toLocaleString(
+                                      "id-ID"
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500">
+                                    Profit Cafe
+                                  </div>
+                                  <div className="font-semibold text-red-700">
+                                    Rp{" "}
+                                    {Math.ceil(day.cafeProfit).toLocaleString(
+                                      "id-ID"
+                                    )}
+                                  </div>
+                                </div>
+                                {/* <div>
                               <div className="text-xs text-gray-500">
                                 Profit Voucher
                               </div>
@@ -2290,131 +2512,1172 @@ const Bookkeeping: React.FC = () => {
                                 )}
                               </div>
                             </div> */}
-                            <div>
-                              <div className="text-xs text-gray-500">
-                                Laba Bruto
+                                <div>
+                                  <div className="text-xs text-gray-500">
+                                    Laba Bruto
+                                  </div>
+                                  <div className="font-bold text-blue-700">
+                                    Rp{" "}
+                                    {Math.ceil(day.totalProfit).toLocaleString(
+                                      "id-ID"
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="font-bold text-blue-700">
-                                Rp{" "}
-                                {Math.ceil(day.totalProfit).toLocaleString(
-                                  "id-ID"
+                            </div>
+                            {isOpen &&
+                              (() => {
+                                const dayTransactions = (transactions as any[])
+                                  .filter((t: any) => {
+                                    if (!t || !t.timestamp) return false;
+                                    const txDate = new Date(t.timestamp)
+                                      .toISOString()
+                                      .slice(0, 10);
+                                    if (!["rental", "sale"].includes(t.type))
+                                      return false;
+                                    return txDate === dk;
+                                  })
+                                  .sort(
+                                    (a: any, b: any) =>
+                                      new Date(b.timestamp).getTime() -
+                                      new Date(a.timestamp).getTime()
+                                  );
+
+                                const makeKey = (type: string) =>
+                                  `${dk}|${type}`;
+                                const groups: Array<{
+                                  label: string;
+                                  type: string;
+                                  color: string;
+                                }> = [
+                                  {
+                                    label: "Profit Rental",
+                                    type: "rental",
+                                    color: "text-green-700",
+                                  },
+                                  {
+                                    label: "Profit Cafe",
+                                    type: "sale",
+                                    color: "text-red-700",
+                                  },
+                                  // {
+                                  //   label: "Profit Voucher",
+                                  //   type: "voucher",
+                                  //   color: "text-purple-700",
+                                  // },
+                                ];
+                                const sumProfit = (list: any[]) =>
+                                  list.reduce(
+                                    (s, t) =>
+                                      s +
+                                      (t?.details?.items || []).reduce(
+                                        (ss: number, it: any) =>
+                                          ss + (Number(it?.profit) || 0),
+                                        0
+                                      ),
+                                    0
+                                  );
+
+                                return (
+                                  <div className="mt-4 pt-4 border-t border-gray-200">
+                                    <div className="mb-3 text-sm text-gray-600">
+                                      Total {dayTransactions.length} transaksi
+                                    </div>
+                                    <div className="space-y-4">
+                                      {groups.map((g) => {
+                                        const list = dayTransactions.filter(
+                                          (t: any) => t.type === g.type
+                                        );
+                                        if (list.length === 0) return null;
+                                        const key = makeKey(g.type);
+                                        const open =
+                                          expandedTypeBuckets.has(key);
+                                        const total = sumProfit(list);
+                                        return (
+                                          <div
+                                            key={g.type}
+                                            className="border rounded-lg"
+                                          >
+                                            <button
+                                              onClick={() => {
+                                                const next = new Set(
+                                                  expandedTypeBuckets
+                                                );
+                                                if (next.has(key))
+                                                  next.delete(key);
+                                                else next.add(key);
+                                                setExpandedTypeBuckets(next);
+                                              }}
+                                              className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
+                                              aria-expanded={open}
+                                            >
+                                              <div className="flex items-center gap-2">
+                                                <svg
+                                                  className={`h-4 w-4 transform ${
+                                                    open ? "rotate-180" : ""
+                                                  }`}
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                  strokeLinecap="round"
+                                                  strokeLinejoin="round"
+                                                >
+                                                  <polyline points="6 9 12 15 18 9" />
+                                                </svg>
+                                                <span className="text-sm font-medium text-gray-900">
+                                                  {g.label}
+                                                </span>
+                                              </div>
+                                              <div className="text-right">
+                                                <div
+                                                  className={`text-sm font-semibold ${g.color}`}
+                                                >
+                                                  Rp{" "}
+                                                  {Math.ceil(
+                                                    total
+                                                  ).toLocaleString("id-ID")}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                  {list.length} transaksi
+                                                </div>
+                                              </div>
+                                            </button>
+                                            {open && (
+                                              <div className="p-3 overflow-x-auto">
+                                                <table className="min-w-full divide-y divide-gray-200">
+                                                  <thead className="bg-white">
+                                                    <tr>
+                                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                        Waktu
+                                                      </th>
+                                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                        Tipe
+                                                      </th>
+                                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                        Deskripsi
+                                                      </th>
+
+                                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                        Detail Items
+                                                      </th>
+                                                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                                        Total Profit
+                                                      </th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody className="bg-white divide-y divide-gray-100">
+                                                    {list.map((t: any) => {
+                                                      const items =
+                                                        t?.details?.items || [];
+                                                      const transactionProfit =
+                                                        items.reduce(
+                                                          (
+                                                            s: number,
+                                                            it: any
+                                                          ) =>
+                                                            s +
+                                                            (Number(
+                                                              it?.profit
+                                                            ) || 0),
+                                                          0
+                                                        );
+                                                      return (
+                                                        <tr
+                                                          key={t.id}
+                                                          className="hover:bg-gray-50"
+                                                        >
+                                                          <td className="px-3 py-2 text-sm">
+                                                            {new Date(
+                                                              t.timestamp
+                                                            ).toLocaleString(
+                                                              "id-ID",
+                                                              {
+                                                                day: "numeric",
+                                                                month:
+                                                                  "numeric",
+                                                                year: "numeric",
+                                                                hour: "2-digit",
+                                                                minute:
+                                                                  "2-digit",
+                                                                hour12: false,
+                                                              }
+                                                            )}
+                                                          </td>
+                                                          <td className="px-3 py-2">
+                                                            <span
+                                                              className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                                                                t.type ===
+                                                                "rental"
+                                                                  ? "bg-green-100 text-green-800"
+                                                                  : t.type ===
+                                                                    "sale"
+                                                                  ? "bg-red-100 text-red-800"
+                                                                  : "bg-gray-100 text-gray-800"
+                                                              }`}
+                                                            >
+                                                              {(t.type || "")
+                                                                .toString()
+                                                                .toUpperCase()}
+                                                            </span>
+                                                          </td>
+                                                          <td className="px-3 py-2 text-sm text-gray-900">
+                                                            {t.description ||
+                                                              "-"}
+                                                          </td>
+                                                          <td className="px-3 py-2 text-sm text-gray-600">
+                                                            {items.length >
+                                                            0 ? (
+                                                              <div className="space-y-1">
+                                                                {items.map(
+                                                                  (
+                                                                    item: any,
+                                                                    idx: number
+                                                                  ) => {
+                                                                    const name =
+                                                                      item.name ??
+                                                                      item.product_name ??
+                                                                      item.title ??
+                                                                      "Item";
+                                                                    const profit =
+                                                                      Number(
+                                                                        item.profit ??
+                                                                          0
+                                                                      );
+                                                                    const qty =
+                                                                      Number(
+                                                                        item.qty ??
+                                                                          item.quantity ??
+                                                                          1
+                                                                      );
+                                                                    return (
+                                                                      <div
+                                                                        key={
+                                                                          idx
+                                                                        }
+                                                                        className="text-xs"
+                                                                      >
+                                                                        {name}{" "}
+                                                                        {qty > 1
+                                                                          ? `x${qty}`
+                                                                          : ""}{" "}
+                                                                        - Rp{" "}
+                                                                        {profit.toLocaleString(
+                                                                          "id-ID"
+                                                                        )}
+                                                                      </div>
+                                                                    );
+                                                                  }
+                                                                )}
+                                                              </div>
+                                                            ) : (
+                                                              <span className="text-gray-400">
+                                                                -
+                                                              </span>
+                                                            )}
+                                                          </td>
+                                                          <td className="px-3 py-2 text-right font-semibold text-green-600">
+                                                            Rp{" "}
+                                                            {Math.ceil(
+                                                              transactionProfit
+                                                            ).toLocaleString(
+                                                              "id-ID"
+                                                            )}
+                                                          </td>
+                                                        </tr>
+                                                      );
+                                                    })}
+                                                  </tbody>
+                                                  <tfoot>
+                                                    <tr className="bg-gray-50">
+                                                      <td
+                                                        colSpan={3}
+                                                        className="px-3 py-2 text-right font-semibold text-gray-900"
+                                                      >
+                                                        Subtotal {g.label}
+                                                      </td>
+                                                      <td className="px-3 py-2 text-right font-bold text-blue-700">
+                                                        Rp{" "}
+                                                        {Math.ceil(
+                                                          total
+                                                        ).toLocaleString(
+                                                          "id-ID"
+                                                        )}
+                                                      </td>
+                                                    </tr>
+                                                  </tfoot>
+                                                </table>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                ) : paginatedData.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">
+                      Tidak ada transaksi ditemukan
+                    </p>
+                  </div>
+                ) : (
+                  paginatedData.map((t: any) => {
+                    const isSelected = selectedItem === String(t.id);
+                    return (
+                      <div
+                        key={t.id}
+                        className="p-6 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                t.type === "rental"
+                                  ? "bg-green-100"
+                                  : t.type === "sale"
+                                  ? "bg-red-100"
+                                  : "bg-purple-100"
+                              }`}
+                            >
+                              {t.type === "rental" ? (
+                                <Gamepad className="h-4 w-4 text-green-600" />
+                              ) : t.type === "sale" ? (
+                                <Coffee className="h-4 w-4 text-red-600" />
+                              ) : (
+                                <Ticket className="h-4 w-4 text-purple-600" />
+                              )}
+                            </div>
+                            <div>
+                              <h3 className="font-medium text-gray-900">
+                                {t.description}
+                              </h3>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span
+                                  className={`inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800  ${
+                                    t.type === "rental"
+                                      ? "bg-green-100 text-green-800"
+                                      : t.type === "sale"
+                                      ? "bg-red-100 text-red-800"
+                                      : "bg-purple-100 text-purple-800"
+                                  }`}
+                                >
+                                  {(t.type || "").toString().toUpperCase()}
+                                </span>
+                                <div className="flex items-center gap-1 text-sm text-gray-600">
+                                  <Calendar className="h-4 w-4" />
+                                  {new Date(t.timestamp).toLocaleDateString(
+                                    "id-ID"
+                                  )}
+                                </div>
+                                {t.reference_id && (
+                                  <span className="text-sm text-gray-500">
+                                    Ref: {t.reference_id}
+                                  </span>
                                 )}
+
+                                {!t?.details ||
+                                  (!t.details?.action &&
+                                    t.type !== "voucher" && (
+                                      <button
+                                        onClick={
+                                          () =>
+                                            setSelectedItem(
+                                              isSelected ? null : String(t.id)
+                                            ) // Toggle detail
+                                        }
+                                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                        title={
+                                          isSelected
+                                            ? "Sembunyikan detail"
+                                            : "Lihat detail"
+                                        }
+                                      >
+                                        {isSelected ? "Tutup" : "Detail"}
+                                      </button>
+                                    ))}
                               </div>
                             </div>
                           </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-green-600">
+                              +{" "}
+                              {Math.ceil(
+                                (t.details?.items || []).reduce(
+                                  (sum: number, item: any) =>
+                                    sum + (Number(item.profit) || 0),
+                                  0
+                                )
+                              ).toLocaleString("id-ID")}
+                            </p>
+                            <p className="text-sm text-gray-600 capitalize">
+                              Profit
+                            </p>
+                          </div>
                         </div>
-                        {isOpen &&
-                          (() => {
-                            const dayTransactions = (transactions as any[])
-                              .filter((t: any) => {
-                                if (!t || !t.timestamp) return false;
-                                const txDate = new Date(t.timestamp)
-                                  .toISOString()
-                                  .slice(0, 10);
-                                if (!["rental", "sale"].includes(t.type))
-                                  return false;
-                                return txDate === dk;
-                              })
-                              .sort(
-                                (a: any, b: any) =>
-                                  new Date(b.timestamp).getTime() -
-                                  new Date(a.timestamp).getTime()
-                              );
+                        {isSelected && t.details?.items?.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            <h4 className="font-medium text-gray-900 mb-3">
+                              Detail
+                            </h4>
+                            <div className="space-y-2">
+                              {t.details.items.map((item: any, idx: number) => {
+                                const name =
+                                  item.name ??
+                                  item.product_name ??
+                                  item.title ??
+                                  "Item";
+                                const profit = Number(item.profit ?? 0);
+                                const qty = Number(
+                                  item.qty ?? item.quantity ?? 1
+                                );
+                                const unit = Number(item.price ?? 0);
+                                const total =
+                                  Number(item.total ?? unit * qty) || 0;
 
-                            const makeKey = (type: string) => `${dk}|${type}`;
-                            const groups: Array<{
-                              label: string;
-                              type: string;
-                              color: string;
-                            }> = [
-                              {
-                                label: "Profit Rental",
-                                type: "rental",
-                                color: "text-green-700",
-                              },
-                              {
-                                label: "Profit Cafe",
-                                type: "sale",
-                                color: "text-red-700",
-                              },
-                              // {
-                              //   label: "Profit Voucher",
-                              //   type: "voucher",
-                              //   color: "text-purple-700",
-                              // },
-                            ];
-                            const sumProfit = (list: any[]) =>
-                              list.reduce(
-                                (s, t) =>
-                                  s +
-                                  (t?.details?.items || []).reduce(
-                                    (ss: number, it: any) =>
-                                      ss + (Number(it?.profit) || 0),
-                                    0
-                                  ),
-                                0
-                              );
-
-                            return (
-                              <div className="mt-4 pt-4 border-t border-gray-200">
-                                <div className="mb-3 text-sm text-gray-600">
-                                  Total {dayTransactions.length} transaksi
-                                </div>
-                                <div className="space-y-4">
-                                  {groups.map((g) => {
-                                    const list = dayTransactions.filter(
-                                      (t: any) => t.type === g.type
+                                let durationMinutes: number | null = null;
+                                if (item.type === "rental") {
+                                  durationMinutes =
+                                    Number(
+                                      t?.details?.rental?.duration_minutes ??
+                                        null
+                                    ) || null;
+                                  if (!durationMinutes && item.description) {
+                                    const m = item.description.match(
+                                      /(\d{1,2}):(\d{2}):(\d{2})/
                                     );
-                                    if (list.length === 0) return null;
-                                    const key = makeKey(g.type);
-                                    const open = expandedTypeBuckets.has(key);
-                                    const total = sumProfit(list);
+                                    if (m) {
+                                      const h = Number(m[1]);
+                                      const mm = Number(m[2]);
+                                      const s = Number(m[3]);
+                                      durationMinutes = Math.round(
+                                        h * 60 + mm + s / 60
+                                      );
+                                    }
+                                  }
+                                }
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="flex justify-between items-center text-sm"
+                                  >
+                                    <span className="text-gray-700">
+                                      {/* {name} x @{qty}{" "} */}
+                                      {item.type === "rental"
+                                        ? `${name} (${
+                                            t.details.rental.duration_minutes ??
+                                            durationMinutes
+                                          } menit - Rp ${total.toLocaleString(
+                                            "id-ID"
+                                          )})`
+                                        : `${name} x @${qty} (Rp ${(
+                                            profit / qty
+                                          ).toLocaleString("id-ID")})`}
+                                      {t.details.discount?.amount &&
+                                        t.details.discount.amount > 0 &&
+                                        item.type === "rental" && (
+                                          <span className="text-red-500">
+                                            (Diskon{" "}
+                                            {t.details.discount.amount.toLocaleString(
+                                              "id-ID"
+                                            )}
+                                            )
+                                          </span>
+                                        )}
+                                    </span>
+                                    <span className="font-medium text-gray-900">
+                                      Rp{" "}
+                                      {item?.profit?.toLocaleString("id-ID") ||
+                                        0}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : activeView === "rekap_kasir" ? (
+              <div className="space-y-4">
+                <div className="flex border-b border-gray-200">
+                  <button
+                    onClick={() => setRekapKasirSubTab("per_tanggal")}
+                    className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
+                      rekapKasirSubTab === "per_tanggal"
+                        ? "border-blue-500 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    <Calendar className="h-4 w-4" />
+                    Rekap Per Tanggal
+                  </button>
+                  <button
+                    onClick={() => setRekapKasirSubTab("per_kasir")}
+                    className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
+                      rekapKasirSubTab === "per_kasir"
+                        ? "border-blue-500 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    <User className="h-4 w-4" />
+                    Rekap Per Kasir
+                  </button>
+                </div>
+
+                {rekapKasirSubTab === "per_tanggal" ? (
+                  <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+                    {rekapKasirByDate.dateKeys.length === 0 ? (
+                      <div className="p-12 text-center">
+                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">
+                          Tidak ada transaksi ditemukan
+                        </p>
+                      </div>
+                    ) : (
+                      rekapKasirByDate.dateKeys.map((dk) => {
+                        const isDateOpen = expandedDates.has(dk);
+                        const sessionsMap =
+                          rekapKasirByDate.map[dk]?.sessions || {};
+                        const sessionIds = Object.keys(sessionsMap);
+                        const filteredSessionIds = sessionIds.filter(
+                          (sid) =>
+                            sid &&
+                            String(sid).trim() !== "" &&
+                            sid !== "-" &&
+                            sid !== "null"
+                        );
+
+                        const summarizedSessions = filteredSessionIds
+                          .map((sid) => ({ sid, ...sessionsMap[sid] }))
+                          .sort((a, b) => b.totalAmount - a.totalAmount);
+
+                        const totalAll = summarizedSessions.reduce(
+                          (sum, item) => sum + item.totalAmount,
+                          0
+                        );
+
+                        return (
+                          <div
+                            key={dk}
+                            className="p-6 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  {new Date(dk).toLocaleDateString("id-ID", {
+                                    weekday: "long",
+                                  })}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(expandedDates);
+                                    if (next.has(dk)) next.delete(dk);
+                                    else next.add(dk);
+                                    setExpandedDates(next);
+                                  }}
+                                  className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
+                                  aria-expanded={isDateOpen}
+                                >
+                                  <span>
+                                    {new Date(dk).toLocaleDateString("id-ID")}
+                                  </span>
+                                  <svg
+                                    className={`h-4 w-4 transform ${
+                                      isDateOpen ? "rotate-180" : ""
+                                    }`}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <polyline points="6 9 12 15 18 9" />
+                                  </svg>
+                                </button>
+                                <div className="text-sm text-gray-600">
+                                  {filteredSessionIds.length} sesi
+                                </div>
+                              </div>
+                              <div className="mt-4">
+                                <div className="text-xs text-gray-500">
+                                  Total
+                                </div>
+                                <div className="font-bold text-green-700">
+                                  Rp {Number(totalAll).toLocaleString("id-ID")}
+                                </div>
+                              </div>
+                            </div>
+
+                            {isDateOpen && (
+                              <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                                {summarizedSessions.map((sessionItem) => {
+                                  const key = `${dk}|${sessionItem.sid}`;
+                                  const open = expandedSessionBuckets.has(key);
+                                  const sess = sessions.find(
+                                    (s: any) =>
+                                      String(s.id) === String(sessionItem.sid)
+                                  );
+                                  const sdata = sessionsMap[sessionItem.sid];
+
+                                  return (
+                                    <div
+                                      key={sessionItem.sid}
+                                      className="border rounded-lg"
+                                    >
+                                      <button
+                                        onClick={() => {
+                                          const next = new Set(
+                                            expandedSessionBuckets
+                                          );
+                                          if (next.has(key)) next.delete(key);
+                                          else next.add(key);
+                                          setExpandedSessionBuckets(next);
+                                        }}
+                                        className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
+                                        aria-expanded={open}
+                                      >
+                                        <div className="text-left">
+                                          <div className="text-sm font-medium text-gray-900">
+                                            Sesi Kasir -{" "}
+                                            {sess?.cashier_name || "Kasir"} (
+                                            {sess?.status === "active"
+                                              ? "Aktif"
+                                              : "Selesai"}
+                                            )
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            Mulai:{" "}
+                                            {sess?.start_time
+                                              ? new Date(
+                                                  sess.start_time
+                                                ).toLocaleString("id-ID", {
+                                                  hour12: false,
+                                                })
+                                              : "-"}
+                                            {sess?.end_time
+                                              ? ` | Selesai: ${new Date(
+                                                  sess.end_time
+                                                ).toLocaleString("id-ID", {
+                                                  hour12: false,
+                                                })}`
+                                              : ""}
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="text-sm font-semibold text-blue-700">
+                                            Rp{" "}
+                                            {Number(
+                                              sdata.totalAmount
+                                            ).toLocaleString("id-ID")}
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            {sdata.count} transaksi
+                                          </div>
+                                        </div>
+                                      </button>
+                                      {open && (
+                                        <div className="p-3 overflow-x-auto">
+                                          <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-white">
+                                              <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                  Waktu
+                                                </th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                  Tipe
+                                                </th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                  Deskripsi
+                                                </th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                                  Jumlah (Rp)
+                                                </th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100">
+                                              {sdata.list.map((t: any) => (
+                                                <tr
+                                                  key={t.id}
+                                                  className="hover:bg-gray-50"
+                                                >
+                                                  <td className="px-3 py-2 text-sm">
+                                                    {new Date(
+                                                      t.timestamp
+                                                    ).toLocaleString("id-ID", {
+                                                      hour12: false,
+                                                    })}
+                                                  </td>
+                                                  <td className="px-3 py-2 text-xs">
+                                                    <span
+                                                      className={`inline-block px-2 py-1 rounded-full ${
+                                                        t.type === "expense"
+                                                          ? "bg-red-100 text-red-800"
+                                                          : "bg-green-100 text-green-800"
+                                                      }`}
+                                                    >
+                                                      {String(
+                                                        t.type || ""
+                                                      ).toUpperCase()}
+                                                    </span>
+                                                  </td>
+                                                  <td className="px-3 py-2 text-sm text-gray-900">
+                                                    {t.description || "-"}
+                                                  </td>
+                                                  <td
+                                                    className={`px-3 py-2 text-right text-sm font-semibold ${
+                                                      t.type === "expense"
+                                                        ? "text-red-500"
+                                                        : ""
+                                                    }`}
+                                                  >
+                                                    {t.type === "expense"
+                                                      ? "- "
+                                                      : ""}
+                                                    Rp{" "}
+                                                    {Number(
+                                                      t.amount || 0
+                                                    ).toLocaleString("id-ID")}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                            <tfoot>
+                                              <tr className="bg-gray-50">
+                                                <td
+                                                  colSpan={3}
+                                                  className="px-3 py-2 text-right font-semibold text-gray-900"
+                                                >
+                                                  Subtotal Sesi
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-bold text-blue-700">
+                                                  Rp{" "}
+                                                  {Number(
+                                                    sdata.totalAmount
+                                                  ).toLocaleString("id-ID")}
+                                                </td>
+                                              </tr>
+                                            </tfoot>
+                                          </table>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+                    {rekapKasirByCashier.cashierKeys.length === 0 ? (
+                      <div className="p-12 text-center">
+                        <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">
+                          Tidak ada data kasir ditemukan
+                        </p>
+                      </div>
+                    ) : (
+                      rekapKasirByCashier.cashierKeys.map((ckey) => {
+                        const cashier = rekapKasirByCashier.map[ckey];
+                        const isCashierOpen = expandedCashierBuckets.has(ckey);
+                        const sortedDates = Object.keys(cashier.dates).sort(
+                          (a, b) => (a < b ? 1 : -1)
+                        );
+
+                        return (
+                          <div
+                            key={ckey}
+                            className="p-6 hover:bg-gray-50 transition-colors"
+                          >
+                            <button
+                              onClick={() => {
+                                const next = new Set(expandedCashierBuckets);
+                                if (next.has(ckey)) next.delete(ckey);
+                                else next.add(ckey);
+                                setExpandedCashierBuckets(next);
+                              }}
+                              className="w-full flex items-center justify-between"
+                              aria-expanded={isCashierOpen}
+                            >
+                              <div className="text-left">
+                                <div className="text-lg font-semibold text-gray-900">
+                                  {cashier.cashierName}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {cashier.count} transaksi
+                                </div>
+                              </div>
+                              <div className="text-right space-y-1">
+                                <div
+                                  className={`text-sm font-semibold ${
+                                    cashier.totalAmount >= 0
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  Rp{" "}
+                                  {Number(cashier.totalAmount).toLocaleString(
+                                    "id-ID"
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {sortedDates.length} hari aktif
+                                </div>
+                              </div>
+                            </button>
+
+                            {isCashierOpen && (
+                              <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                                {sortedDates.map((dk) => {
+                                  const dateKey = `${ckey}|${dk}`;
+                                  const open =
+                                    expandedCashierDateBuckets.has(dateKey);
+                                  const dateData = cashier.dates[dk];
+
+                                  return (
+                                    <div
+                                      key={dateKey}
+                                      className="border rounded-lg"
+                                    >
+                                      <button
+                                        onClick={() => {
+                                          const next = new Set(
+                                            expandedCashierDateBuckets
+                                          );
+                                          if (next.has(dateKey))
+                                            next.delete(dateKey);
+                                          else next.add(dateKey);
+                                          setExpandedCashierDateBuckets(next);
+                                        }}
+                                        className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
+                                        aria-expanded={open}
+                                      >
+                                        <div className="text-left">
+                                          <div className="text-sm font-medium text-gray-900">
+                                            {new Date(dk).toLocaleDateString(
+                                              "id-ID",
+                                              {
+                                                weekday: "long",
+                                                day: "numeric",
+                                                month: "long",
+                                                year: "numeric",
+                                              }
+                                            )}
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            {dateData.count} transaksi
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="text-sm font-semibold text-blue-700">
+                                            Rp{" "}
+                                            {Number(
+                                              dateData.totalAmount
+                                            ).toLocaleString("id-ID")}
+                                          </div>
+                                        </div>
+                                      </button>
+                                      {open && (
+                                        <div className="p-3 overflow-x-auto">
+                                          <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-white">
+                                              <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                  Waktu
+                                                </th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                  Tipe
+                                                </th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                  Deskripsi
+                                                </th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                                  Jumlah (Rp)
+                                                </th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100">
+                                              {dateData.list.map((t: any) => (
+                                                <tr
+                                                  key={t.id}
+                                                  className="hover:bg-gray-50"
+                                                >
+                                                  <td className="px-3 py-2 text-sm">
+                                                    {new Date(
+                                                      t.timestamp
+                                                    ).toLocaleString("id-ID", {
+                                                      hour12: false,
+                                                    })}
+                                                  </td>
+                                                  <td className="px-3 py-2 text-xs">
+                                                    <span
+                                                      className={`inline-block px-2 py-1 rounded-full ${
+                                                        t.type === "expense"
+                                                          ? "bg-red-100 text-red-800"
+                                                          : "bg-green-100 text-green-800"
+                                                      }`}
+                                                    >
+                                                      {String(
+                                                        t.type || ""
+                                                      ).toUpperCase()}
+                                                    </span>
+                                                  </td>
+                                                  <td className="px-3 py-2 text-sm text-gray-900">
+                                                    {t.description || "-"}
+                                                  </td>
+                                                  <td
+                                                    className={`px-3 py-2 text-right text-sm font-semibold ${
+                                                      t.type === "expense"
+                                                        ? "text-red-500"
+                                                        : ""
+                                                    }`}
+                                                  >
+                                                    {t.type === "expense"
+                                                      ? "- "
+                                                      : ""}
+                                                    Rp{" "}
+                                                    {Number(
+                                                      t.amount || 0
+                                                    ).toLocaleString("id-ID")}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                            <tfoot>
+                                              <tr className="bg-gray-50">
+                                                <td
+                                                  colSpan={3}
+                                                  className="px-3 py-2 text-right font-semibold text-gray-900"
+                                                >
+                                                  Subtotal Harian
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-bold text-blue-700">
+                                                  Rp{" "}
+                                                  {Number(
+                                                    dateData.totalAmount
+                                                  ).toLocaleString("id-ID")}
+                                                </td>
+                                              </tr>
+                                            </tfoot>
+                                          </table>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : activeView === "rekap_console" ? (
+              <div className="space-y-4">
+                <div className="flex border-b border-gray-200">
+                  <button
+                    onClick={() => setRekapConsoleSubTab("per_tanggal")}
+                    className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
+                      rekapConsoleSubTab === "per_tanggal"
+                        ? "border-blue-500 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    <Calendar className="h-4 w-4" />
+                    Rekap Per Tanggal
+                  </button>
+                  <button
+                    onClick={() => setRekapConsoleSubTab("per_console")}
+                    className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
+                      rekapConsoleSubTab === "per_console"
+                        ? "border-blue-500 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    <Gamepad className="h-4 w-4" />
+                    Rekap Per Console
+                  </button>
+                </div>
+
+                {rekapConsoleSubTab === "per_tanggal" ? (
+                  <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+                    {rekapConsoleByDate.dateKeys.length === 0 ? (
+                      <div className="p-12 text-center">
+                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">
+                          Tidak ada transaksi ditemukan
+                        </p>
+                      </div>
+                    ) : (
+                      rekapConsoleByDate.dateKeys.map((dk) => {
+                        const isDateOpen = expandedDates.has(dk);
+                        const consolesMap =
+                          rekapConsoleByDate.map[dk]?.consoles || {};
+                        const consoleNames = Object.keys(consolesMap);
+                        const formatDuration = (minutes: number) => {
+                          const hours = Math.floor(minutes / 60);
+                          const mins = minutes % 60;
+                          if (hours === 0) return `${mins} menit`;
+                          if (mins === 0) return `${hours} jam`;
+                          return `${hours} jam ${mins} menit`;
+                        };
+                        return (
+                          <div
+                            key={dk}
+                            className="p-6 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  {new Date(dk).toLocaleDateString("id-ID", {
+                                    weekday: "long",
+                                  })}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(expandedDates);
+                                    if (next.has(dk)) next.delete(dk);
+                                    else next.add(dk);
+                                    setExpandedDates(next);
+                                  }}
+                                  className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
+                                  aria-expanded={isDateOpen}
+                                >
+                                  <span>
+                                    {new Date(dk).toLocaleDateString("id-ID")}
+                                  </span>
+                                  <svg
+                                    className={`h-4 w-4 transform ${
+                                      isDateOpen ? "rotate-180" : ""
+                                    }`}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <polyline points="6 9 12 15 18 9" />
+                                  </svg>
+                                </button>
+                                <div className="text-sm text-gray-600">
+                                  {consoleNames.length} console
+                                </div>
+                              </div>
+                              <div className="mt-4">
+                                {(() => {
+                                  const validConsoles = Object.entries(
+                                    consolesMap
+                                  )
+                                    .map(([name, data]) => ({
+                                      name,
+                                      ...data,
+                                    }))
+                                    .sort(
+                                      (a, b) =>
+                                        b.totalDurationMinutes -
+                                        a.totalDurationMinutes
+                                    );
+
+                                  const totalAllMinutes = validConsoles.reduce(
+                                    (sum, c) => sum + c.totalDurationMinutes,
+                                    0
+                                  );
+                                  const operatingMinutes =
+                                    validConsoles.length * 14 * 60;
+                                  const occupancyRate =
+                                    operatingMinutes > 0
+                                      ? Math.round(
+                                          (totalAllMinutes / operatingMinutes) *
+                                            100
+                                        )
+                                      : 0;
+
+                                  return (
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <div className="text-xs text-gray-500">
+                                          Total Durasi
+                                        </div>
+                                        <div className="font-bold text-green-700">
+                                          {formatDuration(totalAllMinutes)}
+                                        </div>
+                                      </div>
+
+                                      <div>
+                                        <div className="text-xs text-gray-500">
+                                          Okupansi Harian
+                                        </div>
+                                        <div className="font-bold text-orange-700">
+                                          {occupancyRate}%
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                            {isDateOpen && (
+                              <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                                {consoleNames
+                                  .sort(
+                                    (a, b) =>
+                                      consolesMap[b].totalDurationMinutes -
+                                      consolesMap[a].totalDurationMinutes
+                                  )
+                                  .map((consoleName) => {
+                                    const key = `${dk}|${consoleName}`;
+                                    const open =
+                                      expandedConsoleBuckets.has(key);
+                                    const cdata = consolesMap[consoleName];
                                     return (
                                       <div
-                                        key={g.type}
+                                        key={consoleName}
                                         className="border rounded-lg"
                                       >
                                         <button
                                           onClick={() => {
                                             const next = new Set(
-                                              expandedTypeBuckets
+                                              expandedConsoleBuckets
                                             );
                                             if (next.has(key)) next.delete(key);
                                             else next.add(key);
-                                            setExpandedTypeBuckets(next);
+                                            setExpandedConsoleBuckets(next);
                                           }}
                                           className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
                                           aria-expanded={open}
                                         >
-                                          <div className="flex items-center gap-2">
-                                            <svg
-                                              className={`h-4 w-4 transform ${
-                                                open ? "rotate-180" : ""
-                                              }`}
-                                              viewBox="0 0 24 24"
-                                              fill="none"
-                                              stroke="currentColor"
-                                              strokeWidth="2"
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                            >
-                                              <polyline points="6 9 12 15 18 9" />
-                                            </svg>
-                                            <span className="text-sm font-medium text-gray-900">
-                                              {g.label}
-                                            </span>
-                                          </div>
-                                          <div className="text-right">
-                                            <div
-                                              className={`text-sm font-semibold ${g.color}`}
-                                            >
-                                              Rp{" "}
-                                              {Math.ceil(total).toLocaleString(
-                                                "id-ID"
-                                              )}
+                                          <div className="text-left">
+                                            <div className="text-sm font-medium text-gray-900">
+                                              {consoleName}
                                             </div>
                                             <div className="text-xs text-gray-500">
-                                              {list.length} transaksi
+                                              {cdata.count} transaksi
+                                            </div>
+                                          </div>
+                                          <div className="text-right">
+                                            <div className="text-sm font-semibold text-blue-700">
+                                              {formatDuration(
+                                                cdata.totalDurationMinutes
+                                              )}
                                             </div>
                                           </div>
                                         </button>
@@ -2427,32 +3690,36 @@ const Bookkeeping: React.FC = () => {
                                                     Waktu
                                                   </th>
                                                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                    Tipe
-                                                  </th>
-                                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                    Deskripsi
-                                                  </th>
-
-                                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                    Detail Items
+                                                    Console
                                                   </th>
                                                   <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                                    Total Profit
+                                                    Durasi
                                                   </th>
+                                                  {/* <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                            Harga per Jam
+                                          </th> */}
                                                 </tr>
                                               </thead>
                                               <tbody className="bg-white divide-y divide-gray-100">
-                                                {list.map((t: any) => {
-                                                  const items =
-                                                    t?.details?.items || [];
-                                                  const transactionProfit =
-                                                    items.reduce(
-                                                      (s: number, it: any) =>
-                                                        s +
-                                                        (Number(it?.profit) ||
-                                                          0),
-                                                      0
-                                                    );
+                                                {cdata.list.map((t: any) => {
+                                                  const durationMinutes =
+                                                    t.details?.rental
+                                                      ?.duration_minutes ||
+                                                    t.details
+                                                      ?.duration_minutes ||
+                                                    t.details
+                                                      ?.additional_duration_minutes ||
+                                                    0;
+                                                  const consoleName =
+                                                    t.details.items[0]?.name ||
+                                                    t.details?.rental
+                                                      ?.console ||
+                                                    "-";
+                                                  // const hourlyRate =
+                                                  //   t.details?.rental
+                                                  //     ?.hourly_rate_snapshot ||
+                                                  //   t.details?.items?.[0]?.price ||
+                                                  //   0;
                                                   return (
                                                     <tr
                                                       key={t.id}
@@ -2464,90 +3731,24 @@ const Bookkeeping: React.FC = () => {
                                                         ).toLocaleString(
                                                           "id-ID",
                                                           {
-                                                            day: "numeric",
-                                                            month: "numeric",
-                                                            year: "numeric",
-                                                            hour: "2-digit",
-                                                            minute: "2-digit",
                                                             hour12: false,
                                                           }
                                                         )}
                                                       </td>
-                                                      <td className="px-3 py-2">
-                                                        <span
-                                                          className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                                                            t.type === "rental"
-                                                              ? "bg-green-100 text-green-800"
-                                                              : t.type ===
-                                                                "sale"
-                                                              ? "bg-red-100 text-red-800"
-                                                              : "bg-gray-100 text-gray-800"
-                                                          }`}
-                                                        >
-                                                          {(t.type || "")
-                                                            .toString()
-                                                            .toUpperCase()}
-                                                        </span>
-                                                      </td>
                                                       <td className="px-3 py-2 text-sm text-gray-900">
-                                                        {t.description || "-"}
+                                                        {consoleName}
                                                       </td>
-                                                      <td className="px-3 py-2 text-sm text-gray-600">
-                                                        {items.length > 0 ? (
-                                                          <div className="space-y-1">
-                                                            {items.map(
-                                                              (
-                                                                item: any,
-                                                                idx: number
-                                                              ) => {
-                                                                const name =
-                                                                  item.name ??
-                                                                  item.product_name ??
-                                                                  item.title ??
-                                                                  "Item";
-                                                                const profit =
-                                                                  Number(
-                                                                    item.profit ??
-                                                                      0
-                                                                  );
-                                                                const qty =
-                                                                  Number(
-                                                                    item.qty ??
-                                                                      item.quantity ??
-                                                                      1
-                                                                  );
-                                                                return (
-                                                                  <div
-                                                                    key={idx}
-                                                                    className="text-xs"
-                                                                  >
-                                                                    {name}{" "}
-                                                                    {qty > 1
-                                                                      ? `x${qty}`
-                                                                      : ""}{" "}
-                                                                    - Rp{" "}
-                                                                    {profit.toLocaleString(
-                                                                      "id-ID"
-                                                                    )}
-                                                                  </div>
-                                                                );
-                                                              }
-                                                            )}
-                                                          </div>
-                                                        ) : (
-                                                          <span className="text-gray-400">
-                                                            -
-                                                          </span>
+                                                      <td className="px-3 py-2 text-sm text-right text-gray-900">
+                                                        {formatDuration(
+                                                          durationMinutes
                                                         )}
                                                       </td>
-                                                      <td className="px-3 py-2 text-right font-semibold text-green-600">
-                                                        Rp{" "}
-                                                        {Math.ceil(
-                                                          transactionProfit
-                                                        ).toLocaleString(
-                                                          "id-ID"
-                                                        )}
-                                                      </td>
+                                                      {/* <td className="px-3 py-2 text-right text-sm">
+                                                Rp{" "}
+                                                {Number(
+                                                  hourlyRate
+                                                ).toLocaleString("id-ID")}
+                                              </td> */}
                                                     </tr>
                                                   );
                                                 })}
@@ -2555,16 +3756,15 @@ const Bookkeeping: React.FC = () => {
                                               <tfoot>
                                                 <tr className="bg-gray-50">
                                                   <td
-                                                    colSpan={3}
+                                                    colSpan={2}
                                                     className="px-3 py-2 text-right font-semibold text-gray-900"
                                                   >
-                                                    Subtotal {g.label}
+                                                    Subtotal Console
                                                   </td>
-                                                  <td className="px-3 py-2 text-right font-bold text-blue-700">
-                                                    Rp{" "}
-                                                    {Math.ceil(
-                                                      total
-                                                    ).toLocaleString("id-ID")}
+                                                  <td className="px-3 py-2 text-sm text-right font-semibold text-blue-700">
+                                                    {formatDuration(
+                                                      cdata.totalDurationMinutes
+                                                    )}
                                                   </td>
                                                 </tr>
                                               </tfoot>
@@ -2574,1525 +3774,610 @@ const Bookkeeping: React.FC = () => {
                                       </div>
                                     );
                                   })}
-                                </div>
                               </div>
-                            );
-                          })()}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            ) : paginatedData.length === 0 ? (
-              <div className="p-12 text-center">
-                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">Tidak ada transaksi ditemukan</p>
-              </div>
-            ) : (
-              paginatedData.map((t: any) => {
-                const isSelected = selectedItem === String(t.id);
-                return (
-                  <div
-                    key={t.id}
-                    className="p-6 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            t.type === "rental"
-                              ? "bg-green-100"
-                              : t.type === "sale"
-                              ? "bg-red-100"
-                              : "bg-purple-100"
-                          }`}
-                        >
-                          {t.type === "rental" ? (
-                            <Gamepad className="h-4 w-4 text-green-600" />
-                          ) : t.type === "sale" ? (
-                            <Coffee className="h-4 w-4 text-red-600" />
-                          ) : (
-                            <Ticket className="h-4 w-4 text-purple-600" />
-                          )}
-                        </div>
-                        <div>
-                          <h3 className="font-medium text-gray-900">
-                            {t.description}
-                          </h3>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span
-                              className={`inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800  ${
-                                t.type === "rental"
-                                  ? "bg-green-100 text-green-800"
-                                  : t.type === "sale"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-purple-100 text-purple-800"
-                              }`}
-                            >
-                              {(t.type || "").toString().toUpperCase()}
-                            </span>
-                            <div className="flex items-center gap-1 text-sm text-gray-600">
-                              <Calendar className="h-4 w-4" />
-                              {new Date(t.timestamp).toLocaleDateString(
-                                "id-ID"
-                              )}
-                            </div>
-                            {t.reference_id && (
-                              <span className="text-sm text-gray-500">
-                                Ref: {t.reference_id}
-                              </span>
                             )}
-
-                            {!t?.details ||
-                              (!t.details?.action && t.type !== "voucher" && (
-                                <button
-                                  onClick={
-                                    () =>
-                                      setSelectedItem(
-                                        isSelected ? null : String(t.id)
-                                      ) // Toggle detail
-                                  }
-                                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                                  title={
-                                    isSelected
-                                      ? "Sembunyikan detail"
-                                      : "Lihat detail"
-                                  }
-                                >
-                                  {isSelected ? "Tutup" : "Detail"}
-                                </button>
-                              ))}
                           </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-green-600">
-                          +{" "}
-                          {Math.ceil(
-                            (t.details?.items || []).reduce(
-                              (sum: number, item: any) =>
-                                sum + (Number(item.profit) || 0),
-                              0
-                            )
-                          ).toLocaleString("id-ID")}
-                        </p>
-                        <p className="text-sm text-gray-600 capitalize">
-                          Profit
-                        </p>
-                      </div>
-                    </div>
-                    {isSelected && t.details?.items?.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <h4 className="font-medium text-gray-900 mb-3">
-                          Detail
-                        </h4>
-                        <div className="space-y-2">
-                          {t.details.items.map((item: any, idx: number) => {
-                            const name =
-                              item.name ??
-                              item.product_name ??
-                              item.title ??
-                              "Item";
-                            const profit = Number(item.profit ?? 0);
-                            const qty = Number(item.qty ?? item.quantity ?? 1);
-                            const unit = Number(item.price ?? 0);
-                            const total = Number(item.total ?? unit * qty) || 0;
-
-                            let durationMinutes: number | null = null;
-                            if (item.type === "rental") {
-                              durationMinutes =
-                                Number(
-                                  t?.details?.rental?.duration_minutes ?? null
-                                ) || null;
-                              if (!durationMinutes && item.description) {
-                                const m = item.description.match(
-                                  /(\d{1,2}):(\d{2}):(\d{2})/
-                                );
-                                if (m) {
-                                  const h = Number(m[1]);
-                                  const mm = Number(m[2]);
-                                  const s = Number(m[3]);
-                                  durationMinutes = Math.round(
-                                    h * 60 + mm + s / 60
-                                  );
-                                }
-                              }
-                            }
-
-                            return (
-                              <div
-                                key={idx}
-                                className="flex justify-between items-center text-sm"
-                              >
-                                <span className="text-gray-700">
-                                  {/* {name} x @{qty}{" "} */}
-                                  {item.type === "rental"
-                                    ? `${name} (${
-                                        t.details.rental.duration_minutes ??
-                                        durationMinutes
-                                      } menit - Rp ${total.toLocaleString(
-                                        "id-ID"
-                                      )})`
-                                    : `${name} x @${qty} (Rp ${(
-                                        profit / qty
-                                      ).toLocaleString("id-ID")})`}
-                                  {t.details.discount?.amount &&
-                                    t.details.discount.amount > 0 &&
-                                    item.type === "rental" && (
-                                      <span className="text-red-500">
-                                        (Diskon{" "}
-                                        {t.details.discount.amount.toLocaleString(
-                                          "id-ID"
-                                        )}
-                                        )
-                                      </span>
-                                    )}
-                                </span>
-                                <span className="font-medium text-gray-900">
-                                  Rp{" "}
-                                  {item?.profit?.toLocaleString("id-ID") || 0}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+                        );
+                      })
                     )}
                   </div>
-                );
-              })
-            )}
-          </div>
-        ) : activeView === "rekap_kasir" ? (
-          <div className="space-y-4">
-            <div className="flex border-b border-gray-200">
-              <button
-                onClick={() => setRekapKasirSubTab("per_tanggal")}
-                className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
-                  rekapKasirSubTab === "per_tanggal"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                <Calendar className="h-4 w-4" />
-                Rekap Per Tanggal
-              </button>
-              <button
-                onClick={() => setRekapKasirSubTab("per_kasir")}
-                className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
-                  rekapKasirSubTab === "per_kasir"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                <User className="h-4 w-4" />
-                Rekap Per Kasir
-              </button>
-            </div>
-
-            {rekapKasirSubTab === "per_tanggal" ? (
-              <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
-                {rekapKasirByDate.dateKeys.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">
-                      Tidak ada transaksi ditemukan
-                    </p>
-                  </div>
                 ) : (
-                  rekapKasirByDate.dateKeys.map((dk) => {
-                    const isDateOpen = expandedDates.has(dk);
-                    const sessionsMap =
-                      rekapKasirByDate.map[dk]?.sessions || {};
-                    const sessionIds = Object.keys(sessionsMap);
-                    const filteredSessionIds = sessionIds.filter(
-                      (sid) =>
-                        sid &&
-                        String(sid).trim() !== "" &&
-                        sid !== "-" &&
-                        sid !== "null"
-                    );
+                  <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+                    {rekapConsoleByConsole.consoleNames.length === 0 ? (
+                      <div className="p-12 text-center">
+                        <Gamepad className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">
+                          Tidak ada data console ditemukan
+                        </p>
+                      </div>
+                    ) : (
+                      rekapConsoleByConsole.consoleNames.map((consoleName) => {
+                        const consoleData =
+                          rekapConsoleByConsole.map[consoleName];
+                        const isConsoleOpen =
+                          expandedConsoleBuckets.has(consoleName);
+                        const sortedDates = Object.keys(consoleData.dates).sort(
+                          (a, b) => (a < b ? 1 : -1)
+                        );
+                        const formatDuration = (minutes: number) => {
+                          const hours = Math.floor(minutes / 60);
+                          const mins = minutes % 60;
+                          if (hours === 0) return `${mins} menit`;
+                          if (mins === 0) return `${hours} jam`;
+                          return `${hours} jam ${mins} menit`;
+                        };
 
-                    const summarizedSessions = filteredSessionIds
-                      .map((sid) => ({ sid, ...sessionsMap[sid] }))
-                      .sort((a, b) => b.totalAmount - a.totalAmount);
-
-                    const totalAll = summarizedSessions.reduce(
-                      (sum, item) => sum + item.totalAmount,
-                      0
-                    );
-
-                    return (
-                      <div
-                        key={dk}
-                        className="p-6 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm text-gray-500">
-                              {new Date(dk).toLocaleDateString("id-ID", {
-                                weekday: "long",
-                              })}
-                            </div>
+                        return (
+                          <div
+                            key={consoleName}
+                            className="p-6 hover:bg-gray-50 transition-colors"
+                          >
                             <button
                               onClick={() => {
-                                const next = new Set(expandedDates);
-                                if (next.has(dk)) next.delete(dk);
-                                else next.add(dk);
-                                setExpandedDates(next);
+                                const next = new Set(expandedConsoleBuckets);
+                                if (next.has(consoleName))
+                                  next.delete(consoleName);
+                                else next.add(consoleName);
+                                setExpandedConsoleBuckets(next);
                               }}
-                              className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
-                              aria-expanded={isDateOpen}
+                              className="w-full flex items-center justify-between"
+                              aria-expanded={isConsoleOpen}
                             >
-                              <span>
-                                {new Date(dk).toLocaleDateString("id-ID")}
-                              </span>
-                              <svg
-                                className={`h-4 w-4 transform ${
-                                  isDateOpen ? "rotate-180" : ""
-                                }`}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="6 9 12 15 18 9" />
-                              </svg>
-                            </button>
-                            <div className="text-sm text-gray-600">
-                              {filteredSessionIds.length} sesi
-                            </div>
-                          </div>
-                          <div className="mt-4">
-                            <div className="text-xs text-gray-500">Total</div>
-                            <div className="font-bold text-green-700">
-                              Rp {Number(totalAll).toLocaleString("id-ID")}
-                            </div>
-                          </div>
-                        </div>
-
-                        {isDateOpen && (
-                          <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-                            {summarizedSessions.map((sessionItem) => {
-                              const key = `${dk}|${sessionItem.sid}`;
-                              const open = expandedSessionBuckets.has(key);
-                              const sess = sessions.find(
-                                (s: any) =>
-                                  String(s.id) === String(sessionItem.sid)
-                              );
-                              const sdata = sessionsMap[sessionItem.sid];
-
-                              return (
-                                <div
-                                  key={sessionItem.sid}
-                                  className="border rounded-lg"
-                                >
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(
-                                        expandedSessionBuckets
-                                      );
-                                      if (next.has(key)) next.delete(key);
-                                      else next.add(key);
-                                      setExpandedSessionBuckets(next);
-                                    }}
-                                    className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
-                                    aria-expanded={open}
-                                  >
-                                    <div className="text-left">
-                                      <div className="text-sm font-medium text-gray-900">
-                                        Sesi Kasir -{" "}
-                                        {sess?.cashier_name || "Kasir"} (
-                                        {sess?.status === "active"
-                                          ? "Aktif"
-                                          : "Selesai"}
-                                        )
-                                      </div>
-                                      <div className="text-xs text-gray-500">
-                                        Mulai:{" "}
-                                        {sess?.start_time
-                                          ? new Date(
-                                              sess.start_time
-                                            ).toLocaleString("id-ID", {
-                                              hour12: false,
-                                            })
-                                          : "-"}
-                                        {sess?.end_time
-                                          ? ` | Selesai: ${new Date(
-                                              sess.end_time
-                                            ).toLocaleString("id-ID", {
-                                              hour12: false,
-                                            })}`
-                                          : ""}
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="text-sm font-semibold text-blue-700">
-                                        Rp{" "}
-                                        {Number(
-                                          sdata.totalAmount
-                                        ).toLocaleString("id-ID")}
-                                      </div>
-                                      <div className="text-xs text-gray-500">
-                                        {sdata.count} transaksi
-                                      </div>
-                                    </div>
-                                  </button>
-                                  {open && (
-                                    <div className="p-3 overflow-x-auto">
-                                      <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-white">
-                                          <tr>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                              Waktu
-                                            </th>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                              Tipe
-                                            </th>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                              Deskripsi
-                                            </th>
-                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                              Jumlah (Rp)
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-100">
-                                          {sdata.list.map((t: any) => (
-                                            <tr
-                                              key={t.id}
-                                              className="hover:bg-gray-50"
-                                            >
-                                              <td className="px-3 py-2 text-sm">
-                                                {new Date(
-                                                  t.timestamp
-                                                ).toLocaleString("id-ID", {
-                                                  hour12: false,
-                                                })}
-                                              </td>
-                                              <td className="px-3 py-2 text-xs">
-                                                <span
-                                                  className={`inline-block px-2 py-1 rounded-full ${
-                                                    t.type === "expense"
-                                                      ? "bg-red-100 text-red-800"
-                                                      : "bg-green-100 text-green-800"
-                                                  }`}
-                                                >
-                                                  {String(
-                                                    t.type || ""
-                                                  ).toUpperCase()}
-                                                </span>
-                                              </td>
-                                              <td className="px-3 py-2 text-sm text-gray-900">
-                                                {t.description || "-"}
-                                              </td>
-                                              <td
-                                                className={`px-3 py-2 text-right text-sm font-semibold ${
-                                                  t.type === "expense"
-                                                    ? "text-red-500"
-                                                    : ""
-                                                }`}
-                                              >
-                                                {t.type === "expense"
-                                                  ? "- "
-                                                  : ""}
-                                                Rp{" "}
-                                                {Number(
-                                                  t.amount || 0
-                                                ).toLocaleString("id-ID")}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                        <tfoot>
-                                          <tr className="bg-gray-50">
-                                            <td
-                                              colSpan={3}
-                                              className="px-3 py-2 text-right font-semibold text-gray-900"
-                                            >
-                                              Subtotal Sesi
-                                            </td>
-                                            <td className="px-3 py-2 text-right font-bold text-blue-700">
-                                              Rp{" "}
-                                              {Number(
-                                                sdata.totalAmount
-                                              ).toLocaleString("id-ID")}
-                                            </td>
-                                          </tr>
-                                        </tfoot>
-                                      </table>
-                                    </div>
+                              <div className="text-left">
+                                <div className="text-lg font-semibold text-gray-900">
+                                  {consoleName}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {consoleData.count} transaksi
+                                </div>
+                              </div>
+                              <div className="text-right space-y-1">
+                                <div className="text-sm font-semibold text-blue-700">
+                                  {formatDuration(
+                                    consoleData.totalDurationMinutes
                                   )}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
-                {rekapKasirByCashier.cashierKeys.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">
-                      Tidak ada data kasir ditemukan
-                    </p>
-                  </div>
-                ) : (
-                  rekapKasirByCashier.cashierKeys.map((ckey) => {
-                    const cashier = rekapKasirByCashier.map[ckey];
-                    const isCashierOpen = expandedCashierBuckets.has(ckey);
-                    const sortedDates = Object.keys(cashier.dates).sort(
-                      (a, b) => (a < b ? 1 : -1)
-                    );
-
-                    return (
-                      <div
-                        key={ckey}
-                        className="p-6 hover:bg-gray-50 transition-colors"
-                      >
-                        <button
-                          onClick={() => {
-                            const next = new Set(expandedCashierBuckets);
-                            if (next.has(ckey)) next.delete(ckey);
-                            else next.add(ckey);
-                            setExpandedCashierBuckets(next);
-                          }}
-                          className="w-full flex items-center justify-between"
-                          aria-expanded={isCashierOpen}
-                        >
-                          <div className="text-left">
-                            <div className="text-lg font-semibold text-gray-900">
-                              {cashier.cashierName}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {cashier.count} transaksi
-                            </div>
-                          </div>
-                          <div className="text-right space-y-1">
-                            <div
-                              className={`text-sm font-semibold ${
-                                cashier.totalAmount >= 0
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }`}
-                            >
-                              Rp{" "}
-                              {Number(cashier.totalAmount).toLocaleString(
-                                "id-ID"
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {sortedDates.length} hari aktif
-                            </div>
-                          </div>
-                        </button>
-
-                        {isCashierOpen && (
-                          <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-                            {sortedDates.map((dk) => {
-                              const dateKey = `${ckey}|${dk}`;
-                              const open =
-                                expandedCashierDateBuckets.has(dateKey);
-                              const dateData = cashier.dates[dk];
-
-                              return (
-                                <div
-                                  key={dateKey}
-                                  className="border rounded-lg"
-                                >
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(
-                                        expandedCashierDateBuckets
-                                      );
-                                      if (next.has(dateKey))
-                                        next.delete(dateKey);
-                                      else next.add(dateKey);
-                                      setExpandedCashierDateBuckets(next);
-                                    }}
-                                    className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
-                                    aria-expanded={open}
-                                  >
-                                    <div className="text-left">
-                                      <div className="text-sm font-medium text-gray-900">
-                                        {new Date(dk).toLocaleDateString(
-                                          "id-ID",
-                                          {
-                                            weekday: "long",
-                                            day: "numeric",
-                                            month: "long",
-                                            year: "numeric",
-                                          }
-                                        )}
-                                      </div>
-                                      <div className="text-xs text-gray-500">
-                                        {dateData.count} transaksi
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="text-sm font-semibold text-blue-700">
-                                        Rp{" "}
-                                        {Number(
-                                          dateData.totalAmount
-                                        ).toLocaleString("id-ID")}
-                                      </div>
-                                    </div>
-                                  </button>
-                                  {open && (
-                                    <div className="p-3 overflow-x-auto">
-                                      <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-white">
-                                          <tr>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                              Waktu
-                                            </th>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                              Tipe
-                                            </th>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                              Deskripsi
-                                            </th>
-                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                              Jumlah (Rp)
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-100">
-                                          {dateData.list.map((t: any) => (
-                                            <tr
-                                              key={t.id}
-                                              className="hover:bg-gray-50"
-                                            >
-                                              <td className="px-3 py-2 text-sm">
-                                                {new Date(
-                                                  t.timestamp
-                                                ).toLocaleString("id-ID", {
-                                                  hour12: false,
-                                                })}
-                                              </td>
-                                              <td className="px-3 py-2 text-xs">
-                                                <span
-                                                  className={`inline-block px-2 py-1 rounded-full ${
-                                                    t.type === "expense"
-                                                      ? "bg-red-100 text-red-800"
-                                                      : "bg-green-100 text-green-800"
-                                                  }`}
-                                                >
-                                                  {String(
-                                                    t.type || ""
-                                                  ).toUpperCase()}
-                                                </span>
-                                              </td>
-                                              <td className="px-3 py-2 text-sm text-gray-900">
-                                                {t.description || "-"}
-                                              </td>
-                                              <td
-                                                className={`px-3 py-2 text-right text-sm font-semibold ${
-                                                  t.type === "expense"
-                                                    ? "text-red-500"
-                                                    : ""
-                                                }`}
-                                              >
-                                                {t.type === "expense"
-                                                  ? "- "
-                                                  : ""}
-                                                Rp{" "}
-                                                {Number(
-                                                  t.amount || 0
-                                                ).toLocaleString("id-ID")}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                        <tfoot>
-                                          <tr className="bg-gray-50">
-                                            <td
-                                              colSpan={3}
-                                              className="px-3 py-2 text-right font-semibold text-gray-900"
-                                            >
-                                              Subtotal Harian
-                                            </td>
-                                            <td className="px-3 py-2 text-right font-bold text-blue-700">
-                                              Rp{" "}
-                                              {Number(
-                                                dateData.totalAmount
-                                              ).toLocaleString("id-ID")}
-                                            </td>
-                                          </tr>
-                                        </tfoot>
-                                      </table>
-                                    </div>
-                                  )}
+                                <div className="text-xs text-gray-500">
+                                  {sortedDates.length} hari aktif
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-          </div>
-        ) : activeView === "rekap_console" ? (
-          <div className="space-y-4">
-            <div className="flex border-b border-gray-200">
-              <button
-                onClick={() => setRekapConsoleSubTab("per_tanggal")}
-                className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
-                  rekapConsoleSubTab === "per_tanggal"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                <Calendar className="h-4 w-4" />
-                Rekap Per Tanggal
-              </button>
-              <button
-                onClick={() => setRekapConsoleSubTab("per_console")}
-                className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
-                  rekapConsoleSubTab === "per_console"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                <Gamepad className="h-4 w-4" />
-                Rekap Per Console
-              </button>
-            </div>
-
-            {rekapConsoleSubTab === "per_tanggal" ? (
-              <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
-                {rekapConsoleByDate.dateKeys.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">
-                      Tidak ada transaksi ditemukan
-                    </p>
-                  </div>
-                ) : (
-                  rekapConsoleByDate.dateKeys.map((dk) => {
-                    const isDateOpen = expandedDates.has(dk);
-                    const consolesMap =
-                      rekapConsoleByDate.map[dk]?.consoles || {};
-                    const consoleNames = Object.keys(consolesMap);
-                    const formatDuration = (minutes: number) => {
-                      const hours = Math.floor(minutes / 60);
-                      const mins = minutes % 60;
-                      if (hours === 0) return `${mins} menit`;
-                      if (mins === 0) return `${hours} jam`;
-                      return `${hours} jam ${mins} menit`;
-                    };
-                    return (
-                      <div
-                        key={dk}
-                        className="p-6 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm text-gray-500">
-                              {new Date(dk).toLocaleDateString("id-ID", {
-                                weekday: "long",
-                              })}
-                            </div>
-                            <button
-                              onClick={() => {
-                                const next = new Set(expandedDates);
-                                if (next.has(dk)) next.delete(dk);
-                                else next.add(dk);
-                                setExpandedDates(next);
-                              }}
-                              className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
-                              aria-expanded={isDateOpen}
-                            >
-                              <span>
-                                {new Date(dk).toLocaleDateString("id-ID")}
-                              </span>
-                              <svg
-                                className={`h-4 w-4 transform ${
-                                  isDateOpen ? "rotate-180" : ""
-                                }`}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="6 9 12 15 18 9" />
-                              </svg>
+                                <div className="text-xs text-blue-600 font-medium">
+                                  Okupansi:{" "}
+                                  {(() => {
+                                    const operatingMinutes =
+                                      sortedDates.length * 14 * 60;
+                                    const occupancyRate =
+                                      operatingMinutes > 0
+                                        ? Math.round(
+                                            (consoleData.totalDurationMinutes /
+                                              operatingMinutes) *
+                                              100
+                                          )
+                                        : 0;
+                                    return `${occupancyRate}%`;
+                                  })()}
+                                </div>
+                              </div>
                             </button>
-                            <div className="text-sm text-gray-600">
-                              {consoleNames.length} console
-                            </div>
-                          </div>
-                          <div className="mt-4">
-                            {(() => {
-                              const validConsoles = Object.entries(consolesMap)
-                                .map(([name, data]) => ({ name, ...data }))
-                                .sort(
-                                  (a, b) =>
-                                    b.totalDurationMinutes -
-                                    a.totalDurationMinutes
-                                );
 
-                              const totalAllMinutes = validConsoles.reduce(
-                                (sum, c) => sum + c.totalDurationMinutes,
-                                0
-                              );
-                              const operatingMinutes =
-                                validConsoles.length * 14 * 60;
-                              const occupancyRate =
-                                operatingMinutes > 0
-                                  ? Math.round(
-                                      (totalAllMinutes / operatingMinutes) * 100
-                                    )
-                                  : 0;
+                            {isConsoleOpen && (
+                              <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                                {sortedDates.map((dk) => {
+                                  const dateKey = `${consoleName}|${dk}`;
+                                  const open =
+                                    expandedConsoleDateBuckets.has(dateKey);
+                                  const dateData = consoleData.dates[dk];
 
-                              return (
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <div className="text-xs text-gray-500">
-                                      Total Durasi
-                                    </div>
-                                    <div className="font-bold text-green-700">
-                                      {formatDuration(totalAllMinutes)}
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <div className="text-xs text-gray-500">
-                                      Okupansi Harian
-                                    </div>
-                                    <div className="font-bold text-orange-700">
-                                      {occupancyRate}%
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                        {isDateOpen && (
-                          <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-                            {consoleNames
-                              .sort(
-                                (a, b) =>
-                                  consolesMap[b].totalDurationMinutes -
-                                  consolesMap[a].totalDurationMinutes
-                              )
-                              .map((consoleName) => {
-                                const key = `${dk}|${consoleName}`;
-                                const open = expandedConsoleBuckets.has(key);
-                                const cdata = consolesMap[consoleName];
-                                return (
-                                  <div
-                                    key={consoleName}
-                                    className="border rounded-lg"
-                                  >
-                                    <button
-                                      onClick={() => {
-                                        const next = new Set(
-                                          expandedConsoleBuckets
-                                        );
-                                        if (next.has(key)) next.delete(key);
-                                        else next.add(key);
-                                        setExpandedConsoleBuckets(next);
-                                      }}
-                                      className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
-                                      aria-expanded={open}
+                                  return (
+                                    <div
+                                      key={dateKey}
+                                      className="border rounded-lg"
                                     >
-                                      <div className="text-left">
-                                        <div className="text-sm font-medium text-gray-900">
-                                          {consoleName}
+                                      <button
+                                        onClick={() => {
+                                          const next = new Set(
+                                            expandedConsoleDateBuckets
+                                          );
+                                          if (next.has(dateKey))
+                                            next.delete(dateKey);
+                                          else next.add(dateKey);
+                                          setExpandedConsoleDateBuckets(next);
+                                        }}
+                                        className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
+                                        aria-expanded={open}
+                                      >
+                                        <div className="text-left">
+                                          <div className="text-sm font-medium text-gray-900">
+                                            {new Date(dk).toLocaleDateString(
+                                              "id-ID",
+                                              {
+                                                weekday: "long",
+                                                day: "numeric",
+                                                month: "long",
+                                                year: "numeric",
+                                              }
+                                            )}
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            {dateData.count} transaksi
+                                          </div>
                                         </div>
-                                        <div className="text-xs text-gray-500">
-                                          {cdata.count} transaksi
+                                        <div className="text-right">
+                                          <div className="text-sm font-semibold text-blue-700">
+                                            {formatDuration(
+                                              dateData.totalDurationMinutes
+                                            )}
+                                          </div>
                                         </div>
-                                      </div>
-                                      <div className="text-right">
-                                        <div className="text-sm font-semibold text-blue-700">
-                                          {formatDuration(
-                                            cdata.totalDurationMinutes
-                                          )}
-                                        </div>
-                                      </div>
-                                    </button>
-                                    {open && (
-                                      <div className="p-3 overflow-x-auto">
-                                        <table className="min-w-full divide-y divide-gray-200">
-                                          <thead className="bg-white">
-                                            <tr>
-                                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                Waktu
-                                              </th>
-                                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                Console
-                                              </th>
-                                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                                Durasi
-                                              </th>
-                                              {/* <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                            Harga per Jam
-                                          </th> */}
-                                            </tr>
-                                          </thead>
-                                          <tbody className="bg-white divide-y divide-gray-100">
-                                            {cdata.list.map((t: any) => {
-                                              const durationMinutes =
-                                                t.details?.rental
-                                                  ?.duration_minutes ||
-                                                t.details?.duration_minutes ||
-                                                t.details
-                                                  ?.additional_duration_minutes ||
-                                                0;
-                                              const consoleName =
-                                                t.details.items[0]?.name ||
-                                                t.details?.rental?.console ||
-                                                "-";
-                                              // const hourlyRate =
-                                              //   t.details?.rental
-                                              //     ?.hourly_rate_snapshot ||
-                                              //   t.details?.items?.[0]?.price ||
-                                              //   0;
-                                              return (
-                                                <tr
-                                                  key={t.id}
-                                                  className="hover:bg-gray-50"
+                                      </button>
+                                      {open && (
+                                        <div className="p-3 overflow-x-auto">
+                                          <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-white">
+                                              <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                  Waktu
+                                                </th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                  Console
+                                                </th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                                  Durasi
+                                                </th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100">
+                                              {dateData.list.map((t: any) => {
+                                                const durationMinutes =
+                                                  t.details?.rental
+                                                    ?.duration_minutes ||
+                                                  t.details?.duration_minutes ||
+                                                  t.details
+                                                    ?.additional_duration_minutes ||
+                                                  0;
+                                                const consoleNameItem =
+                                                  t.details.items[0]?.name ||
+                                                  t.details?.rental?.console ||
+                                                  "-";
+                                                return (
+                                                  <tr
+                                                    key={t.id}
+                                                    className="hover:bg-gray-50"
+                                                  >
+                                                    <td className="px-3 py-2 text-sm">
+                                                      {new Date(
+                                                        t.timestamp
+                                                      ).toLocaleString(
+                                                        "id-ID",
+                                                        {
+                                                          hour12: false,
+                                                        }
+                                                      )}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-sm text-gray-900">
+                                                      {consoleNameItem}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-sm text-right text-gray-900">
+                                                      {formatDuration(
+                                                        durationMinutes
+                                                      )}
+                                                    </td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                            <tfoot>
+                                              <tr className="bg-gray-50">
+                                                <td
+                                                  colSpan={2}
+                                                  className="px-3 py-2 text-right font-semibold text-gray-900"
                                                 >
-                                                  <td className="px-3 py-2 text-sm">
-                                                    {new Date(
-                                                      t.timestamp
-                                                    ).toLocaleString("id-ID", {
-                                                      hour12: false,
-                                                    })}
-                                                  </td>
-                                                  <td className="px-3 py-2 text-sm text-gray-900">
-                                                    {consoleName}
-                                                  </td>
-                                                  <td className="px-3 py-2 text-sm text-right text-gray-900">
-                                                    {formatDuration(
-                                                      durationMinutes
-                                                    )}
-                                                  </td>
-                                                  {/* <td className="px-3 py-2 text-right text-sm">
-                                                Rp{" "}
-                                                {Number(
-                                                  hourlyRate
-                                                ).toLocaleString("id-ID")}
-                                              </td> */}
-                                                </tr>
-                                              );
-                                            })}
-                                          </tbody>
-                                          <tfoot>
-                                            <tr className="bg-gray-50">
-                                              <td
-                                                colSpan={2}
-                                                className="px-3 py-2 text-right font-semibold text-gray-900"
-                                              >
-                                                Subtotal Console
-                                              </td>
-                                              <td className="px-3 py-2 text-sm text-right font-semibold text-blue-700">
-                                                {formatDuration(
-                                                  cdata.totalDurationMinutes
-                                                )}
-                                              </td>
-                                            </tr>
-                                          </tfoot>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
-                {rekapConsoleByConsole.consoleNames.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <Gamepad className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">
-                      Tidak ada data console ditemukan
-                    </p>
-                  </div>
-                ) : (
-                  rekapConsoleByConsole.consoleNames.map((consoleName) => {
-                    const consoleData = rekapConsoleByConsole.map[consoleName];
-                    const isConsoleOpen =
-                      expandedConsoleBuckets.has(consoleName);
-                    const sortedDates = Object.keys(consoleData.dates).sort(
-                      (a, b) => (a < b ? 1 : -1)
-                    );
-                    const formatDuration = (minutes: number) => {
-                      const hours = Math.floor(minutes / 60);
-                      const mins = minutes % 60;
-                      if (hours === 0) return `${mins} menit`;
-                      if (mins === 0) return `${hours} jam`;
-                      return `${hours} jam ${mins} menit`;
-                    };
-
-                    return (
-                      <div
-                        key={consoleName}
-                        className="p-6 hover:bg-gray-50 transition-colors"
-                      >
-                        <button
-                          onClick={() => {
-                            const next = new Set(expandedConsoleBuckets);
-                            if (next.has(consoleName)) next.delete(consoleName);
-                            else next.add(consoleName);
-                            setExpandedConsoleBuckets(next);
-                          }}
-                          className="w-full flex items-center justify-between"
-                          aria-expanded={isConsoleOpen}
-                        >
-                          <div className="text-left">
-                            <div className="text-lg font-semibold text-gray-900">
-                              {consoleName}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {consoleData.count} transaksi
-                            </div>
-                          </div>
-                          <div className="text-right space-y-1">
-                            <div className="text-sm font-semibold text-blue-700">
-                              {formatDuration(consoleData.totalDurationMinutes)}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {sortedDates.length} hari aktif
-                            </div>
-                            <div className="text-xs text-blue-600 font-medium">
-                              Okupansi:{" "}
-                              {(() => {
-                                const operatingMinutes =
-                                  sortedDates.length * 14 * 60;
-                                const occupancyRate =
-                                  operatingMinutes > 0
-                                    ? Math.round(
-                                        (consoleData.totalDurationMinutes /
-                                          operatingMinutes) *
-                                          100
-                                      )
-                                    : 0;
-                                return `${occupancyRate}%`;
-                              })()}
-                            </div>
-                          </div>
-                        </button>
-
-                        {isConsoleOpen && (
-                          <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-                            {sortedDates.map((dk) => {
-                              const dateKey = `${consoleName}|${dk}`;
-                              const open =
-                                expandedConsoleDateBuckets.has(dateKey);
-                              const dateData = consoleData.dates[dk];
-
-                              return (
-                                <div
-                                  key={dateKey}
-                                  className="border rounded-lg"
-                                >
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(
-                                        expandedConsoleDateBuckets
-                                      );
-                                      if (next.has(dateKey))
-                                        next.delete(dateKey);
-                                      else next.add(dateKey);
-                                      setExpandedConsoleDateBuckets(next);
-                                    }}
-                                    className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
-                                    aria-expanded={open}
-                                  >
-                                    <div className="text-left">
-                                      <div className="text-sm font-medium text-gray-900">
-                                        {new Date(dk).toLocaleDateString(
-                                          "id-ID",
-                                          {
-                                            weekday: "long",
-                                            day: "numeric",
-                                            month: "long",
-                                            year: "numeric",
-                                          }
-                                        )}
-                                      </div>
-                                      <div className="text-xs text-gray-500">
-                                        {dateData.count} transaksi
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="text-sm font-semibold text-blue-700">
-                                        {formatDuration(
-                                          dateData.totalDurationMinutes
-                                        )}
-                                      </div>
-                                    </div>
-                                  </button>
-                                  {open && (
-                                    <div className="p-3 overflow-x-auto">
-                                      <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-white">
-                                          <tr>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                              Waktu
-                                            </th>
-                                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                              Console
-                                            </th>
-                                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                              Durasi
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-100">
-                                          {dateData.list.map((t: any) => {
-                                            const durationMinutes =
-                                              t.details?.rental
-                                                ?.duration_minutes ||
-                                              t.details?.duration_minutes ||
-                                              t.details
-                                                ?.additional_duration_minutes ||
-                                              0;
-                                            const consoleNameItem =
-                                              t.details.items[0]?.name ||
-                                              t.details?.rental?.console ||
-                                              "-";
-                                            return (
-                                              <tr
-                                                key={t.id}
-                                                className="hover:bg-gray-50"
-                                              >
-                                                <td className="px-3 py-2 text-sm">
-                                                  {new Date(
-                                                    t.timestamp
-                                                  ).toLocaleString("id-ID", {
-                                                    hour12: false,
-                                                  })}
+                                                  Subtotal Harian
                                                 </td>
-                                                <td className="px-3 py-2 text-sm text-gray-900">
-                                                  {consoleNameItem}
-                                                </td>
-                                                <td className="px-3 py-2 text-sm text-right text-gray-900">
+                                                <td className="px-3 py-2 text-sm text-right font-semibold text-blue-700">
                                                   {formatDuration(
-                                                    durationMinutes
+                                                    dateData.totalDurationMinutes
                                                   )}
                                                 </td>
                                               </tr>
-                                            );
-                                          })}
-                                        </tbody>
-                                        <tfoot>
-                                          <tr className="bg-gray-50">
-                                            <td
-                                              colSpan={2}
-                                              className="px-3 py-2 text-right font-semibold text-gray-900"
-                                            >
-                                              Subtotal Harian
-                                            </td>
-                                            <td className="px-3 py-2 text-sm text-right font-semibold text-blue-700">
-                                              {formatDuration(
-                                                dateData.totalDurationMinutes
-                                              )}
-                                            </td>
-                                          </tr>
-                                        </tfoot>
-                                      </table>
+                                            </tfoot>
+                                          </table>
+                                        </div>
+                                      )}
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })
+                        );
+                      })
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        ) : activeView === "laporan_kasir" ? (
-          <>
-            <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
-              {paginatedData.length === 0 ? (
-                <div className="p-12 text-center">
-                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Tidak ada transaksi ditemukan</p>
+            ) : activeView === "laporan_kasir" ? (
+              <>
+                <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
+                  {paginatedData.length === 0 ? (
+                    <div className="p-12 text-center">
+                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600">
+                        Tidak ada transaksi ditemukan
+                      </p>
+                    </div>
+                  ) : (
+                    paginatedData.map((transaction: any) => {
+                      const isSelected =
+                        selectedItem === String(transaction.id);
+                      return (
+                        <div
+                          key={transaction.id}
+                          className="p-6 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div
+                                className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                  transaction.type === "income"
+                                    ? "bg-emerald-100"
+                                    : transaction.type === "sale"
+                                    ? "bg-green-100"
+                                    : transaction.type === "rental"
+                                    ? "bg-blue-100"
+                                    : transaction.type === "voucher"
+                                    ? "bg-purple-100"
+                                    : "bg-red-100"
+                                }`}
+                              >
+                                {transaction.type === "income" ? (
+                                  <DollarSign className="h-5 w-5 text-emerald-600" />
+                                ) : transaction.type === "sale" ? (
+                                  <Coffee className="h-5 w-5 text-green-600" />
+                                ) : transaction.type === "rental" ? (
+                                  <Gamepad className="h-5 w-5 text-blue-600" />
+                                ) : transaction.type === "voucher" ? (
+                                  <Ticket className="h-5 w-5 text-purple-600" />
+                                ) : (
+                                  <TrendingDown className="h-5 w-5 text-red-600" />
+                                )}
+                              </div>
+                              <div>
+                                <h3 className="font-medium text-gray-900">
+                                  {transaction.description}
+                                </h3>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <span
+                                    className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                                      transaction.type === "income"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : transaction.payment_method === "cash"
+                                        ? "bg-green-100 text-green-800"
+                                        : transaction.payment_method === "card"
+                                        ? "bg-blue-100 text-blue-800"
+                                        : "bg-purple-100 text-purple-800"
+                                    }`}
+                                  >
+                                    {transaction.type === "income"
+                                      ? "SALDO"
+                                      : (
+                                          transaction.payment_method || "cash"
+                                        ).toUpperCase()}
+                                  </span>
+                                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                                    <Clock className="h-4 w-4" />
+                                    {new Date(
+                                      transaction.timestamp
+                                    ).toLocaleString("id-ID", {
+                                      day: "numeric",
+                                      month: "numeric",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      hour12: false,
+                                    })}
+                                  </div>
+                                  {transaction.reference_id && (
+                                    <span className="text-sm text-gray-500">
+                                      Ref: {transaction.reference_id}
+                                    </span>
+                                  )}
+
+                                  {!transaction?.details ||
+                                    (!transaction.details?.action && (
+                                      <button
+                                        onClick={() =>
+                                          setSelectedItem((prev) =>
+                                            prev === String(transaction.id)
+                                              ? null
+                                              : String(transaction.id)
+                                          )
+                                        }
+                                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                        title={
+                                          isSelected
+                                            ? "Sembunyikan detail"
+                                            : "Lihat detail"
+                                        }
+                                      >
+                                        {isSelected ? "Tutup" : "Detail"}
+                                      </button>
+                                    ))}
+
+                                  {!(transaction.type === "expense") &&
+                                    transaction.reference_id &&
+                                    !String(transaction.reference_id)
+                                      .toUpperCase()
+                                      .includes("OPENING-CASH") &&
+                                    !String(transaction.reference_id)
+                                      .toUpperCase()
+                                      .includes("MOVE_RENTAL") &&
+                                    !String(transaction.reference_id)
+                                      .toUpperCase()
+                                      .includes("CANCELLED") && (
+                                      <button
+                                        onClick={() =>
+                                          handlePrintReceipt(transaction)
+                                        }
+                                        className="text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
+                                        title="Cetak struk"
+                                      >
+                                        <Receipt className="h-3 w-3" />
+                                        Print
+                                      </button>
+                                    )}
+
+                                  {/* Edit button */}
+                                  {!(
+                                    transaction.type === "expense" ||
+                                    transaction.type === "voucher" ||
+                                    transaction.type === "rental"
+                                  ) &&
+                                    transaction.reference_id &&
+                                    !String(transaction.reference_id)
+                                      .toUpperCase()
+                                      .includes("OPENING-CASH") && (
+                                      <button
+                                        onClick={() =>
+                                          openEditTransaction(transaction)
+                                        }
+                                        className="text-amber-600 hover:text-amber-700 text-sm font-medium flex items-center gap-1"
+                                        title="Edit transaksi"
+                                      >
+                                        <SquarePen className="h-3 w-3" />
+                                        Edit
+                                      </button>
+                                    )}
+
+                                  {/* Delete button */}
+                                  {transaction.type !== "expense" &&
+                                    transaction.reference_id &&
+                                    !String(transaction.reference_id)
+                                      .toUpperCase()
+                                      .includes("OPENING-CASH") &&
+                                    !String(transaction.reference_id)
+                                      .toUpperCase()
+                                      .includes("MOVE_RENTAL") && (
+                                      <button
+                                        onClick={() =>
+                                          handleDeleteTransaction(
+                                            transaction.id
+                                          )
+                                        }
+                                        disabled={saving}
+                                        className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Hapus transaksi"
+                                      >
+                                        <Trash className="h-3 w-3" />
+                                        Hapus
+                                      </button>
+                                    )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <p
+                                className={`text-lg font-bold ${
+                                  transaction.type === "expense"
+                                    ? "text-red-600"
+                                    : "text-green-600"
+                                }`}
+                              >
+                                {transaction.type === "expense" ? "-" : "+"}Rp{" "}
+                                {Number(transaction.amount || 0).toLocaleString(
+                                  "id-ID"
+                                )}
+                              </p>
+                              <p className="text-sm text-gray-600 capitalize">
+                                {transaction.type}
+                              </p>
+                            </div>
+                          </div>
+
+                          {isSelected &&
+                            (
+                              transaction.details?.items ??
+                              transaction.metadata?.items ??
+                              []
+                            ).length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <h4 className="font-medium text-gray-900 mb-3">
+                                  Detail
+                                </h4>
+                                <div className="space-y-2">
+                                  {(
+                                    (transaction.details?.items ??
+                                      transaction.metadata?.items) ||
+                                    []
+                                  ).map((it: any, idx: number) => {
+                                    const name =
+                                      it.name ??
+                                      it.product_name ??
+                                      it.title ??
+                                      "Item";
+                                    const qty = Number(
+                                      it.qty ?? it.quantity ?? 1
+                                    );
+                                    const unit = Number(it.price ?? 0);
+                                    const total =
+                                      Number(it.total ?? unit * qty) || 0;
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className="flex justify-between items-center text-sm"
+                                      >
+                                        <span className="text-gray-700">
+                                          {/* {name} x @{qty} */}
+                                          {it.type === "rental"
+                                            ? name
+                                            : `${name} x @${qty}`}
+                                        </span>
+                                        <span className="font-medium text-gray-900">
+                                          Rp {total.toLocaleString("id-ID")}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-              ) : (
-                paginatedData.map((transaction: any) => {
-                  const isSelected = selectedItem === String(transaction.id);
-                  return (
+              </>
+            ) : (
+              <>
+                <div className="divide-y divide-gray-200">
+                  {paginatedData.map((entry) => (
                     <div
-                      key={transaction.id}
+                      key={entry.id}
                       className="p-6 hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <div
                             className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              transaction.type === "income"
-                                ? "bg-emerald-100"
-                                : transaction.type === "sale"
+                              entry.type === "income"
                                 ? "bg-green-100"
-                                : transaction.type === "rental"
-                                ? "bg-blue-100"
-                                : transaction.type === "voucher"
-                                ? "bg-purple-100"
                                 : "bg-red-100"
                             }`}
                           >
-                            {transaction.type === "income" ? (
-                              <DollarSign className="h-5 w-5 text-emerald-600" />
-                            ) : transaction.type === "sale" ? (
-                              <Coffee className="h-5 w-5 text-green-600" />
-                            ) : transaction.type === "rental" ? (
-                              <Gamepad className="h-5 w-5 text-blue-600" />
-                            ) : transaction.type === "voucher" ? (
-                              <Ticket className="h-5 w-5 text-purple-600" />
-                            ) : (
-                              <TrendingDown className="h-5 w-5 text-red-600" />
-                            )}
+                            {getTypeIcon(entry.type)}
                           </div>
                           <div>
                             <h3 className="font-medium text-gray-900">
-                              {transaction.description}
+                              {entry.description}
                             </h3>
                             <div className="flex items-center gap-3 mt-1">
                               <span
-                                className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                                  transaction.type === "income"
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : transaction.payment_method === "cash"
-                                    ? "bg-green-100 text-green-800"
-                                    : transaction.payment_method === "card"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-purple-100 text-purple-800"
-                                }`}
+                                className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(
+                                  entry.category
+                                )}`}
                               >
-                                {transaction.type === "income"
-                                  ? "SALDO"
-                                  : (
-                                      transaction.payment_method || "cash"
-                                    ).toUpperCase()}
+                                {categories.find(
+                                  (c) => c.value === entry.category
+                                )?.label || entry.category}
                               </span>
                               <div className="flex items-center gap-1 text-sm text-gray-600">
-                                <Clock className="h-4 w-4" />
-                                {new Date(transaction.timestamp).toLocaleString(
-                                  "id-ID",
-                                  {
-                                    day: "numeric",
-                                    month: "numeric",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    hour12: false,
-                                  }
+                                <Calendar className="h-4 w-4" />
+                                {new Date(entry.entry_date).toLocaleDateString(
+                                  "id-ID"
                                 )}
                               </div>
-                              {transaction.reference_id && (
+                              {entry.reference && (
                                 <span className="text-sm text-gray-500">
-                                  Ref: {transaction.reference_id}
+                                  Ref: {entry.reference}
                                 </span>
                               )}
-
-                              {!transaction?.details ||
-                                (!transaction.details?.action && (
-                                  <button
-                                    onClick={() =>
-                                      setSelectedItem((prev) =>
-                                        prev === String(transaction.id)
-                                          ? null
-                                          : String(transaction.id)
-                                      )
-                                    }
-                                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                                    title={
-                                      isSelected
-                                        ? "Sembunyikan detail"
-                                        : "Lihat detail"
-                                    }
-                                  >
-                                    {isSelected ? "Tutup" : "Detail"}
-                                  </button>
-                                ))}
-
-                              {!(transaction.type === "expense") &&
-                                transaction.reference_id &&
-                                !String(transaction.reference_id)
-                                  .toUpperCase()
-                                  .includes("OPENING-CASH") &&
-                                !String(transaction.reference_id)
-                                  .toUpperCase()
-                                  .includes("MOVE_RENTAL") &&
-                                !String(transaction.reference_id)
-                                  .toUpperCase()
-                                  .includes("CANCELLED") && (
-                                  <button
-                                    onClick={() =>
-                                      handlePrintReceipt(transaction)
-                                    }
-                                    className="text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
-                                    title="Cetak struk"
-                                  >
-                                    <Receipt className="h-3 w-3" />
-                                    Print
-                                  </button>
-                                )}
-
-                              {/* Edit button */}
-                              {!(
-                                transaction.type === "expense" ||
-                                transaction.type === "voucher" ||
-                                transaction.type === "rental"
-                              ) &&
-                                transaction.reference_id &&
-                                !String(transaction.reference_id)
-                                  .toUpperCase()
-                                  .includes("OPENING-CASH") && (
-                                  <button
-                                    onClick={() =>
-                                      openEditTransaction(transaction)
-                                    }
-                                    className="text-amber-600 hover:text-amber-700 text-sm font-medium flex items-center gap-1"
-                                    title="Edit transaksi"
-                                  >
-                                    <SquarePen className="h-3 w-3" />
-                                    Edit
-                                  </button>
-                                )}
-
-                              {/* Delete button */}
-                              {transaction.type !== "expense" &&
-                                transaction.reference_id &&
-                                !String(transaction.reference_id)
-                                  .toUpperCase()
-                                  .includes("OPENING-CASH") &&
-                                !String(transaction.reference_id)
-                                  .toUpperCase()
-                                  .includes("MOVE_RENTAL") && (
-                                  <button
-                                    onClick={() =>
-                                      handleDeleteTransaction(transaction.id)
-                                    }
-                                    disabled={saving}
-                                    className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Hapus transaksi"
-                                  >
-                                    <Trash className="h-3 w-3" />
-                                    Hapus
-                                  </button>
-                                )}
                             </div>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <p
-                            className={`text-lg font-bold ${
-                              transaction.type === "expense"
-                                ? "text-red-600"
-                                : "text-green-600"
-                            }`}
-                          >
-                            {transaction.type === "expense" ? "-" : "+"}Rp{" "}
-                            {Number(transaction.amount || 0).toLocaleString(
-                              "id-ID"
-                            )}
-                          </p>
-                          <p className="text-sm text-gray-600 capitalize">
-                            {transaction.type}
-                          </p>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p
+                              className={`text-lg font-bold ${
+                                entry.type === "income"
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              {entry.type === "income" ? "+" : "-"}Rp{" "}
+                              {entry.amount.toLocaleString("id-ID")}
+                            </p>
+                            <p className="text-sm text-gray-600 capitalize">
+                              {types.find((t) => t.value === entry.type)
+                                ?.label || entry.type}
+                            </p>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex gap-2">
+                            <button
+                              className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                              onClick={() => {
+                                setEditEntry(entry);
+                                setShowEditForm(true);
+                              }}
+                              title="Edit transaksi"
+                            >
+                              <SquarePen className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteEntry(entry.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Hapus transaksi"
+                            >
+                              <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1-1H6a1 1 0 00-1-1z"
+                                />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       </div>
 
-                      {isSelected &&
-                        (
-                          transaction.details?.items ??
-                          transaction.metadata?.items ??
-                          []
-                        ).length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <h4 className="font-medium text-gray-900 mb-3">
-                              Detail
-                            </h4>
-                            <div className="space-y-2">
-                              {(
-                                (transaction.details?.items ??
-                                  transaction.metadata?.items) ||
-                                []
-                              ).map((it: any, idx: number) => {
-                                const name =
-                                  it.name ??
-                                  it.product_name ??
-                                  it.title ??
-                                  "Item";
-                                const qty = Number(it.qty ?? it.quantity ?? 1);
-                                const unit = Number(it.price ?? 0);
-                                const total =
-                                  Number(it.total ?? unit * qty) || 0;
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="flex justify-between items-center text-sm"
-                                  >
-                                    <span className="text-gray-700">
-                                      {/* {name} x @{qty} */}
-                                      {it.type === "rental"
-                                        ? name
-                                        : `${name} x @${qty}`}
-                                    </span>
-                                    <span className="font-medium text-gray-900">
-                                      Rp {total.toLocaleString("id-ID")}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </>
-        ) : activeView === "rekap_okupansi" ? (
-          <OccupancyCalendar />
-        ) : (
-          <>
-            <div className="divide-y divide-gray-200">
-              {paginatedData.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="p-6 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          entry.type === "income"
-                            ? "bg-green-100"
-                            : "bg-red-100"
-                        }`}
-                      >
-                        {getTypeIcon(entry.type)}
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-900">
-                          {entry.description}
-                        </h3>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span
-                            className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(
-                              entry.category
-                            )}`}
-                          >
-                            {categories.find((c) => c.value === entry.category)
-                              ?.label || entry.category}
-                          </span>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Calendar className="h-4 w-4" />
-                            {new Date(entry.entry_date).toLocaleDateString(
-                              "id-ID"
-                            )}
-                          </div>
-                          {entry.reference && (
-                            <span className="text-sm text-gray-500">
-                              Ref: {entry.reference}
-                            </span>
-                          )}
+                      {entry.notes && (
+                        <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                          <strong>Catatan:</strong> {entry.notes}
                         </div>
-                      </div>
+                      )}
                     </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p
-                          className={`text-lg font-bold ${
-                            entry.type === "income"
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {entry.type === "income" ? "+" : "-"}Rp{" "}
-                          {entry.amount.toLocaleString("id-ID")}
-                        </p>
-                        <p className="text-sm text-gray-600 capitalize">
-                          {types.find((t) => t.value === entry.type)?.label ||
-                            entry.type}
-                        </p>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex gap-2">
-                        <button
-                          className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                          onClick={() => {
-                            setEditEntry(entry);
-                            setShowEditForm(true);
-                          }}
-                          title="Edit transaksi"
-                        >
-                          <SquarePen className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          onClick={() => handleDeleteEntry(entry.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Hapus transaksi"
-                        >
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1-1H6a1 1 0 00-1-1z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {entry.notes && (
-                    <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                      <strong>Catatan:</strong> {entry.notes}
-                    </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
-          </>
+              </>
+            )}
+          </div>
         )}
-      </div>
+      {activeView == "laba_rugi" && labaRugiSubTab === "rekap" && (
+        <ProfitCalendar />
+      )}
+
+      {activeView == "rekap_kasir" && transaksiKasirSubTab === "rekap" && (
+        <CashierCalendar />
+      )}
+
+      {activeView == "rekap_console" && rekapConsoleViewSubTab === "rekap" && (
+        <OccupancyCalendar />
+      )}
 
       {/* Pagination */}
       {activeTab !== "rekap" &&
         totalPages > 1 &&
-        activeView !== "rekap_kasir" && (
+        activeView !== "rekap_kasir" &&
+        labaRugiSubTab !== "rekap" && (
           <div className="px-6 py-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-700">
