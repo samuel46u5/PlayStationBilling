@@ -40,7 +40,7 @@ const CashierCalendar: React.FC = () => {
 
         const { data: transactions, error } = await supabase
           .from("cashier_transactions")
-          .select("*")
+          .select(`*, cashier_sessions ( cashier_name )`)
           .gte("timestamp", startOfMonth.toISOString())
           .lte("timestamp", endOfMonth.toISOString());
 
@@ -73,7 +73,8 @@ const CashierCalendar: React.FC = () => {
             cashierByDate[dateKey].sessions[sid] = {
               totalAmount: 0,
               count: 0,
-              cashierName: transaction.cashier_name || "Kasir",
+              cashierName:
+                transaction.cashier_sessions?.cashier_name || "Kasir",
             };
           }
 
@@ -267,8 +268,42 @@ const CashierCalendar: React.FC = () => {
                     </div>
 
                     <div className="text-sm text-gray-600 text-center">
-                      <div>{sessionCount} sesi</div>
-                      <div>{transactionCount} transaksi</div>
+                      <div className="text-sm text-gray-600 text-center">
+                        {(() => {
+                          const sessions = day.cashierData?.sessions || {};
+                          const validSessions = Object.values(sessions).filter(
+                            (s: any) => s.totalAmount > 0
+                          );
+                          console.log(validSessions);
+
+                          if (validSessions.length === 0) {
+                            return (
+                              <div className="text-xs text-gray-400">
+                                Tidak ada data
+                              </div>
+                            );
+                          }
+
+                          // Tampilkan semua cashier dengan nama dan revenue mereka
+                          return validSessions.map(
+                            (session: any, index: number) => (
+                              <div key={index} className="text-xs mb-1">
+                                <div className="font-medium truncate">
+                                  {`${session.cashierName}: ` || "Kasir"}
+                                  <span className="text-green-600 text-right">
+                                    Rp{" "}
+                                    {session.totalAmount.toLocaleString(
+                                      "id-ID"
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          );
+                        })()}
+                      </div>
+                      {/* <div>{sessionCount} sesi</div>
+                      <div>{transactionCount} transaksi</div> */}
                     </div>
                   </div>
                 )}
