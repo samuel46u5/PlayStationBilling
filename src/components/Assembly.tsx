@@ -362,6 +362,84 @@ const Assembly: React.FC = () => {
     }
   };
 
+  // const handleAssemble = async () => {
+  //   if (!assembleForm.recipe_id || assembleForm.quantity <= 0) {
+  //     Swal.fire("Error", "Pilih resep dan jumlah yang valid", "error");
+  //     return;
+  //   }
+
+  //   const recipe = recipes.find((r) => r.id === assembleForm.recipe_id);
+  //   if (!recipe) return;
+
+  //   try {
+  //     // Check stock availability
+  //     for (const ingredient of recipe.ingredients) {
+  //       const product = rawMaterials.find(
+  //         (p) => p.id === ingredient.product_id
+  //       );
+  //       const required = ingredient.quantity_required * assembleForm.quantity;
+
+  //       if (!product || product.stock < required) {
+  //         Swal.fire(
+  //           "Error",
+  //           `Stok ${
+  //             ingredient.product_name
+  //           } tidak cukup. Dibutuhkan: ${required} ${ingredient.unit}
+  //           }, Tersedia: ${product?.stock || 0}`,
+  //           "error"
+  //         );
+  //         return;
+  //       }
+  //     }
+
+  //     // Confirm assembly
+  //     const result = await Swal.fire({
+  //       title: "Konfirmasi Assembly",
+  //       text: `Merakit ${assembleForm.quantity} ${recipe.product_name}?`,
+  //       icon: "question",
+  //       showCancelButton: true,
+  //       confirmButtonText: "Ya, Rakit",
+  //       cancelButtonText: "Batal",
+  //     });
+
+  //     if (!result.isConfirmed) return;
+
+  //     // Decrease ingredient stocks
+  //     for (const ingredient of recipe.ingredients) {
+  //       const required = ingredient.quantity_required * assembleForm.quantity;
+  //       await db.products.decreaseStock(ingredient.product_id, required);
+  //     }
+
+  //     // Increase finished product stock
+  //     await db.products.increaseStock(recipe.product_id, assembleForm.quantity);
+
+  //     // Create transaction record
+  //     const { error: logError } = await supabase.from("assembly_logs").insert({
+  //       recipe_id: recipe.id,
+  //       quantity_produced: assembleForm.quantity,
+  //       assembled_at: new Date().toISOString(),
+  //       assembled_by: user?.full_name || user?.username,
+  //       notes: assembleForm.notes,
+  //       ingredients_used: recipe.ingredients.map((ing) => ({
+  //         product_id: ing.product_id,
+  //         product_name: ing.product_name,
+  //         quantity_used: ing.quantity_required * assembleForm.quantity,
+  //         unit: ing.unit,
+  //       })),
+  //     });
+
+  //     if (logError) throw logError;
+
+  //     Swal.fire("Berhasil", "Assembly berhasil!", "success");
+  //     setShowAssembleForm(false);
+  //     setAssembleForm({ recipe_id: "", quantity: 1, notes: "" });
+  //     fetchData();
+  //   } catch (error) {
+  //     console.error("Error assembling:", error);
+  //     Swal.fire("Error", "Gagal merakit produk", "error");
+  //   }
+  // };
+
   const handleAssemble = async () => {
     if (!assembleForm.recipe_id || assembleForm.quantity <= 0) {
       Swal.fire("Error", "Pilih resep dan jumlah yang valid", "error");
@@ -372,7 +450,6 @@ const Assembly: React.FC = () => {
     if (!recipe) return;
 
     try {
-      // Check stock availability
       for (const ingredient of recipe.ingredients) {
         const product = rawMaterials.find(
           (p) => p.id === ingredient.product_id
@@ -384,7 +461,8 @@ const Assembly: React.FC = () => {
             "Error",
             `Stok ${
               ingredient.product_name
-            } tidak cukup. Dibutuhkan: ${required} ${ingredient.unit}
+            } tidak cukup. Dibutuhkan: ${required} ${
+              ingredient.unit
             }, Tersedia: ${product?.stock || 0}`,
             "error"
           );
@@ -404,16 +482,16 @@ const Assembly: React.FC = () => {
 
       if (!result.isConfirmed) return;
 
-      // Decrease ingredient stocks
-      for (const ingredient of recipe.ingredients) {
+      const decreasePromises = recipe.ingredients.map((ingredient) => {
         const required = ingredient.quantity_required * assembleForm.quantity;
-        await db.products.decreaseStock(ingredient.product_id, required);
-      }
+        return db.products.decreaseStock(ingredient.product_id, required);
+      });
+
+      await Promise.all(decreasePromises);
 
       // Increase finished product stock
       await db.products.increaseStock(recipe.product_id, assembleForm.quantity);
 
-      // Create transaction record
       const { error: logError } = await supabase.from("assembly_logs").insert({
         recipe_id: recipe.id,
         quantity_produced: assembleForm.quantity,

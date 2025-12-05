@@ -204,7 +204,7 @@ const RFIDCards: React.FC = () => {
       .from("rfid_cards")
       .select(
         `
-        id, alias, is_admin, is_helper_card, uid, status, created_at, balance_points, avg_nilai_point
+        id, alias, is_admin, is_helper_card, is_pay_as_you_go_card, uid, status, created_at, balance_points, avg_nilai_point
       `
       )
       .order("created_at", { ascending: false });
@@ -293,6 +293,7 @@ const RFIDCards: React.FC = () => {
   >(null);
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [editIsHelper, setEditIsHelper] = useState(false);
+  const [editIsPayAsYouGo, setEditIsPayAsYouGo] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
   // History modal state
@@ -599,6 +600,7 @@ const RFIDCards: React.FC = () => {
     setEditCard(card);
     setEditIsAdmin(card.is_admin);
     setEditIsHelper(card.is_helper_card);
+    setEditIsPayAsYouGo(card.is_pay_as_you_go_card || false);
     setEditAlias(card.alias || "");
   };
 
@@ -611,6 +613,7 @@ const RFIDCards: React.FC = () => {
         .update({
           is_admin: editIsAdmin,
           is_helper_card: editIsHelper,
+          is_pay_as_you_go_card: editIsPayAsYouGo,
           alias: editAlias.trim() || null,
         })
         .eq("id", editCard.id);
@@ -1213,6 +1216,23 @@ const RFIDCards: React.FC = () => {
                           />
                           <label htmlFor="edit-helper-only" className="text-sm">
                             Kartu Helper
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id="edit-pay-as-you-go"
+                            type="checkbox"
+                            checked={editIsPayAsYouGo}
+                            onChange={(e) =>
+                              setEditIsPayAsYouGo(e.target.checked)
+                            }
+                            className="rounded"
+                          />
+                          <label
+                            htmlFor="edit-pay-as-you-go"
+                            className="text-sm"
+                          >
+                            Kartu Helper Pay-as-you-go
                           </label>
                         </div>
                       </div>

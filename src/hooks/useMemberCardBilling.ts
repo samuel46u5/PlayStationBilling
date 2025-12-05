@@ -17,18 +17,37 @@ interface MemberCardSession {
   is_mode_esp32?: boolean;
 }
 
+let minMinutesCache: Record<string, number> = {};
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 5 * 60 * 1000;
+
 async function getMinimumMinutesByConsole(consoleIds: string[]) {
   if (!consoleIds.length) return {};
+
+  const now = Date.now();
+  if (now - cacheTimestamp < CACHE_TTL && Object.keys(minMinutesCache).length > 0) {
+    const result: Record<string, number> = {};
+    for (const id of consoleIds) {
+      result[id] = minMinutesCache[id] || 0;
+    }
+    return result;
+  }
+
   const { data, error } = await supabase
     .from("consoles")
     .select("id, rate_profiles(minimum_minutes_member)")
     .in("id", consoleIds);
   if (error || !data) return {};
+
   const map: Record<string, number> = {};
   for (const row of data) {
     const min = Number(row?.rate_profiles[0]?.minimum_minutes_member) || 0;
     map[row.id] = min;
   }
+
+  minMinutesCache = { ...minMinutesCache, ...map };
+  cacheTimestamp = now;
+
   return map;
 }
 
@@ -189,7 +208,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     };
 
     // Jalankan billing setiap 30 detik
-    intervalRef.current = setInterval(processMemberCardBilling, 30000);
+    intervalRef.current = setInterval(processMemberCardBilling, 60000);
 
     // Jalankan sekali saat mount
     processMemberCardBilling();

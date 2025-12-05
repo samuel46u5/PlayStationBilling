@@ -282,6 +282,19 @@ const ActiveRentals: React.FC = () => {
   const [rentalType, setRentalType] = useState<
     "pay-as-you-go" | "prepaid" | "member-card"
   >("pay-as-you-go");
+  // const [activatedPayAsYouGoCard, setActivatedPayAsYouGoCard] =
+  //   useState<string>("");
+  const [payAsYouGoProcessing, setPayAsYouGoProcessing] = useState(false);
+  const [payAsYouGoSummary, setPayAsYouGoSummary] = useState<{
+    totalMinutes: number;
+    totalPointsDeducted: number;
+    sessionsCount: number;
+    estimatedCost: number;
+    minimumMinutes: number;
+    hourlyRate: number;
+  } | null>(null);
+  const [payAsYouGoSummaryLoading, setPayAsYouGoSummaryLoading] =
+    useState(false);
   const [scannedCardUID, setScannedCardUID] = useState<string>("");
   const [scannedCardData, setScannedCardData] = useState<any>(null);
   const [startRentalLoading, setStartRentalLoading] = useState<boolean>(false);
@@ -314,7 +327,9 @@ const ActiveRentals: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from("rfid_cards")
-        .select("uid, balance_points, status, is_helper_card")
+        .select(
+          "uid, balance_points, status, is_helper_card, is_pay_as_you_go_card"
+        )
         .eq("uid", uid)
         .single();
 
@@ -330,6 +345,109 @@ const ActiveRentals: React.FC = () => {
       setScannedCardData(null);
     }
   };
+
+  useEffect(() => {
+    const calculatePayAsYouGoSummary = async () => {
+      if (!scannedCardUID || !scannedCardData?.is_pay_as_you_go_card) {
+        setPayAsYouGoSummary(null);
+        setPayAsYouGoSummaryLoading(false);
+        return;
+      }
+
+      try {
+        const { data: logs, error: logsError } = await supabase
+          .from("card_usage_logs")
+          .select("session_id, action_type, timestamp, points_amount")
+          .eq("card_uid", scannedCardUID)
+          .eq("action_type", "balance_deduct")
+          .order("timestamp", { ascending: true });
+
+        if (logsError) throw logsError;
+
+        if (!logs || logs.length === 0) {
+          setPayAsYouGoSummary(null);
+          setPayAsYouGoSummaryLoading(false);
+          return;
+        }
+
+        // Hitung total durasi dari semua logs
+        let totalMinutes = 0;
+        let totalPointsDeducted = 0;
+        let minimumMinutes = 60;
+        let hourlyRate = 50000;
+        const sessionIds = [
+          ...new Set(logs.map((log) => log.session_id).filter(Boolean)),
+        ];
+
+        if (logs[0]?.session_id) {
+          const { data: firstSession } = await supabase
+            .from("rental_sessions")
+            .select(
+              `
+              consoles(rate_profiles(hourly_rate, minimum_minutes))
+            `
+            )
+            .eq("id", logs[0].session_id)
+            .single();
+
+          if (firstSession?.consoles?.rate_profiles) {
+            minimumMinutes =
+              firstSession.consoles?.rate_profiles.minimum_minutes ?? 60;
+            hourlyRate =
+              firstSession.consoles?.rate_profiles.hourly_rate ?? 10000;
+          }
+        }
+
+        for (const log of logs) {
+          if (log.session_id) {
+            const { data: session } = await supabase
+              .from("rental_sessions")
+              .select(
+                `
+                start_time, end_time, duration_minutes,
+                consoles(rate_profiles(hourly_rate))
+              `
+              )
+              .eq("id", log.session_id)
+              .single();
+
+            if (session?.consoles?.rate_profiles?.hourly_rate) {
+              const hourlyRate =
+                session?.consoles?.rate_profiles?.hourly_rate ?? 50000;
+              const costPerMinute = hourlyRate / 60;
+              const minutesUsed = Math.abs(log.points_amount) / costPerMinute;
+              totalMinutes += minutesUsed;
+            }
+          }
+          totalPointsDeducted += Math.abs(log.points_amount);
+        }
+
+        // Rule pay-as-you-go: minimal pembayaran per jam penuh
+        let estimatedCost = 0;
+        if (totalMinutes < minimumMinutes) {
+          estimatedCost = hourlyRate;
+        } else {
+          estimatedCost = totalPointsDeducted;
+        }
+
+        setPayAsYouGoSummary({
+          totalMinutes: Math.floor(totalMinutes),
+          totalPointsDeducted,
+          sessionsCount: sessionIds.length,
+          estimatedCost,
+          minimumMinutes,
+          hourlyRate,
+        });
+      } catch (error) {
+        console.error("Error calculating pay-as-you-go summary:", error);
+        setPayAsYouGoSummary(null);
+      } finally {
+        setPayAsYouGoSummaryLoading(false);
+      }
+    };
+
+    calculatePayAsYouGoSummary();
+  }, [scannedCardUID, scannedCardData?.is_pay_as_you_go_card]);
 
   const resetPoints = async () => {
     if (!scannedCardUID || !scannedCardData) return;
@@ -454,6 +572,7 @@ const ActiveRentals: React.FC = () => {
   // useMemberCardBilling(activeSessions);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [showCheckBalanceModal, setShowCheckBalanceModal] = useState(false);
+  const [showPayAsYouGoModal, setShowPayAsYouGoModal] = useState(false);
   const [voucherSearchTerm, setVoucherSearchTerm] = useState("");
   const [voucherList, setVoucherList] = useState<any[]>([]);
   const [showSellVoucherModal, setShowSellVoucherModal] = useState(false);
@@ -855,7 +974,7 @@ const ActiveRentals: React.FC = () => {
           .then((text) => setRelayStatus(text))
           .catch(() => setRelayStatus("-"));
       }
-    }, 30000);
+    }, 60000);
     setStatusIntervalId(interval);
     return () => clearInterval(interval);
   }, [showStartRentalModal, selectedConsole]);
@@ -6284,6 +6403,17 @@ const ActiveRentals: React.FC = () => {
           <button
             onClick={() => {
               if (!ensureCashierActive()) return;
+              setShowPayAsYouGoModal(true);
+            }}
+            className=" bg-purple-500 hover:bg-purple-600 text-white py-3 px-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <Play className="h-5 w-5" />
+            Pay-as-you-go Card
+          </button>
+
+          <button
+            onClick={() => {
+              if (!ensureCashierActive()) return;
               setShowSellVoucherModal(true);
               setVoucherQuantity(1);
             }}
@@ -6808,6 +6938,499 @@ const ActiveRentals: React.FC = () => {
                 <button
                   onClick={() => {
                     setShowCheckBalanceModal(false);
+                    setScannedCardUID("");
+                    setScannedCardData(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPayAsYouGoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Aktivasi Kartu Pay-as-you-go
+              </h2>
+
+              {/* Card Scan Status */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-blue-600 pt-1">
+                    <Play className="h-5 w-5" />
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      Scan Kartu untuk Aktivasi
+                    </h3>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Silakan scan kartu RFID yang akan digunakan untuk mode
+                      pay-as-you-go.
+                    </p>
+                    {/* 
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Input UID kartu manual"
+                        value={scannedCardUID}
+                        onChange={(e) => setScannedCardUID(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (e.currentTarget.value.trim()) {
+                              fetchCardData(e.currentTarget.value.trim());
+                            }
+                          }
+                        }}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (scannedCardUID.trim()) {
+                            fetchCardData(scannedCardUID.trim());
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+                      >
+                        Scan
+                      </button>
+                    </div> */}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Detected Status */}
+              {scannedCardUID && scannedCardData && (
+                <div
+                  className={`border rounded-lg p-4 mb-4 ${
+                    scannedCardData?.is_pay_as_you_go_card
+                      ? "bg-green-50 border-green-200"
+                      : "bg-yellow-50 border-yellow-200"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`pt-1 ${
+                        scannedCardData?.is_pay_as_you_go_card
+                          ? "text-green-600"
+                          : "text-yellow-600"
+                      }`}
+                    >
+                      {scannedCardData?.is_pay_as_you_go_card ? (
+                        <svg
+                          className="h-5 w-5"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="h-5 w-5"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h3
+                        className={`text-sm font-medium ${
+                          scannedCardData?.is_pay_as_you_go_card
+                            ? "text-green-800"
+                            : "text-yellow-800"
+                        }`}
+                      >
+                        {scannedCardData?.is_pay_as_you_go_card
+                          ? "Kartu Pay-as-you-go Terdeteksi"
+                          : "Kartu Bukan Tipe Pay-as-you-go"}
+                      </h3>
+                      <p
+                        className={`text-sm mt-1 ${
+                          scannedCardData?.is_pay_as_you_go_card
+                            ? "text-green-700"
+                            : "text-yellow-700"
+                        }`}
+                      >
+                        UID: {scannedCardUID}
+                      </p>
+                      <p
+                        className={`text-sm font-medium ${
+                          scannedCardData?.status === "active"
+                            ? scannedCardData?.is_pay_as_you_go_card
+                              ? "text-green-600"
+                              : "text-yellow-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        Status:{" "}
+                        {scannedCardData?.status === "active"
+                          ? "Aktif"
+                          : "Tidak Aktif"}
+                      </p>
+
+                      {scannedCardData?.status === "active" &&
+                        scannedCardData?.is_pay_as_you_go_card && (
+                          <div className="mt-3 p-3 bg-white rounded border">
+                            <div className="space-y-2">
+                              <div className="text-xs font-medium text-gray-700 mb-2">
+                                Ringkasan Penggunaan Kartu
+                              </div>
+
+                              {payAsYouGoSummaryLoading ? (
+                                <div className="text-xs text-gray-500 text-center py-2">
+                                  Menghitung ringkasan penggunaan...
+                                </div>
+                              ) : payAsYouGoSummary ? (
+                                <>
+                                  <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                      <span className="text-gray-600">
+                                        Total Durasi:
+                                      </span>
+                                      <div className="font-medium text-blue-600">
+                                        {payAsYouGoSummary.totalMinutes} menit
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-600">
+                                        Minimum Durasi:
+                                      </span>
+                                      <div className="font-medium text-orange-600">
+                                        {payAsYouGoSummary.minimumMinutes} menit
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-600">
+                                        Points Terpotong:
+                                      </span>
+                                      <div className="font-medium text-red-600">
+                                        -
+                                        {payAsYouGoSummary.totalPointsDeducted.toLocaleString(
+                                          "id-ID"
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-600">
+                                        Tarif Per Jam:
+                                      </span>
+                                      <div className="font-medium text-green-600">
+                                        Rp{" "}
+                                        {payAsYouGoSummary.hourlyRate.toLocaleString(
+                                          "id-ID"
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <span className="text-gray-600">
+                                        Biaya Harus Dibayar:
+                                      </span>
+                                      <div className="font-bold text-green-600 text-sm">
+                                        Rp{" "}
+                                        {payAsYouGoSummary.estimatedCost.toLocaleString(
+                                          "id-ID"
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-xs text-gray-600 space-y-1 mt-2 pt-2 border-t">
+                                    <div className="font-medium">
+                                      Rule Pay-as-you-go:
+                                    </div>
+                                    <div>
+                                      •{" "}
+                                      {payAsYouGoSummary.totalMinutes <
+                                      payAsYouGoSummary.minimumMinutes
+                                        ? `Durasi ${payAsYouGoSummary.totalMinutes} menit < minimum ${payAsYouGoSummary.minimumMinutes} menit → bayar tarif penuh`
+                                        : `Durasi ${payAsYouGoSummary.totalMinutes} menit ≥ minimum ${payAsYouGoSummary.minimumMinutes} menit → bayar sesuai points terpotong`}
+                                    </div>
+                                    <div>
+                                      • Klik "Bayar" untuk menyelesaikan
+                                      pembayaran
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-gray-500 text-center py-2">
+                                  Kartu belum pernah digunakan untuk bermain
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                      {scannedCardData?.status === "active" &&
+                        !scannedCardData?.is_pay_as_you_go_card && (
+                          <div className="mt-3 p-3 bg-yellow-100 rounded border border-yellow-300">
+                            <p className="text-xs text-yellow-800 mb-2 font-medium">
+                              Peringatan: Kartu ini bukan tipe Pay-as-you-go
+                            </p>
+                            <ul className="text-xs text-yellow-700 space-y-1">
+                              <li>
+                                • Kartu ini tidak dapat digunakan untuk mode
+                                Pay-as-you-go
+                              </li>
+                              <li>
+                                • Silakan gunakan kartu yang bertipe
+                                Pay-as-you-go
+                              </li>
+                            </ul>
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Error State */}
+              {scannedCardUID && !scannedCardData && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="text-red-600 pt-1">
+                      <svg
+                        className="h-5 w-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-red-800">
+                        Kartu Tidak Ditemukan
+                      </h3>
+                      <p className="text-sm text-red-700 mt-1">
+                        UID {scannedCardUID} tidak terdaftar dalam sistem.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                {scannedCardData?.status === "active" &&
+                  scannedCardData?.is_pay_as_you_go_card && (
+                    <>
+                      <button
+                        onClick={async () => {
+                          setPayAsYouGoProcessing(true);
+                          try {
+                            const [updateResult, deleteResult] =
+                              await Promise.all([
+                                supabase
+                                  .from("rfid_cards")
+                                  .update({
+                                    balance_points: 100000,
+                                    avg_nilai_point: 1,
+                                    total_poin_ever: 100000,
+                                    total_uang_ever: 100000,
+                                  })
+                                  .eq("uid", scannedCardUID),
+
+                                supabase
+                                  .from("card_usage_logs")
+                                  .delete()
+                                  .eq("card_uid", scannedCardUID),
+                              ]);
+
+                            if (updateResult.error) {
+                              throw new Error(
+                                `Gagal update saldo kartu: ${updateResult.error.message}`
+                              );
+                            }
+
+                            if (deleteResult.error) {
+                              console.warn(
+                                "Warning: Gagal menghapus logs kartu:",
+                                deleteResult.error
+                              );
+                            }
+
+                            // setRentalType("pay-as-you-go");
+                            // setActivatedPayAsYouGoCard(scannedCardUID);
+                            setShowPayAsYouGoModal(false);
+                            setScannedCardUID("");
+                            setScannedCardData(null);
+                            Swal.fire(
+                              "Berhasil",
+                              "Saldo kartu berhasil diset menjadi 100.000 dan logs lama dihapus",
+                              "success"
+                            );
+                          } catch (error) {
+                            console.error("Error setting card balance:", error);
+                            Swal.fire(
+                              "Gagal",
+                              "Gagal mengatur saldo kartu",
+                              "error"
+                            );
+                          } finally {
+                            setPayAsYouGoProcessing(false);
+                          }
+                        }}
+                        disabled={payAsYouGoProcessing}
+                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
+                      >
+                        {payAsYouGoProcessing
+                          ? "Memproses..."
+                          : "Aktivasi Kartu"}
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          setPayAsYouGoProcessing(true);
+                          try {
+                            // Ambil logs kartu untuk mendapatkan session terbaru
+                            const { data: logs, error: logsError } =
+                              await supabase
+                                .from("card_usage_logs")
+                                .select(
+                                  "session_id, action_type, timestamp, points_amount"
+                                )
+                                .eq("card_uid", scannedCardUID)
+                                .eq("action_type", "balance_deduct")
+                                .order("timestamp", { ascending: true })
+                                .limit(1);
+
+                            if (logsError) throw logsError;
+
+                            if (!logs || logs.length === 0) {
+                              Swal.fire(
+                                "Info",
+                                "Tidak ada durasi main yang tercatat",
+                                "info"
+                              );
+                              return;
+                            }
+
+                            const latestLog = logs[0];
+
+                            // Ambil session details dari session terbaru
+                            const { data: session, error: sessionError } =
+                              await supabase
+                                .from("rental_sessions")
+                                .select(
+                                  `
+                                  id, console_id, start_time, end_time, duration_minutes,
+                                  consoles(name, location, rate_profiles(hourly_rate, capital, minimum_minutes))
+                                `
+                                )
+                                .eq("id", latestLog.session_id)
+                                .single();
+
+                            if (sessionError || !session) {
+                              Swal.fire(
+                                "Error",
+                                "Tidak dapat menemukan data session",
+                                "error"
+                              );
+                              return;
+                            }
+
+                            // Hitung durasi berdasarkan session
+                            const durationMinutes =
+                              session.duration_minutes ??
+                              (session.start_time
+                                ? Math.ceil(
+                                    (Date.now() -
+                                      new Date(session.start_time).getTime()) /
+                                      (1000 * 60)
+                                  )
+                                : 0);
+
+                            if (durationMinutes === 0) {
+                              Swal.fire(
+                                "Info",
+                                "Durasi main tidak dapat dihitung",
+                                "info"
+                              );
+                              return;
+                            }
+
+                            // Gunakan hourly rate dan minimum minutes dari session
+                            const hourlyRate =
+                              session.consoles?.rate_profiles?.hourly_rate ??
+                              50000;
+                            const minimumMinutes =
+                              session.consoles?.rate_profiles
+                                ?.minimum_minutes ?? 60;
+
+                            // Logika perhitungan biaya berdasarkan rule pay-as-you-go
+                            let totalCost = 0;
+                            if (durationMinutes < minimumMinutes) {
+                              // Jika di bawah minimum, bayar hourly rate penuh
+                              totalCost = hourlyRate;
+                            } else {
+                              // Jika sudah di atas minimum, bayar sesuai points yang sudah terpotong
+                              totalCost = Math.abs(latestLog.points_amount);
+                            }
+
+                            // Buat session object untuk modal payment (sesuai format pay-as-you-go)
+                            const paymentSession = {
+                              ...session,
+                              total_cost: totalCost,
+                              payment_status: "pending" as const,
+                            };
+
+                            // Panggil modal payment seperti pay-as-you-go biasa
+                            setShowPaymentModal({
+                              session: paymentSession,
+                              productsTotal: 0,
+                            });
+                            setPaymentAmount(totalCost);
+                            setChangeAmount(0);
+                          } catch (error) {
+                            console.error("Error preparing payment:", error);
+                            Swal.fire(
+                              "Gagal",
+                              "Gagal mempersiapkan pembayaran",
+                              "error"
+                            );
+                          } finally {
+                            setPayAsYouGoProcessing(false);
+                          }
+                        }}
+                        disabled={payAsYouGoProcessing}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed font-medium transition-colors"
+                      >
+                        {payAsYouGoProcessing ? "Memproses..." : "Bayar"}
+                      </button>
+                    </>
+                  )}
+
+                {scannedCardData?.status === "active" &&
+                  !scannedCardData?.is_pay_as_you_go_card && (
+                    <div className="flex-1 px-4 py-2 text-center bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed">
+                      Kartu Tidak Valid
+                    </div>
+                  )}
+
+                <button
+                  onClick={() => {
+                    setShowPayAsYouGoModal(false);
                     setScannedCardUID("");
                     setScannedCardData(null);
                   }}
@@ -9729,50 +10352,50 @@ const ActiveRentals: React.FC = () => {
                           </button>
                         </div>
                       ) : (
-                        // <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                        //   <p className="text-sm text-yellow-800">
-                        //     Silakan tempelkan kartu RFID untuk menggunakan
-                        //     member card mode.
-                        //   </p>
-                        //   <p className="text-xs text-yellow-600 mt-1">
-                        //     Kartu akan otomatis terdeteksi saat di-tempel.
-                        //   </p>
-                        // </div>
-                        <div className="flex flex-col gap-2">
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                            <p className="text-sm text-yellow-800">
-                              Silakan scan kartu RFID atau masukkan UID manual.
-                            </p>
-                            {/* <input
-                              type="text"
-                              placeholder="Input UID kartu manual"
-                              value={scannedCardUID}
-                              onChange={(e) =>
-                                setScannedCardUID(e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                }
-                              }}
-                              className="mt-2 px-3 py-2 border border-gray-300 rounded-lg"
-                            /> */}
-                            <p className="text-xs text-yellow-600 mt-1">
-                              Kartu akan otomatis terdeteksi saat di-scan
-                            </p>
-                          </div>
-                          {/* <button
-                            type="button"
-                            onClick={() => {
-                              if (scannedCardUID.trim()) {
-                                fetchCardData(scannedCardUID.trim());
-                              }
-                            }}
-                            className="mt-2 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
-                          >
-                            Cek Kartu
-                          </button> */}
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                          <p className="text-sm text-yellow-800">
+                            Silakan tempelkan kartu RFID untuk menggunakan
+                            member card mode.
+                          </p>
+                          <p className="text-xs text-yellow-600 mt-1">
+                            Kartu akan otomatis terdeteksi saat di-tempel.
+                          </p>
                         </div>
+                        // <div className="flex flex-col gap-2">
+                        //   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        //     <p className="text-sm text-yellow-800">
+                        //       Silakan scan kartu RFID atau masukkan UID manual.
+                        //     </p>
+                        //     <input
+                        //       type="text"
+                        //       placeholder="Input UID kartu manual"
+                        //       value={scannedCardUID}
+                        //       onChange={(e) =>
+                        //         setScannedCardUID(e.target.value)
+                        //       }
+                        //       onKeyDown={(e) => {
+                        //         if (e.key === "Enter") {
+                        //           e.preventDefault();
+                        //         }
+                        //       }}
+                        //       className="mt-2 px-3 py-2 border border-gray-300 rounded-lg"
+                        //     />
+                        //     <p className="text-xs text-yellow-600 mt-1">
+                        //       Kartu akan otomatis terdeteksi saat di-scan
+                        //     </p>
+                        //   </div>
+                        //   {/* <button
+                        //     type="button"
+                        //     onClick={() => {
+                        //       if (scannedCardUID.trim()) {
+                        //         fetchCardData(scannedCardUID.trim());
+                        //       }
+                        //     }}
+                        //     className="mt-2 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+                        //   >
+                        //     Cek Kartu
+                        //   </button> */}
+                        // </div>
                       )}
                     </div>
                   )}
