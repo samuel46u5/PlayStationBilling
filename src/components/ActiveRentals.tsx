@@ -471,6 +471,7 @@ const ActiveRentals: React.FC = () => {
           total_poin_ever: 0,
           total_uang_ever: 0,
         });
+        await new Promise((resolve) => setTimeout(resolve, 500));
         Swal.fire("Berhasil", "Points berhasil direset menjadi 0", "success");
       } else {
         Swal.fire("Gagal", "Gagal mereset points", "error");
