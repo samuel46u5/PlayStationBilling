@@ -25,6 +25,7 @@ import RFIDCards from "./components/RFIDCards";
 import LoginPage from "./pages/LoginPage";
 import { useAuth } from "./contexts/AuthContext";
 import { TimerProvider } from "./contexts/TimerContext";
+import Games from "./components/Games";
 
 const App: React.FC = () => {
   return (
@@ -69,6 +70,8 @@ const AppLayout: React.FC = () => {
         return <Products />;
       case "assembly":
         return <Assembly />;
+      case "games":
+        return <Games />;
       case "sales":
         return <Sales />;
       // case "payments":

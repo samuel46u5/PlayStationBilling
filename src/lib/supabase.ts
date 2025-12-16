@@ -124,7 +124,7 @@ export const db = {
         .select(`
           *,
           equipment_types(name, category),
-          rate_profiles(name, hourly_rate, daily_rate)
+          rate_profiles(name, hourly_rate)
         `)
         .eq('is_active', true);
       
@@ -132,11 +132,141 @@ export const db = {
       return data;
     },
 
+    async getById(id: string) {
+      const { data, error } = await supabase
+        .from('consoles')
+        .select(`
+          *
+        `)
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+
     async updateStatus(id: string, status: string) {
       return db.update('consoles', id, { status });
+    },
+    
+    async addInstalledGame(consoleId: string, gameId: string) {
+      // Get current console
+      const console = await this.getById(consoleId);
+      if (!console) throw new Error('Console not found');
+
+      const currentInstalled = console.installed_games || [];
+      if (!currentInstalled.includes(gameId)) {
+        currentInstalled.push(gameId);
+        await db.update("consoles", consoleId, { installed_games: currentInstalled });
+      }
+    },
+
+    async removeInstalledGame(consoleId: string, gameId: string) {
+      const console = await this.getById(consoleId);
+      if (!console) throw new Error('Console not found');
+
+      const currentInstalled = console.installed_games || [];
+      const updatedInstalled = currentInstalled.filter(id => id !== gameId);
+      await db.update("consoles", consoleId, { installed_games: updatedInstalled });
+    },
+
+    async getConsoleGames(consoleId: string) {
+      const console = await this.getById(consoleId);
+      if (!console) return { installed: [], available: [] };
+
+      return {
+        installed: console.installed_games || []
+      };
+    },
+
+    async getAvailableGames(consoleId: string) {
+      try {
+        const console = await this.getById(consoleId);
+        if (!console) return [];
+
+        // Get all active games and filter by platform compatibility
+        const allGames = await db.games.getAll();
+        
+        if (!Array.isArray(allGames)) {
+          console.warn('Failed to fetch games:', allGames);
+          return [];
+        }
+
+        return allGames.filter((game: any) => 
+          game.is_active && 
+          game.platform?.some((platform: string) => {
+            const platformMapping = {
+              'ps3': 'PS3',
+              'ps4': 'PS4', 
+              'ps5': 'PS5',
+              'billiard': 'Billiard'
+            };
+            return platformMapping[platform as keyof typeof platformMapping] === console.equipment_type_id;
+          })
+        );
+      } catch (error) {
+        console.error('Error fetching available games:', error);
+        return [];
+      }
     }
   },
 
+  games: {
+    async getAll() {
+      return await db.select('games');
+    },
+
+    async getById(id: string) {
+      const data = await db.select('games', '*', { id });
+      return data[0] || null;
+    },
+
+    async getByPlatform(platformId: string) {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .contains('platform', [platformId]);
+      if (error) throw error;
+      return data;
+    },
+
+    async create(gameData: any) {
+      const user = await getCurrentUserSafe();
+      const game = {
+        ...gameData,
+        // createdBy: user?.id || 'system',
+        // createdAt: new Date().toISOString(),
+        // updatedAt: new Date().toISOString()
+      };
+      return await db.insert('games', game);
+    },
+
+    async update(id: string, gameData: any) {
+      const updateData = {
+        ...gameData,
+        updated_at: new Date().toISOString()
+      };
+      return await db.update('games', id, updateData);
+    },
+
+    async delete(id: string) {
+      return await db.delete('games', id);
+    }
+  },
+
+  equipmentTypes: {
+    async getAll() {
+      return await db.select('equipment_types');
+    },
+
+    async getById(id: string) {
+      const data = await db.select('equipment_types', '*', { id });
+      return data[0] || null;
+    },
+
+    async getActive() {
+      return await db.select('equipment_types', '*', { is_active: true });
+    },
+  },
   products: {
     async getAll() {
       const { data, error } = await supabase

@@ -1,0 +1,994 @@
+import React, { useState, useEffect } from "react";
+import {
+  Gamepad2,
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Check,
+  X,
+  Settings,
+  Package,
+  Users,
+  Calendar,
+  HardDrive,
+} from "lucide-react";
+import { db } from "../lib/supabase";
+import Swal from "sweetalert2";
+import type { Game, Console, EquipmentType } from "../types";
+
+const Games: React.FC = () => {
+  const [games, setGames] = useState<Game[]>([]);
+  const [consoles, setConsoles] = useState<Console[]>([]);
+  const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
+  const [selectedGenre, setSelectedGenre] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"games" | "consoles">("games");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
+  const [selectedConsole, setSelectedConsole] = useState<string | null>(null);
+
+  // Form state for adding/editing games
+  const [gameForm, setGameForm] = useState({
+    title: "",
+    platform: [] as string[],
+    genre: [] as string[],
+    developer: "",
+    publisher: "",
+    release_year: "",
+    description: "",
+    file_size_gb: "",
+    cover_image_url: "",
+    is_multiplayer: false,
+    max_players: "",
+    is_active: true,
+  });
+
+  // Available options
+  const platformOptions = [
+    { id: "ET006", label: "Playstation 3" },
+    { id: "ET001", label: "PlayStation 4" },
+    { id: "ET002", label: "PlayStation 5" },
+  ];
+
+  const genreOptions = [
+    "Action",
+    "Adventure",
+    "RPG",
+    "Strategy",
+    "Sports",
+    "Racing",
+    "Fighting",
+    "Horror",
+    "Other",
+  ];
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [gamesData, consolesData, equipmentTypesData] = await Promise.all([
+        db.games.getAll(),
+        db.consoles.getAll(),
+        db.equipmentTypes.getActive(),
+      ]);
+
+      setGames(gamesData || []);
+      setConsoles(consolesData || []);
+      setEquipmentTypes(equipmentTypesData || []);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      Swal.fire("Error", "Failed to load data", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setGameForm({
+      title: "",
+      platform: [],
+      genre: [],
+      developer: "",
+      publisher: "",
+      release_year: "",
+      description: "",
+      file_size_gb: "",
+      cover_image_url: "",
+      is_multiplayer: false,
+      max_players: "",
+      is_active: true,
+    });
+  };
+
+  const handleSubmitGame = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!gameForm.title.trim()) {
+      Swal.fire("Error", "Game title is required", "error");
+      return;
+    }
+
+    if (gameForm.platform.length === 0) {
+      Swal.fire("Error", "At least one platform must be selected", "error");
+      return;
+    }
+
+    try {
+      const gameData = {
+        ...gameForm,
+        release_year: gameForm.release_year
+          ? parseInt(gameForm.release_year)
+          : undefined,
+        file_size_gb: gameForm.file_size_gb
+          ? parseFloat(gameForm.file_size_gb)
+          : undefined,
+        max_players: gameForm.max_players
+          ? parseInt(gameForm.max_players)
+          : undefined,
+      };
+
+      if (editingGame) {
+        await db.games.update(editingGame.id, gameData);
+        Swal.fire("Success", "Game updated successfully", "success");
+      } else {
+        await db.games.create(gameData);
+        Swal.fire("Success", "Game added successfully", "success");
+      }
+
+      resetForm();
+      setShowAddForm(false);
+      setEditingGame(null);
+      loadData();
+    } catch (error) {
+      console.error("Error saving game:", error);
+      Swal.fire("Error", "Failed to save game", "error");
+    }
+  };
+
+  const handleEditGame = (game: Game) => {
+    setEditingGame(game);
+    setGameForm({
+      title: game.title,
+      platform: game.platform || [],
+      genre: game.genre || [],
+      developer: game.developer || "",
+      publisher: game.publisher || "",
+      release_year: game.release_year?.toString() || "",
+      description: game.description || "",
+      file_size_gb: game.file_size_gb?.toString() || "",
+      //   esrbRating: game.esrbRating || "E",
+      cover_image_url: game.cover_image_url || "",
+      is_multiplayer: game.is_multiplayer || false,
+      max_players: game.max_players?.toString() || "",
+      is_active: game.is_active,
+    });
+    setShowAddForm(true);
+  };
+
+  const handleDeleteGame = async (gameId: string, title: string) => {
+    const result = await Swal.fire({
+      title: "Hapus Game",
+      text: `Apakah Anda yakin ingin menghapus "${title}"?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Ya, hapus!",
+      cancelButtonText: "Batal",
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await db.games.delete(gameId);
+        Swal.fire("Terhapus!", "Game telah berhasil dihapus.", "success");
+        loadData();
+      } catch (error) {
+        console.error("Error deleting game:", error);
+        Swal.fire("Error", "Gagal menghapus game", "error");
+      }
+    }
+  };
+
+  const handleAssignGame = async (consoleId: string, gameId: string) => {
+    try {
+      const console = consoles.find((c) => c.id === consoleId);
+      if (!console) {
+        Swal.fire("Error", "Console not found", "error");
+        return;
+      }
+
+      const availableGames = getAvailableGamesForConsole(console);
+      const installedGames = getInstalledGamesForConsole(console);
+
+      const isAvailable = availableGames.some((game) => game.id === gameId);
+      const isInstalled = installedGames.includes(gameId);
+
+      if (!isAvailable) {
+        Swal.fire("Error", "Game tidak tersedia untuk console ini", "error");
+        return;
+      }
+
+      if (isInstalled) {
+        await db.consoles.removeInstalledGame(consoleId, gameId);
+        Swal.fire("Berhasil", "Game berhasil dihapus dari console", "success");
+      } else {
+        // Add to installed
+        await db.consoles.addInstalledGame(consoleId, gameId);
+        Swal.fire("Berhasil", "Game berhasil diinstall ke console", "success");
+      }
+
+      loadData();
+    } catch (error) {
+      console.error("Error updating game assignment:", error);
+      Swal.fire("Error", "Gagal memperbarui assignment game", "error");
+    }
+  };
+
+  const getPlatformLabel = (platformId: string) => {
+    const platform = platformOptions.find((p) => p.id === platformId);
+    return platform ? platform.label : platformId;
+  };
+
+  const platformToEquipmentType = {
+    ps3: "ET006",
+    ps4: "ET001",
+    ps5: "ET002",
+  };
+
+  const getAvailableGamesForConsole = (console: Console) => {
+    if (!console.equipment_type_id) return [];
+
+    return games.filter(
+      (game) =>
+        game.is_active && game.platform?.includes(console.equipment_type_id)
+    );
+  };
+
+  const getInstalledGamesForConsole = (console: Console) => {
+    return console.installed_games || [];
+  };
+
+  const getConsoleGames = (consoleId: string) => {
+    const console = consoles.find((c) => c.id === consoleId);
+    if (!console) return { installed: [], available: [] };
+
+    return {
+      installed: getInstalledGamesForConsole(console),
+      available: getAvailableGamesForConsole(console),
+    };
+  };
+
+  const filteredGames = games.filter((game) => {
+    const matchesSearch =
+      game.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      game.developer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      game.publisher?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesPlatform =
+      selectedPlatform === "all" || game.platform.includes(selectedPlatform);
+    const matchesGenre =
+      selectedGenre === "all" || game.genre.includes(selectedGenre);
+
+    return matchesSearch && matchesPlatform && matchesGenre && game.is_active;
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+            Master Game Management
+          </h1>
+          <p className="text-gray-600 mt-1">
+            Kelola koleksi game dan distribusinya ke console
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() =>
+              setViewMode(viewMode === "games" ? "consoles" : "games")
+            }
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+          >
+            <Settings className="h-4 w-4" />
+            {viewMode === "games" ? "View Consoles" : "View Games"}
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowAddForm(true);
+              setEditingGame(null);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Add Game
+          </button>
+        </div>
+      </div>
+
+      {/* View Toggle and Filters */}
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex flex-wrap gap-4 items-center justify-between">
+          <div className="flex gap-4 items-center">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode("games")}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  viewMode === "games"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Game Library ({games.length})
+              </button>
+              <button
+                onClick={() => setViewMode("consoles")}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  viewMode === "consoles"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Console ({consoles.length})
+              </button>
+            </div>
+          </div>
+
+          {viewMode === "games" && (
+            <div className="flex gap-4 items-center">
+              <div className="relative">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search games..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <select
+                value={selectedPlatform}
+                onChange={(e) => setSelectedPlatform(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">All Platforms</option>
+                {platformOptions.map((platform) => (
+                  <option key={platform.id} value={platform.id}>
+                    {platform.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={selectedGenre}
+                onChange={(e) => setSelectedGenre(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">All Genres</option>
+                {genreOptions.map((genre) => (
+                  <option key={genre} value={genre}>
+                    {genre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add/Edit Game Form Modal*/}
+      {showAddForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">
+                  {editingGame ? "Edit Game" : "Add New Game"}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setEditingGame(null);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <form onSubmit={handleSubmitGame} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Game Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={gameForm.title}
+                      onChange={(e) =>
+                        setGameForm({ ...gameForm, title: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Developer
+                    </label>
+                    <input
+                      type="text"
+                      value={gameForm.developer}
+                      onChange={(e) =>
+                        setGameForm({ ...gameForm, developer: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Publisher
+                    </label>
+                    <input
+                      type="text"
+                      value={gameForm.publisher}
+                      onChange={(e) =>
+                        setGameForm({ ...gameForm, publisher: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Release Year
+                    </label>
+                    <input
+                      type="number"
+                      value={gameForm.release_year}
+                      onChange={(e) =>
+                        setGameForm({
+                          ...gameForm,
+                          release_year: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="1950"
+                      max={new Date().getFullYear() + 1}
+                    />
+                  </div>
+
+                  {/* <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ESRB Rating
+                    </label>
+                    <select
+                      value={gameForm.esrbRating}
+                      onChange={(e) =>
+                        setGameForm({
+                          ...gameForm,
+                          esrbRating: e.target.value as any,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="E">E - Everyone</option>
+                      <option value="E10+">E10+ - Everyone 10+</option>
+                      <option value="T">T - Teen</option>
+                      <option value="M">M - Mature</option>
+                      <option value="A">A - Adult Only</option>
+                      <option value="RP">RP - Rating Pending</option>
+                    </select>
+                  </div> */}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      File Size (GB)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={gameForm.file_size_gb}
+                      onChange={(e) =>
+                        setGameForm({
+                          ...gameForm,
+                          file_size_gb: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Platforms */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Platforms *
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {platformOptions.map((platform) => (
+                      <label key={platform.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={gameForm.platform.includes(platform.id)}
+                          onChange={(e) => {
+                            const updatedPlatforms = e.target.checked
+                              ? [...gameForm.platform, platform.id]
+                              : gameForm.platform.filter(
+                                  (p) => p !== platform.id
+                                );
+                            setGameForm({
+                              ...gameForm,
+                              platform: updatedPlatforms,
+                            });
+                          }}
+                          className="mr-2"
+                        />
+                        {platform.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Genres */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Genres
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {genreOptions.map((genre) => (
+                      <label key={genre} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={gameForm.genre.includes(genre)}
+                          onChange={(e) => {
+                            const updatedGenres = e.target.checked
+                              ? [...gameForm.genre, genre]
+                              : gameForm.genre.filter((g) => g !== genre);
+                            setGameForm({ ...gameForm, genre: updatedGenres });
+                          }}
+                          className="mr-2"
+                        />
+                        {genre}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Multiplayer options */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isMultiplayer"
+                      checked={gameForm.is_multiplayer}
+                      onChange={(e) =>
+                        setGameForm({
+                          ...gameForm,
+                          is_multiplayer: e.target.checked,
+                        })
+                      }
+                      className="mr-2"
+                    />
+                    <label
+                      htmlFor="isMultiplayer"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Multiplayer Game
+                    </label>
+                  </div>
+
+                  {gameForm.is_multiplayer && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Max Players
+                      </label>
+                      <input
+                        type="number"
+                        value={gameForm.max_players}
+                        onChange={(e) =>
+                          setGameForm({
+                            ...gameForm,
+                            max_players: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        min="1"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isActive"
+                      checked={gameForm.is_active}
+                      onChange={(e) =>
+                        setGameForm({
+                          ...gameForm,
+                          is_active: e.target.checked,
+                        })
+                      }
+                      className="mr-2"
+                    />
+                    <label
+                      htmlFor="isActive"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Active
+                    </label>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={gameForm.description}
+                    onChange={(e) =>
+                      setGameForm({ ...gameForm, description: e.target.value })
+                    }
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Game description..."
+                  />
+                </div>
+
+                <div className="flex justify-end gap-4 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setEditingGame(null);
+                      resetForm();
+                    }}
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    {editingGame ? "Update Game" : "Add Game"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Games View */}
+      {viewMode === "games" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredGames.map((game) => (
+            <div
+              key={game.id}
+              className="bg-white rounded-lg shadow-sm border overflow-hidden"
+            >
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {game.title}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {game.developer && `${game.developer}`}
+                      {game.developer && game.release_year && " • "}
+                      {game.release_year}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEditGame(game)}
+                      className="p-1 text-gray-400 hover:text-blue-600"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteGame(game.id, game.title)}
+                      className="p-1 text-gray-400 hover:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex flex-wrap gap-1">
+                    {game.platform.map((platform) => (
+                      <span
+                        key={platform}
+                        className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                      >
+                        {getPlatformLabel(platform)}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1">
+                    {game.genre.slice(0, 3).map((genre) => (
+                      <span
+                        key={genre}
+                        className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
+                      >
+                        {genre}
+                      </span>
+                    ))}
+                    {game.genre.length > 3 && (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                        +{game.genre.length - 3}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {game.description && (
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                    {game.description}
+                  </p>
+                )}
+
+                <div className="flex justify-between items-center text-sm text-gray-500">
+                  <div className="flex items-center gap-4">
+                    {game.file_size_gb && (
+                      <span className="flex items-center gap-1">
+                        <HardDrive className="h-4 w-4" />
+                        {game.file_size_gb}GB
+                      </span>
+                    )}
+                    {game.is_multiplayer && (
+                      <span className="flex items-center gap-1">
+                        <Users className="h-4 w-4" />
+                        Multi
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`px-2 py-1 text-xs rounded-full ${
+                      game.is_active
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {game.is_active ? "Active" : "Inactive"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Consoles View */}
+      {viewMode === "consoles" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {consoles.map((console) => {
+            const consoleGamesList = getConsoleGames(console.id);
+            return (
+              <div
+                key={console.id}
+                className="bg-white rounded-lg shadow-sm border overflow-hidden"
+              >
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {console.name}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        {console.equipment_types?.name}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full ${
+                        console.status === "available"
+                          ? "bg-green-100 text-green-800"
+                          : console.status === "rented"
+                          ? "bg-blue-100 text-blue-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {console.status}
+                    </span>
+                  </div>
+
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      Installed Games ({console.installed_games?.length || 0})
+                    </h4>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {console.installed_games &&
+                      console.installed_games.length > 0 ? (
+                        console.installed_games.map((gameId) => {
+                          const game = games.find((g) => g.id === gameId);
+                          return game ? (
+                            <div
+                              key={gameId}
+                              className="flex items-center justify-between bg-gray-50 rounded p-2"
+                            >
+                              <span className="text-sm font-medium">
+                                {game.title}
+                              </span>
+                              <button
+                                onClick={() =>
+                                  handleAssignGame(console.id, game.id)
+                                }
+                                className="text-green-600 hover:text-green-800"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : null;
+                        })
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">
+                          No games installed
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <button
+                      onClick={() => setSelectedConsole(console.id)}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Manage Games
+                    </button>
+                    <span className="text-xs text-gray-500">
+                      {console.location}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Console Game Management Modal */}
+      {selectedConsole && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">
+                  Manage Games -{" "}
+                  {consoles.find((c) => c.id === selectedConsole)?.name}
+                </h2>
+                <button
+                  onClick={() => setSelectedConsole(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              {(() => {
+                const console = consoles.find((c) => c.id === selectedConsole);
+                if (!console) return null;
+
+                const availableGames = getAvailableGamesForConsole(console);
+                const installedGames = getInstalledGamesForConsole(console);
+                const allRelevantGames = games.filter(
+                  (game) =>
+                    game.is_active &&
+                    (availableGames.some((g) => g.id === game.id) ||
+                      installedGames.includes(game.id))
+                );
+
+                if (allRelevantGames.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <div className="text-gray-400 mb-4">
+                        <svg
+                          className="mx-auto h-12 w-12"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        Tidak Ada Game Tersedia
+                      </h3>
+                      <p className="text-gray-500 mb-4">
+                        Belum ada game yang kompatibel dengan console ini atau
+                        sudah terinstall.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {allRelevantGames.map((game) => {
+                      const isAvailable = availableGames.some(
+                        (g) => g.id === game.id
+                      );
+                      const isInstalled = installedGames.includes(game.id);
+
+                      return (
+                        <div key={game.id} className="border rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <h3 className="font-medium">{game.title}</h3>
+                            <div className="flex items-center gap-2">
+                              {isInstalled && (
+                                <Check className="h-4 w-4 text-green-600" />
+                              )}
+                              <button
+                                onClick={() =>
+                                  handleAssignGame(selectedConsole!, game.id)
+                                }
+                                className={`px-3 py-1 text-xs rounded ${
+                                  isInstalled
+                                    ? "bg-green-100 text-green-800 hover:bg-green-200"
+                                    : "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                }`}
+                              >
+                                {isInstalled ? "Installed" : "Install"}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            <p>
+                              {game.developer} • {game.release_year}
+                            </p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {game.platform.map((p) => (
+                                <span
+                                  key={p}
+                                  className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded"
+                                >
+                                  {getPlatformLabel(p)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Games;

@@ -61,6 +61,25 @@ export interface Console {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  installed_games?: string[];
+}
+
+export interface Game {
+  id: string;
+  title: string;
+  platform: string[]; 
+  genre: string[];
+  developer?: string;
+  publisher?: string;
+  release_year?: number;
+  description?: string;
+  file_size_gb?: number;
+  cover_image_url?: string;
+  is_multiplayer: boolean;
+  max_players?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // Sparepart Management
