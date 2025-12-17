@@ -17,6 +17,15 @@ export const supabase = createClient(supabaseUrl, supabaseServiceRole, {
   }
 });
 
+// export const supabase2 = createClient(supabaseUrl, supabaseServiceRole, {
+//   auth: {
+//     autoRefreshToken: true,
+//     persistSession: true,
+//     detectSessionInUrl: true
+//   }
+// });
+
+
 // Helper function to get current user with proper error handling
 async function getCurrentUserSafe() {
   try {
@@ -1042,6 +1051,59 @@ export const auth = {
     }
   }
 };
+
+export const storage = {
+  async uploadGameCover(file: File, gameId?: string, oldImageUrl?: string): Promise<string> {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = gameId
+        ? `${gameId}_cover.${fileExt}`
+        : `temp_cover_${Date.now()}.${fileExt}`;
+
+      const filePath = `game-covers/${fileName}`;
+
+      if (oldImageUrl && oldImageUrl !== filePath) {
+        await this.deleteGameCover(oldImageUrl);
+      }
+
+      const { data, error } = await supabase.storage
+        .from('game-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('game-images')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading game cover:', error);
+      throw new Error('Failed to upload image');
+    }
+  },
+
+  async deleteGameCover(imageUrl: string): Promise<void> {
+    try {
+      if (!imageUrl || imageUrl.startsWith('data:')) return; 
+
+      const urlParts = imageUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      const filePath = `game-covers/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from('game-images')
+        .remove([filePath]);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting game cover:', error);
+    }
+  }
+}
 
 const getClientIP = async (): Promise<string> => {
   try {

@@ -13,7 +13,7 @@ import {
   Calendar,
   HardDrive,
 } from "lucide-react";
-import { db } from "../lib/supabase";
+import { db, storage } from "../lib/supabase";
 import Swal from "sweetalert2";
 import type { Game, Console, EquipmentType } from "../types";
 
@@ -656,6 +656,64 @@ const Games: React.FC = () => {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cover Image (Max 5MB)
+                  </label>
+                  <div className="space-y-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          try {
+                            const publicUrl = await storage.uploadGameCover(
+                              file,
+                              editingGame?.id,
+                              gameForm.cover_image_url
+                            );
+                            setGameForm({
+                              ...gameForm,
+                              cover_image_url: publicUrl,
+                            });
+
+                            Swal.fire(
+                              "Success",
+                              "Gambar berhasil diupload",
+                              "success"
+                            );
+                          } catch (error) {
+                            console.error("Upload error:", error);
+                            Swal.fire(
+                              "Error",
+                              "Gagal mengupload gambar",
+                              "error"
+                            );
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+
+                    {gameForm.cover_image_url && (
+                      <div className="mt-4">
+                        <p className="text-sm text-gray-600 mb-2">
+                          {editingGame ? "Current Image:" : "Uploaded Image:"}
+                        </p>
+                        <img
+                          src={gameForm.cover_image_url}
+                          alt="Cover preview"
+                          className="max-w-xs max-h-48 object-cover rounded-lg border border-gray-200"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-4 pt-4 border-t">
                   <button
                     type="button"
@@ -689,6 +747,77 @@ const Games: React.FC = () => {
               key={game.id}
               className="bg-white rounded-lg shadow-sm border overflow-hidden"
             >
+              {game.cover_image_url ? (
+                <div className="aspect-video w-full bg-gray-100 overflow-hidden relative">
+                  {/* Loading placeholder */}
+                  <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
+                    <svg
+                      className="w-8 h-8 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </div>
+
+                  <img
+                    src={game.cover_image_url}
+                    alt={`${game.title} cover`}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    onLoad={(e) => {
+                      const placeholder = e.currentTarget
+                        .previousElementSibling as HTMLElement;
+                      if (placeholder) placeholder.style.display = "none";
+                    }}
+                    onError={(e) => {
+                      const placeholder = e.currentTarget
+                        .previousElementSibling as HTMLElement;
+                      if (placeholder) placeholder.style.display = "none";
+
+                      e.currentTarget.style.display = "none";
+                      const container = e.currentTarget.parentElement;
+                      if (container) {
+                        container.innerHTML = `
+                          <div class="flex items-center justify-center h-full bg-gray-100">
+                            <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                          </div>
+                        `;
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="aspect-video w-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+                  <div className="text-center">
+                    <svg
+                      className="w-12 h-12 text-blue-300 mx-auto mb-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <p className="text-xs text-blue-600 font-medium">
+                      No Cover Image
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
