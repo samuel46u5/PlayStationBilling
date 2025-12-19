@@ -58,6 +58,7 @@ const StokOpname: React.FC<{
   const [savedSessions, setSavedSessions] = useState<any[]>([]); // sessions from database
   const [current, setCurrent] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [savingLoading, setSavingLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -525,6 +526,7 @@ const StokOpname: React.FC<{
       });
       return;
     }
+    setSavingLoading(true);
     try {
       const totals = computeTotalsWithNominal(current);
       const isExisting = Boolean(current.id && String(current.id).length > 8); // simple heuristic: DB uuid vs local id
@@ -615,6 +617,8 @@ const StokOpname: React.FC<{
         title: "Gagal menyimpan",
         text: err?.message || "Terjadi kesalahan saat menyimpan stok opname.",
       });
+    } finally {
+      setSavingLoading(false);
     }
   };
 
@@ -877,7 +881,14 @@ const StokOpname: React.FC<{
                 } font-medium`}
                 disabled={(current?.rows || []).length === 0}
               >
-                Buat Stok Opname
+                {savingLoading ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Menyimpan...
+                  </div>
+                ) : (
+                  "Buat Stok Opname"
+                )}
               </button>
             </div>
           </div>
