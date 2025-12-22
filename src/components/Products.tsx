@@ -1848,6 +1848,57 @@ const Products: React.FC = () => {
         // ignore if table missing or error
       }
 
+      // 4) stock opname adjustments (stock adjustments from opname sessions)
+      try {
+        const { data: opnameSessions } = await supabase
+          .from("stock_opname_sessions")
+          .select(
+            `
+            id,
+            nomor,
+            opname_date,
+            created_at,
+            stock_opname_items!inner(
+              product_id,
+              product_name,
+              system_stock,
+              physical_stock,
+              unit_cost
+            )
+          `
+          )
+          .eq("stock_opname_items.product_id", productId);
+
+        if (Array.isArray(opnameSessions) && opnameSessions.length > 0) {
+          for (const session of opnameSessions as any[]) {
+            const sessionItems = session.stock_opname_items || [];
+            for (const item of sessionItems) {
+              if (String(item.product_id) === String(productId)) {
+                // Calculate adjustment: physical_stock - system_stock
+                const adjustment =
+                  Number(item.physical_stock || 0) -
+                  Number(item.system_stock || 0);
+
+                if (adjustment !== 0) {
+                  // Only add if there's actual adjustment
+                  rows.push({
+                    id: `opname_${session.id}_${item.product_id}`,
+                    product_id: productId,
+                    quantity: adjustment, // positive = stock increase, negative = stock decrease
+                    note: `Opname: ${session.nomor || session.id} (${Number(
+                      item.system_stock || 0
+                    )} → ${Number(item.physical_stock || 0)})`,
+                    created_at: session.created_at,
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // ignore if table missing or error - for backward compatibility
+      }
+
       if (rows.length === 0) {
         setStockHistory([]);
         setStockHistoryLoading(false);
@@ -2238,7 +2289,8 @@ const Products: React.FC = () => {
                               >
                                 <td className="px-2 py-2">
                                   {new Date(r.created_at).toLocaleString(
-                                    "id-ID"
+                                    "id-ID",
+                                    { timeZone: "Asia/Jakarta" }
                                   )}
                                 </td>
                                 <td className="px-2 py-2 ">
