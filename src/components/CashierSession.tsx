@@ -63,6 +63,7 @@ const CashierSessionComponent: React.FC = () => {
   const [closingCash, setClosingCash] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [loading, setLoading] = useState(true);
 
   const [typeTransaction, setTypeTransaction] = useState<string>("income");
   const [totalAmount, setTotalAmount] = useState<number>(0);
@@ -94,6 +95,7 @@ const CashierSessionComponent: React.FC = () => {
   useEffect(() => {
     const fetchSession = async () => {
       if (user) {
+        setLoading(true);
         try {
           const session = await db.cashierSessions.getCurrent(user.id);
           setCurrentSession(mapDbSession(session));
@@ -103,6 +105,7 @@ const CashierSessionComponent: React.FC = () => {
       } else {
         setCurrentSession(null);
       }
+      setLoading(false);
     };
     fetchSession();
   }, [user]);
@@ -658,92 +661,104 @@ const CashierSessionComponent: React.FC = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Transaksi Harian Kasir
-            </h1>
-            <p className="text-gray-600">
-              Data transaksi untuk kasir yang sedang bertugas hari ini
-            </p>
-          </div>
-
-          {/* Session Controls */}
-          <div className="flex gap-3">
-            {!currentSession ? (
-              <button
-                onClick={() => setShowOpenModal(true)}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                <ArrowUpCircle className="h-5 w-5" />
-                Buka Kasir
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-                >
-                  <Plus className="h-5 w-5" />
-                  Tambah Transaksi
-                </button>
-                <button
-                  onClick={() => setShowCloseModal(true)}
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-                >
-                  <ArrowDownCircle className="h-5 w-5" />
-                  Tutup Kasir
-                </button>
-              </>
-            )}
+      {loading ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Memuat data sesi kasir...</p>
           </div>
         </div>
-
-        {/* Current Session Alert */}
-        {currentSession && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <h3 className="font-semibold text-green-800">Sesi Kasir Aktif</h3>
+      ) : (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Transaksi Harian Kasir
+              </h1>
+              <p className="text-gray-600">
+                Data transaksi untuk kasir yang sedang bertugas hari ini
+              </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-green-700">
-                  <strong>Kasir:</strong> {currentSession.cashierName}
-                </p>
-              </div>
-              <div>
-                <p className="text-green-700">
-                  <strong>Mulai:</strong>{" "}
-                  {new Date(currentSession.startTime).toLocaleString("id-ID")}
-                </p>
-              </div>
-              <div>
-                <p className="text-green-700">
-                  <strong>Durasi:</strong> {getSessionDuration(currentSession)}
-                </p>
-              </div>
+
+            {/* Session Controls */}
+            <div className="flex gap-3">
+              {!currentSession ? (
+                <button
+                  onClick={() => setShowOpenModal(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
+                  <ArrowUpCircle className="h-5 w-5" />
+                  Buka Kasir
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowAddModal(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="h-5 w-5" />
+                    Tambah Transaksi
+                  </button>
+                  <button
+                    onClick={() => setShowCloseModal(true)}
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  >
+                    <ArrowDownCircle className="h-5 w-5" />
+                    Tutup Kasir
+                  </button>
+                </>
+              )}
             </div>
           </div>
-        )}
 
-        {/* No Active Session */}
-        {!currentSession && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
-              <h3 className="font-semibold text-yellow-800">
-                Tidak Ada Sesi Aktif
-              </h3>
+          {/* Current Session Alert */}
+          {currentSession && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <h3 className="font-semibold text-green-800">
+                  Sesi Kasir Aktif
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-green-700">
+                    <strong>Kasir:</strong> {currentSession.cashierName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-green-700">
+                    <strong>Mulai:</strong>{" "}
+                    {new Date(currentSession.startTime).toLocaleString("id-ID")}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-green-700">
+                    <strong>Durasi:</strong>{" "}
+                    {getSessionDuration(currentSession)}
+                  </p>
+                </div>
+              </div>
             </div>
-            <p className="text-yellow-700 text-sm">
-              Silakan buka sesi kasir terlebih dahulu untuk memulai transaksi
-              hari ini.
-            </p>
-          </div>
-        )}
-      </div>
+          )}
+
+          {/* No Active Session */}
+          {!currentSession && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="h-5 w-5 text-yellow-600" />
+                <h3 className="font-semibold text-yellow-800">
+                  Tidak Ada Sesi Aktif
+                </h3>
+              </div>
+              <p className="text-yellow-700 text-sm">
+                Silakan buka sesi kasir terlebih dahulu untuk memulai transaksi
+                hari ini.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Today's Summary - Only show if session is active */}
       {currentSession && (
