@@ -622,9 +622,7 @@ const Bookkeeping: React.FC = () => {
         switch (selectedPeriod) {
           case "today": {
             start = new Date();
-            start.setHours(0, 0, 0, 0);
             end = new Date();
-            end.setHours(23, 59, 59, 999);
             break;
           }
           case "yesterday": {
@@ -2297,7 +2295,28 @@ const Bookkeeping: React.FC = () => {
                       </span>
                       <span
                         className={`text-lg font-bold ${
-                          summary.netProfit >= 0
+                          summary.netProfit >= 0 ||
+                          sourceList
+                            .filter(
+                              (t: any) =>
+                                t.type === "income" ||
+                                t.type === "sale" ||
+                                t.type === "rental" ||
+                                t.type === "voucher"
+                            )
+                            .reduce(
+                              (s: number, t: any) =>
+                                s + (Number(t.amount) || 0),
+                              0
+                            ) -
+                            sourceList
+                              .filter((t: any) => t.type === "expense")
+                              .reduce(
+                                (s: number, t: any) =>
+                                  s + (Number(t.amount) || 0),
+                                0
+                              ) >=
+                            0
                             ? "text-green-600"
                             : "text-red-600"
                         }`}

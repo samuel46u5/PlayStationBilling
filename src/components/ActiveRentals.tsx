@@ -6254,6 +6254,34 @@ const ActiveRentals: React.FC = () => {
       setCancelLoading(false);
     }
   };
+
+  // Filtered consoles
+  const filteredConsoles = useMemo(() => {
+    let filtered = consoles;
+
+    // Filter by status
+    if (consoleFilter !== "all") {
+      filtered = filtered.filter((c) => c.status === consoleFilter);
+    }
+
+    // Filter by search
+    if (searchConsole.trim()) {
+      const searchLower = searchConsole.toLowerCase();
+      filtered = filtered.filter(
+        (c) =>
+          c.name.toLowerCase().includes(searchLower) ||
+          c.location?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Sort by console number
+    return filtered.sort((a, b) => {
+      const aNum = parseInt(a.name) || 0;
+      const bNum = parseInt(b.name) || 0;
+      return aNum - bNum;
+    });
+  }, [consoles, consoleFilter, searchConsole]);
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-8">
@@ -8449,36 +8477,12 @@ const ActiveRentals: React.FC = () => {
           </div>
         </div>
       ) : null}
+
       {/* Console Grid */}
       {viewMode === "simple" ? (
         <div className="space-y-6">
           {(() => {
             // Group consoles by location
-            const filteredConsoles = useMemo(() => {
-              let filtered = consoles;
-
-              // Filter by status
-              if (consoleFilter !== "all") {
-                filtered = filtered.filter((c) => c.status === consoleFilter);
-              }
-
-              // Filter by search
-              if (searchConsole.trim()) {
-                const searchLower = searchConsole.toLowerCase();
-                filtered = filtered.filter(
-                  (c) =>
-                    c.name.toLowerCase().includes(searchLower) ||
-                    c.location?.toLowerCase().includes(searchLower)
-                );
-              }
-
-              // Sort by console number
-              return filtered.sort((a, b) => {
-                const aNum = parseInt(a.name) || 0;
-                const bNum = parseInt(b.name) || 0;
-                return aNum - bNum;
-              });
-            }, [consoles, consoleFilter, searchConsole]);
 
             const groupedConsoles = filteredConsoles.reduce((acc, console) => {
               const location = console.location || "Lantai 1";
