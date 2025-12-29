@@ -5306,7 +5306,7 @@ const Products: React.FC = () => {
                                 }`,
                                 amount: purchaseTotal,
                                 reference: reference,
-                                notes: `PO ${poData.po_number || poId}${
+                                notes: `${poData.po_number || poId}${
                                   newPurchase.notes
                                     ? ` - ${newPurchase.notes}`
                                     : ""

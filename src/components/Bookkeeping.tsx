@@ -27,6 +27,7 @@ import { printReceipt } from "../utils/receipt";
 import OccupancyCalendar from "./OccupancyCalendar";
 import ProfitCalendar from "./ProfitCalendar";
 import CashierCalendar from "./CashierCalendar";
+import JournalCalendar from "./JournalCalendar";
 
 type Summary = {
   totalRental?: number;
@@ -108,6 +109,9 @@ const Bookkeeping: React.FC = () => {
   const [rekapConsoleViewSubTab, setRekapConsoleViewSubTab] = useState<
     "detail" | "rekap"
   >("detail");
+  const [jurnalSubTab, setJurnalSubTab] = useState<"detail" | "rekap">(
+    "detail"
+  );
 
   const renderDetailRekapNav = () => {
     if (activeView === "laba_rugi") {
@@ -191,14 +195,35 @@ const Bookkeeping: React.FC = () => {
       );
     }
 
+    if (activeView === "jurnal") {
+      return (
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => setJurnalSubTab("detail")}
+            className={`px-3 py-2 text-sm rounded ${
+              jurnalSubTab === "detail"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Detail Jurnal Umum
+          </button>
+          <button
+            onClick={() => setJurnalSubTab("rekap")}
+            className={`px-3 py-2 text-sm rounded ${
+              jurnalSubTab === "rekap"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Rekap Jurnal Umum
+          </button>
+        </div>
+      );
+    }
+
     return null;
   };
-
-  const renderRekapPlaceholder = (message: string) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 text-center text-gray-500">
-      {message}
-    </div>
-  );
 
   // Laporan Kasir states
   const [sessions, setSessions] = useState<any[]>([]);
@@ -628,9 +653,7 @@ const Bookkeeping: React.FC = () => {
           case "yesterday": {
             start = new Date();
             start.setDate(start.getDate() - 1);
-            start.setHours(0, 0, 0, 0);
             end = new Date(start);
-            end.setHours(23, 59, 59, 999);
             break;
           }
           case "week": {
@@ -725,6 +748,7 @@ const Bookkeeping: React.FC = () => {
     setLabaRugiSubTab("detail");
     setTransaksiKasirSubTab("detail");
     setRekapConsoleViewSubTab("detail");
+    setJurnalSubTab("detail");
   }, [activeView]);
 
   useEffect(() => {
@@ -1721,7 +1745,8 @@ const Bookkeeping: React.FC = () => {
             {activeView !== "laporan_kasir" &&
               rekapConsoleViewSubTab !== "rekap" &&
               transaksiKasirSubTab !== "rekap" &&
-              labaRugiSubTab !== "rekap" && (
+              labaRugiSubTab !== "rekap" &&
+              jurnalSubTab !== "rekap" && (
                 <div className="flex items-center gap-2">
                   <select
                     value={selectedPeriod}
@@ -1797,7 +1822,7 @@ const Bookkeeping: React.FC = () => {
               </div>
             )}
 
-            {activeView === "jurnal" && (
+            {activeView === "jurnal" && jurnalSubTab !== "rekap" && (
               <button
                 onClick={() => setShowAddForm(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
@@ -1962,7 +1987,8 @@ const Bookkeeping: React.FC = () => {
       {/* Transactions List */}
       {rekapConsoleViewSubTab !== "rekap" &&
         labaRugiSubTab !== "rekap" &&
-        transaksiKasirSubTab !== "rekap" && (
+        transaksiKasirSubTab !== "rekap" &&
+        jurnalSubTab !== "rekap" && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between mb-4">
@@ -2450,7 +2476,7 @@ const Bookkeeping: React.FC = () => {
                               .filter(
                                 (t: any) =>
                                   t.type === "rental" &&
-                                  t.details.payment.method === "member_card"
+                                  t.details?.payment?.method === "member_card"
                               )
                               .reduce((sum: number, t: any) => {
                                 const durationMinutes =
@@ -2472,7 +2498,7 @@ const Bookkeeping: React.FC = () => {
                             transactions.filter(
                               (t: any) =>
                                 t.type === "rental" &&
-                                t.details.payment.method === "member_card"
+                                t.details?.payment?.method === "member_card"
                             ).length
                           }{" "}
                           transaksi
@@ -4396,114 +4422,295 @@ const Bookkeeping: React.FC = () => {
               </>
             ) : (
               <>
-                <div className="divide-y divide-gray-200">
-                  {paginatedData.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="p-6 hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              entry.type === "income"
-                                ? "bg-green-100"
-                                : "bg-red-100"
-                            }`}
-                          >
-                            {getTypeIcon(entry.type)}
-                          </div>
-                          <div>
-                            <h3 className="font-medium text-gray-900">
-                              {entry.description}
-                            </h3>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span
-                                className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(
-                                  entry.category
-                                )}`}
-                              >
-                                {categories.find(
-                                  (c) => c.value === entry.category
-                                )?.label || entry.category}
-                              </span>
-                              <div className="flex items-center gap-1 text-sm text-gray-600">
-                                <Calendar className="h-4 w-4" />
-                                {new Date(entry.entry_date).toLocaleDateString(
-                                  "id-ID"
+                {jurnalSubTab === "detail" ? (
+                  <div className="divide-y divide-gray-200">
+                    {paginatedData.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="p-6 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                entry.type === "income"
+                                  ? "bg-green-100"
+                                  : "bg-red-100"
+                              }`}
+                            >
+                              {getTypeIcon(entry.type)}
+                            </div>
+                            <div>
+                              <h3 className="font-medium text-gray-900">
+                                {entry.description}
+                              </h3>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span
+                                  className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(
+                                    entry.category
+                                  )}`}
+                                >
+                                  {categories.find(
+                                    (c) => c.value === entry.category
+                                  )?.label || entry.category}
+                                </span>
+                                <div className="flex items-center gap-1 text-sm text-gray-600">
+                                  <Calendar className="h-4 w-4" />
+                                  {new Date(
+                                    entry.entry_date
+                                  ).toLocaleDateString("id-ID")}
+                                </div>
+                                {entry.reference && (
+                                  <span className="text-sm text-gray-500">
+                                    Ref: {entry.reference}
+                                  </span>
                                 )}
                               </div>
-                              {entry.reference && (
-                                <span className="text-sm text-gray-500">
-                                  Ref: {entry.reference}
-                                </span>
-                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p
+                                className={`text-lg font-bold ${
+                                  entry.type === "income"
+                                    ? "text-green-600"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                {entry.type === "income" ? "+" : "-"}Rp{" "}
+                                {entry.amount.toLocaleString("id-ID")}
+                              </p>
+                              <p className="text-sm text-gray-600 capitalize">
+                                {types.find((t) => t.value === entry.type)
+                                  ?.label || entry.type}
+                              </p>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="flex gap-2">
+                              <button
+                                className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                onClick={() => {
+                                  setEditEntry(entry);
+                                  setShowEditForm(true);
+                                }}
+                                title="Edit transaksi"
+                              >
+                                <SquarePen className="w-4 h-4" />
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteEntry(entry.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Hapus transaksi"
+                              >
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1-1H6a1 1 0 00-1-1z"
+                                  />
+                                </svg>
+                              </button>
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p
-                              className={`text-lg font-bold ${
-                                entry.type === "income"
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }`}
-                            >
-                              {entry.type === "income" ? "+" : "-"}Rp{" "}
-                              {entry.amount.toLocaleString("id-ID")}
-                            </p>
-                            <p className="text-sm text-gray-600 capitalize">
-                              {types.find((t) => t.value === entry.type)
-                                ?.label || entry.type}
-                            </p>
+                        {entry.notes && (
+                          <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                            <strong>Catatan:</strong> {entry.notes}
                           </div>
-
-                          {/* Action buttons */}
-                          <div className="flex gap-2">
-                            <button
-                              className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                              onClick={() => {
-                                setEditEntry(entry);
-                                setShowEditForm(true);
-                              }}
-                              title="Edit transaksi"
-                            >
-                              <SquarePen className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteEntry(entry.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Hapus transaksi"
-                            >
-                              <svg
-                                className="h-4 w-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1-1H6a1 1 0 00-1-1z"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
+                        )}
                       </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4 p-4">
+                    {(() => {
+                      // Group entries by date
+                      const entriesByDate = entries.reduce((acc, entry) => {
+                        const date = entry.entry_date;
+                        if (!acc[date]) {
+                          acc[date] = {
+                            entries: [],
+                            totalIncome: 0,
+                            totalExpense: 0,
+                            netProfit: 0,
+                          };
+                        }
+                        acc[date].entries.push(entry);
+                        if (entry.type === "income") {
+                          acc[date].totalIncome += entry.amount;
+                        } else {
+                          acc[date].totalExpense += entry.amount;
+                        }
+                        acc[date].netProfit =
+                          acc[date].totalIncome - acc[date].totalExpense;
+                        return acc;
+                      }, {} as Record<string, { entries: any[]; totalIncome: number; totalExpense: number; netProfit: number }>);
 
-                      {entry.notes && (
-                        <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                          <strong>Catatan:</strong> {entry.notes}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                      const sortedDates = Object.keys(entriesByDate).sort(
+                        (a, b) => b.localeCompare(a)
+                      );
+
+                      if (sortedDates.length === 0) {
+                        return (
+                          <div className="p-12 text-center">
+                            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-600">
+                              Tidak ada data jurnal ditemukan
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return sortedDates.map((date) => {
+                        const dayData = entriesByDate[date];
+                        const isExpanded = expandedDates.has(date);
+
+                        return (
+                          <div
+                            key={date}
+                            className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  {new Date(date).toLocaleDateString("id-ID", {
+                                    weekday: "long",
+                                  })}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(expandedDates);
+                                    if (next.has(date)) next.delete(date);
+                                    else next.add(date);
+                                    setExpandedDates(next);
+                                  }}
+                                  className="font-semibold text-left text-blue-600 hover:underline flex items-center gap-2"
+                                  aria-expanded={isExpanded}
+                                >
+                                  <span>
+                                    {new Date(date).toLocaleDateString("id-ID")}
+                                  </span>
+                                  <svg
+                                    className={`h-4 w-4 transform ${
+                                      isExpanded ? "rotate-180" : ""
+                                    }`}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <polyline points="6 9 12 15 18 9" />
+                                  </svg>
+                                </button>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  {dayData.entries.length} transaksi
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-4 text-right">
+                                <div>
+                                  <div className="text-xs text-gray-500">
+                                    Pemasukan
+                                  </div>
+                                  <div className="font-semibold text-green-600">
+                                    Rp{" "}
+                                    {dayData.totalIncome.toLocaleString(
+                                      "id-ID"
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500">
+                                    Pengeluaran
+                                  </div>
+                                  <div className="font-semibold text-red-600">
+                                    Rp{" "}
+                                    {dayData.totalExpense.toLocaleString(
+                                      "id-ID"
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500">
+                                    Saldo
+                                  </div>
+                                  <div
+                                    className={`font-bold ${
+                                      dayData.netProfit >= 0
+                                        ? "text-green-600"
+                                        : "text-red-600"
+                                    }`}
+                                  >
+                                    Rp{" "}
+                                    {Math.abs(dayData.netProfit).toLocaleString(
+                                      "id-ID"
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            {isExpanded && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <div className="space-y-3">
+                                  {dayData.entries.map((entry) => (
+                                    <div
+                                      key={entry.id}
+                                      className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <span
+                                          className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(
+                                            entry.category
+                                          )}`}
+                                        >
+                                          {categories.find(
+                                            (c) => c.value === entry.category
+                                          )?.label || entry.category}
+                                        </span>
+                                        <span className="text-sm text-gray-900">
+                                          {entry.description}
+                                        </span>
+                                        {entry.reference && (
+                                          <span className="text-xs text-gray-500">
+                                            Ref: {entry.reference}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-right">
+                                        <span
+                                          className={`text-sm font-semibold ${
+                                            entry.type === "income"
+                                              ? "text-green-600"
+                                              : "text-red-600"
+                                          }`}
+                                        >
+                                          {entry.type === "income" ? "+" : "-"}
+                                          Rp{" "}
+                                          {entry.amount.toLocaleString("id-ID")}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -4518,6 +4725,10 @@ const Bookkeeping: React.FC = () => {
 
       {activeView == "rekap_console" && rekapConsoleViewSubTab === "rekap" && (
         <OccupancyCalendar />
+      )}
+
+      {activeView == "jurnal" && jurnalSubTab === "rekap" && (
+        <JournalCalendar />
       )}
 
       {/* Pagination */}
