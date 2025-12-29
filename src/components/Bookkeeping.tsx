@@ -2438,6 +2438,134 @@ const Bookkeeping: React.FC = () => {
                         </span>
                       </div>
                     </div>
+
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-indigo-800">
+                          Mode Member
+                        </span>
+                        <span className="text-lg font-bold text-indigo-600">
+                          {(() => {
+                            const memberHours = transactions
+                              .filter(
+                                (t: any) =>
+                                  t.type === "rental" &&
+                                  t.details.payment.method === "member_card"
+                              )
+                              .reduce((sum: number, t: any) => {
+                                const durationMinutes =
+                                  t.details?.rental?.duration_minutes ||
+                                  t.details?.duration_minutes ||
+                                  t.details?.additional_duration_minutes ||
+                                  0;
+                                return sum + durationMinutes;
+                              }, 0);
+                            const hours = Math.floor(memberHours / 60);
+                            const minutes = memberHours % 60;
+                            return `${hours}j ${minutes}m`;
+                          })()}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <span className="text-xs text-indigo-600">
+                          {
+                            transactions.filter(
+                              (t: any) =>
+                                t.type === "rental" &&
+                                t.details.payment.method === "member_card"
+                            ).length
+                          }{" "}
+                          transaksi
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Mode Pay as You Go */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-blue-800">
+                          Pay as You Go
+                        </span>
+                        <span className="text-lg font-bold text-blue-600">
+                          {(() => {
+                            const payAsYouGoHours = transactions
+                              .filter(
+                                (t: any) =>
+                                  t.type === "rental" &&
+                                  t.description ===
+                                    "Rental payment (Pay-as-you-go)"
+                              )
+                              .reduce((sum: number, t: any) => {
+                                const durationMinutes =
+                                  t.details?.rental?.duration_minutes ||
+                                  t.details?.duration_minutes ||
+                                  t.details?.additional_duration_minutes ||
+                                  0;
+                                return sum + durationMinutes;
+                              }, 0);
+                            const hours = Math.floor(payAsYouGoHours / 60);
+                            const minutes = payAsYouGoHours % 60;
+                            return `${hours}j ${minutes}m`;
+                          })()}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <span className="text-xs text-blue-600">
+                          {
+                            transactions.filter(
+                              (t: any) =>
+                                t.type === "rental" &&
+                                t.description ===
+                                  "Rental payment (Pay-as-you-go)"
+                            ).length
+                          }{" "}
+                          transaksi
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Mode Bayar di Muka */}
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-green-800">
+                          Bayar di Muka
+                        </span>
+                        <span className="text-lg font-bold text-green-600">
+                          {(() => {
+                            const prepaidHours = transactions
+                              .filter(
+                                (t: any) =>
+                                  t.type === "rental" &&
+                                  t.details?.rental?.prepaid
+                              )
+                              .reduce((sum: number, t: any) => {
+                                const durationMinutes =
+                                  t.details?.rental?.duration_minutes ||
+                                  t.details?.duration_minutes ||
+                                  t.details?.additional_duration_minutes ||
+                                  0;
+                                return sum + durationMinutes;
+                              }, 0);
+                            const hours = Math.floor(prepaidHours / 60);
+                            const minutes = prepaidHours % 60;
+                            return `${hours}j ${minutes}m`;
+                          })()}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <span className="text-xs text-green-600">
+                          {
+                            transactions.filter(
+                              (t: any) =>
+                                t.type === "rental" &&
+                                t.details?.rental?.prepaid &&
+                                t.details?.rental?.duration_minutes
+                            ).length
+                          }{" "}
+                          transaksi
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
             </div>
