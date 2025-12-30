@@ -760,6 +760,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
   const [phone, setPhone] = React.useState("");
   const [roleId, setRoleId] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [notes, setNotes] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const { user: currentUser } = useAuth();
@@ -808,6 +809,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
           phone: phone || null,
           role_id: roleId,
           status: "active",
+          notes: notes || null,
         })
         .select()
         .single();
@@ -927,6 +929,19 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Catatan (Opsional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={3}
+                placeholder="Catatan tambahan tentang user ini..."
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Password
               </label>
               <input
@@ -983,6 +998,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   const [phone, setPhone] = React.useState(user.phone || "");
   const [roleId, setRoleId] = React.useState(user.role_id || "");
   const [status, setStatus] = React.useState(user.status || "active");
+  const [notes, setNotes] = React.useState(user.notes || "");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const { user: currentUser } = useAuth();
@@ -1010,6 +1026,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
           phone: phone || null,
           role_id: roleId,
           status,
+          notes: notes || null,
         })
         .eq("id", user.id)
         .select()
@@ -1136,6 +1153,19 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Catatan (Opsional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={3}
+                placeholder="Catatan tambahan tentang user ini..."
+                disabled={loading}
+              />
             </div>
             {error && <div className="text-red-600 text-sm">{error}</div>}
             <div className="flex gap-3 mt-6">
