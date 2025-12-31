@@ -126,6 +126,21 @@ const CashierCalendar: React.FC = () => {
     const currentMonth = selectedDate.getMonth();
     const currentYear = selectedDate.getFullYear();
 
+    const sessionSummary = Object.values(cashierData).reduce((acc, dayData) => {
+      Object.entries(dayData.sessions).forEach(([sessionId, sessionData]) => {
+        const cashierName = sessionData.cashierName || "Kasir";
+        if (!acc[cashierName]) {
+          acc[cashierName] = {
+            totalAmount: 0,
+            sessionCount: 0,
+          };
+        }
+        acc[cashierName].totalAmount += sessionData.totalAmount;
+        acc[cashierName].sessionCount += 1;
+      });
+      return acc;
+    }, {} as Record<string, { totalAmount: number; sessionCount: number }>);
+
     const firstDay = new Date(currentYear, currentMonth, 1);
     const lastDay = new Date(currentYear, currentMonth + 1, 0);
     const daysInMonth = lastDay.getDate();
@@ -339,6 +354,31 @@ const CashierCalendar: React.FC = () => {
                 .toLocaleString("id-ID")}
             </h3>
             <p className="text-gray-600 text-sm">Total Transaksi Bulan Ini</p>
+
+            {/* Session Details */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="space-y-2 text-left">
+                {Object.entries(sessionSummary)
+                  .sort(([, a], [, b]) => b.totalAmount - a.totalAmount)
+                  .map(([cashierName, data]) => (
+                    <div
+                      key={cashierName}
+                      className="flex justify-between items-center text-sm"
+                    >
+                      {data.totalAmount > 0 && (
+                        <>
+                          <span className="text-gray-700 font-medium">
+                            {cashierName}:
+                          </span>
+                          <span className="text-gray-900 font-semibold">
+                            Rp {data.totalAmount.toLocaleString("id-ID")}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">

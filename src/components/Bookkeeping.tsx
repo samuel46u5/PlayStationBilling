@@ -19,6 +19,7 @@ import {
   CreditCard,
   Banknote,
   User,
+  Search,
 } from "lucide-react";
 import { supabase, db } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
@@ -48,6 +49,8 @@ const Bookkeeping: React.FC = () => {
 
   // Filter states
   const [selectedPeriod, setSelectedPeriod] = useState("today");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -218,6 +221,22 @@ const Bookkeeping: React.FC = () => {
           >
             Rekap Jurnal Umum
           </button>
+
+          {/* Search input for jurnal */}
+          {activeView === "jurnal" && jurnalSubTab === "detail" && (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cari berdasarkan deskripsi..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -236,6 +255,9 @@ const Bookkeeping: React.FC = () => {
   const [sessionEndDate, setSessionEndDate] = useState<string>("");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<
     "all" | "cash" | "non-cash"
+  >("all");
+  const [sessionStatusFilter, setSessionStatusFilter] = useState<
+    "all" | "active" | "closed"
   >("all");
 
   // Pagination states
@@ -358,6 +380,16 @@ const Bookkeeping: React.FC = () => {
       if (!st) return false;
       if (start && st < start) return false;
       if (end && st > end) return false;
+
+      // Filter by status
+      if (sessionStatusFilter !== "all") {
+        const sessionStatus = s.status || "active";
+        if (sessionStatusFilter === "active" && sessionStatus !== "active")
+          return false;
+        if (sessionStatusFilter === "closed" && sessionStatus === "active")
+          return false;
+      }
+
       return true;
     });
   }, [
@@ -365,6 +397,7 @@ const Bookkeeping: React.FC = () => {
     sessionPeriod,
     sessionStartDate,
     sessionEndDate,
+    sessionStatusFilter,
     showSessionModal,
   ]);
 
@@ -753,7 +786,17 @@ const Bookkeeping: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, activeView]);
+  }, [activeTab, activeView, debouncedSearchTerm]);
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Ambil daftar sesi saat masuk tab laporan_kasir
   useEffect(() => {
@@ -765,8 +808,8 @@ const Bookkeeping: React.FC = () => {
         const { data, error } = await supabase
           .from("cashier_sessions")
           .select("*")
-          .order("start_time", { ascending: false })
-          .limit(100);
+          .order("start_time", { ascending: false });
+        // .limit(100);
         if (error) throw error;
         setSessions(data || []);
         if (!selectedSessionId && (data || []).length > 0) {
@@ -944,6 +987,27 @@ const Bookkeeping: React.FC = () => {
   const paginatedData = filteredByTab.slice(
     (currentPage - 1) * entriesPerPage,
     currentPage * entriesPerPage
+  );
+
+  // Filtered entries for journal search
+  const filteredEntries = useMemo(() => {
+    if (!debouncedSearchTerm.trim()) return entries;
+
+    return entries.filter((entry) =>
+      entry.description
+        .toLowerCase()
+        .includes(debouncedSearchTerm.toLowerCase())
+    );
+  }, [entries, debouncedSearchTerm]);
+
+  // Pagination logic for journal entries
+  const journalEntriesPerPage = 20;
+  const journalTotalPages = Math.ceil(
+    filteredEntries.length / journalEntriesPerPage
+  );
+  const paginatedEntries = filteredEntries.slice(
+    (currentPage - 1) * journalEntriesPerPage,
+    currentPage * journalEntriesPerPage
   );
 
   // Rekap kasir per tanggal -> per sesi
@@ -1544,10 +1608,10 @@ const Bookkeeping: React.FC = () => {
           [];
 
         for (const item of items) {
-          if (item.type !== "rental" && item.product_id && item.qty) {
+          if (item.type !== "rental" && item.product_id && item.quantity) {
             await db.products.increaseStock(
               String(item.product_id),
-              Number(item.qty)
+              Number(item.quantity)
             );
           }
         }
@@ -2007,8 +2071,9 @@ const Bookkeeping: React.FC = () => {
                   {activeView !== "rekap_kasir" &&
                     activeView !== "rekap_console" && (
                       <p className="text-sm text-gray-600 mt-1">
-                        Menampilkan {paginatedData.length} transaksi dari{" "}
-                        {filteredByTab.length}
+                        {activeView === "jurnal" && jurnalSubTab === "detail"
+                          ? `Menampilkan ${paginatedEntries.length} transaksi dari ${filteredEntries.length} hasil pencarian`
+                          : `Menampilkan ${paginatedData.length} transaksi dari ${filteredByTab.length}`}
                       </p>
                     )}
                   {/* {activeView === "rekap_okupansi" && (
@@ -4424,112 +4489,123 @@ const Bookkeeping: React.FC = () => {
               <>
                 {jurnalSubTab === "detail" ? (
                   <div className="divide-y divide-gray-200">
-                    {paginatedData.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="p-6 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                entry.type === "income"
-                                  ? "bg-green-100"
-                                  : "bg-red-100"
-                              }`}
-                            >
-                              {getTypeIcon(entry.type)}
-                            </div>
-                            <div>
-                              <h3 className="font-medium text-gray-900">
-                                {entry.description}
-                              </h3>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span
-                                  className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(
-                                    entry.category
-                                  )}`}
-                                >
-                                  {categories.find(
-                                    (c) => c.value === entry.category
-                                  )?.label || entry.category}
-                                </span>
-                                <div className="flex items-center gap-1 text-sm text-gray-600">
-                                  <Calendar className="h-4 w-4" />
-                                  {new Date(
-                                    entry.entry_date
-                                  ).toLocaleDateString("id-ID")}
-                                </div>
-                                {entry.reference && (
-                                  <span className="text-sm text-gray-500">
-                                    Ref: {entry.reference}
+                    {paginatedEntries.length === 0 ? (
+                      <div className="p-12 text-center">
+                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">
+                          {debouncedSearchTerm.trim()
+                            ? `Tidak ada transaksi yang cocok dengan "${debouncedSearchTerm}"`
+                            : "Tidak ada data jurnal ditemukan"}
+                        </p>
+                      </div>
+                    ) : (
+                      paginatedEntries.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="p-6 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div
+                                className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                  entry.type === "income"
+                                    ? "bg-green-100"
+                                    : "bg-red-100"
+                                }`}
+                              >
+                                {getTypeIcon(entry.type)}
+                              </div>
+                              <div>
+                                <h3 className="font-medium text-gray-900">
+                                  {entry.description}
+                                </h3>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <span
+                                    className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(
+                                      entry.category
+                                    )}`}
+                                  >
+                                    {categories.find(
+                                      (c) => c.value === entry.category
+                                    )?.label || entry.category}
                                   </span>
-                                )}
+                                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                                    <Calendar className="h-4 w-4" />
+                                    {new Date(
+                                      entry.entry_date
+                                    ).toLocaleDateString("id-ID")}
+                                  </div>
+                                  {entry.reference && (
+                                    <span className="text-sm text-gray-500">
+                                      Ref: {entry.reference}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p
+                                  className={`text-lg font-bold ${
+                                    entry.type === "income"
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  {entry.type === "income" ? "+" : "-"}Rp{" "}
+                                  {entry.amount.toLocaleString("id-ID")}
+                                </p>
+                                <p className="text-sm text-gray-600 capitalize">
+                                  {types.find((t) => t.value === entry.type)
+                                    ?.label || entry.type}
+                                </p>
+                              </div>
+
+                              {/* Action buttons */}
+                              <div className="flex gap-2">
+                                <button
+                                  className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                  onClick={() => {
+                                    setEditEntry(entry);
+                                    setShowEditForm(true);
+                                  }}
+                                  title="Edit transaksi"
+                                >
+                                  <SquarePen className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  onClick={() => handleDeleteEntry(entry.id)}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Hapus transaksi"
+                                >
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1-1H6a1 1 0 00-1-1z"
+                                    />
+                                  </svg>
+                                </button>
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <p
-                                className={`text-lg font-bold ${
-                                  entry.type === "income"
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }`}
-                              >
-                                {entry.type === "income" ? "+" : "-"}Rp{" "}
-                                {entry.amount.toLocaleString("id-ID")}
-                              </p>
-                              <p className="text-sm text-gray-600 capitalize">
-                                {types.find((t) => t.value === entry.type)
-                                  ?.label || entry.type}
-                              </p>
+                          {entry.notes && (
+                            <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                              <strong>Catatan:</strong> {entry.notes}
                             </div>
-
-                            {/* Action buttons */}
-                            <div className="flex gap-2">
-                              <button
-                                className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                                onClick={() => {
-                                  setEditEntry(entry);
-                                  setShowEditForm(true);
-                                }}
-                                title="Edit transaksi"
-                              >
-                                <SquarePen className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                onClick={() => handleDeleteEntry(entry.id)}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Hapus transaksi"
-                              >
-                                <svg
-                                  className="h-4 w-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1-1H6a1 1 0 00-1-1z"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
+                          )}
                         </div>
-
-                        {entry.notes && (
-                          <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                            <strong>Catatan:</strong> {entry.notes}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4 p-4">
@@ -4733,13 +4809,19 @@ const Bookkeeping: React.FC = () => {
 
       {/* Pagination */}
       {activeTab !== "rekap" &&
-        totalPages > 1 &&
+        ((activeView === "jurnal" &&
+          jurnalSubTab === "detail" &&
+          journalTotalPages > 1) ||
+          (activeView !== "jurnal" && totalPages > 1)) &&
         activeView !== "rekap_kasir" &&
         labaRugiSubTab !== "rekap" && (
           <div className="px-6 py-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-700">
-                Halaman {currentPage} dari {totalPages}
+                Halaman {currentPage} dari{" "}
+                {activeView === "jurnal" && jurnalSubTab === "detail"
+                  ? journalTotalPages
+                  : totalPages}
               </p>
               <div className="flex gap-2">
                 <button
@@ -4961,6 +5043,17 @@ const Bookkeeping: React.FC = () => {
                       {p.label}
                     </option>
                   ))}
+                </select>
+                <select
+                  value={sessionStatusFilter}
+                  onChange={(e) =>
+                    setSessionStatusFilter(e.target.value as any)
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Semua Status</option>
+                  <option value="active">Aktif</option>
+                  <option value="closed">Selesai</option>
                 </select>
                 {sessionPeriod === "range" && (
                   <div className="flex items-center gap-2">
