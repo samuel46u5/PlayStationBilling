@@ -208,7 +208,7 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     };
 
     // Jalankan billing setiap 30 detik
-    intervalRef.current = setInterval(processMemberCardBilling, 60000);
+    intervalRef.current = setInterval(processMemberCardBilling, 30000);
 
     // Jalankan sekali saat mount
     processMemberCardBilling();
@@ -351,28 +351,46 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         return;
       }
 
-      // Log pemotongan points ke card_usage_logs
-      const { error: logError } = await supabase
+      // Cek apakah log dengan kombinasi session_id + points_amount + balance_before sudah ada
+      const { data: existingLogs } = await supabase
         .from("card_usage_logs")
-        .insert({
-          card_uid: session.card_uid,
-          session_id: session.id,
-          action_type: "balance_deduct",
-          points_amount: computedDelta,
-          balance_before: currentBalance,
-          balance_after: newBalance,
-          notes: `Automatic deduction for rental session - ${
-            computedDelta /
-            (session.per_minute_rate_snapshot ||
-              session.hourly_rate_snapshot / 60)
-          } minutes`,
-        });
+        .select("id")
+        .eq("session_id", session.id)
+        .eq("action_type", "balance_deduct")
+        .eq("points_amount", computedDelta)
+        .eq("balance_before", currentBalance)
+        .eq("balance_after", newBalance)
+        .limit(1);
 
-      if (logError) {
-        console.error(
-          `Error logging point usage for session ${session.id}:`,
-          logError
+      // Jika sudah ada log dengan data yang sama, skip insert
+      if (existingLogs && existingLogs.length > 0) {
+        console.log(
+          `[Session ${session.id}] Skipping duplicate log insert - already exists (${computedDelta} pts, balance: ${currentBalance} → ${newBalance})`
         );
+      } else {
+        // Log pemotongan points ke card_usage_logs
+        const { error: logError } = await supabase
+          .from("card_usage_logs")
+          .insert({
+            card_uid: session.card_uid,
+            session_id: session.id,
+            action_type: "balance_deduct",
+            points_amount: computedDelta,
+            balance_before: currentBalance,
+            balance_after: newBalance,
+            notes: `Automatic deduction for rental session - ${
+              computedDelta /
+              (session.per_minute_rate_snapshot ||
+                session.hourly_rate_snapshot / 60)
+            } minutes`,
+          });
+
+        if (logError) {
+          console.error(
+            `Error logging point usage for session ${session.id}:`,
+            logError
+          );
+        }
       }
 
       console.log(
@@ -439,24 +457,41 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         return;
       }
 
-      // Log partial deduction
-      const { error: logError2 } = await supabase
+      // Cek apakah log partial deduction sudah ada
+      const { data: existingPartialLogs } = await supabase
         .from("card_usage_logs")
-        .insert({
-          card_uid: session.card_uid,
-          session_id: session.id,
-          action_type: "balance_deduct",
-          points_amount: partialDelta,
-          balance_before: currentBalance,
-          balance_after: 0,
-          notes:
-            "Partial deduction due to insufficient balance; auto ending session",
-        });
-      if (logError2) {
-        console.error(
-          `Error logging partial point usage for session ${session.id}:`,
-          logError2
+        .select("id")
+        .eq("session_id", session.id)
+        .eq("action_type", "balance_deduct")
+        .eq("points_amount", partialDelta)
+        .eq("balance_before", currentBalance)
+        .eq("balance_after", 0)
+        .limit(1);
+
+      if (existingPartialLogs && existingPartialLogs.length > 0) {
+        console.log(
+          `[Session ${session.id}] Skipping duplicate partial log insert - already exists (${partialDelta} pts, balance: ${currentBalance} → 0)`
         );
+      } else {
+        // Log partial deduction
+        const { error: logError2 } = await supabase
+          .from("card_usage_logs")
+          .insert({
+            card_uid: session.card_uid,
+            session_id: session.id,
+            action_type: "balance_deduct",
+            points_amount: partialDelta,
+            balance_before: currentBalance,
+            balance_after: 0,
+            notes:
+              "Partial deduction due to insufficient balance; auto ending session",
+          });
+        if (logError2) {
+          console.error(
+            `Error logging partial point usage for session ${session.id}:`,
+            logError2
+          );
+        }
       }
 
       console.log(
