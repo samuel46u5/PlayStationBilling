@@ -183,142 +183,7 @@ const getCurrentCashierSession = async () => {
   }
 };
 
-// function groupDeductLogsBySession(logs: CardUsageLog[]) {
-//   const grouped: Record<
-//     string,
-//     {
-//       total_points: number;
-//       firstTimestamp: string;
-//       lastTimestamp: string;
-//       session_id: string;
-//       balance_before?: number;
-//       balance_after?: number;
-//       notes?: string;
-//     }
-//   > = {};
-
-//   logs.forEach((log) => {
-//     if (log.action_type !== "balance_deduct") return;
-
-//     const sid = log.session_id || "no-session";
-
-//     if (!grouped[sid]) {
-//       grouped[sid] = {
-//         total_points: log.points_amount,
-//         firstTimestamp: log.timestamp,
-//         lastTimestamp: log.timestamp,
-//         session_id: sid,
-//         balance_before: log.balance_before,
-//         balance_after: log.balance_after,
-//         notes: log.notes,
-//       };
-//     } else {
-//       grouped[sid].total_points += log.points_amount;
-
-//       // Update waktu awal dan akhir sesi
-//       if (new Date(log.timestamp) < new Date(grouped[sid].firstTimestamp)) {
-//         grouped[sid].firstTimestamp = log.timestamp;
-//         grouped[sid].balance_before = log.balance_before;
-//       }
-//       if (new Date(log.timestamp) > new Date(grouped[sid].lastTimestamp)) {
-//         grouped[sid].lastTimestamp = log.timestamp;
-//         grouped[sid].balance_after = log.balance_after;
-//       }
-//     }
-//   });
-
-//   // Hitung durasi sesi dan update notes
-//   Object.values(grouped).forEach((session) => {
-//     const start = new Date(session.firstTimestamp);
-//     const end = new Date(session.lastTimestamp);
-//     const diffMs = end.getTime() - start.getTime();
-//     const diffMinutes = Math.ceil(diffMs / 60000);
-//     session.notes = `Automatic deduction for rental session - ${diffMinutes} minutes`;
-
-//     if (session.balance_before !== undefined && session.total_points > 0) {
-//       const expectedBalanceAfter =
-//         session.balance_before - session.total_points;
-
-//       // Jika balance_after dari log terakhir tidak konsisten, gunakan perhitungan
-//       if (session.balance_after !== expectedBalanceAfter) {
-//         session.balance_after = expectedBalanceAfter;
-//       }
-//     }
-//   });
-
-//   return Object.values(grouped);
-// }
-
-// Fungsi helper untuk menghapus duplikat log berdasarkan kombinasi unik
-function removeDuplicateLogs(logs: CardUsageLog[]): CardUsageLog[] {
-  const seen = new Set<string>();
-  const uniqueLogs: CardUsageLog[] = [];
-
-  // Sort berdasarkan timestamp untuk memastikan kita ambil yang pertama
-  const sortedLogs = [...logs].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-
-  for (const log of sortedLogs) {
-    // Buat key unik berdasarkan kombinasi yang penting
-    const key = `${log.session_id || "no-session"}_${log.action_type}_${
-      log.points_amount
-    }_${log.balance_before}_${log.balance_after}`;
-
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueLogs.push(log);
-    }
-  }
-
-  return uniqueLogs;
-}
-
-function groupDeductLogsBySession(
-  logs: CardUsageLog[],
-  currentBalance: number
-) {
-  // Hapus duplikat terlebih dahulu
-  const uniqueLogs = removeDuplicateLogs(logs);
-
-  // Hitung running balance dari semua transaksi secara kronologis
-  const sortedLogs = [...uniqueLogs].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-
-  // Hitung running balance dari awal sampai akhir
-  let runningBalance = 0; // Mulai dari 0, kita akan hitung maju
-  const logsWithBalance = sortedLogs.map((log) => {
-    const balanceBefore = runningBalance;
-    let balanceAfter = runningBalance;
-
-    if (log.action_type === "balance_add") {
-      balanceAfter = runningBalance + log.points_amount;
-    } else if (log.action_type === "balance_deduct") {
-      balanceAfter = runningBalance - Math.abs(log.points_amount);
-    }
-
-    runningBalance = balanceAfter;
-
-    return {
-      ...log,
-      calculated_balance_before: balanceBefore,
-      calculated_balance_after: balanceAfter,
-    };
-  });
-
-  // Sesuaikan dengan balance saat ini
-  // Hitung selisih antara calculated balance akhir dengan current balance
-  const calculatedFinalBalance = runningBalance;
-  const adjustment = currentBalance - calculatedFinalBalance;
-
-  // Apply adjustment ke semua calculated balances
-  logsWithBalance.forEach((log) => {
-    log.calculated_balance_before += adjustment;
-    log.calculated_balance_after += adjustment;
-  });
-
-  // Sekarang group deduct logs menggunakan calculated balances
+function groupDeductLogsBySession(logs: CardUsageLog[]) {
   const grouped: Record<
     string,
     {
@@ -332,35 +197,35 @@ function groupDeductLogsBySession(
     }
   > = {};
 
-  logsWithBalance
-    .filter((log) => log.action_type === "balance_deduct")
-    .forEach((log) => {
-      const sid = log.session_id || "no-session";
+  logs.forEach((log) => {
+    if (log.action_type !== "balance_deduct") return;
 
-      if (!grouped[sid]) {
-        grouped[sid] = {
-          total_points: Math.abs(log.points_amount), // Pastikan positive
-          firstTimestamp: log.timestamp,
-          lastTimestamp: log.timestamp,
-          session_id: sid,
-          balance_before: log.calculated_balance_before,
-          balance_after: log.calculated_balance_after,
-          notes: log.notes,
-        };
-      } else {
-        grouped[sid].total_points += Math.abs(log.points_amount);
+    const sid = log.session_id || "no-session";
 
-        // Update waktu awal dan akhir sesi
-        if (new Date(log.timestamp) < new Date(grouped[sid].firstTimestamp)) {
-          grouped[sid].firstTimestamp = log.timestamp;
-          grouped[sid].balance_before = log.calculated_balance_before;
-        }
-        if (new Date(log.timestamp) > new Date(grouped[sid].lastTimestamp)) {
-          grouped[sid].lastTimestamp = log.timestamp;
-          grouped[sid].balance_after = log.calculated_balance_after;
-        }
+    if (!grouped[sid]) {
+      grouped[sid] = {
+        total_points: log.points_amount,
+        firstTimestamp: log.timestamp,
+        lastTimestamp: log.timestamp,
+        session_id: sid,
+        balance_before: log.balance_before,
+        balance_after: log.balance_after,
+        notes: log.notes,
+      };
+    } else {
+      grouped[sid].total_points += log.points_amount;
+
+      // Update waktu awal dan akhir sesi
+      if (new Date(log.timestamp) < new Date(grouped[sid].firstTimestamp)) {
+        grouped[sid].firstTimestamp = log.timestamp;
+        grouped[sid].balance_before = log.balance_before;
       }
-    });
+      if (new Date(log.timestamp) > new Date(grouped[sid].lastTimestamp)) {
+        grouped[sid].lastTimestamp = log.timestamp;
+        grouped[sid].balance_after = log.balance_after;
+      }
+    }
+  });
 
   // Hitung durasi sesi dan update notes
   Object.values(grouped).forEach((session) => {
@@ -7636,17 +7501,11 @@ const ActiveRentals: React.FC = () => {
               ) : (
                 <div className="max-h-[60vh] overflow-auto divide-y divide-gray-100">
                   {(() => {
-                    // Hapus duplikat dari historyLogs terlebih dahulu
-                    const uniqueHistoryLogs = removeDuplicateLogs(historyLogs);
-
                     // Filter logs penambahan dan group pemakaian
-                    const addLogs = uniqueHistoryLogs.filter(
+                    const addLogs = historyLogs.filter(
                       (log) => log.action_type === "balance_add"
                     );
-                    const deductGrouped = groupDeductLogsBySession(
-                      uniqueHistoryLogs,
-                      scannedCardData?.balance_points || 0
-                    );
+                    const deductGrouped = groupDeductLogsBySession(historyLogs);
 
                     // Gabungkan dan urutkan semua logs
                     const combined = [
