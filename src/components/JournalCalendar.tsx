@@ -24,6 +24,12 @@ const JournalCalendar: React.FC = () => {
     {}
   );
   const [loading, setLoading] = useState(true);
+  const getLocalDateString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   // Load journal data from bookkeeping_entries
   useEffect(() => {
@@ -46,8 +52,8 @@ const JournalCalendar: React.FC = () => {
         const { data: entries, error } = await supabase
           .from("bookkeeping_entries")
           .select("*")
-          .gte("entry_date", startOfMonth.toISOString().split("T")[0])
-          .lte("entry_date", endOfMonth.toISOString().split("T")[0]);
+          .gte("entry_date", getLocalDateString(startOfMonth))
+          .lte("entry_date", getLocalDateString(endOfMonth));
 
         if (error) throw error;
 

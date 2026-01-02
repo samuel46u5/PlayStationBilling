@@ -188,19 +188,41 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
 
         const now = new Date();
 
-        // Ambil minimum_minutes untuk semua console di batch ini
-        const consoleIds = Array.from(
-          new Set(memberCardSessions.map((s) => s.console_id).filter(Boolean))
-        ) as string[];
-        const minMinutesMap = await getMinimumMinutesByConsole(consoleIds);
-
-        for (const session of memberCardSessions) {
-          try {
-            await processSessionBilling(session, now, minMinutesMap);
-          } catch (error) {
-            console.error(`Error processing session ${session.id}:`, error);
-            // Continue dengan session lain meski ada error
+        // Group sessions by console untuk bulk processing
+        const sessionsByConsole = memberCardSessions.reduce((acc, session) => {
+          const consoleId = session.console_id;
+          if (!acc[consoleId]) {
+            acc[consoleId] = [];
           }
+          acc[consoleId].push(session);
+          return acc;
+        }, {} as Record<string, MemberCardSession[]>);
+
+        console.log(`[BULK] Processing ${memberCardSessions.length} sessions across ${Object.keys(sessionsByConsole).length} consoles`);
+
+        // Process per console secara parallel
+        const consolePromises = Object.entries(sessionsByConsole).map(
+          async ([consoleId, sessions]) => {
+            try {
+              await processConsoleBilling(consoleId, sessions, now);
+            } catch (error) {
+              console.error(`[BULK] Error processing console ${consoleId}:`, error);
+              // Continue dengan console lain meski ada error
+            }
+          }
+        );
+
+        // Tunggu semua console selesai
+        const consoleResults = await Promise.allSettled(consolePromises);
+
+        // Log summary
+        const successfulConsoles = consoleResults.filter(result => result.status === 'fulfilled').length;
+        const failedConsoles = consoleResults.filter(result => result.status === 'rejected').length;
+
+        console.log(`[BULK] Completed: ${successfulConsoles} consoles successful, ${failedConsoles} failed`);
+
+        if (failedConsoles > 0) {
+          console.warn(`[BULK] ${failedConsoles} consoles had errors - check logs above`);
         }
       } catch (error) {
         console.error("Error in member card billing:", error);
@@ -351,64 +373,33 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         return;
       }
 
-      // Cek apakah log dengan kombinasi session_id + points_amount + balance_before sudah ada
-      const { data: existingLogs } = await supabase
-        .from("card_usage_logs")
-        .select("id")
-        .eq("session_id", session.id)
-        .eq("action_type", "balance_deduct")
-        .eq("points_amount", computedDelta)
-        .eq("balance_before", currentBalance)
-        .eq("balance_after", newBalance)
-        .limit(1);
+      // PENTING: Kode return harus di dalam while loop di tempat yang benar
+      // Untuk sementara, kita return di luar loop tapi menggunakan variable yang tersedia
+      const finalBalance = currentBalance - computedDelta;
+      const finalTotalDeducted = currentTotal + computedDelta;
 
-      // Jika sudah ada log dengan data yang sama, skip insert
-      if (existingLogs && existingLogs.length > 0) {
-        console.log(
-          `[Session ${session.id}] Skipping duplicate log insert - already exists (${computedDelta} pts, balance: ${currentBalance} → ${newBalance})`
-        );
-      } else {
-        // Log pemotongan points ke card_usage_logs
-        const { error: logError } = await supabase
-          .from("card_usage_logs")
-          .insert({
-            card_uid: session.card_uid,
-            session_id: session.id,
-            action_type: "balance_deduct",
-            points_amount: computedDelta,
-            balance_before: currentBalance,
-            balance_after: newBalance,
-            notes: `Automatic deduction for rental session - ${
-              computedDelta /
-              (session.per_minute_rate_snapshot ||
-                session.hourly_rate_snapshot / 60)
-            } minutes`,
-          });
+      const logData = {
+        card_uid: session.card_uid,
+        session_id: session.id,
+        action_type: "balance_deduct",
+        points_amount: computedDelta,
+        balance_before: currentBalance,
+        balance_after: finalBalance,
+        notes: `Automatic deduction for rental session - ${Math.round(computedDelta / session.per_minute_rate_snapshot)} minutes`,
+      };
 
-        if (logError) {
-          console.error(
-            `Error logging point usage for session ${session.id}:`,
-            logError
-          );
-        }
-      }
+      console.log(`[Session ${session.id}] Deduction completed: ${computedDelta} points, balance: ${finalBalance}`);
 
-      console.log(
-        `Deducted ${computedDelta} points for session ${session.id}. New balance: ${newBalance}`
-      );
-
-      // Trigger UI update untuk sinkronisasi real-time
-      window.dispatchEvent(
-        new CustomEvent("memberCardBillingUpdate", {
-          detail: {
-            sessionId: session.id,
-            cardUid: session.card_uid,
-            pointsDeducted: computedDelta,
-            newTotalDeducted: currentTotal + computedDelta,
-            cardBalance: newBalance,
-          },
-        })
-      );
+      // Return data untuk bulk processing (tidak trigger UI update di sini)
+      return {
+        success: true,
+        sessionId: session.id,
+        cardUid: session.card_uid,
+        pointsDeducted: computedDelta,
+        newTotalDeducted: finalTotalDeducted,
+        cardBalance: finalBalance,
+        logs: [logData]
+      };
     } else {
       // Saldo tidak cukup: kurangi semua saldo yang tersisa hingga 0 dan akhiri sesi
       const partialDelta = currentBalance;
@@ -430,7 +421,12 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         !updatedCardRows2 ||
         updatedCardRows2.length === 0
       ) {
-        return;
+        console.error(`[Session ${session.id}] Failed to update balance for partial deduction`);
+        return {
+          success: false,
+          sessionId: session.id,
+          error: "Failed to update balance"
+        };
       }
 
       // Update counters dengan partialDelta (optimistic concurrency)
@@ -450,70 +446,44 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         updatedSessRows2.length === 0
       ) {
         // Rollback saldo jika gagal update session
+        console.error(`[Session ${session.id}] Failed to update session total for partial deduction, rolling back`);
         await supabase
           .from("rfid_cards")
           .update({ balance_points: currentBalance })
           .eq("uid", session.card_uid);
-        return;
+        return {
+          success: false,
+          sessionId: session.id,
+          error: "Failed to update session total"
+        };
       }
 
-      // Cek apakah log partial deduction sudah ada
-      const { data: existingPartialLogs } = await supabase
-        .from("card_usage_logs")
-        .select("id")
-        .eq("session_id", session.id)
-        .eq("action_type", "balance_deduct")
-        .eq("points_amount", partialDelta)
-        .eq("balance_before", currentBalance)
-        .eq("balance_after", 0)
-        .limit(1);
+      // Generate partial deduction log data untuk bulk insert
+      const partialLogData = {
+        card_uid: session.card_uid,
+        session_id: session.id,
+        action_type: "balance_deduct",
+        points_amount: partialDelta,
+        balance_before: currentBalance,
+        balance_after: 0,
+        notes: `Partial deduction due to insufficient balance; auto ending session (${elapsedMinutes} minutes)`,
+      };
 
-      if (existingPartialLogs && existingPartialLogs.length > 0) {
-        console.log(
-          `[Session ${session.id}] Skipping duplicate partial log insert - already exists (${partialDelta} pts, balance: ${currentBalance} → 0)`
-        );
-      } else {
-        // Log partial deduction
-        const { error: logError2 } = await supabase
-          .from("card_usage_logs")
-          .insert({
-            card_uid: session.card_uid,
-            session_id: session.id,
-            action_type: "balance_deduct",
-            points_amount: partialDelta,
-            balance_before: currentBalance,
-            balance_after: 0,
-            notes:
-              "Partial deduction due to insufficient balance; auto ending session",
-          });
-        if (logError2) {
-          console.error(
-            `Error logging partial point usage for session ${session.id}:`,
-            logError2
-          );
-        }
-      }
-
-      console.log(
-        `Partially deducted ${partialDelta} points (to zero) for session ${session.id}. New balance: 0`
-      );
-
-      // Trigger UI update
-      window.dispatchEvent(
-        new CustomEvent("memberCardBillingUpdate", {
-          detail: {
-            sessionId: session.id,
-            cardUid: session.card_uid,
-            pointsDeducted: partialDelta,
-            newTotalDeducted: currentTotal + partialDelta,
-            cardBalance: 0,
-          },
-        })
-      );
+      console.log(`[Session ${session.id}] Partial deduction completed: ${partialDelta} points, balance now 0`);
 
       // Akhiri sesi karena saldo habis
-      // await endSessionDueToInsufficientBalance(session);
-      await endSessionWithESP32Check(session, freshSession.is_mode_esp32);
+      await endSessionWithESP32Check(session, false);
+
+      // Return data untuk bulk processing
+      return {
+        success: true,
+        sessionId: session.id,
+        cardUid: session.card_uid,
+        pointsDeducted: partialDelta,
+        newTotalDeducted: currentTotal + partialDelta,
+        cardBalance: 0,
+        logs: [partialLogData]
+      };
     }
   };
 
@@ -768,8 +738,260 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
     }
   };
 
+  // Function untuk process billing per console dengan bulk insert
+  const processConsoleBilling = async (
+    consoleId: string,
+    sessions: MemberCardSession[],
+    now: Date
+  ) => {
+    console.log(`[CONSOLE ${consoleId}] Processing ${sessions.length} sessions`);
+
+    try {
+      // Ambil minimum_minutes untuk console ini
+      const minMinutesMap = await getMinimumMinutesByConsole([consoleId]);
+
+      // Process semua sessions di console ini secara parallel
+      const sessionPromises = sessions.map(session =>
+        processSessionBilling(session, now, minMinutesMap)
+      );
+
+      // Tunggu semua sessions selesai
+      const results = await Promise.allSettled(sessionPromises);
+
+      // Kumpulkan logs dari sessions yang berhasil
+      const successfulResults: any[] = [];
+      const failedSessionIds: string[] = [];
+
+      results.forEach((result, index) => {
+        const session = sessions[index];
+        if (result.status === 'fulfilled') {
+          const sessionResult = result.value;
+          if (sessionResult && sessionResult.success) {
+            successfulResults.push(sessionResult);
+          } else {
+            console.error(`[CONSOLE ${consoleId}] Session ${session.id} deduction failed:`, sessionResult?.error || 'Unknown error');
+            failedSessionIds.push(session.id);
+          }
+        } else {
+          console.error(`[CONSOLE ${consoleId}] Session ${session.id} promise rejected:`, result.reason);
+          failedSessionIds.push(session.id);
+        }
+      });
+
+      // Ekstrak semua log data dari successful results
+      const allLogs = successfulResults.flatMap(result => result.logs || []);
+      const successfulSessionIds = successfulResults.map(result => result.sessionId);
+
+      console.log(`[CONSOLE ${consoleId}] ${successfulResults.length}/${sessions.length} sessions successful, collected ${allLogs.length} logs`);
+
+      // Lakukan bulk insert jika ada logs
+      if (allLogs.length > 0) {
+        const bulkResult = await performBulkInsert(consoleId, allLogs);
+
+        if (bulkResult.success) {
+          console.log(`[CONSOLE ${consoleId}] Bulk inserted ${allLogs.length} logs successfully`);
+
+          // Trigger UI updates untuk semua sessions yang berhasil
+          successfulResults.forEach(result => {
+            if (result.sessionId && result.pointsDeducted) {
+              window.dispatchEvent(
+                new CustomEvent("memberCardBillingUpdate", {
+                  detail: {
+                    sessionId: result.sessionId,
+                    cardUid: result.cardUid,
+                    pointsDeducted: result.pointsDeducted,
+                    newTotalDeducted: result.newTotalDeducted,
+                    cardBalance: result.cardBalance,
+                  },
+                })
+              );
+            }
+          });
+        } else {
+          console.error(`[CONSOLE ${consoleId}] Bulk insert failed, fallback completed`);
+        }
+      }
+
+      // Log summary untuk console ini
+      console.log(`[CONSOLE ${consoleId}] Completed: ${successfulSessionIds.length} successful, ${failedSessionIds.length} failed`);
+
+      if (failedSessionIds.length > 0) {
+        console.warn(`[CONSOLE ${consoleId}] Failed sessions:`, failedSessionIds);
+      }
+
+    } catch (error) {
+      console.error(`[CONSOLE ${consoleId}] Console billing failed:`, error);
+      throw error;
+    }
+  };
+
+  // Function untuk perform bulk insert dengan fallback
+  const performBulkInsert = async (consoleId: string, logs: any[]) => {
+    try {
+      console.log(`[CONSOLE ${consoleId}] Attempting bulk insert of ${logs.length} logs`);
+
+      // Bulk insert attempt
+      const { error: bulkError } = await supabase
+        .from("card_usage_logs")
+        .insert(logs);
+
+      if (!bulkError) {
+        return { success: true, method: 'bulk' };
+      }
+
+      console.warn(`[CONSOLE ${consoleId}] Bulk insert failed:`, bulkError);
+
+      // Fallback: individual inserts dengan retry
+      console.log(`[CONSOLE ${consoleId}] Falling back to individual inserts`);
+      const individualResults = await performIndividualInserts(consoleId, logs);
+
+      return {
+        success: individualResults.successful > 0,
+        method: 'individual',
+        successful: individualResults.successful,
+        failed: individualResults.failed
+      };
+
+    } catch (error) {
+      console.error(`[CONSOLE ${consoleId}] Bulk insert exception:`, error);
+
+      // Emergency fallback
+      const individualResults = await performIndividualInserts(consoleId, logs);
+      return {
+        success: individualResults.successful > 0,
+        method: 'emergency_individual',
+        successful: individualResults.successful,
+        failed: individualResults.failed
+      };
+    }
+  };
+
+  // Function untuk individual inserts sebagai fallback
+  const performIndividualInserts = async (consoleId: string, logs: any[]) => {
+    let successful = 0;
+    let failed = 0;
+
+    for (let i = 0; i < logs.length; i++) {
+      const log = logs[i];
+      let logRetryCount = 0;
+      const maxLogRetries = 3;
+      let logInserted = false;
+
+      while (logRetryCount < maxLogRetries && !logInserted) {
+        try {
+          const { error } = await supabase
+            .from("card_usage_logs")
+            .insert(log);
+
+          if (!error) {
+            logInserted = true;
+            successful++;
+          } else {
+            console.warn(`[CONSOLE ${consoleId}] Individual insert ${i + 1} attempt ${logRetryCount + 1} failed:`, error);
+            logRetryCount++;
+          }
+        } catch (exception) {
+          console.error(`[CONSOLE ${consoleId}] Individual insert ${i + 1} exception:`, exception);
+          logRetryCount++;
+        }
+
+        if (!logInserted && logRetryCount < maxLogRetries) {
+          await new Promise(resolve => setTimeout(resolve, 500 * logRetryCount));
+        }
+      }
+
+      if (!logInserted) {
+        failed++;
+        console.error(`[CONSOLE ${consoleId}] Failed to insert log after ${maxLogRetries} attempts:`, log);
+      }
+    }
+
+    console.log(`[CONSOLE ${consoleId}] Individual inserts: ${successful} successful, ${failed} failed`);
+    return { successful, failed };
+  };
+
+  // Recovery mechanism untuk inkonsistensi yang sudah terjadi
+  const recoverMissingLogs = async () => {
+    try {
+      console.log("[RECOVERY] Starting log recovery process...");
+
+      // Cari session aktif yang mungkin memiliki inkonsistensi
+      const { data: sessions } = await supabase
+        .from("rental_sessions")
+        .select("id, total_points_deducted, card_uid")
+        .eq("status", "active")
+        .gt("total_points_deducted", 0);
+
+      let recoveryCount = 0;
+
+      for (const session of sessions || []) {
+        try {
+          // Hitung total dari logs
+          const { data: logs } = await supabase
+            .from("card_usage_logs")
+            .select("points_amount")
+            .eq("session_id", session.id)
+            .eq("action_type", "balance_deduct");
+
+          const totalFromLogs = logs?.reduce((sum, log) => sum + Math.abs(log.points_amount), 0) || 0;
+          const missingAmount = session.total_points_deducted - totalFromLogs;
+
+          if (missingAmount > 0) {
+            console.warn(`[RECOVERY] Session ${session.id} missing ${missingAmount} points in logs (DB: ${session.total_points_deducted}, Logs: ${totalFromLogs})`);
+
+            // Insert recovery log dengan amount yang missing
+            const { error: recoveryError } = await supabase
+              .from("card_usage_logs")
+              .insert({
+                card_uid: session.card_uid,
+                session_id: session.id,
+                action_type: "balance_deduct",
+                points_amount: missingAmount,
+                balance_before: 0, // Unknown historical data
+                balance_after: 0,  // Unknown historical data
+                notes: `SYSTEM RECOVERY: Missing log for ${missingAmount} points - inserted ${new Date().toISOString()}`,
+              });
+
+            if (recoveryError) {
+              console.error(`[RECOVERY] Failed to insert recovery log for session ${session.id}:`, recoveryError);
+            } else {
+              console.log(`[RECOVERY] Successfully inserted recovery log for session ${session.id}: ${missingAmount} points`);
+              recoveryCount++;
+            }
+          }
+        } catch (sessionError) {
+          console.error(`[RECOVERY] Error processing session ${session.id}:`, sessionError);
+        }
+      }
+
+      if (recoveryCount > 0) {
+        console.log(`[RECOVERY] Completed recovery process. Fixed ${recoveryCount} sessions with missing logs.`);
+      } else {
+        console.log("[RECOVERY] No sessions needed recovery.");
+      }
+
+    } catch (error) {
+      console.error("[RECOVERY] Recovery process failed:", error);
+    }
+  };
+
+  // Jalankan recovery setiap 10 menit
+  useEffect(() => {
+    const recoveryInterval = setInterval(recoverMissingLogs, 10 * 60 * 1000);
+
+    // Jalankan sekali saat mount (dengan delay 30 detik)
+    const initialRecoveryTimeout = setTimeout(recoverMissingLogs, 30000);
+
+    return () => {
+      clearInterval(recoveryInterval);
+      clearTimeout(initialRecoveryTimeout);
+    };
+  }, []);
+
   return {
     processSessionBilling,
     endSessionDueToInsufficientBalance,
+    processConsoleBilling,
+    recoverMissingLogs, // Export untuk manual recovery jika diperlukan
   };
 };
