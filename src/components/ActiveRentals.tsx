@@ -7636,17 +7636,11 @@ const ActiveRentals: React.FC = () => {
               ) : (
                 <div className="max-h-[60vh] overflow-auto divide-y divide-gray-100">
                   {(() => {
-                    // Hapus duplikat dari historyLogs terlebih dahulu
-                    const uniqueHistoryLogs = removeDuplicateLogs(historyLogs);
-
                     // Filter logs penambahan dan group pemakaian
-                    const addLogs = uniqueHistoryLogs.filter(
+                    const addLogs = historyLogs.filter(
                       (log) => log.action_type === "balance_add"
                     );
-                    const deductGrouped = groupDeductLogsBySession(
-                      uniqueHistoryLogs,
-                      scannedCardData?.balance_points || 0
-                    );
+                    const deductGrouped = groupDeductLogsBySession(historyLogs);
 
                     // Gabungkan dan urutkan semua logs
                     const combined = [
