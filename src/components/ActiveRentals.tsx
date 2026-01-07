@@ -1732,7 +1732,7 @@ const ActiveRentals: React.FC = () => {
         try {
           supabase.removeChannel(channel);
         } catch (e) {
-          console.error(e)
+          console.error(e);
         }
         channel = supabase
           .channel("active_rentals_realtime")
@@ -1759,8 +1759,7 @@ const ActiveRentals: React.FC = () => {
   useEffect(() => {
     let isSubscribed = true;
     let updateTimeout: NodeJS.Timeout;
-
-    const consolesChannel = supabase
+    let consolesChannel = supabase
       .channel("consoles_auto_shutdown_realtime_optimized")
       .on(
         "postgres_changes",
@@ -1816,9 +1815,83 @@ const ActiveRentals: React.FC = () => {
       )
       .subscribe();
 
+    // Fungsi untuk re-subscribe jika tab kembali aktif
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        try {
+          supabase.removeChannel(consolesChannel);
+        } catch (e) {
+          console.error(e);
+        }
+
+        // Subscribe ulang ke channel baru
+        consolesChannel = supabase
+          .channel("consoles_auto_shutdown_realtime_optimized")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "consoles" },
+            async (payload) => {
+              try {
+                console.log(
+                  "Console change detected in ActiveRentals:",
+                  payload
+                );
+
+                if (
+                  payload.eventType === "UPDATE" &&
+                  payload.new &&
+                  payload.old &&
+                  isSubscribed
+                ) {
+                  const consoleId = payload.new.id;
+                  const oldAutoShutdown = payload.old.auto_shutdown_enabled;
+                  const newAutoShutdown = payload.new.auto_shutdown_enabled;
+
+                  if (
+                    oldAutoShutdown !== newAutoShutdown &&
+                    !updatingConsoleIds.has(consoleId)
+                  ) {
+                    console.log(
+                      `External update: auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`
+                    );
+
+                    clearTimeout(updateTimeout);
+                    updateTimeout = setTimeout(() => {
+                      if (isSubscribed) {
+                        setConsoleAutoShutdownStates((prev) => {
+                          const newStates = {
+                            ...prev,
+                            [consoleId]: newAutoShutdown ?? true,
+                          };
+
+                          const anyEnabled = Object.values(newStates).some(
+                            (state) => state
+                          );
+                          setAutoShutdownEnabled(anyEnabled);
+                          return newStates;
+                        });
+                      }
+                    }, 100);
+                  }
+                }
+              } catch (e) {
+                console.error(
+                  "Console realtime refresh error in ActiveRentals:",
+                  e
+                );
+              }
+            }
+          )
+          .subscribe();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       isSubscribed = false;
       clearTimeout(updateTimeout);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       supabase.removeChannel(consolesChannel);
     };
   }, [updatingConsoleIds]);
