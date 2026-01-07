@@ -1715,19 +1715,43 @@ const ActiveRentals: React.FC = () => {
 
   // Additional realtime listener for immediate UI updates
   useEffect(() => {
-    const channel = supabase
+    let channel = supabase
       .channel("active_rentals_realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "rental_sessions" },
         async () => {
-          // Trigger refresh from TimerContext
           await refreshActiveSessions();
         }
       )
       .subscribe();
 
+    // Fungsi untuk re-subscribe jika tab kembali aktif
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        try {
+          supabase.removeChannel(channel);
+        } catch (e) {
+          console.error(e)
+        }
+        channel = supabase
+          .channel("active_rentals_realtime")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "rental_sessions" },
+            async () => {
+              await refreshActiveSessions();
+            }
+          )
+          .subscribe();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Cleanup
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, [refreshActiveSessions]);
