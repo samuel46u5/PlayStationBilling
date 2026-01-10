@@ -694,40 +694,40 @@ const Bookkeeping: React.FC = () => {
             const day = start.getDay();
             const diff = (day === 0 ? -6 : 1) - day;
             start.setDate(start.getDate() + diff);
-            start.setHours(0, 0, 0, 0);
+            // start.setHours(0, 0, 0, 0);
             end = new Date();
-            end.setHours(23, 59, 59, 999);
+            // end.setHours(23, 59, 59, 999);
             break;
           }
           case "last_week": {
             start = new Date();
             start.setDate(start.getDate() - 7);
-            start.setHours(0, 0, 0, 0);
+            // start.setHours(0, 0, 0, 0);
             end = new Date();
             end.setDate(end.getDate() - 1);
-            end.setHours(23, 59, 59, 999);
+            // end.setHours(23, 59, 59, 999);
             break;
           }
           case "month": {
             start = new Date(now.getFullYear(), now.getMonth(), 1);
             end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-            end.setHours(23, 59, 59, 999);
+            // end.setHours(23, 59, 59, 999);
             break;
           }
           case "last_month": {
             start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             end = new Date(now.getFullYear(), now.getMonth(), 0);
-            end.setHours(23, 59, 59, 999);
+            // end.setHours(23, 59, 59, 999);
             break;
           }
           case "range": {
             if (startDate) {
               start = new Date(startDate);
-              start.setHours(0, 0, 0, 0);
+              // start.setHours(0, 0, 0, 0);
             }
             if (endDate) {
               end = new Date(endDate);
-              end.setHours(23, 59, 59, 999);
+              // end.setHours(23, 59, 59, 999);
             }
             break;
           }
@@ -1000,12 +1000,24 @@ const Bookkeeping: React.FC = () => {
     );
   }, [entries, debouncedSearchTerm]);
 
+  const journalFilteredEntries = useMemo(() => {
+    let filtered = filteredByTab;
+    if (activeView === "jurnal" && debouncedSearchTerm.trim()) {
+      filtered = filtered.filter((entry) =>
+        entry.description
+          .toLowerCase()
+          .includes(debouncedSearchTerm.toLowerCase())
+      );
+    }
+    return filtered;
+  }, [filteredByTab, activeView, debouncedSearchTerm]);
+
   // Pagination logic for journal entries
   const journalEntriesPerPage = 20;
   const journalTotalPages = Math.ceil(
-    filteredEntries.length / journalEntriesPerPage
+    journalFilteredEntries.length / journalEntriesPerPage
   );
-  const paginatedEntries = filteredEntries.slice(
+  const paginatedEntries = journalFilteredEntries.slice(
     (currentPage - 1) * journalEntriesPerPage,
     currentPage * journalEntriesPerPage
   );
