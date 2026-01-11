@@ -472,7 +472,9 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       console.log(`[Session ${session.id}] Partial deduction completed: ${partialDelta} points, balance now 0`);
 
       // Akhiri sesi karena saldo habis
-      await endSessionWithESP32Check(session, false);
+      // await endSessionWithESP32Check(session, false);
+      const isESP32Mode = freshSession.is_mode_esp32 || session.is_mode_esp32;
+      await endSessionWithESP32Check(session, isESP32Mode ?? false);
 
       // Return data untuk bulk processing
       return {
