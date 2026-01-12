@@ -229,8 +229,8 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       }
     };
 
-    // Jalankan billing setiap 30 detik
-    intervalRef.current = setInterval(processMemberCardBilling, 30000);
+    // Jalankan billing setiap 60 detik
+    intervalRef.current = setInterval(processMemberCardBilling, 60000);
 
     // Jalankan sekali saat mount
     processMemberCardBilling();
