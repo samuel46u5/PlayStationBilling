@@ -467,15 +467,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     return () => clearInterval(authInterval);
   }, [checkAuthorization]);
 
-  // Set up interval untuk refresh active sessions setiap 30 detik
-  useEffect(() => {
-    const sessionRefreshInterval = setInterval(() => {
-      fetchActiveSessions();
-    }, 30000); // Refresh setiap 30 detik
-
-    return () => clearInterval(sessionRefreshInterval);
-  }, [fetchActiveSessions]);
-
   // Realtime sync for rental_sessions changes across devices
   useEffect(() => {
     const channel = supabase
