@@ -76,8 +76,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
         .select(
           `
           *,
-          consoles(name, location, rate_profiles(capital)),
-          last_billed_minutes
+          consoles(name, location, rate_profiles(capital))
         `
         )
         .in("status", ["active"]);
