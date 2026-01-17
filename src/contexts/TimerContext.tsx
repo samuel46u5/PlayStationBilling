@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
-import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
+// import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
 import { isAuthorizedDeviceForBilling } from "../utils/deviceFingerprint.ts";
 
 interface RentalSession {
@@ -66,7 +66,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   const [isAuthorizedDevice, setIsAuthorizedDevice] = useState(false);
 
   // Member card billing hook
-  useMemberCardBilling(activeSessions);
+  // useMemberCardBilling(activeSessions);
 
   // Fetch active sessions from database
   const fetchActiveSessions = useCallback(async () => {
@@ -465,6 +465,15 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
 
     return () => clearInterval(authInterval);
   }, [checkAuthorization]);
+
+  // Set up interval untuk refresh active sessions setiap 30 detik
+  useEffect(() => {
+    const sessionRefreshInterval = setInterval(() => {
+      fetchActiveSessions();
+    }, 30000); // Refresh setiap 30 detik
+
+    return () => clearInterval(sessionRefreshInterval);
+  }, [fetchActiveSessions]);
 
   // Realtime sync for rental_sessions changes across devices
   useEffect(() => {

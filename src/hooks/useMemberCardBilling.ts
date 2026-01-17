@@ -156,12 +156,33 @@ async function pingESP32(
   }
 }
 
-export const useMemberCardBilling = (activeSessions: any[]) => {
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+let globalBillingLock = false;
+let lastBillingTime = 0;
+const BILLING_INTERVAL = 60 * 1000; 
+const MIN_BILLING_INTERVAL = 30 * 1000;
 
+export const useMemberCardBilling = () => {
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastProcessedSessions = useRef<Set<string>>(new Set());
   useEffect(() => {
     ensureFingerprintReady();
     const processMemberCardBilling = async () => {
+      const now = Date.now();
+      
+      // **PERIOD LOCK**: Cegah billing terlalu sering
+      if (now - lastBillingTime < MIN_BILLING_INTERVAL) {
+        console.log(`[BILLING] Skipped - too soon since last billing (${(now - lastBillingTime)/1000}s ago)`);
+        return;
+      }
+      
+      // **GLOBAL LOCK**: Cegah concurrent billing
+      if (globalBillingLock) {
+        console.log("[BILLING] Skipped - another billing process is running");
+        return;
+      }
+      
+      globalBillingLock = true;
+      lastBillingTime = now;
       try {
         // Check apakah device ini yang authorized untuk melakukan billing
         const isAuthorized = await isAuthorizedDeviceForBilling();
@@ -173,11 +194,25 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
           return;
         }
 
+        const { data: freshActiveSessions, error: sessionError } = await supabase
+          .from("rental_sessions")
+          .select(`
+            *,
+            consoles(name, location, rate_profiles(minimum_minutes_member))
+          `)
+          .eq("status", "active")
+          .not("card_uid", "is", null);
+
+        if (sessionError || !freshActiveSessions) {
+          console.error("Error fetching fresh sessions:", sessionError);
+          return;
+        }
+
         // Ambil semua sesi member-card aktif
-        const memberCardSessions = activeSessions.filter(
+        const memberCardSessions = freshActiveSessions.filter(
           (session) =>
             session.status === "active" &&
-            session.is_voucher_used &&
+            // session.is_voucher_used &&
             session.start_time &&
             session.card_uid
         ) as MemberCardSession[];
@@ -185,6 +220,17 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         if (memberCardSessions.length === 0) {
           return;
         }
+
+        const currentSessionIds = new Set(memberCardSessions.map(s => s.id));
+        const newSessions = [...currentSessionIds].filter(id => !lastProcessedSessions.current.has(id));
+        
+        if (newSessions.length === 0) {
+          console.log(`[BILLING] No new sessions to process (${currentSessionIds.size} total)`);
+          return;
+        }
+
+        console.log(`[BILLING] Processing ${memberCardSessions.length} sessions (${newSessions.length} new)`);
+        lastProcessedSessions.current = currentSessionIds;
 
         const now = new Date();
 
@@ -226,27 +272,47 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
         }
       } catch (error) {
         console.error("Error in member card billing:", error);
+      } finally {
+        globalBillingLock = false;
       }
     };
 
     // Jalankan billing setiap 60 detik
-    intervalRef.current = setInterval(processMemberCardBilling, 60000);
+    intervalRef.current = setInterval(processMemberCardBilling, BILLING_INTERVAL);
 
+    const initialTimeout = setTimeout(processMemberCardBilling, 5000);
     // Jalankan sekali saat mount
-    processMemberCardBilling();
+    // processMemberCardBilling();
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      clearTimeout(initialTimeout);
+      globalBillingLock = false;
     };
-  }, [activeSessions]);
+  }, []);
 
   const processSessionBilling = async (
     session: MemberCardSession,
     now: Date,
     minMinutesMap: Record<string, number>
   ) => {
+    // **ENHANCED IDEMPOTENCY**: Database-level period lock
+    const sessionBillingCheck = await supabase
+    .from("rental_sessions")
+    .select("last_billing_at, total_points_deducted")
+    .eq("id", session.id)
+    .single();
+
+    if (sessionBillingCheck.data?.last_billing_at) {
+      const timeSinceLastBilling = now.getTime() - new Date(sessionBillingCheck.data.last_billing_at).getTime();
+      if (timeSinceLastBilling < MIN_BILLING_INTERVAL) {
+        console.log(`[Session ${session.id}] Skipped - billed ${timeSinceLastBilling/1000}s ago`);
+        return;
+      }
+    }
+
     const startTime = new Date(session.start_time);
     const elapsedMinutes = Math.ceil(
       (now.getTime() - startTime.getTime()) / 60000
@@ -390,6 +456,11 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
 
       console.log(`[Session ${session.id}] Deduction completed: ${computedDelta} points, balance: ${finalBalance}`);
 
+      await supabase
+      .from("rental_sessions")
+      .update({ last_billing_at: now.toISOString() })
+      .eq("id", session.id);
+
       // Return data untuk bulk processing (tidak trigger UI update di sini)
       return {
         success: true,
@@ -475,6 +546,14 @@ export const useMemberCardBilling = (activeSessions: any[]) => {
       // await endSessionWithESP32Check(session, false);
       const isESP32Mode = freshSession.is_mode_esp32 || session.is_mode_esp32;
       await endSessionWithESP32Check(session, isESP32Mode ?? false);
+
+      console.log(`[Session ${session.id}] Deduction completed: ${computedDelta} points, balance now 0`);
+
+      // Update last_billing_at setelah successful billing
+      await supabase
+        .from("rental_sessions")
+        .update({ last_billing_at: now.toISOString() })
+        .eq("id", session.id);
 
       // Return data untuk bulk processing
       return {
