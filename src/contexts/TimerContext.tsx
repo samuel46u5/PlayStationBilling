@@ -430,7 +430,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
         .single();
       
       const minMinutesMap: Record<string, number> = {};
-      minMinutesMap[consoleId] = consoleData?.rate_profiles?.[0]?.minimum_minutes_member || 60;
+      minMinutesMap[consoleId] = consoleData?.rate_profiles?.[0]?.minimum_minutes_member || 0;
 
       // Process each session
       const sessionPromises = sessions.map(session =>
@@ -486,7 +486,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
 
     const startTime = new Date(session.start_time);
     const elapsedMinutes = Math.ceil((now.getTime() - startTime.getTime()) / 60000);
-    const minimumMinutes = minMinutesMap[session.console_id] || 60;
+    const minimumMinutes = minMinutesMap[session.console_id] || 0;
 
     // Calculate expected points
     let expectedPoints = 0;
@@ -514,7 +514,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
         .single(),
       supabase
         .from("rental_sessions")
-        .select("id, total_points_deducted")
+        .select("id, total_points_deducted, is_mode_esp32")
         .eq("id", session.id)
         .limit(1),
     ]);
@@ -658,7 +658,9 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
       console.log(`[Session ${session.id}] Partial deduction completed: ${partialDelta} points, balance now 0`);
 
       // End session
-      await endSessionDueToInsufficientBalance(session);
+      // await endSessionDueToInsufficientBalance(session);
+      const isESP32Mode = freshSessionRows[0].is_mode_esp32 || session.is_mode_esp32;
+      await endSessionWithESP32Check(session, isESP32Mode ?? false);
 
       // Update last_billing_at
       await supabase
@@ -725,6 +727,37 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
       console.log(`Session ${session.id} ended due to insufficient balance after ${elapsedMinutes} minutes`);
     } catch (error) {
       console.error(`Error ending session ${session.id}:`, error);
+    }
+  };
+
+  const endSessionWithESP32Check = async (
+    session: MemberCardSession,
+    isModeESP32?: boolean
+  ) => {
+    try {
+      // Jika mode ESP32, JANGAN akhiri sesi otomatis
+      if (isModeESP32) {
+        console.log(
+          `Session ${session.id} menggunakan mode ESP32, skip auto end karena saldo habis.`
+        );
+        return;
+      }
+  
+      // Bukan mode ESP32, maka langsung akhiri sesi
+      console.log(
+        `Session ${session.id} tidak menggunakan mode ESP32, langsung mengakhiri sesi.`
+      );
+      await endSessionDueToInsufficientBalance(session);
+    } catch (error) {
+      console.error(
+        `Error dalam endSessionWithESP32Check untuk session ${session.id}:`,
+        error
+      );
+      try {
+        await endSessionDueToInsufficientBalance(session);
+      } catch (endError) {
+        console.error(`Error mengakhiri sesi ${session.id}:`, endError);
+      }
     }
   };
 
@@ -884,14 +917,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   }, [checkAuthorization]);
 
   // Set up interval untuk refresh active sessions setiap 30 detik
-  useEffect(() => {
-    const sessionRefreshInterval = setInterval(() => {
-      fetchActiveSessions();
-    }, 30000); // Refresh setiap 30 detik
-
-    return () => clearInterval(sessionRefreshInterval);
-  }, [fetchActiveSessions]);
-
   useEffect(() => {
     const sessionRefreshInterval = setInterval(() => {
       fetchActiveSessions();
