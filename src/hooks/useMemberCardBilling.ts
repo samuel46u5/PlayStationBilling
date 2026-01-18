@@ -15,6 +15,7 @@ interface MemberCardSession {
   per_minute_rate_snapshot: number;
   total_points_deducted: number;
   is_mode_esp32?: boolean;
+  last_billed_minutes?: number;
 }
 
 let minMinutesCache: Record<string, number> = {};
@@ -293,6 +294,269 @@ export const useMemberCardBilling = () => {
     };
   }, []);
 
+  // Helper function untuk menghitung expected points berdasarkan menit
+  const calculateExpectedPoints = (
+    minutes: number, 
+    minimumMinutes: number, 
+    session: MemberCardSession
+  ): number => {
+    if (minimumMinutes === 0) {
+      return minutes * session.per_minute_rate_snapshot;
+    } else if (minutes <= minimumMinutes) {
+      return session.hourly_rate_snapshot;
+    } else {
+      const extraMinutes = minutes - minimumMinutes;
+      return session.hourly_rate_snapshot + extraMinutes * session.per_minute_rate_snapshot;
+    }
+  };
+
+  // const processSessionBilling = async (
+  //   session: MemberCardSession,
+  //   now: Date,
+  //   minMinutesMap: Record<string, number>
+  // ) => {
+  //   const startTime = new Date(session.start_time);
+  //   const elapsedMinutes = Math.ceil(
+  //     (now.getTime() - startTime.getTime()) / 60000
+  //   );
+  //   const minimumMinutes = minMinutesMap[session.console_id] || 0;
+
+  //   // Hitung expected points berdasarkan waktu berjalan
+  //   let expectedPoints = 0;
+  //   if (minimumMinutes === 0) {
+  //     expectedPoints = elapsedMinutes * session.per_minute_rate_snapshot;
+  //   } else if (elapsedMinutes <= minimumMinutes) {
+  //     // Minimal 1 jam
+  //     expectedPoints = session.hourly_rate_snapshot;
+  //   } else {
+  //     // 1 jam + menit tambahan
+  //     const extraMinutes = elapsedMinutes - minimumMinutes;
+  //     expectedPoints =
+  //       session.hourly_rate_snapshot +
+  //       extraMinutes * session.per_minute_rate_snapshot;
+  //   }
+
+  //   // Hitung delta yang perlu dipotong
+  //   const deltaPoints = expectedPoints - session.total_points_deducted;
+
+  //   if (deltaPoints <= 0) {
+  //     return; // Tidak ada yang perlu dipotong
+  //   }
+
+  //   // Ambil saldo kartu saat ini (guarded) & current session counters (fresh)
+  //   const [
+  //     { data: cardData, error: cardError },
+  //     { data: freshSessionRows, error: freshSessErr },
+  //   ] = await Promise.all([
+  //     supabase
+  //       .from("rfid_cards")
+  //       .select("balance_points, status")
+  //       .eq("uid", session.card_uid)
+  //       .single(),
+  //     supabase
+  //       .from("rental_sessions")
+  //       .select("id,total_points_deducted,is_mode_esp32,last_billed_minutes")
+  //       .eq("id", session.id)
+  //       .limit(1),
+  //   ]);
+
+  //   if (cardError || !cardData) {
+  //     console.error(
+  //       `Error fetching card balance for session ${session.id}:`,
+  //       cardError
+  //     );
+  //     return;
+  //   }
+
+  //   if (cardData.status !== "active") {
+  //     console.error(
+  //       `Card ${session.card_uid} is not active for session ${session.id}`
+  //     );
+  //     return;
+  //   }
+  //   if (freshSessErr || !freshSessionRows || freshSessionRows.length === 0) {
+  //     console.error(
+  //       `Error fetching fresh session for ${session.id}:`,
+  //       freshSessErr
+  //     );
+  //     return;
+  //   }
+  //   const freshSession = freshSessionRows[0] as {
+  //     total_points_deducted: number;
+  //     is_mode_esp32?: boolean;
+  //   };
+
+  //   const currentBalance = Number(cardData.balance_points) || 0;
+  //   const currentTotal = Number(freshSession.total_points_deducted) || 0;
+  //   const computedDelta = expectedPoints - currentTotal;
+  //   if (computedDelta <= 0) {
+  //     // Sudah dipotong oleh klien lain
+  //     return;
+  //   }
+
+  //   // Lakukan pemotongan points
+  //   if (computedDelta <= currentBalance) {
+  //     // Cukup saldo: kurangi sebesar computedDelta seperti biasa
+  //     const newBalance = currentBalance - computedDelta;
+
+  //     // Guarded balance update (only if balance_points still >= computedDelta)
+  //     const { data: updatedCardRows, error: updateBalanceError } =
+  //       await supabase
+  //         .from("rfid_cards")
+  //         .update({ balance_points: newBalance })
+  //         .eq("uid", session.card_uid)
+  //         .eq("status", "active")
+  //         .gte("balance_points", computedDelta)
+  //         .select("id");
+  //     if (
+  //       updateBalanceError ||
+  //       !updatedCardRows ||
+  //       updatedCardRows.length === 0
+  //     ) {
+  //       // Guard gagal karena race condition/saldo berubah.
+  //       return;
+  //     }
+
+  //     // Guarded session counters update (optimistic concurrency)
+  //     const { data: updatedSessRows, error: updateSessionError } =
+  //       await supabase
+  //         .from("rental_sessions")
+  //         .update({
+  //           total_points_deducted: currentTotal + computedDelta,
+  //         })
+  //         .eq("id", session.id)
+  //         .eq("total_points_deducted", currentTotal)
+  //         .select("id");
+
+  //     if (
+  //       updateSessionError ||
+  //       !updatedSessRows ||
+  //       updatedSessRows.length === 0
+  //     ) {
+  //       // Session sudah diupdate pihak lain → rollback saldo
+  //       await supabase
+  //         .from("rfid_cards")
+  //         .update({ balance_points: currentBalance })
+  //         .eq("uid", session.card_uid);
+  //       return;
+  //     }
+
+  //     // PENTING: Kode return harus di dalam while loop di tempat yang benar
+  //     // Untuk sementara, kita return di luar loop tapi menggunakan variable yang tersedia
+  //     const finalBalance = currentBalance - computedDelta;
+  //     const finalTotalDeducted = currentTotal + computedDelta;
+
+  //     const logData = {
+  //       card_uid: session.card_uid,
+  //       session_id: session.id,
+  //       action_type: "balance_deduct",
+  //       points_amount: computedDelta,
+  //       balance_before: currentBalance,
+  //       balance_after: finalBalance,
+  //       notes: `Automatic deduction for rental session - ${Math.round(computedDelta / session.per_minute_rate_snapshot)} minutes`,
+  //     };
+
+  //     console.log(`[Session ${session.id}] Deduction completed: ${computedDelta} points, balance: ${finalBalance}`);
+
+  //     // Return data untuk bulk processing (tidak trigger UI update di sini)
+  //     return {
+  //       success: true,
+  //       sessionId: session.id,
+  //       cardUid: session.card_uid,
+  //       pointsDeducted: computedDelta,
+  //       newTotalDeducted: finalTotalDeducted,
+  //       cardBalance: finalBalance,
+  //       logs: [logData]
+  //     };
+  //   } else {
+  //     // Saldo tidak cukup: kurangi semua saldo yang tersisa hingga 0 dan akhiri sesi
+  //     const partialDelta = currentBalance;
+  //     if (partialDelta <= 0) {
+  //       return;
+  //     }
+
+  //     // Guarded: set balance ke 0 hanya jika masih sama dengan currentBalance
+  //     const { data: updatedCardRows2, error: updateBalanceError2 } =
+  //       await supabase
+  //         .from("rfid_cards")
+  //         .update({ balance_points: 0 })
+  //         .eq("uid", session.card_uid)
+  //         .eq("status", "active")
+  //         .eq("balance_points", currentBalance)
+  //         .select("id");
+  //     if (
+  //       updateBalanceError2 ||
+  //       !updatedCardRows2 ||
+  //       updatedCardRows2.length === 0
+  //     ) {
+  //       console.error(`[Session ${session.id}] Failed to update balance for partial deduction`);
+  //       return {
+  //         success: false,
+  //         sessionId: session.id,
+  //         error: "Failed to update balance"
+  //       };
+  //     }
+
+  //     // Update counters dengan partialDelta (optimistic concurrency)
+  //     const { data: updatedSessRows2, error: updateSessionError2 } =
+  //       await supabase
+  //         .from("rental_sessions")
+  //         .update({
+  //           total_points_deducted: currentTotal + partialDelta,
+  //         })
+  //         .eq("id", session.id)
+  //         .eq("total_points_deducted", currentTotal)
+  //         .select("id");
+
+  //     if (
+  //       updateSessionError2 ||
+  //       !updatedSessRows2 ||
+  //       updatedSessRows2.length === 0
+  //     ) {
+  //       // Rollback saldo jika gagal update session
+  //       console.error(`[Session ${session.id}] Failed to update session total for partial deduction, rolling back`);
+  //       await supabase
+  //         .from("rfid_cards")
+  //         .update({ balance_points: currentBalance })
+  //         .eq("uid", session.card_uid);
+  //       return {
+  //         success: false,
+  //         sessionId: session.id,
+  //         error: "Failed to update session total"
+  //       };
+  //     }
+
+  //     // Generate partial deduction log data untuk bulk insert
+  //     const partialLogData = {
+  //       card_uid: session.card_uid,
+  //       session_id: session.id,
+  //       action_type: "balance_deduct",
+  //       points_amount: partialDelta,
+  //       balance_before: currentBalance,
+  //       balance_after: 0,
+  //       notes: `Partial deduction due to insufficient balance; auto ending session (${elapsedMinutes} minutes)`,
+  //     };
+
+  //     console.log(`[Session ${session.id}] Partial deduction completed: ${partialDelta} points, balance now 0`);
+
+  //     // Akhiri sesi karena saldo habis
+  //     // await endSessionWithESP32Check(session, false);
+  //     const isESP32Mode = freshSession.is_mode_esp32 || session.is_mode_esp32;
+  //     await endSessionWithESP32Check(session, isESP32Mode ?? false);
+
+  //     // Return data untuk bulk processing
+  //     return {
+  //       success: true,
+  //       sessionId: session.id,
+  //       cardUid: session.card_uid,
+  //       pointsDeducted: partialDelta,
+  //       newTotalDeducted: currentTotal + partialDelta,
+  //       cardBalance: 0,
+  //       logs: [partialLogData]
+  //     };
+  //   }
+  // };
+
   const processSessionBilling = async (
     session: MemberCardSession,
     now: Date,
@@ -317,27 +581,26 @@ export const useMemberCardBilling = () => {
     const elapsedMinutes = Math.ceil(
       (now.getTime() - startTime.getTime()) / 60000
     );
-    const minimumMinutes = minMinutesMap[session.console_id] || 0;
-
-    // Hitung expected points berdasarkan waktu berjalan
-    let expectedPoints = 0;
-    if (minimumMinutes === 0) {
-      expectedPoints = elapsedMinutes * session.per_minute_rate_snapshot;
-    } else if (elapsedMinutes <= minimumMinutes) {
-      // Minimal 1 jam
-      expectedPoints = session.hourly_rate_snapshot;
-    } else {
-      // 1 jam + menit tambahan
-      const extraMinutes = elapsedMinutes - minimumMinutes;
-      expectedPoints =
-        session.hourly_rate_snapshot +
-        extraMinutes * session.per_minute_rate_snapshot;
+    
+    // Idempotency check: jika sudah di-billing untuk menit ini, skip
+    const alreadyBilledMinutes = session.last_billed_minutes || 0;
+    if (alreadyBilledMinutes >= elapsedMinutes) {
+      console.log(`[Session ${session.id}] Already billed for ${alreadyBilledMinutes}/${elapsedMinutes} minutes, skipping`);
+      return;
     }
 
-    // Hitung delta yang perlu dipotong
-    const deltaPoints = expectedPoints - session.total_points_deducted;
+    const minimumMinutes = minMinutesMap[session.console_id] || 0;
+
+    // Hitung expected points untuk selisih menit yang belum di-billing
+    const totalExpectedAfterBilling = calculateExpectedPoints(elapsedMinutes, minimumMinutes, session);
+    const totalExpectedBeforeBilling = calculateExpectedPoints(alreadyBilledMinutes, minimumMinutes, session);
+    const expectedPointsForPeriod = totalExpectedAfterBilling - totalExpectedBeforeBilling;
+    
+    // Hitung delta yang perlu dipotong (sudah termasuk yang sebelumnya)
+    const deltaPoints = expectedPointsForPeriod - (session.total_points_deducted - totalExpectedBeforeBilling);
 
     if (deltaPoints <= 0) {
+      console.log(`[Session ${session.id}] No additional points to deduct (delta: ${deltaPoints})`);
       return; // Tidak ada yang perlu dipotong
     }
 
@@ -353,7 +616,7 @@ export const useMemberCardBilling = () => {
         .single(),
       supabase
         .from("rental_sessions")
-        .select("id,total_points_deducted,is_mode_esp32")
+        .select("id,total_points_deducted,is_mode_esp32,last_billed_minutes")
         .eq("id", session.id)
         .limit(1),
     ]);
@@ -382,13 +645,14 @@ export const useMemberCardBilling = () => {
     const freshSession = freshSessionRows[0] as {
       total_points_deducted: number;
       is_mode_esp32?: boolean;
+      last_billed_minutes?: number;
     };
 
     const currentBalance = Number(cardData.balance_points) || 0;
     const currentTotal = Number(freshSession.total_points_deducted) || 0;
-    const computedDelta = expectedPoints - currentTotal;
+    const computedDelta = expectedPointsForPeriod - (currentTotal - totalExpectedBeforeBilling);
+    
     if (computedDelta <= 0) {
-      // Sudah dipotong oleh klien lain
       return;
     }
 
@@ -421,6 +685,7 @@ export const useMemberCardBilling = () => {
           .from("rental_sessions")
           .update({
             total_points_deducted: currentTotal + computedDelta,
+            last_billed_minutes: elapsedMinutes, // Update tracking minutes
           })
           .eq("id", session.id)
           .eq("total_points_deducted", currentTotal)
@@ -439,8 +704,6 @@ export const useMemberCardBilling = () => {
         return;
       }
 
-      // PENTING: Kode return harus di dalam while loop di tempat yang benar
-      // Untuk sementara, kita return di luar loop tapi menggunakan variable yang tersedia
       const finalBalance = currentBalance - computedDelta;
       const finalTotalDeducted = currentTotal + computedDelta;
 
@@ -451,10 +714,10 @@ export const useMemberCardBilling = () => {
         points_amount: computedDelta,
         balance_before: currentBalance,
         balance_after: finalBalance,
-        notes: `Automatic deduction for rental session - ${Math.round(computedDelta / session.per_minute_rate_snapshot)} minutes`,
+        notes: `Automatic deduction for rental session - billed ${minutesToBill} minutes (${alreadyBilledMinutes} to ${elapsedMinutes})`,
       };
 
-      console.log(`[Session ${session.id}] Deduction completed: ${computedDelta} points, balance: ${finalBalance}`);
+      console.log(`[Session ${session.id}] Deduction completed: ${computedDelta} points, balance: ${finalBalance}, minutes: ${alreadyBilledMinutes}->${elapsedMinutes}`);
 
       await supabase
       .from("rental_sessions")
@@ -469,6 +732,7 @@ export const useMemberCardBilling = () => {
         pointsDeducted: computedDelta,
         newTotalDeducted: finalTotalDeducted,
         cardBalance: finalBalance,
+        billedMinutes: elapsedMinutes,
         logs: [logData]
       };
     } else {
@@ -506,6 +770,7 @@ export const useMemberCardBilling = () => {
           .from("rental_sessions")
           .update({
             total_points_deducted: currentTotal + partialDelta,
+            last_billed_minutes: elapsedMinutes,
           })
           .eq("id", session.id)
           .eq("total_points_deducted", currentTotal)
@@ -537,13 +802,12 @@ export const useMemberCardBilling = () => {
         points_amount: partialDelta,
         balance_before: currentBalance,
         balance_after: 0,
-        notes: `Partial deduction due to insufficient balance; auto ending session (${elapsedMinutes} minutes)`,
+        notes: `Partial deduction due to insufficient balance; auto ending session (${elapsedMinutes} minutes total, billed up to ${elapsedMinutes})`,
       };
 
       console.log(`[Session ${session.id}] Partial deduction completed: ${partialDelta} points, balance now 0`);
 
       // Akhiri sesi karena saldo habis
-      // await endSessionWithESP32Check(session, false);
       const isESP32Mode = freshSession.is_mode_esp32 || session.is_mode_esp32;
       await endSessionWithESP32Check(session, isESP32Mode ?? false);
 
@@ -563,6 +827,7 @@ export const useMemberCardBilling = () => {
         pointsDeducted: partialDelta,
         newTotalDeducted: currentTotal + partialDelta,
         cardBalance: 0,
+        billedMinutes: elapsedMinutes,
         logs: [partialLogData]
       };
     }
@@ -883,6 +1148,7 @@ export const useMemberCardBilling = () => {
                     pointsDeducted: result.pointsDeducted,
                     newTotalDeducted: result.newTotalDeducted,
                     cardBalance: result.cardBalance,
+                    billedMinutes: result.billedMinutes,
                   },
                 })
               );
