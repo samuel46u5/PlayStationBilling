@@ -998,7 +998,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     setIsTimerRunning(true);
     const interval = setInterval(() => {
       checkAllSessions();
-    }, 60000); // Check every 60 seconds
+    }, 30000); // Check every 30 seconds
 
     return () => {
       clearInterval(interval);
