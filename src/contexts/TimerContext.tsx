@@ -198,14 +198,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
           //   })
           //   .eq("id", session.id);
 
-          // Update console status with guard: only if no other active sessions exist for this console
-          const { data: otherActiveSessions, error: activeErr } = await supabase
-            .from("rental_sessions")
-            .select("id")
-            .eq("console_id", session.console_id)
-            .eq("status", "active")
-            .limit(1);
-
           const updateRentalSession = supabase
             .from("rental_sessions")
             .update({
@@ -214,23 +206,43 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
             })
             .eq("id", session.id);
 
-          const updateConsoleStatus = supabase
-            .from("consoles")
-            .update({ status: "available" })
-            .eq("id", session.console_id);
+          // Update console status with guard: only if no other active sessions exist for this console
+          const { data: otherActiveSessions, error: activeErr } = await supabase
+            .from("rental_sessions")
+            .select("id")
+            .eq("console_id", session.console_id)
+            .eq("status", "active")
+            .neq("id", session.id) 
+            .limit(1);
 
-          await Promise.all([updateRentalSession, updateConsoleStatus]);
+          // const updateConsoleStatus = supabase
+          //   .from("consoles")
+          //   .update({ status: "available" })
+          //   .eq("id", session.console_id);
 
-          if (
-            !activeErr &&
-            Array.isArray(otherActiveSessions) &&
-            otherActiveSessions.length === 0
-          ) {
-            await supabase
+          // await Promise.all([updateRentalSession, updateConsoleStatus]);
+
+          const updates = [updateRentalSession];
+          if (!activeErr && Array.isArray(otherActiveSessions) && otherActiveSessions.length === 0) {
+            const updateConsoleStatus = supabase
               .from("consoles")
               .update({ status: "available" })
               .eq("id", session.console_id);
+            updates.push(updateConsoleStatus);
           }
+
+          await Promise.all(updates);
+
+          // if (
+          //   !activeErr &&
+          //   Array.isArray(otherActiveSessions) &&
+          //   otherActiveSessions.length === 0
+          // ) {
+          //   await supabase
+          //     .from("consoles")
+          //     .update({ status: "available" })
+          //     .eq("id", session.console_id);
+          // }
 
           // Finalize products and stock
           await finalizeProductsAndStock(session.id);
