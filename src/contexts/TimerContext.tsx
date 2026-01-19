@@ -791,7 +791,11 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
     setIsCheckingSessions(true);
 
     const prepaidSessions = activeSessions.filter(
-      (session) => session.duration_minutes && session.status === "active"
+      (session) => 
+        session.duration_minutes && 
+        session.duration_minutes > 0 && 
+        session.status === "active" &&
+        session.start_time
     );
 
     await Promise.all(
