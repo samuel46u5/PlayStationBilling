@@ -215,12 +215,12 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
             .neq("id", session.id) 
             .limit(1);
 
-          // const updateConsoleStatus = supabase
-          //   .from("consoles")
-          //   .update({ status: "available" })
-          //   .eq("id", session.console_id);
+          const updateConsoleStatus = supabase
+            .from("consoles")
+            .update({ status: "available" })
+            .eq("id", session.console_id);
 
-          // await Promise.all([updateRentalSession, updateConsoleStatus]);
+          await Promise.all([updateRentalSession, updateConsoleStatus]);
 
           const updates = [updateRentalSession];
           if (!activeErr && Array.isArray(otherActiveSessions) && otherActiveSessions.length === 0) {
