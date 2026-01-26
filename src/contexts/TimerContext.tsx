@@ -143,42 +143,186 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   };
 
   // Check if a session has expired and end it automatically
+  // const checkSessionTimeout = useCallback(
+  //   async (sessionId: string) => {
+  //     try {
+  //       const session = activeSessions.find((s) => s.id === sessionId);
+  //       if (!session || !session.start_time || !session.duration_minutes) {
+  //         return;
+  //       }
+
+  //       const startTime = new Date(session.start_time);
+  //       const endTime = new Date(
+  //         startTime.getTime() + session.duration_minutes * 60 * 1000
+  //       );
+  //       const now = new Date();
+
+  //       // If session has expired
+  //       if (now >= endTime) {
+  //         console.log(
+  //           `Session ${sessionId} has expired, ending automatically...`
+  //         );
+
+  //         // Find console for relay commands
+  //         const { data: consoleData } = await supabase
+  //           .from("consoles")
+  //           .select("id, name, power_tv_command, relay_command_off")
+  //           .eq("id", session.console_id)
+  //           .single();
+
+  //         // Execute relay commands if available
+  //         // if (consoleData) {
+  //         //   if (consoleData.power_tv_command) {
+  //         //     fetch(consoleData.power_tv_command).catch(() => {});
+  //         //   }
+  //         //   if (consoleData.relay_command_off) {
+  //         //     fetch(consoleData.relay_command_off).catch(() => {});
+  //         //   }
+  //         // }
+
+  //         if (consoleData) {
+  //           if (consoleData.power_tv_command) {
+  //             await retryFetch(consoleData.power_tv_command, 3, 2000);
+  //           }
+  //           if (consoleData.relay_command_off) {
+  //             await retryFetch(consoleData.relay_command_off, 3, 2000);
+  //           }
+  //         }
+
+  //         // Update rental session
+  //         // await supabase
+  //         //   .from("rental_sessions")
+  //         //   .update({
+  //         //     end_time: now.toISOString(),
+  //         //     status: "completed",
+  //         //   })
+  //         //   .eq("id", session.id);
+
+  //         const updateRentalSession = supabase
+  //           .from("rental_sessions")
+  //           .update({
+  //             end_time: now.toISOString(),
+  //             status: "completed",
+  //           })
+  //           .eq("id", session.id);
+
+  //         // Update console status with guard: only if no other active sessions exist for this console
+  //         const { data: otherActiveSessions, error: activeErr } = await supabase
+  //           .from("rental_sessions")
+  //           .select("id")
+  //           .eq("console_id", session.console_id)
+  //           .eq("status", "active")
+  //           .neq("id", session.id) 
+  //           .limit(1);
+
+  //         const updateConsoleStatus = supabase
+  //           .from("consoles")
+  //           .update({ status: "available" })
+  //           .eq("id", session.console_id);
+
+  //         await Promise.all([updateRentalSession, updateConsoleStatus]);
+
+  //         const updates = [updateRentalSession];
+  //         if (!activeErr && Array.isArray(otherActiveSessions) && otherActiveSessions.length === 0) {
+  //           const updateConsoleStatus = supabase
+  //             .from("consoles")
+  //             .update({ status: "available" })
+  //             .eq("id", session.console_id);
+  //           updates.push(updateConsoleStatus);
+  //         }
+
+  //         await Promise.all(updates);
+
+  //         // if (
+  //         //   !activeErr &&
+  //         //   Array.isArray(otherActiveSessions) &&
+  //         //   otherActiveSessions.length === 0
+  //         // ) {
+  //         //   await supabase
+  //         //     .from("consoles")
+  //         //     .update({ status: "available" })
+  //         //     .eq("id", session.console_id);
+  //         // }
+
+  //         // Finalize products and stock
+  //         await finalizeProductsAndStock(session.id);
+
+  //         // Show notification
+  //         Swal.fire({
+  //           title: "Session Berakhir",
+  //           text: `Session ${
+  //             session.consoles?.name || "Console"
+  //           } telah berakhir otomatis`,
+  //           icon: "info",
+  //           toast: true,
+  //           position: "top-end",
+  //           showConfirmButton: false,
+  //           timer: 3000,
+  //         });
+
+  //         // Refresh active sessions
+  //         await fetchActiveSessions();
+  //       }
+  //     } catch (error) {
+  //       console.error("Error checking session timeout:", error);
+  //     }
+  //   },
+  //   [activeSessions, fetchActiveSessions]
+  // );
+
+  // Check if a session has expired and end it automatically
   const checkSessionTimeout = useCallback(
     async (sessionId: string) => {
       try {
-        const session = activeSessions.find((s) => s.id === sessionId);
-        if (!session || !session.start_time || !session.duration_minutes) {
+        const { data: freshSession, error: fetchError } = await supabase
+          .from("rental_sessions")
+          .select(`
+            id,
+            console_id,
+            start_time,
+            duration_minutes,
+            status,
+            consoles(name)
+          `)
+          .eq("id", sessionId)
+          .eq("status", "active")
+          .single();
+
+        if (fetchError || !freshSession || !freshSession.start_time || !freshSession.duration_minutes) {
           return;
         }
 
-        const startTime = new Date(session.start_time);
+        const startTime = new Date(freshSession.start_time);
         const endTime = new Date(
-          startTime.getTime() + session.duration_minutes * 60 * 1000
+          startTime.getTime() + freshSession.duration_minutes * 60 * 1000
         );
         const now = new Date();
 
         // If session has expired
         if (now >= endTime) {
           console.log(
-            `Session ${sessionId} has expired, ending automatically...`
+            `[TIMEOUT] Session ${sessionId} has expired, ending automatically...`
           );
+
+        
+          const { data: verifySession } = await supabase
+            .from("rental_sessions")
+            .select("id, status")
+            .eq("id", sessionId)
+            .eq("status", "active")
+            .single();
+
+          if (!verifySession) {
+            console.log(`[TIMEOUT] Session ${sessionId} already ended by another process`);
+            return;
+          }
 
           // Find console for relay commands
           const { data: consoleData } = await supabase
             .from("consoles")
             .select("id, name, power_tv_command, relay_command_off")
-            .eq("id", session.console_id)
+            .eq("id", freshSession.console_id)
             .single();
-
-          // Execute relay commands if available
-          // if (consoleData) {
-          //   if (consoleData.power_tv_command) {
-          //     fetch(consoleData.power_tv_command).catch(() => {});
-          //   }
-          //   if (consoleData.relay_command_off) {
-          //     fetch(consoleData.relay_command_off).catch(() => {});
-          //   }
-          // }
 
           if (consoleData) {
             if (consoleData.power_tv_command) {
@@ -189,69 +333,46 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
             }
           }
 
-          // Update rental session
-          // await supabase
-          //   .from("rental_sessions")
-          //   .update({
-          //     end_time: now.toISOString(),
-          //     status: "completed",
-          //   })
-          //   .eq("id", session.id);
-
-          const updateRentalSession = supabase
+          const { data: updatedSession, error: updateError } = await supabase
             .from("rental_sessions")
             .update({
               end_time: now.toISOString(),
               status: "completed",
             })
-            .eq("id", session.id);
+            .eq("id", sessionId)
+            .eq("status", "active") 
+            .select("id")
+            .single();
+
+          if (updateError || !updatedSession) {
+            console.log(`[TIMEOUT] Session ${sessionId} already ended or update failed`);
+            return;
+          }
 
           // Update console status with guard: only if no other active sessions exist for this console
           const { data: otherActiveSessions, error: activeErr } = await supabase
             .from("rental_sessions")
             .select("id")
-            .eq("console_id", session.console_id)
+            .eq("console_id", freshSession.console_id)
             .eq("status", "active")
-            .neq("id", session.id) 
+            .neq("id", sessionId) 
             .limit(1);
 
-          const updateConsoleStatus = supabase
-            .from("consoles")
-            .update({ status: "available" })
-            .eq("id", session.console_id);
-
-          await Promise.all([updateRentalSession, updateConsoleStatus]);
-
-          const updates = [updateRentalSession];
           if (!activeErr && Array.isArray(otherActiveSessions) && otherActiveSessions.length === 0) {
-            const updateConsoleStatus = supabase
+            await supabase
               .from("consoles")
               .update({ status: "available" })
-              .eq("id", session.console_id);
-            updates.push(updateConsoleStatus);
+              .eq("id", freshSession.console_id);
           }
 
-          await Promise.all(updates);
-
-          // if (
-          //   !activeErr &&
-          //   Array.isArray(otherActiveSessions) &&
-          //   otherActiveSessions.length === 0
-          // ) {
-          //   await supabase
-          //     .from("consoles")
-          //     .update({ status: "available" })
-          //     .eq("id", session.console_id);
-          // }
-
           // Finalize products and stock
-          await finalizeProductsAndStock(session.id);
+          await finalizeProductsAndStock(sessionId);
 
           // Show notification
           Swal.fire({
             title: "Session Berakhir",
             text: `Session ${
-              session.consoles?.name || "Console"
+              consoleData?.name || "Console"
             } telah berakhir otomatis`,
             icon: "info",
             toast: true,
@@ -267,7 +388,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
         console.error("Error checking session timeout:", error);
       }
     },
-    [activeSessions, fetchActiveSessions]
+    [fetchActiveSessions] 
   );
 
   // Finalize products and stock (helper function)
@@ -467,8 +588,26 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
       if (successfulResults.length > 0) {
         const allLogs = successfulResults.flatMap(result => result.logs || []);
         if (allLogs.length > 0) {
-          await supabase.from("card_usage_logs").insert(allLogs);
-          console.log(`[CONSOLE ${consoleId}] Bulk inserted ${allLogs.length} logs`);
+          // Check duplicates sebelum insert
+          const uniqueLogs = await Promise.all(
+            allLogs.map(async (log) => {
+              const { data: existing } = await supabase
+                .from("card_usage_logs")
+                .select("id")
+                .eq("session_id", log.session_id)
+                .eq("points_amount", log.points_amount)
+                .eq("balance_before", log.balance_before)
+                .eq("balance_after", log.balance_after)
+                .gte("created_at", new Date(Date.now() - 120000).toISOString())
+                .limit(1);
+              return existing && existing.length > 0 ? null : log;
+            })
+          );
+          
+          const filteredLogs = uniqueLogs.filter(log => log !== null);
+          if (filteredLogs.length > 0) {
+            await supabase.from("card_usage_logs").insert(filteredLogs);
+          }
         }
       }
 
@@ -494,6 +633,28 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
       if (timeSinceLastBilling < MIN_BILLING_INTERVAL) {
         return;
       }
+
+      const { data: recentLogs } = await supabase
+        .from("card_usage_logs")
+        .select("id, created_at, points_amount, balance_before, balance_after")
+        .eq("session_id", session.id)
+        .eq("action_type", "balance_deduct")
+        .gte("created_at", new Date(now.getTime() - 120000).toISOString())
+        .order("created_at", { ascending: false })
+        .limit(5);
+        
+        if (recentLogs && recentLogs.length > 0) {
+          const duplicateLog = recentLogs.find(
+            log => 
+              log.points_amount === computedDelta &&
+              Math.abs(new Date(log.created_at).getTime() - now.getTime()) < 60000 // Dalam 1 menit terakhir
+          );
+          
+          if (duplicateLog) {
+            console.log(`[BILLING] Session ${session.id} skipped - duplicate log found (${duplicateLog.id})`);
+            return;
+          }
+        }
     }
 
     const startTime = new Date(session.start_time);
@@ -552,7 +713,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
           .update({ balance_points: newBalance })
           .eq("uid", session.card_uid)
           .eq("status", "active")
-          .gte("balance_points", computedDelta)
+          .eq("balance_points", currentBalance)
           .select("id");
           
       if (updateBalanceError || !updatedCardRows || updatedCardRows.length === 0) {
@@ -563,7 +724,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
       const { data: updatedSessRows, error: updateSessionError } =
         await supabase
           .from("rental_sessions")
-          .update({ total_points_deducted: currentTotal + computedDelta })
+          .update({ total_points_deducted: currentTotal + computedDelta, last_billing_at: now.toISOString()})
           .eq("id", session.id)
           .eq("total_points_deducted", currentTotal)
           .select("id");
@@ -577,6 +738,14 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
         return;
       }
 
+      const { data: actualCardData } = await supabase
+        .from("rfid_cards")
+        .select("balance_points")
+        .eq("uid", session.card_uid)
+        .single();
+
+      const actualBalance = Number(actualCardData?.balance_points) || 0;
+
       // Create log
       const logData = {
         card_uid: session.card_uid,
@@ -584,17 +753,17 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
         action_type: "balance_deduct",
         points_amount: computedDelta,
         balance_before: currentBalance,
-        balance_after: newBalance,
+        balance_after: actualBalance,
         notes: `Automatic deduction for rental session - ${Math.round(computedDelta / session.per_minute_rate_snapshot)} minutes`,
       };
 
       console.log(`[Session ${session.id}] Deduction completed: ${computedDelta} points, balance: ${newBalance}`);
 
       // Update last_billing_at
-      await supabase
-        .from("rental_sessions")
-        .update({ last_billing_at: now.toISOString() })
-        .eq("id", session.id);
+      // await supabase
+      //   .from("rental_sessions")
+      //   .update({ last_billing_at: now.toISOString() })
+      //   .eq("id", session.id);
 
       // Trigger UI update
       window.dispatchEvent(
@@ -786,24 +955,53 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({ children }) => {
   }, []);
 
   // Check all active sessions for timeout
+  // const checkAllSessions = useCallback(async () => {
+  //   if (isCheckingSessions) return;
+  //   setIsCheckingSessions(true);
+
+  //   const prepaidSessions = activeSessions.filter(
+  //     (session) => 
+  //       session.duration_minutes && 
+  //       session.duration_minutes > 0 && 
+  //       session.status === "active" &&
+  //       session.start_time
+  //   );
+
+  //   await Promise.all(
+  //     prepaidSessions.map((session) => checkSessionTimeout(session.id))
+  //   );
+
+  //   setIsCheckingSessions(false);
+  // }, [activeSessions, checkSessionTimeout, isCheckingSessions]);
+
+  // Check all active sessions for timeout
   const checkAllSessions = useCallback(async () => {
     if (isCheckingSessions) return;
     setIsCheckingSessions(true);
 
-    const prepaidSessions = activeSessions.filter(
-      (session) => 
-        session.duration_minutes && 
-        session.duration_minutes > 0 && 
-        session.status === "active" &&
-        session.start_time
-    );
+    try {
+      const { data: freshPrepaidSessions, error: fetchError } = await supabase
+        .from("rental_sessions")
+        .select("id, start_time, duration_minutes, status")
+        .eq("status", "active")
+        .not("duration_minutes", "is", null)
+        .gt("duration_minutes", 0);
 
-    await Promise.all(
-      prepaidSessions.map((session) => checkSessionTimeout(session.id))
-    );
+      if (fetchError || !freshPrepaidSessions || freshPrepaidSessions.length === 0) {
+        setIsCheckingSessions(false);
+        return;
+      }
 
-    setIsCheckingSessions(false);
-  }, [activeSessions, checkSessionTimeout, isCheckingSessions]);
+      // Check each session
+      await Promise.all(
+        freshPrepaidSessions.map((session) => checkSessionTimeout(session.id))
+      );
+    } catch (error) {
+      console.error("Error in checkAllSessions:", error);
+    } finally {
+      setIsCheckingSessions(false);
+    }
+  }, [checkSessionTimeout, isCheckingSessions]);
 
   // Refresh active sessions (public method)
   const refreshActiveSessions = useCallback(async () => {
