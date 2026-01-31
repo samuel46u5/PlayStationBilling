@@ -553,44 +553,113 @@ export const db = {
     async getAll() {
       return db.select('purchase_orders', '*');
     },
+    // async create(purchase: any) {
+    //   // Generate PO number (simple: PO-YYYYMMDD-<random4>)
+    //   const today = new Date();
+    //   const dateStr = today.toISOString().slice(0,10).replace(/-/g, '');
+    //   const rand = Math.floor(1000 + Math.random() * 9000);
+    //   const po_number = `PO-${dateStr}-${rand}`;
+    //   // Insert PO
+    //   const po = await db.insert('purchase_orders', {
+    //     po_number,
+    //     supplier_id: purchase.supplier_id,
+    //     notes: purchase.notes,
+    //     expected_date: purchase.expected_date,
+    //     subtotal: purchase.subtotal,
+    //     // tax: purchase.tax,
+    //     total_amount: purchase.total_amount || purchase.total, // fallback for old code
+    //     // status: 'pending',
+    //     // created_by: null // tidak perlu jika tidak ada user
+    //   });
+    //   // Insert PO items
+    //   if (purchase.items && Array.isArray(purchase.items)) {
+    //     for (const item of purchase.items) {
+    //       await db.insert('purchase_order_items', {
+    //         po_id: po.id,
+    //         product_id: item.productId,
+    //         product_name: item.productName,
+    //         quantity: item.quantity,
+    //         unit_cost: item.unitCost,
+    //         total: item.total
+    //       });
+
+    //       if (item.productId && item.quantity > 0) {
+    //         await db.products.increaseStock(item.productId, item.quantity);
+    //       }
+    //     }
+    //   }
+    //   return po;
+    // },
     async create(purchase: any) {
       // Generate PO number (simple: PO-YYYYMMDD-<random4>)
       const today = new Date();
       const dateStr = today.toISOString().slice(0,10).replace(/-/g, '');
       const rand = Math.floor(1000 + Math.random() * 9000);
       const po_number = `PO-${dateStr}-${rand}`;
-      // Insert PO
-      const po = await db.insert('purchase_orders', {
-        po_number,
-        supplier_id: purchase.supplier_id,
-        notes: purchase.notes,
-        expected_date: purchase.expected_date,
-        subtotal: purchase.subtotal,
-        // tax: purchase.tax,
-        total_amount: purchase.total_amount || purchase.total, // fallback for old code
-        // status: 'pending',
-        // created_by: null // tidak perlu jika tidak ada user
-      });
-      // Insert PO items
+      
+      // Validasi semua produk ada sebelum melakukan operasi
       if (purchase.items && Array.isArray(purchase.items)) {
         for (const item of purchase.items) {
-          await db.insert('purchase_order_items', {
-            po_id: po.id,
-            product_id: item.productId,
-            product_name: item.productName,
-            quantity: item.quantity,
-            unit_cost: item.unitCost,
-            total: item.total
-          });
-
           if (item.productId && item.quantity > 0) {
-            await db.products.increaseStock(item.productId, item.quantity);
+            const { data: product, error } = await supabase
+              .from('products')
+              .select('id, stock')
+              .eq('id', item.productId)
+              .single();
+            
+            if (error || !product) {
+              throw new Error(`Produk dengan ID ${item.productId} tidak ditemukan`);
+            }
           }
         }
       }
-      return po;
-    },
+      
+      const po = await db.insert('purchase_orders', {
+        po_number,
+        supplier_id: purchase.supplier_id,
+        status: 'received', // Set status ke received
+        received_date: new Date().toISOString().split('T')[0], // Set tanggal diterima
+        notes: purchase.notes,
+        expected_date: purchase.expected_date,
+        order_date: purchase.order_date || new Date().toISOString(),
+        subtotal: purchase.subtotal,
+        // tax: purchase.tax,
+        total_amount: purchase.total_amount || purchase.total, 
+      });
 
+      const successfulStockIncreases: Array<{productId: string, quantity: number}> = [];
+      
+      try {
+        if (purchase.items && Array.isArray(purchase.items)) {
+          for (const item of purchase.items) {
+            await db.insert('purchase_order_items', {
+              po_id: po.id,
+              product_id: item.productId,
+              product_name: item.productName,
+              quantity: item.quantity,
+              unit_cost: item.unitCost,
+              total: item.total
+            });
+
+            if (item.productId && item.quantity > 0) {
+              await db.products.increaseStock(item.productId, item.quantity);
+              successfulStockIncreases.push({productId: item.productId, quantity: item.quantity});
+            }
+          }
+        }
+        return po;
+      } catch (error) {
+        // Rollback stock increases yang sudah berhasil
+        for (const increase of successfulStockIncreases) {
+          try {
+            await db.products.decreaseStock(increase.productId, increase.quantity);
+          } catch (rollbackError) {
+            console.error(`Gagal rollback stok untuk produk ${increase.productId}:`, rollbackError);
+          }
+        }
+        throw error; 
+      }
+    },
     async delete(poId: string) {
       const { data: items, error: itemsErr } = await supabase
         .from('purchase_order_items')
@@ -1033,7 +1102,7 @@ export const auth = {
         .from('users')
         .select(`
           *,
-          roles(name, nav_items)
+          roles(id, name, nav_items)
         `)
         .eq('id', user.id)
         .single();

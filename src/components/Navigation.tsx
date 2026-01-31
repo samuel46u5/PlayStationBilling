@@ -32,6 +32,12 @@ interface NavigationProps {
   onTabChange: (tab: string) => void;
 }
 
+const roleColors = {
+  admin: "bg-red-100 text-red-700",
+  manager: "bg-blue-100 text-blue-700",
+  cashier: "bg-green-100 text-green-700",
+};
+
 const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
   // const navItems = [
   //   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -99,6 +105,8 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     ? (user!.roles!.nav_items as string[])
     : null;
 
+  console.log(user);
+
   const navItems = (
     allowedIds ? NAV_ITEMS.filter((i) => allowedIds.includes(i.id)) : NAV_ITEMS
   ).map((i) => ({
@@ -122,12 +130,20 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
             <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
               <User className="h-5 w-5 text-slate-300" />
             </div>
-            <div className="overflow-hidden">
-              <p className="font-medium text-sm text-white truncate">
+            <div className="overflow-hidden flex flex-col gap-1">
+              <p className="font-medium text-sm text-white truncate uppercase">
                 {user?.full_name}
               </p>
-              <p className="text-xs text-slate-400 truncate">
-                {user?.roles?.name}
+              <p className="text-xs truncate uppercase">
+                <span
+                  className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                    roleColors[
+                      user?.roles?.id?.toLowerCase() as keyof typeof roleColors
+                    ] || "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {user?.roles?.name}
+                </span>
               </p>
             </div>
           </div>

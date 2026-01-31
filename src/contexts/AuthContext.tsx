@@ -9,6 +9,7 @@ export interface User {
   role_id: string;
   status: string;
   roles?: {
+    id: string;
     name: string;
     nav_items: any[];
   };
