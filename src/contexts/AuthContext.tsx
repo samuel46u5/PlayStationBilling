@@ -4,6 +4,7 @@ import { auth, db, supabase } from "../lib/supabase";
 export interface User {
   id: string;
   username: string;
+  hex_color: string;
   full_name: string;
   email: string;
   role_id: string;

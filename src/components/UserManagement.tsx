@@ -763,6 +763,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
   const [notes, setNotes] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [hexColor, setHexColor] = React.useState("#ffffff");
   const { user: currentUser } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -810,6 +811,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
           role_id: roleId,
           status: "active",
           notes: notes || null,
+          hex_color: hexColor,
         })
         .select()
         .single();
@@ -942,6 +944,28 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Background Color
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
+                  value={hexColor}
+                  onChange={(e) => setHexColor(e.target.value)}
+                  disabled={loading}
+                />
+                <input
+                  type="text"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  value={hexColor}
+                  onChange={(e) => setHexColor(e.target.value)}
+                  placeholder="#ffffff"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Password
               </label>
               <input
@@ -1001,6 +1025,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   const [notes, setNotes] = React.useState(user.notes || "");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [hexColor, setHexColor] = React.useState(user.hex_color || "#ffffff");
   const { user: currentUser } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1026,6 +1051,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
           phone: phone || null,
           role_id: roleId,
           status,
+          hex_color: hexColor,
           notes: notes || null,
         })
         .eq("id", user.id)
@@ -1153,6 +1179,28 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Background Color
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
+                  value={hexColor}
+                  onChange={(e) => setHexColor(e.target.value)}
+                  disabled={loading}
+                />
+                <input
+                  type="text"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={hexColor}
+                  onChange={(e) => setHexColor(e.target.value)}
+                  placeholder="#000000"
+                  disabled={loading}
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -105,8 +105,6 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     ? (user!.roles!.nav_items as string[])
     : null;
 
-  console.log(user);
-
   const navItems = (
     allowedIds ? NAV_ITEMS.filter((i) => allowedIds.includes(i.id)) : NAV_ITEMS
   ).map((i) => ({
@@ -115,7 +113,11 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
   }));
 
   return (
-    <nav className="bg-slate-800 text-white w-64 min-h-screen p-6 flex flex-col">
+    <nav
+      className={`${
+        user?.hex_color ? `bg-[${user?.hex_color}]` : "bg-slate-800"
+      }  text-white w-64 min-h-screen p-6 flex flex-col`}
+    >
       <div className="mb-1">
         <div className="flex items-center gap-3 mb-2">
           <Gamepad2 className="h-8 w-8 text-blue-400" />
