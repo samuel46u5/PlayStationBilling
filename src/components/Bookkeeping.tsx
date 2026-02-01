@@ -29,6 +29,7 @@ import OccupancyCalendar from "./OccupancyCalendar";
 import ProfitCalendar from "./ProfitCalendar";
 import CashierCalendar from "./CashierCalendar";
 import JournalCalendar from "./JournalCalendar";
+import RevenueChart, { RevenueDataPoint } from "./RevenueChart";
 
 type Summary = {
   totalRental?: number;
@@ -115,6 +116,63 @@ const Bookkeeping: React.FC = () => {
   const [jurnalSubTab, setJurnalSubTab] = useState<"detail" | "rekap">(
     "detail"
   );
+  const [chartData, setChartData] = useState<RevenueDataPoint[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+
+  const fetchChartData = async () => {
+    try {
+      setChartLoading(true);
+
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setFullYear(startDate.getFullYear() - 1);
+      startDate.setDate(1);
+
+      const { data: transactions, error } = await supabase
+        .from("cashier_transactions")
+        .select("amount, timestamp")
+        // .in("type", ["sale", "rental", "voucher"])
+        .gte("timestamp", startDate.toISOString())
+        .lte("timestamp", endDate.toISOString())
+        .order("timestamp", { ascending: true });
+
+      if (error) throw error;
+
+      const monthlyData: Record<string, number> = {};
+
+      transactions?.forEach((transaction) => {
+        const date = new Date(transaction.timestamp);
+        const monthKey = date.toLocaleDateString("id-ID", {
+          year: "numeric",
+          month: "short",
+        });
+
+        monthlyData[monthKey] =
+          (monthlyData[monthKey] || 0) + (transaction.amount || 0);
+      });
+
+      const chartData = Object.entries(monthlyData)
+        .map(([month, revenue]) => ({
+          month,
+          revenue: revenue / 1000000,
+        }))
+        .sort((a, b) => {
+          const dateA = new Date(a.month.replace(/(\w+)\s+(\d+)/, "$2-$1-01"));
+          const dateB = new Date(b.month.replace(/(\w+)\s+(\d+)/, "$2-$1-01"));
+          return dateA.getTime() - dateB.getTime();
+        });
+
+      setChartData(chartData);
+    } catch (error) {
+      console.error("Error fetching chart data:", error);
+    } finally {
+      setChartLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchChartData();
+  }, []);
 
   const renderDetailRekapNav = () => {
     if (activeView === "laba_rugi") {
@@ -4808,7 +4866,15 @@ const Bookkeeping: React.FC = () => {
       )}
 
       {activeView == "rekap_kasir" && transaksiKasirSubTab === "rekap" && (
-        <CashierCalendar />
+        <div>
+          <RevenueChart
+            title="Total Omset Bulanan"
+            data={chartData}
+            height={300}
+            loading={chartLoading}
+          />
+          <CashierCalendar />
+        </div>
       )}
 
       {activeView == "rekap_console" && rekapConsoleViewSubTab === "rekap" && (
