@@ -617,8 +617,8 @@ export const db = {
       const po = await db.insert('purchase_orders', {
         po_number,
         supplier_id: purchase.supplier_id,
-        status: 'received', // Set status ke received
-        received_date: new Date().toISOString().split('T')[0], // Set tanggal diterima
+        // status: 'received', // Set status ke received
+        // received_date: new Date().toISOString().split('T')[0], // Set tanggal diterima
         notes: purchase.notes,
         expected_date: purchase.expected_date,
         order_date: purchase.order_date || new Date().toISOString(),
