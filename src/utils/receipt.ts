@@ -4,6 +4,7 @@ export interface ReceiptData {
   id: string;
   timestamp: string;
   customer?: { name: string };
+  receiptType?: "transaction" | "cashier_session";
   items: Array<{
     name: string;
     type: "rental" | "product" | "voucher";
@@ -23,6 +24,13 @@ export interface ReceiptData {
   paymentAmount: number;
   change: number;
   cashier: string;
+  sessionNotes?: string | null;
+  variance?: number;
+  sessionSummary?: {
+    startTime: string;
+    endTime: string;
+    totalTransactions: number;
+  };
 }
 
 export interface RentalProofData {
@@ -65,6 +73,10 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
   const printerSettings = settings?.printer || {};
 
   const lineWidth = printerSettings.receiptWidth || 40;
+
+  if (tx.receiptType === "cashier_session") {
+    return generateCashierSessionReceipt(tx, printerSettings);
+  }
 
   const pad = (
     text: string,
@@ -195,6 +207,136 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
         pre {
           margin: 0;
           padding: ${printerSettings.padding}px;
+        }
+      </style>
+    </head>
+    <body>
+<pre>${receiptText}</pre>
+    </body>
+  </html>`;
+};
+
+const generateCashierSessionReceipt = async (tx: ReceiptData, printerSettings: any) => {
+  const lineWidth = printerSettings.receiptWidth || 40;
+
+  const pad = (text: string, width: number, align: "left" | "right" = "left") => {
+    if (align === "right") return text.toString().padStart(width);
+    return text.toString().padEnd(width);
+  };
+
+  const formatMoney = (amount: number) => "Rp " + amount.toLocaleString("id-ID");
+
+  const lines: string[] = [];
+  const center = (text: string) => {
+    const space = Math.max(0, Math.floor((lineWidth - text.length) / 2));
+    return " ".repeat(space) + text;
+  };
+
+  // HEADER - PENUTUPAN SESI KASIR
+  lines.push("=".repeat(lineWidth));
+  lines.push(center("PENUTUPAN SESI KASIR"));
+  lines.push("=".repeat(lineWidth));
+  
+  lines.push(pad(`ID SESI    : ${tx.id}`, lineWidth));
+  lines.push(pad(`TANGGAL    : ${tx.timestamp}`, lineWidth));
+  lines.push(pad(`KASIR      : ${tx.cashier}`, lineWidth));
+  
+  if (tx.sessionSummary) {
+    lines.push(pad(`MULAI      : ${tx.sessionSummary.startTime}`, lineWidth));
+    lines.push(pad(`SELESAI    : ${tx.sessionSummary.endTime}`, lineWidth));
+    lines.push(pad(`TOTAL TX  : ${tx.sessionSummary.totalTransactions} transaksi`, lineWidth));
+  }
+  
+  lines.push("-".repeat(lineWidth));
+
+  // ITEMS LIST 
+  tx.items.forEach((item) => {
+    if (item.name.includes("SALDO AWAL") || item.name.includes("TOTAL")) {
+      lines.push(""); 
+      lines.push(center(item.name));
+      lines.push(center("=".repeat(item.name.length)));
+    } else {
+      lines.push(""); 
+      lines.push(item.name);
+    }
+    
+    // Detail item
+    const qty = item.quantity ? ` (${item.quantity})` : "";
+    const total = formatMoney(item.total);
+    
+    if (item.name.includes("SALDO AWAL") || item.name.includes("TOTAL")) {
+      lines.push(pad(total, lineWidth, "right"));
+    } else {
+      lines.push(pad(`${total}${qty}`, lineWidth, "right"));
+    }
+
+    // Description
+    if (item.description) {
+      const descLines = item.description.match(new RegExp(`.{1,${lineWidth - 2}}`, "g")) || [];
+      descLines.forEach((dl: string) => lines.push("  " + dl));
+    }
+  });
+
+  lines.push("");
+  lines.push("=".repeat(lineWidth));
+  lines.push(center("RINGKASAN AKHIR"));
+  lines.push("=".repeat(lineWidth));
+
+  // Ringkasan akhir
+  lines.push(pad(`SALDO AWAL     :`, 25) + pad(formatMoney(tx.items[0].total), 15, "right"));
+  lines.push(pad(`+ TOTAL PENJUALAN :`, 25) + pad(formatMoney(tx.total - tx.subtotal + tx.items[0].total), 15, "right"));
+  lines.push(pad(`- TOTAL PENGELUARAN:`, 25) + pad(formatMoney(tx.subtotal - tx.total), 15, "right"));
+  lines.push("-".repeat(lineWidth));
+  lines.push(pad(`SUBTOTAL       :`, 25) + pad(formatMoney(tx.subtotal), 15, "right"));
+  lines.push(pad(`HARUS SETOR    :`, 25) + pad(formatMoney(tx.total), 15, "right"));
+  lines.push(pad(`DISETOR        :`, 25) + pad(formatMoney(tx.paymentAmount), 15, "right"));
+  
+  // Variance
+  // const variance = tx.variance || (tx.paymentAmount - tx.total);
+  // if (variance !== 0) {
+  //   const varianceText = variance > 0 ? "LEBIH" : "KURANG";
+  //   lines.push(pad(`SELISIH (${varianceText}):`, 25) + pad(formatMoney(Math.abs(variance)), 15, "right"));
+  // }
+
+  lines.push("=".repeat(lineWidth));
+
+  // Notes jika ada
+  if (tx.sessionNotes) {
+    lines.push(center("CATATAN"));
+    lines.push("-".repeat(lineWidth));
+    const noteLines = tx.sessionNotes.match(new RegExp(`.{1,${lineWidth}}`, "g")) || [];
+    noteLines.forEach((nl: string) => lines.push(nl));
+    lines.push("-".repeat(lineWidth));
+  }
+
+  const receiptText = lines.join("\n");
+
+  return `
+  <html>
+    <head>
+      <title>Receipt - ${tx.id}</title>
+      <style>
+        @media print {
+          @page {
+            size: auto;
+            margin: 0mm;
+          }
+          body {
+            margin: 0;
+          }
+        }
+
+        body {
+          font-family: 'Courier New', monospace;
+          font-size: ${printerSettings.fontSize || 10}pt;
+          white-space: pre;
+          margin: 0;
+          padding: 0;
+        }
+
+        pre {
+          margin: 0;
+          padding: ${printerSettings.padding || 10}px;
         }
       </style>
     </head>

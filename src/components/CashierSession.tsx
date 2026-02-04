@@ -529,28 +529,59 @@ const CashierSessionComponent: React.FC = () => {
       id: `SESSION-${currentSession.id}`,
       timestamp: new Date().toLocaleString("id-ID"),
       customer: { name: currentSession.cashierName },
+      receiptType: "cashier_session" as const,
       items: [
         {
-          name: "Saldo Awal",
+          name: "SALDO AWAL",
           type: "rental" as const,
           total: currentSession.openingCash,
-          description: "Modal dari bos",
+          description: "Modal awal dari bos",
         },
         {
-          name: "Total Penjualan",
+          name: "PENJUALAN CAFE",
+          type: "product" as const,
+          quantity: todaySales.length,
+          total: todayTotalSales,
+          description:
+            todaySales.length > 0
+              ? `${todaySales.length} transaksi`
+              : "Tidak ada penjualan",
+        },
+        {
+          name: "PENJUALAN RENTAL",
+          type: "rental" as const,
+          quantity: todayRentals.length,
+          total: todayTotalRentals,
+          description:
+            todayRentals.length > 0
+              ? `${todayRentals.length} transaksi`
+              : "Tidak ada rental",
+        },
+        {
+          name: "PENJUALAN VOUCHER",
+          type: "voucher" as const,
+          quantity: todayVouchers.length,
+          total: todayTotalVouchers,
+          description:
+            todayVouchers.length > 0
+              ? `${todayVouchers.length} transaksi`
+              : "Tidak ada voucher",
+        },
+        {
+          name: "TOTAL PENJUALAN",
           type: "rental" as const,
           total: todayTotalRevenue,
-          description: `Cafe: Rp ${todayTotalSales.toLocaleString(
-            "id-ID"
-          )} | Rental: Rp ${todayTotalRentals.toLocaleString(
-            "id-ID"
-          )} | Voucher: Rp ${todayTotalVouchers.toLocaleString("id-ID")}`,
+          description: `Total semua penjualan hari ini`,
         },
         {
-          name: "Total Pengeluaran",
+          name: "TOTAL PENGELUARAN",
           type: "rental" as const,
+          quantity: todayExpenses.length,
           total: todayTotalExpenses,
-          description: `${todayExpenses.length} transaksi pengeluaran`,
+          description:
+            todayExpenses.length > 0
+              ? `${todayExpenses.length} transaksi pengeluaran`
+              : "Tidak ada pengeluaran",
         },
       ],
       subtotal:
@@ -561,6 +592,17 @@ const CashierSessionComponent: React.FC = () => {
       paymentAmount: closingCash,
       change: Math.abs(closingCash - expectedCash),
       cashier: currentSession.cashierName,
+      sessionNotes: notes || null,
+      variance: variance,
+      sessionSummary: {
+        startTime: new Date(currentSession.startTime).toLocaleString("id-ID"),
+        endTime: new Date().toLocaleString("id-ID"),
+        totalTransactions:
+          todaySales.length +
+          todayRentals.length +
+          todayVouchers.length +
+          todayExpenses.length,
+      },
     };
 
     const result = await Swal.fire({
