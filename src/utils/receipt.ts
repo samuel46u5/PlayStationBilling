@@ -74,7 +74,7 @@ export const generateReceiptHTMLTextMode = async (tx: ReceiptData) => {
 
   const lineWidth = printerSettings.receiptWidth || 40;
 
-  if (tx.receiptType === "cashier_session") {
+  if (tx.receiptType === "cashier_session" || tx.id.startsWith("SESSION-")) {
     return generateCashierSessionReceipt(tx, printerSettings);
   }
 
