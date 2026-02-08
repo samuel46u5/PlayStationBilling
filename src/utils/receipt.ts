@@ -236,9 +236,16 @@ const generateCashierSessionReceipt = async (tx: ReceiptData, printerSettings: a
   lines.push("=".repeat(lineWidth));
   lines.push(center("PENUTUPAN SESI KASIR"));
   lines.push("=".repeat(lineWidth));
+
+  const dateWithDay = new Date().toLocaleDateString("id-ID", {
+    weekday: 'long',
+    year: 'numeric', 
+    month: 'long',
+    day: 'numeric'
+  });
   
   lines.push(pad(`ID SESI    : ${tx.id}`, lineWidth));
-  lines.push(pad(`TANGGAL    : ${tx.timestamp}`, lineWidth));
+  lines.push(pad(`TANGGAL    : ${dateWithDay}`, lineWidth));
   lines.push(pad(`KASIR      : ${tx.cashier}`, lineWidth));
   
   if (tx.sessionSummary) {
