@@ -256,7 +256,7 @@ function removeDuplicateLogs(logs: CardUsageLog[]): CardUsageLog[] {
 
   // Sort berdasarkan timestamp untuk memastikan kita ambil yang pertama
   const sortedLogs = [...logs].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
 
   for (const log of sortedLogs) {
@@ -436,7 +436,7 @@ const ActiveRentals: React.FC = () => {
   const [processPaymentLoading, setProcessPaymentLoading] =
     useState<boolean>(false);
   const [endingSessionIds, setEndingSessionIds] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [showVoucherPaymentModal, setShowVoucherPaymentModal] = useState(false);
   const [consoleHistorySessions, setConsoleHistorySessions] = useState<
@@ -463,7 +463,7 @@ const ActiveRentals: React.FC = () => {
       const { data, error } = await supabase
         .from("rfid_cards")
         .select(
-          "uid, balance_points, status, is_helper_card, is_pay_as_you_go_card"
+          "uid, balance_points, status, is_helper_card, is_pay_as_you_go_card",
         )
         .eq("uid", uid)
         .single();
@@ -520,7 +520,7 @@ const ActiveRentals: React.FC = () => {
             .select(
               `
               consoles(rate_profiles(hourly_rate, minimum_minutes))
-            `
+            `,
             )
             .eq("id", logs[0].session_id)
             .single();
@@ -541,7 +541,7 @@ const ActiveRentals: React.FC = () => {
                 `
                 start_time, end_time, duration_minutes,
                 consoles(rate_profiles(hourly_rate))
-              `
+              `,
               )
               .eq("id", log.session_id)
               .single();
@@ -636,7 +636,7 @@ const ActiveRentals: React.FC = () => {
       });
 
       const activePackages = filteredPackages.filter(
-        (pkg: any) => pkg.status === "active"
+        (pkg: any) => pkg.status === "active",
       );
 
       setAvailablePackages(activePackages);
@@ -681,7 +681,7 @@ const ActiveRentals: React.FC = () => {
       const { data, error } = await supabase
         .from("card_usage_logs")
         .select(
-          "id, card_uid, session_id, action_type, points_amount, balance_before, balance_after, timestamp, notes"
+          "id, card_uid, session_id, action_type, points_amount, balance_before, balance_after, timestamp, notes",
         )
         .eq("card_uid", cardUID)
         .order("timestamp", { ascending: false });
@@ -738,7 +738,7 @@ const ActiveRentals: React.FC = () => {
   const [isUpdatingAutoShutdown, setIsUpdatingAutoShutdown] =
     useState<boolean>(false);
   const [updatingConsoleIds, setUpdatingConsoleIds] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [showAutoShutdownModal, setShowAutoShutdownModal] =
     useState<boolean>(false);
@@ -811,7 +811,7 @@ const ActiveRentals: React.FC = () => {
       cancelButtonText: "Batal",
       preConfirm: () => {
         const input = document.getElementById(
-          "preparation-minutes"
+          "preparation-minutes",
         ) as HTMLInputElement;
         const minutes = parseInt(input.value);
         if (!minutes || minutes < 1 || minutes > 60) {
@@ -857,13 +857,13 @@ const ActiveRentals: React.FC = () => {
             prev.map((c) =>
               c.id === targetConsole.id
                 ? { ...c, auto_shutdown_enabled: false }
-                : c
-            )
+                : c,
+            ),
           );
         } catch (error) {
           console.error(
             `Error updating auto_shutdown for ${targetConsole.name}:`,
-            error
+            error,
           );
         }
       }
@@ -916,9 +916,12 @@ const ActiveRentals: React.FC = () => {
       });
 
       // Set timer untuk mematikan setelah waktu yang ditentukan
-      const timeoutId = setTimeout(async () => {
-        await handleStopPreparation(targetConsole, originalAutoShutdown);
-      }, preparationMinutes * 60 * 1000); // Konversi menit ke milidetik
+      const timeoutId = setTimeout(
+        async () => {
+          await handleStopPreparation(targetConsole, originalAutoShutdown);
+        },
+        preparationMinutes * 60 * 1000,
+      ); // Konversi menit ke milidetik
 
       // Simpan state persiapan
       setPreparationMode((prev) => ({
@@ -943,7 +946,7 @@ const ActiveRentals: React.FC = () => {
   // Fungsi untuk menghentikan persiapan
   const handleStopPreparation = async (
     console: Console,
-    originalAutoShutdown: boolean
+    originalAutoShutdown: boolean,
   ) => {
     const shutdownResults = [];
 
@@ -988,19 +991,19 @@ const ActiveRentals: React.FC = () => {
           prev.map((c) =>
             c.id === console.id
               ? { ...c, auto_shutdown_enabled: originalAutoShutdown }
-              : c
-          )
+              : c,
+          ),
         );
       } catch (error) {
         console.error(
           `Error restoring auto_shutdown for ${console.name}:`,
-          error
+          error,
         );
       }
     }
 
     const shutdownSuccessful = shutdownResults.filter(
-      (r) => r.status === "success"
+      (r) => r.status === "success",
     ).length;
     const shutdownTotal = shutdownResults.length;
 
@@ -1049,7 +1052,7 @@ const ActiveRentals: React.FC = () => {
     // Hentikan persiapan
     await handleStopPreparation(
       targetConsole,
-      preparation.originalAutoShutdown
+      preparation.originalAutoShutdown,
     );
   };
 
@@ -1060,7 +1063,7 @@ const ActiveRentals: React.FC = () => {
       showStartRentalModal
         ? consoles.find((c: any) => c.id === showStartRentalModal)
         : undefined,
-    [showStartRentalModal, consoles]
+    [showStartRentalModal, consoles],
   );
 
   // const availableCustomers = React.useMemo(() => {
@@ -1161,7 +1164,7 @@ const ActiveRentals: React.FC = () => {
   // >({});
   // Toggle view mode: 'simple' | 'detail' | 'list'
   const [viewMode, setViewMode] = useState<"simple" | "detail" | "list">(
-    "simple"
+    "simple",
   );
   // Tambahan: countdown detik
   // const [countdownSeconds, setCountdownSeconds] = useState<
@@ -1177,7 +1180,7 @@ const ActiveRentals: React.FC = () => {
   const [historySessions, setHistorySessions] = useState<RentalSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyStartDate, setHistoryStartDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [historyEndDate, setHistoryEndDate] = useState<string>("");
   // Pagination states for history
@@ -1194,12 +1197,12 @@ const ActiveRentals: React.FC = () => {
     Record<string, number>
   >({});
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "qris" | "card">(
-    "cash"
+    "cash",
   );
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
   const [discountType, setDiscountType] = useState<"amount" | "percentage">(
-    "amount"
+    "amount",
   );
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
@@ -1217,7 +1220,7 @@ const ActiveRentals: React.FC = () => {
           Swal.fire(
             "Peringatan",
             "Anda harus login dan membuka sesi kasir aktif untuk mengakses menu ini.",
-            "warning"
+            "warning",
           );
           return;
         }
@@ -1247,7 +1250,7 @@ const ActiveRentals: React.FC = () => {
         Swal.fire(
           "Peringatan",
           "Gagal memeriksa sesi kasir. Silakan buka sesi kasir terlebih dahulu.",
-          "warning"
+          "warning",
         );
       }
     })();
@@ -1258,7 +1261,7 @@ const ActiveRentals: React.FC = () => {
       Swal.fire(
         "Peringatan",
         "Buka sesi kasir aktif terlebih dahulu.",
-        "warning"
+        "warning",
       );
       return false;
     }
@@ -1323,7 +1326,7 @@ const ActiveRentals: React.FC = () => {
           `Auto shutdown ${
             enabled ? "diaktifkan" : "dinonaktifkan"
           } untuk console ini`,
-          "success"
+          "success",
         );
 
         if (enabled) {
@@ -1343,7 +1346,7 @@ const ActiveRentals: React.FC = () => {
         Swal.fire(
           "Error",
           "Gagal mengupdate status auto shutdown console",
-          "error"
+          "error",
         );
       } finally {
         setUpdatingConsoleIds((prev) => {
@@ -1358,7 +1361,7 @@ const ActiveRentals: React.FC = () => {
       autoShutdownEnabled,
       updatingConsoleIds,
       triggerUnusedConsolesCheck,
-    ]
+    ],
   );
 
   const toggleAllConsolesAutoShutdown = useCallback(
@@ -1398,7 +1401,7 @@ const ActiveRentals: React.FC = () => {
           `Auto shutdown ${
             enabled ? "diaktifkan" : "dinonaktifkan"
           } untuk semua console`,
-          "success"
+          "success",
         );
       } catch (error) {
         console.error("Error updating all consoles auto shutdown:", error);
@@ -1409,7 +1412,7 @@ const ActiveRentals: React.FC = () => {
         Swal.fire(
           "Error",
           "Gagal mengupdate status auto shutdown semua console",
-          "error"
+          "error",
         );
       } finally {
         setIsUpdatingAutoShutdown(false);
@@ -1421,7 +1424,7 @@ const ActiveRentals: React.FC = () => {
       autoShutdownEnabled,
       consoles,
       triggerUnusedConsolesCheck,
-    ]
+    ],
   );
 
   // Function untuk sinkronisasi status console dan rental session
@@ -1459,7 +1462,7 @@ const ActiveRentals: React.FC = () => {
       // 3. Cek console yang "rented" tapi tidak ada session aktif
       for (const console of rentedConsoles || []) {
         const hasActiveSession = activeSessions?.some(
-          (session) => session.console_id === console.id
+          (session) => session.console_id === console.id,
         );
 
         if (!hasActiveSession) {
@@ -1470,7 +1473,7 @@ const ActiveRentals: React.FC = () => {
             .eq("id", console.id);
 
           issues.push(
-            `Console ${console.name} di-set ke "available" (tidak ada session aktif)`
+            `Console ${console.name} di-set ke "available" (tidak ada session aktif)`,
           );
           fixedCount++;
         }
@@ -1479,7 +1482,7 @@ const ActiveRentals: React.FC = () => {
       // 4. Cek session aktif yang console-nya tidak "rented"
       for (const session of activeSessions || []) {
         const console = rentedConsoles?.find(
-          (c) => c.id === session.console_id
+          (c) => c.id === session.console_id,
         );
 
         if (!console) {
@@ -1497,7 +1500,7 @@ const ActiveRentals: React.FC = () => {
               .eq("id", session.console_id);
 
             issues.push(
-              `Console ${consoleData.name} di-set ke "rented" (ada session aktif)`
+              `Console ${consoleData.name} di-set ke "rented" (ada session aktif)`,
             );
             fixedCount++;
           }
@@ -1612,7 +1615,7 @@ const ActiveRentals: React.FC = () => {
       const startOfDay = new Date(
         today.getFullYear(),
         today.getMonth(),
-        today.getDate()
+        today.getDate(),
       ).toISOString();
       const endOfDay = new Date(
         today.getFullYear(),
@@ -1620,7 +1623,7 @@ const ActiveRentals: React.FC = () => {
         today.getDate(),
         23,
         59,
-        59
+        59,
       ).toISOString();
 
       const { data, error } = await supabase
@@ -1681,13 +1684,13 @@ const ActiveRentals: React.FC = () => {
 
     window.addEventListener(
       "memberCardSessionEnded",
-      handleMemberCardSessionEnded
+      handleMemberCardSessionEnded,
     );
 
     return () => {
       window.removeEventListener(
         "memberCardSessionEnded",
-        handleMemberCardSessionEnded
+        handleMemberCardSessionEnded,
       );
     };
   }, [refreshActiveSessions]);
@@ -1722,7 +1725,7 @@ const ActiveRentals: React.FC = () => {
         { event: "*", schema: "public", table: "rental_sessions" },
         async () => {
           await refreshActiveSessions();
-        }
+        },
       )
       .subscribe();
 
@@ -1741,7 +1744,7 @@ const ActiveRentals: React.FC = () => {
             { event: "*", schema: "public", table: "rental_sessions" },
             async () => {
               await refreshActiveSessions();
-            }
+            },
           )
           .subscribe();
       }
@@ -1783,7 +1786,7 @@ const ActiveRentals: React.FC = () => {
                 !updatingConsoleIds.has(consoleId)
               ) {
                 console.log(
-                  `External update: auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`
+                  `External update: auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`,
                 );
 
                 clearTimeout(updateTimeout);
@@ -1796,7 +1799,7 @@ const ActiveRentals: React.FC = () => {
                       };
 
                       const anyEnabled = Object.values(newStates).some(
-                        (state) => state
+                        (state) => state,
                       );
                       setAutoShutdownEnabled(anyEnabled);
                       return newStates;
@@ -1808,10 +1811,10 @@ const ActiveRentals: React.FC = () => {
           } catch (e) {
             console.error(
               "Console realtime refresh error in ActiveRentals:",
-              e
+              e,
             );
           }
-        }
+        },
       )
       .subscribe();
 
@@ -1834,7 +1837,7 @@ const ActiveRentals: React.FC = () => {
               try {
                 console.log(
                   "Console change detected in ActiveRentals:",
-                  payload
+                  payload,
                 );
 
                 if (
@@ -1852,7 +1855,7 @@ const ActiveRentals: React.FC = () => {
                     !updatingConsoleIds.has(consoleId)
                   ) {
                     console.log(
-                      `External update: auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`
+                      `External update: auto_shutdown_enabled for console ${consoleId}: ${oldAutoShutdown} -> ${newAutoShutdown}`,
                     );
 
                     clearTimeout(updateTimeout);
@@ -1865,7 +1868,7 @@ const ActiveRentals: React.FC = () => {
                           };
 
                           const anyEnabled = Object.values(newStates).some(
-                            (state) => state
+                            (state) => state,
                           );
                           setAutoShutdownEnabled(anyEnabled);
                           return newStates;
@@ -1877,10 +1880,10 @@ const ActiveRentals: React.FC = () => {
               } catch (e) {
                 console.error(
                   "Console realtime refresh error in ActiveRentals:",
-                  e
+                  e,
                 );
               }
-            }
+            },
           )
           .subscribe();
       }
@@ -1930,7 +1933,7 @@ const ActiveRentals: React.FC = () => {
         supabase
           .from("rate_profiles")
           .select(
-            "id, name, hourly_rate, minimum_minutes, minimum_minutes_member"
+            "id, name, hourly_rate, minimum_minutes, minimum_minutes_member",
           ),
         db.products.getActiveProducts(),
       ]);
@@ -1959,11 +1962,11 @@ const ActiveRentals: React.FC = () => {
           if (!productRowsError && Array.isArray(productRows)) {
             for (const sessionId of sessionIds) {
               const items = productRows.filter(
-                (row) => row.session_id === sessionId
+                (row) => row.session_id === sessionId,
               );
               productsTotalMap[sessionId] = items.reduce(
                 (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
-                0
+                0,
               );
             }
           }
@@ -2026,7 +2029,7 @@ const ActiveRentals: React.FC = () => {
     }
     const console = consoles.find((c) => c.id === session.console_id);
     const rateProfile = rateProfiles.find(
-      (r) => r.id === console?.rate_profile_id
+      (r) => r.id === console?.rate_profile_id,
     );
     const hourlyRate = rateProfile?.hourly_rate || 15000;
     const minimumMinutes = rateProfile?.minimum_minutes ?? 60;
@@ -2406,7 +2409,7 @@ const ActiveRentals: React.FC = () => {
           : new Date();
         const endTime = new Date();
         const elapsedMinutes = Math.ceil(
-          (endTime.getTime() - startTime.getTime()) / (1000 * 60)
+          (endTime.getTime() - startTime.getTime()) / (1000 * 60),
         );
 
         // Hitung total points yang seharusnya ditarik untuk durasi berjalan
@@ -2420,7 +2423,7 @@ const ActiveRentals: React.FC = () => {
         const perMinuteRateSnapshot =
           session.per_minute_rate_snapshot || hourlyRateSnapshot / 60;
         const rp = rateProfiles.find(
-          (r) => r.id === consoleObj?.rate_profile_id
+          (r) => r.id === consoleObj?.rate_profile_id,
         );
         const minimumMinutesMember = rp?.minimum_minutes_member ?? 60;
 
@@ -2433,7 +2436,7 @@ const ActiveRentals: React.FC = () => {
           totalPoints =
             hourlyRateSnapshot +
             Math.ceil(
-              (elapsedMinutes - minimumMinutesMember) * perMinuteRateSnapshot
+              (elapsedMinutes - minimumMinutesMember) * perMinuteRateSnapshot,
             );
         }
 
@@ -2556,7 +2559,7 @@ const ActiveRentals: React.FC = () => {
         Swal.fire(
           "Berhasil",
           `Sesi rental (member card) berhasil diakhiri. Waktu terpakai: ${elapsedMinutes} menit`,
-          "success"
+          "success",
         );
         return;
       }
@@ -2578,7 +2581,7 @@ const ActiveRentals: React.FC = () => {
         if (!productErr && Array.isArray(productRows)) {
           productsTotal = productRows.reduce(
             (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
-            0
+            0,
           );
         }
       } catch (e) {
@@ -2612,7 +2615,7 @@ const ActiveRentals: React.FC = () => {
     const targetId = moveTargetConsoleId;
     try {
       const session = activeSessions.find(
-        (s) => s.id === showMoveModal.sessionId
+        (s) => s.id === showMoveModal.sessionId,
       );
       const fromConsole = consoles.find((c) => c.id === fromId);
       const targetConsole = consoles.find((c) => c.id === targetId);
@@ -3051,7 +3054,7 @@ const ActiveRentals: React.FC = () => {
       const { data: productRows } = await supabase
         .from("rental_session_products")
         .select(
-          `product_name, quantity, price, total, status, products(cost), product_id`
+          `product_name, quantity, price, total, status, products(cost), product_id`,
         )
         .eq("session_id", session.id)
         .in("status", ["pending", "completed"]);
@@ -3070,7 +3073,7 @@ const ActiveRentals: React.FC = () => {
               (session.start_time
                 ? Math.ceil(
                     (Date.now() - new Date(session.start_time).getTime()) /
-                      (1000 * 60)
+                      (1000 * 60),
                   )
                 : 0);
             const durationHours = durationMinutes / 60;
@@ -3138,7 +3141,7 @@ const ActiveRentals: React.FC = () => {
             (session.start_time
               ? Math.ceil(
                   (Date.now() - new Date(session.start_time).getTime()) /
-                    (1000 * 60)
+                    (1000 * 60),
                 )
               : 0),
         },
@@ -3306,7 +3309,7 @@ const ActiveRentals: React.FC = () => {
       discountType: "amount" | "percentage",
       discountValue: number,
       additionalHours: number,
-      additionalMinutes: number
+      additionalMinutes: number,
     ) => void;
     session: RentalSession;
     console: Console;
@@ -3367,7 +3370,7 @@ const ActiveRentals: React.FC = () => {
                   Rp{" "}
                   {Math.max(
                     0,
-                    additionalCost - localDiscountAmount
+                    additionalCost - localDiscountAmount,
                   ).toLocaleString("id-ID")}
                 </div>
               </div>
@@ -3403,7 +3406,7 @@ const ActiveRentals: React.FC = () => {
                     value={additionalHours}
                     onChange={(e) =>
                       setAdditionalHours(
-                        Math.max(0, parseInt(e.target.value) || 0)
+                        Math.max(0, parseInt(e.target.value) || 0),
                       )
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -3420,7 +3423,10 @@ const ActiveRentals: React.FC = () => {
                     value={additionalMinutes}
                     onChange={(e) =>
                       setAdditionalMinutes(
-                        Math.max(0, Math.min(59, parseInt(e.target.value) || 0))
+                        Math.max(
+                          0,
+                          Math.min(59, parseInt(e.target.value) || 0),
+                        ),
                       )
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -3526,7 +3532,7 @@ const ActiveRentals: React.FC = () => {
                     if (localDiscountType === "percentage") {
                       const maxPercentage = Math.min(100, val);
                       setLocalDiscountAmount(
-                        (additionalCost * maxPercentage) / 100
+                        (additionalCost * maxPercentage) / 100,
                       );
                     } else {
                       setLocalDiscountAmount(Math.min(val, additionalCost));
@@ -3612,14 +3618,14 @@ const ActiveRentals: React.FC = () => {
                     className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
                     onClick={() =>
                       setPaymentAmount(
-                        Math.max(0, additionalCost - localDiscountAmount)
+                        Math.max(0, additionalCost - localDiscountAmount),
                       )
                     }
                   >
                     LUNAS (Rp{" "}
                     {Math.max(
                       0,
-                      additionalCost - localDiscountAmount
+                      additionalCost - localDiscountAmount,
                     ).toLocaleString("id-ID")}
                     )
                   </button>
@@ -3650,7 +3656,7 @@ const ActiveRentals: React.FC = () => {
                 {(() => {
                   const finalTotal = Math.max(
                     0,
-                    additionalCost - localDiscountAmount
+                    additionalCost - localDiscountAmount,
                   );
                   const change = paymentAmount - finalTotal;
                   return change > 0 ? change.toLocaleString("id-ID") : 0;
@@ -3675,13 +3681,13 @@ const ActiveRentals: React.FC = () => {
                     localDiscountType,
                     localDiscountValue,
                     additionalHours,
-                    additionalMinutes
+                    additionalMinutes,
                   )
                 }
                 className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${(() => {
                   const finalTotal = Math.max(
                     0,
-                    additionalCost - localDiscountAmount
+                    additionalCost - localDiscountAmount,
                   );
                   return paymentAmount < finalTotal
                     ? "opacity-50 cursor-not-allowed"
@@ -3690,7 +3696,7 @@ const ActiveRentals: React.FC = () => {
                 disabled={(() => {
                   const finalTotal = Math.max(
                     0,
-                    additionalCost - localDiscountAmount
+                    additionalCost - localDiscountAmount,
                   );
                   return (
                     paymentAmount < finalTotal ||
@@ -3715,7 +3721,7 @@ const ActiveRentals: React.FC = () => {
     discountType: "amount" | "percentage",
     discountValue: number,
     additionalHours: number,
-    additionalMinutes: number
+    additionalMinutes: number,
   ) => {
     if (!ensureCashierActive()) return;
     if (!showAddTimeModal) return;
@@ -3872,7 +3878,7 @@ const ActiveRentals: React.FC = () => {
       paymentAmount: number,
       discountAmount: number,
       discountType: "amount" | "percentage",
-      discountValue: number
+      discountValue: number,
     ) => void;
     loading: boolean;
     voucher: any;
@@ -3917,7 +3923,7 @@ const ActiveRentals: React.FC = () => {
           icon: "warning",
           title: "Pembayaran Kurang",
           text: `Jumlah pembayaran kurang. Total yang harus dibayar: Rp ${finalTotal.toLocaleString(
-            "id-ID"
+            "id-ID",
           )}`,
         });
         return;
@@ -3933,10 +3939,10 @@ const ActiveRentals: React.FC = () => {
             paymentAmount,
             localDiscountAmount,
             localDiscountType,
-            localDiscountValue
+            localDiscountValue,
           ),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Payment timeout")), 30000)
+            setTimeout(() => reject(new Error("Payment timeout")), 30000),
           ),
         ]);
       } catch (error) {
@@ -4335,7 +4341,7 @@ const ActiveRentals: React.FC = () => {
       paymentAmount: number,
       discountAmount: number,
       discountType: "amount" | "percentage",
-      discountValue: number
+      discountValue: number,
     ) => void;
     duration: string;
     hourlyRate: number;
@@ -4379,7 +4385,7 @@ const ActiveRentals: React.FC = () => {
                   Rp{" "}
                   {Math.max(
                     0,
-                    totalAmount - localDiscountAmount
+                    totalAmount - localDiscountAmount,
                   ).toLocaleString("id-ID")}
                 </div>
               </div>
@@ -4490,7 +4496,7 @@ const ActiveRentals: React.FC = () => {
                     if (localDiscountType === "percentage") {
                       const maxPercentage = Math.min(100, val);
                       setLocalDiscountAmount(
-                        (totalAmount * maxPercentage) / 100
+                        (totalAmount * maxPercentage) / 100,
                       );
                     } else {
                       setLocalDiscountAmount(Math.min(val, totalAmount));
@@ -4575,14 +4581,14 @@ const ActiveRentals: React.FC = () => {
                     className="w-full py-2 rounded bg-blue-100 border border-blue-200 text-blue-800 font-bold text-base hover:bg-blue-200 mb-2"
                     onClick={() =>
                       setPaymentAmount(
-                        Math.max(0, totalAmount - localDiscountAmount)
+                        Math.max(0, totalAmount - localDiscountAmount),
                       )
                     }
                   >
                     LUNAS (Rp{" "}
                     {Math.max(
                       0,
-                      totalAmount - localDiscountAmount
+                      totalAmount - localDiscountAmount,
                     ).toLocaleString("id-ID")}
                     )
                   </button>
@@ -4612,7 +4618,7 @@ const ActiveRentals: React.FC = () => {
                 {(() => {
                   const finalTotal = Math.max(
                     0,
-                    totalAmount - localDiscountAmount
+                    totalAmount - localDiscountAmount,
                   );
                   const change = paymentAmount - finalTotal;
                   return change > 0 ? change.toLocaleString("id-ID") : 0;
@@ -4634,13 +4640,13 @@ const ActiveRentals: React.FC = () => {
                     paymentAmount,
                     localDiscountAmount,
                     localDiscountType,
-                    localDiscountValue
+                    localDiscountValue,
                   )
                 }
                 className={`flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors ${(() => {
                   const finalTotal = Math.max(
                     0,
-                    totalAmount - localDiscountAmount
+                    totalAmount - localDiscountAmount,
                   );
                   return paymentAmount < finalTotal
                     ? "opacity-50 cursor-not-allowed"
@@ -4649,7 +4655,7 @@ const ActiveRentals: React.FC = () => {
                 disabled={(() => {
                   const finalTotal = Math.max(
                     0,
-                    totalAmount - localDiscountAmount
+                    totalAmount - localDiscountAmount,
                   );
                   return paymentAmount < finalTotal || loading;
                 })()}
@@ -4745,7 +4751,7 @@ const ActiveRentals: React.FC = () => {
                         <span className="font-medium text-gray-900">
                           Rp{" "}
                           {Number(
-                            pkg.hargaNormal || pkg.packagePrice || 0
+                            pkg.hargaNormal || pkg.packagePrice || 0,
                           ).toLocaleString("id-ID")}
                         </span>
                       </div>
@@ -4755,7 +4761,7 @@ const ActiveRentals: React.FC = () => {
                         <span className="font-medium text-blue-600">
                           Rp{" "}
                           {Number(pkg.packagePrice || 0).toLocaleString(
-                            "id-ID"
+                            "id-ID",
                           )}
                         </span>
                       </div>
@@ -4807,12 +4813,12 @@ const ActiveRentals: React.FC = () => {
     paymentAmount: number,
     discountAmount: number,
     discountType: "amount" | "percentage",
-    discountValue: number
+    discountValue: number,
   ) => {
     try {
       // Get selected voucher data
       const selectedVoucher = voucherList.find(
-        (v) => v.id === selectedVoucherId
+        (v) => v.id === selectedVoucherId,
       );
       if (!selectedVoucher) {
         alert("Voucher tidak ditemukan!");
@@ -5009,7 +5015,7 @@ const ActiveRentals: React.FC = () => {
   const retryDatabaseOperation = async (
     operation: () => Promise<any>,
     maxRetries: number = 3,
-    delayMs: number = 1000
+    delayMs: number = 1000,
   ): Promise<any> => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -5138,7 +5144,7 @@ const ActiveRentals: React.FC = () => {
           : null;
       if (rentalType === "prepaid") {
         const rateProfile = rateProfiles.find(
-          (r) => r.id === latestConsole.rate_profile_id
+          (r) => r.id === latestConsole.rate_profile_id,
         );
         const hourlyRate = rateProfile?.hourly_rate || 0;
         // Billing rule: minimal 1 jam, setelah itu per menit
@@ -5170,7 +5176,7 @@ const ActiveRentals: React.FC = () => {
           Swal.fire(
             "Error",
             "Silakan scan kartu RFID terlebih dahulu",
-            "warning"
+            "warning",
           );
           return;
         }
@@ -5202,7 +5208,7 @@ const ActiveRentals: React.FC = () => {
 
         // Ambil snapshot rate untuk konsistensi harga selama sesi
         const rpForSnapshot = rateProfiles.find(
-          (r) => r.id === latestConsole.rate_profile_id
+          (r) => r.id === latestConsole.rate_profile_id,
         );
         const hourlyRateSnapshot = rpForSnapshot?.hourly_rate || 15000;
         const perMinuteRateSnapshot = Math.ceil(hourlyRateSnapshot / 60);
@@ -5254,7 +5260,7 @@ const ActiveRentals: React.FC = () => {
         Swal.fire(
           "Berhasil",
           "Sesi rental (member card) berhasil dimulai",
-          "success"
+          "success",
         );
         return;
       }
@@ -5324,8 +5330,8 @@ const ActiveRentals: React.FC = () => {
                 profit:
                   ((product.price ?? 0) - (product.cost ?? 0)) * newQuantity,
               }
-            : item
-        )
+            : item,
+        ),
       );
     } else {
       const newItem: CartItem = {
@@ -5481,7 +5487,7 @@ const ActiveRentals: React.FC = () => {
 
     // Filter consoles yang dipilih
     const selectedConsoles = consoles.filter((c) =>
-      selectedConsoleIds.includes(c.id)
+      selectedConsoleIds.includes(c.id),
     );
 
     switch (selectedCommand) {
@@ -5507,41 +5513,41 @@ const ActiveRentals: React.FC = () => {
               const res = await fetch(device.power_tv_command);
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               return { device, status: "success" };
-            })
+            }),
           );
 
           const successful = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "success"
+                r.status === "fulfilled" && r.value.status === "success",
             )
             .map((r) => r.value.device);
 
           const alreadyOff = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "already_off"
+                r.status === "fulfilled" && r.value.status === "already_off",
             )
             .map((r) => r.value.device);
 
           const failed = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "failed"
+                r.status === "fulfilled" && r.value.status === "failed",
             )
             .map((r) => r.value.device)
             .concat(
               results
                 .filter(
-                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                  (r): r is PromiseRejectedResult => r.status === "rejected",
                 )
-                .map((_, i) => selectedConsoles[i])
+                .map((_, i) => selectedConsoles[i]),
             );
 
           // Menampilkan SweetAlert
@@ -5593,41 +5599,41 @@ const ActiveRentals: React.FC = () => {
               const res = await fetch(device.power_tv_command);
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               return { device, status: "success" };
-            })
+            }),
           );
 
           const successful = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "success"
+                r.status === "fulfilled" && r.value.status === "success",
             )
             .map((r) => r.value.device);
 
           const alreadyOn = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "already_on"
+                r.status === "fulfilled" && r.value.status === "already_on",
             )
             .map((r) => r.value.device);
 
           const failed = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "failed"
+                r.status === "fulfilled" && r.value.status === "failed",
             )
             .map((r) => r.value.device)
             .concat(
               results
                 .filter(
-                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                  (r): r is PromiseRejectedResult => r.status === "rejected",
                 )
-                .map((_, i) => selectedConsoles[i])
+                .map((_, i) => selectedConsoles[i]),
             );
 
           // Menampilkan SweetAlert
@@ -5784,41 +5790,41 @@ const ActiveRentals: React.FC = () => {
               } catch (error) {
                 return { device, status: "failed", reason: error };
               }
-            })
+            }),
           );
 
           const successful = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "success"
+                r.status === "fulfilled" && r.value.status === "success",
             )
             .map((r) => r.value.device);
 
           const alreadyOn = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "already_on"
+                r.status === "fulfilled" && r.value.status === "already_on",
             )
             .map((r) => r.value.device);
 
           const failed = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "failed"
+                r.status === "fulfilled" && r.value.status === "failed",
             )
             .map((r) => r.value.device)
             .concat(
               results
                 .filter(
-                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                  (r): r is PromiseRejectedResult => r.status === "rejected",
                 )
-                .map((_, i) => selectedConsoles[i])
+                .map((_, i) => selectedConsoles[i]),
             );
 
           await Swal.fire({
@@ -5867,32 +5873,32 @@ const ActiveRentals: React.FC = () => {
               } else {
                 return { device, status: "success" };
               }
-            })
+            }),
           );
 
           const successful = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "success"
+                r.status === "fulfilled" && r.value.status === "success",
             )
             .map((r) => r.value.device);
 
           const failed = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "failed"
+                r.status === "fulfilled" && r.value.status === "failed",
             )
             .map((r) => r.value.device)
             .concat(
               results
                 .filter(
-                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                  (r): r is PromiseRejectedResult => r.status === "rejected",
                 )
-                .map((_, i) => selectedConsoles[i])
+                .map((_, i) => selectedConsoles[i]),
             );
 
           await Swal.fire({
@@ -5935,32 +5941,32 @@ const ActiveRentals: React.FC = () => {
               } else {
                 return { device, status: "success" };
               }
-            })
+            }),
           );
 
           const successful = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "success"
+                r.status === "fulfilled" && r.value.status === "success",
             )
             .map((r) => r.value.device);
 
           const failed = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "failed"
+                r.status === "fulfilled" && r.value.status === "failed",
             )
             .map((r) => r.value.device)
             .concat(
               results
                 .filter(
-                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                  (r): r is PromiseRejectedResult => r.status === "rejected",
                 )
-                .map((_, i) => selectedConsoles[i])
+                .map((_, i) => selectedConsoles[i]),
             );
 
           await Swal.fire({
@@ -5990,7 +5996,7 @@ const ActiveRentals: React.FC = () => {
           const results = await Promise.allSettled(
             selectedConsoles.map((device) =>
               fetch(
-                `http://localhost:3001/tv/${device.ip_address_tv}/volume/${volume}?port=5555&method=adb`
+                `http://localhost:3001/tv/${device.ip_address_tv}/volume/${volume}?port=5555&method=adb`,
               )
                 .then((res) => {
                   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -6000,33 +6006,33 @@ const ActiveRentals: React.FC = () => {
                   device,
                   status: "failed",
                   error: err.message,
-                }))
-            )
+                })),
+            ),
           );
 
           const successful = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "success"
+                r.status === "fulfilled" && r.value.status === "success",
             )
             .map((r) => r.value.device);
 
           const failed = results
             .filter(
               (
-                r
+                r,
               ): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-                r.status === "fulfilled" && r.value.status === "failed"
+                r.status === "fulfilled" && r.value.status === "failed",
             )
             .map((r) => r.value.device)
             .concat(
               results
                 .filter(
-                  (r): r is PromiseRejectedResult => r.status === "rejected"
+                  (r): r is PromiseRejectedResult => r.status === "rejected",
                 )
-                .map((_, i) => selectedConsoles[i])
+                .map((_, i) => selectedConsoles[i]),
             );
 
           await Swal.fire({
@@ -6053,7 +6059,7 @@ const ActiveRentals: React.FC = () => {
         const results = await Promise.allSettled(
           selectedConsoles.map((device) =>
             fetch(
-              `http://localhost:3001/tv/${device.ip_address_tv}/volume/0?port=5555&method=adb`
+              `http://localhost:3001/tv/${device.ip_address_tv}/volume/0?port=5555&method=adb`,
             )
               .then((res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -6063,29 +6069,29 @@ const ActiveRentals: React.FC = () => {
                 device,
                 status: "failed",
                 error: err.message,
-              }))
-          )
+              })),
+          ),
         );
 
         const successful = results
           .filter(
             (r): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-              r.status === "fulfilled" && r.value.status === "success"
+              r.status === "fulfilled" && r.value.status === "success",
           )
           .map((r) => r.value.device);
 
         const failed = results
           .filter(
             (r): r is PromiseFulfilledResult<{ device: any; status: string }> =>
-              r.status === "fulfilled" && r.value.status === "failed"
+              r.status === "fulfilled" && r.value.status === "failed",
           )
           .map((r) => r.value.device)
           .concat(
             results
               .filter(
-                (r): r is PromiseRejectedResult => r.status === "rejected"
+                (r): r is PromiseRejectedResult => r.status === "rejected",
               )
-              .map((_, i) => selectedConsoles[i])
+              .map((_, i) => selectedConsoles[i]),
           );
 
         await Swal.fire({
@@ -6170,7 +6176,7 @@ const ActiveRentals: React.FC = () => {
     paymentAmount: number,
     discountAmount: number,
     discountType: "amount" | "percentage",
-    discountValue: number
+    discountValue: number,
   ) => {
     if (!ensureCashierActive()) return;
     if (!showPrepaidPaymentModal) return;
@@ -6178,7 +6184,7 @@ const ActiveRentals: React.FC = () => {
 
     const finalTotal = Math.max(
       0,
-      showPrepaidPaymentModal.totalAmount - discountAmount
+      showPrepaidPaymentModal.totalAmount - discountAmount,
     );
 
     if (paymentAmount < finalTotal) {
@@ -6378,7 +6384,7 @@ const ActiveRentals: React.FC = () => {
         .single();
 
       const isPrepaid = Boolean(
-        trx?.details?.rental?.prepaid ?? trx?.details?.prepaid
+        trx?.details?.rental?.prepaid ?? trx?.details?.prepaid,
       );
 
       // Update rental session status
@@ -6387,7 +6393,7 @@ const ActiveRentals: React.FC = () => {
         .update({
           status: "cancelled",
           notes: `Dibatalkan oleh kasir pada ${new Date().toLocaleString(
-            "id-ID"
+            "id-ID",
           )}: ${cancelReason}`,
         })
         .eq("id", session.id);
@@ -6432,7 +6438,7 @@ const ActiveRentals: React.FC = () => {
           paymentMethod: "cash",
           referenceId: `CANCELLED-${Date.now()}`,
           description: `Dibatalkan oleh kasir pada ${new Date().toLocaleString(
-            "id-ID"
+            "id-ID",
           )}: ${cancelReason}`,
           details: {
             action: "cancel_session",
@@ -6502,7 +6508,7 @@ const ActiveRentals: React.FC = () => {
       filtered = filtered.filter(
         (c) =>
           c.name.toLowerCase().includes(searchLower) ||
-          c.location?.toLowerCase().includes(searchLower)
+          c.location?.toLowerCase().includes(searchLower),
       );
     }
 
@@ -6567,8 +6573,8 @@ const ActiveRentals: React.FC = () => {
                   {isUpdatingAutoShutdown
                     ? "Updating..."
                     : autoShutdownEnabled
-                    ? "All Protected"
-                    : "All Disabled"}
+                      ? "All Protected"
+                      : "All Disabled"}
                 </div>
               </div>
 
@@ -6875,7 +6881,7 @@ const ActiveRentals: React.FC = () => {
                         >
                           {selectedVoucherId
                             ? voucherList.find(
-                                (v) => v.id === selectedVoucherId
+                                (v) => v.id === selectedVoucherId,
                               )?.name || "Pilih Voucher"
                             : "Pilih Voucher"}
                         </button>
@@ -6902,7 +6908,7 @@ const ActiveRentals: React.FC = () => {
                         onChange={(e) => {
                           const val = Math.max(
                             1,
-                            parseInt(e.target.value) || 1
+                            parseInt(e.target.value) || 1,
                           );
                           setVoucherQuantity(val);
                         }}
@@ -6919,7 +6925,7 @@ const ActiveRentals: React.FC = () => {
                     value={paymentMethod}
                     onChange={(e) =>
                       setPaymentMethod(
-                        e.target.value as "cash" | "qris" | "card"
+                        e.target.value as "cash" | "qris" | "card",
                       )
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
@@ -6933,7 +6939,7 @@ const ActiveRentals: React.FC = () => {
                   <div className="bg-gray-50 rounded-lg p-4">
                     {(() => {
                       const v = voucherList.find(
-                        (v) => v.id === selectedVoucherId
+                        (v) => v.id === selectedVoucherId,
                       );
                       if (!v) return null;
 
@@ -7018,7 +7024,7 @@ const ActiveRentals: React.FC = () => {
                     setSelling(true);
                     // await handleSellVoucher();
                     const selectedVoucher = voucherList.find(
-                      (v) => v.id === selectedVoucherId
+                      (v) => v.id === selectedVoucherId,
                     );
                     const qty = Math.max(1, Number(voucherQuantity) || 1);
                     const subtotal =
@@ -7165,7 +7171,7 @@ const ActiveRentals: React.FC = () => {
                   <div className="text-center">
                     <div className="text-3xl font-bold text-blue-600 mb-2">
                       {scannedCardData?.balance_points?.toLocaleString(
-                        "id-ID"
+                        "id-ID",
                       ) || 0}{" "}
                       Points
                     </div>
@@ -7386,7 +7392,7 @@ const ActiveRentals: React.FC = () => {
                                       <div className="font-medium text-red-600">
                                         -
                                         {payAsYouGoSummary.totalPointsDeducted.toLocaleString(
-                                          "id-ID"
+                                          "id-ID",
                                         )}
                                       </div>
                                     </div>
@@ -7397,7 +7403,7 @@ const ActiveRentals: React.FC = () => {
                                       <div className="font-medium text-green-600">
                                         Rp{" "}
                                         {payAsYouGoSummary.hourlyRate.toLocaleString(
-                                          "id-ID"
+                                          "id-ID",
                                         )}
                                       </div>
                                     </div>
@@ -7408,7 +7414,7 @@ const ActiveRentals: React.FC = () => {
                                       <div className="font-bold text-green-600 text-sm">
                                         Rp{" "}
                                         {payAsYouGoSummary.estimatedCost.toLocaleString(
-                                          "id-ID"
+                                          "id-ID",
                                         )}
                                       </div>
                                     </div>
@@ -7520,14 +7526,14 @@ const ActiveRentals: React.FC = () => {
 
                             if (updateResult.error) {
                               throw new Error(
-                                `Gagal update saldo kartu: ${updateResult.error.message}`
+                                `Gagal update saldo kartu: ${updateResult.error.message}`,
                               );
                             }
 
                             if (deleteResult.error) {
                               console.warn(
                                 "Warning: Gagal menghapus logs kartu:",
-                                deleteResult.error
+                                deleteResult.error,
                               );
                             }
 
@@ -7539,14 +7545,14 @@ const ActiveRentals: React.FC = () => {
                             Swal.fire(
                               "Berhasil",
                               "Saldo kartu berhasil diset menjadi 100.000 dan logs lama dihapus",
-                              "success"
+                              "success",
                             );
                           } catch (error) {
                             console.error("Error setting card balance:", error);
                             Swal.fire(
                               "Gagal",
                               "Gagal mengatur saldo kartu",
-                              "error"
+                              "error",
                             );
                           } finally {
                             setPayAsYouGoProcessing(false);
@@ -7569,7 +7575,7 @@ const ActiveRentals: React.FC = () => {
                               await supabase
                                 .from("card_usage_logs")
                                 .select(
-                                  "session_id, action_type, timestamp, points_amount"
+                                  "session_id, action_type, timestamp, points_amount",
                                 )
                                 .eq("card_uid", scannedCardUID)
                                 .eq("action_type", "balance_deduct")
@@ -7582,7 +7588,7 @@ const ActiveRentals: React.FC = () => {
                               Swal.fire(
                                 "Info",
                                 "Tidak ada durasi main yang tercatat",
-                                "info"
+                                "info",
                               );
                               return;
                             }
@@ -7597,7 +7603,7 @@ const ActiveRentals: React.FC = () => {
                                   `
                                   id, console_id, start_time, end_time, duration_minutes,
                                   consoles(name, location, rate_profiles(hourly_rate, capital, minimum_minutes))
-                                `
+                                `,
                                 )
                                 .eq("id", latestLog.session_id)
                                 .single();
@@ -7606,7 +7612,7 @@ const ActiveRentals: React.FC = () => {
                               Swal.fire(
                                 "Error",
                                 "Tidak dapat menemukan data session",
-                                "error"
+                                "error",
                               );
                               return;
                             }
@@ -7618,7 +7624,7 @@ const ActiveRentals: React.FC = () => {
                                 ? Math.ceil(
                                     (Date.now() -
                                       new Date(session.start_time).getTime()) /
-                                      (1000 * 60)
+                                      (1000 * 60),
                                   )
                                 : 0);
 
@@ -7626,7 +7632,7 @@ const ActiveRentals: React.FC = () => {
                               Swal.fire(
                                 "Info",
                                 "Durasi main tidak dapat dihitung",
-                                "info"
+                                "info",
                               );
                               return;
                             }
@@ -7668,7 +7674,7 @@ const ActiveRentals: React.FC = () => {
                             Swal.fire(
                               "Gagal",
                               "Gagal mempersiapkan pembayaran",
-                              "error"
+                              "error",
                             );
                           } finally {
                             setPayAsYouGoProcessing(false);
@@ -7735,7 +7741,7 @@ const ActiveRentals: React.FC = () => {
                   {(() => {
                     // Filter logs penambahan dan group pemakaian
                     const addLogs = historyLogs.filter(
-                      (log) => log.action_type === "balance_add"
+                      (log) => log.action_type === "balance_add",
                     );
                     const deductGrouped = groupDeductLogsBySession(historyLogs);
 
@@ -7763,7 +7769,7 @@ const ActiveRentals: React.FC = () => {
                     ].sort(
                       (a, b) =>
                         new Date(b.timestamp).getTime() -
-                        new Date(a.timestamp).getTime()
+                        new Date(a.timestamp).getTime(),
                     );
 
                     if (combined.length === 0) {
@@ -7834,7 +7840,7 @@ const ActiveRentals: React.FC = () => {
                             )}
                           </div>
                         </div>
-                      )
+                      ),
                     );
                   })()}
                 </div>
@@ -7890,7 +7896,7 @@ const ActiveRentals: React.FC = () => {
                           : null;
                         const duration = end
                           ? Math.round(
-                              (end.getTime() - start.getTime()) / 60000
+                              (end.getTime() - start.getTime()) / 60000,
                             )
                           : null;
                         return (
@@ -7916,14 +7922,14 @@ const ActiveRentals: React.FC = () => {
                                 <button
                                   onClick={() => {
                                     const console = consoles.find(
-                                      (c) => c.id === session.console_id
+                                      (c) => c.id === session.console_id,
                                     );
                                     if (console && session.start_time) {
                                       printRentalProof({
                                         customerName: "Customer",
                                         unitNumber: console.name,
                                         startTimestamp: new Date(
-                                          session.start_time
+                                          session.start_time,
                                         ).toLocaleString("id-ID"),
                                         mode: session.duration_minutes
                                           ? "prepaid"
@@ -7968,7 +7974,7 @@ const ActiveRentals: React.FC = () => {
                               ) : (
                                 <>
                                   {session.total_points_deducted?.toLocaleString(
-                                    "id-ID"
+                                    "id-ID",
                                   )}{" "}
                                   points
                                 </>
@@ -8175,7 +8181,7 @@ const ActiveRentals: React.FC = () => {
                             : null;
                           const duration = end
                             ? Math.round(
-                                (end.getTime() - start.getTime()) / 60000
+                                (end.getTime() - start.getTime()) / 60000,
                               )
                             : null;
                           return (
@@ -8201,14 +8207,14 @@ const ActiveRentals: React.FC = () => {
                                   <button
                                     onClick={() => {
                                       const console = consoles.find(
-                                        (c) => c.id === session.console_id
+                                        (c) => c.id === session.console_id,
                                       );
                                       if (console && session.start_time) {
                                         printRentalProof({
                                           customerName: "Customer",
                                           unitNumber: console.name,
                                           startTimestamp: new Date(
-                                            session.start_time
+                                            session.start_time,
                                           ).toLocaleString("id-ID"),
                                           mode: session.duration_minutes
                                             ? "prepaid"
@@ -8252,13 +8258,13 @@ const ActiveRentals: React.FC = () => {
                                   <>
                                     Rp{" "}
                                     {session.total_amount.toLocaleString(
-                                      "id-ID"
+                                      "id-ID",
                                     )}
                                   </>
                                 ) : (
                                   <>
                                     {session.total_points_deducted?.toLocaleString(
-                                      "id-ID"
+                                      "id-ID",
                                     )}{" "}
                                     points
                                   </>
@@ -8311,14 +8317,14 @@ const ActiveRentals: React.FC = () => {
                               setCurrentPage(page);
                               loadHistorySessions(
                                 historyStartDate,
-                                historyEndDate
+                                historyEndDate,
                               );
                             }}
                             disabled={page === currentPage}
                           >
                             {page}
                           </button>
-                        )
+                        ),
                       )}
                     </div>
                     <button
@@ -8485,7 +8491,7 @@ const ActiveRentals: React.FC = () => {
                                       ]);
                                     } else {
                                       setSelectedConsoleIds((s) =>
-                                        s.filter((id) => id !== c.id)
+                                        s.filter((id) => id !== c.id),
                                       );
                                     }
                                   }}
@@ -8555,7 +8561,7 @@ const ActiveRentals: React.FC = () => {
                                     } catch (error) {
                                       console.error(
                                         "Error toggling TV:",
-                                        error
+                                        error,
                                       );
                                       // Tampilkan error message
                                       Swal.fire({
@@ -8641,7 +8647,7 @@ const ActiveRentals: React.FC = () => {
                                     } catch (error) {
                                       console.error(
                                         "Error toggling lamp:",
-                                        error
+                                        error,
                                       );
                                       // Tampilkan error message
                                       Swal.fire({
@@ -8716,14 +8722,17 @@ const ActiveRentals: React.FC = () => {
           {(() => {
             // Group consoles by location
 
-            const groupedConsoles = filteredConsoles.reduce((acc, console) => {
-              const location = console.location || "Lantai 1";
-              if (!acc[location]) {
-                acc[location] = [];
-              }
-              acc[location].push(console);
-              return acc;
-            }, {} as Record<string, typeof filteredConsoles>);
+            const groupedConsoles = filteredConsoles.reduce(
+              (acc, console) => {
+                const location = console.location || "Lantai 1";
+                if (!acc[location]) {
+                  acc[location] = [];
+                }
+                acc[location].push(console);
+                return acc;
+              },
+              {} as Record<string, typeof filteredConsoles>,
+            );
 
             const sortedLocations = Object.keys(groupedConsoles).sort(
               (a, b) => {
@@ -8732,7 +8741,7 @@ const ActiveRentals: React.FC = () => {
                 if (a === "Lantai 2") return -1;
                 if (b === "Lantai 2") return 1;
                 return a.localeCompare(b);
-              }
+              },
             );
 
             return (
@@ -8741,10 +8750,10 @@ const ActiveRentals: React.FC = () => {
                   const locationConsoles = groupedConsoles[location].sort(
                     (a, b) => {
                       const sa = activeSessions.find(
-                        (s) => s.console_id === a.id
+                        (s) => s.console_id === a.id,
                       );
                       const sb = activeSessions.find(
-                        (s) => s.console_id === b.id
+                        (s) => s.console_id === b.id,
                       );
 
                       // Fungsi untuk menghitung sisa waktu prepaid
@@ -8762,8 +8771,8 @@ const ActiveRentals: React.FC = () => {
                             Math.floor(
                               (Date.now() -
                                 new Date(session.start_time).getTime()) /
-                                1000
-                            )
+                                1000,
+                            ),
                         );
                       };
 
@@ -8779,7 +8788,7 @@ const ActiveRentals: React.FC = () => {
                         return Math.floor(
                           (Date.now() -
                             new Date(session.start_time).getTime()) /
-                            1000
+                            1000,
                         );
                       };
 
@@ -8821,7 +8830,7 @@ const ActiveRentals: React.FC = () => {
                           numeric: true,
                         });
                       }
-                    }
+                    },
                   );
 
                   return (
@@ -8840,7 +8849,7 @@ const ActiveRentals: React.FC = () => {
                         {locationConsoles.map((console) => {
                           const isActive = console.status === "rented";
                           const activeSession = activeSessions.find(
-                            (s) => s.console_id === console.id
+                            (s) => s.console_id === console.id,
                           );
                           const rateProfile = getConsoleRateProfile(console.id);
                           return (
@@ -8850,8 +8859,8 @@ const ActiveRentals: React.FC = () => {
                                 console.status === "available"
                                   ? "border-green-200 bg-white"
                                   : console.status === "rented"
-                                  ? "border-blue-200 bg-white"
-                                  : "border-red-200 bg-white"
+                                    ? "border-blue-200 bg-white"
+                                    : "border-red-200 bg-white"
                               }`}
                               style={{ minWidth: 0 }}
                             >
@@ -8881,7 +8890,7 @@ const ActiveRentals: React.FC = () => {
                                     <DollarSign className="h-3 w-3" />
                                     {rateProfile
                                       ? rateProfile.hourly_rate.toLocaleString(
-                                          "id-ID"
+                                          "id-ID",
                                         )
                                       : "0"}
                                   </span>
@@ -8891,18 +8900,18 @@ const ActiveRentals: React.FC = () => {
                                         console.status === "available"
                                           ? "bg-green-500 text-white"
                                           : console.status === "rented"
-                                          ? "bg-blue-500 text-white"
-                                          : "bg-red-500 text-white"
+                                            ? "bg-blue-500 text-white"
+                                            : "bg-red-500 text-white"
                                       }`}
                                     >
                                       {console.status === "available"
                                         ? "READY"
                                         : console.status === "rented"
-                                        ? "ACTIVE"
-                                        : "MAINT."}
+                                          ? "ACTIVE"
+                                          : "MAINT."}
                                     </span>
-                                    {consoleAutoShutdownStates[console.id] ??
-                                    console.auto_shutdown_enabled ? (
+                                    {(consoleAutoShutdownStates[console.id] ??
+                                    console.auto_shutdown_enabled) ? (
                                       <Lock className="h-4 w-4 text-green-700" />
                                     ) : (
                                       <Unlock className="h-4 w-4 text-red-700" />
@@ -8913,10 +8922,10 @@ const ActiveRentals: React.FC = () => {
                                           className="rounded-md p-1"
                                           onClick={async () => {
                                             setScannedCardUID(
-                                              activeSession.card_uid!
+                                              activeSession.card_uid!,
                                             );
                                             await fetchCardHistory(
-                                              activeSession.card_uid!
+                                              activeSession.card_uid!,
                                             );
                                             setShowHistoryPointModal(true);
                                           }}
@@ -8928,10 +8937,10 @@ const ActiveRentals: React.FC = () => {
                                         className="rounded-md p-1"
                                         onClick={async () => {
                                           setSelectedConsoleForHistory(
-                                            console.name
+                                            console.name,
                                           );
                                           await loadConsoleHistoryToday(
-                                            console.id
+                                            console.id,
                                           );
                                           setShowConsoleHistoryModal(true);
                                         }}
@@ -8956,12 +8965,12 @@ const ActiveRentals: React.FC = () => {
                                       <Countdown
                                         sessionId={activeSession.id}
                                         startTimeMs={new Date(
-                                          activeSession.start_time
+                                          activeSession.start_time,
                                         ).getTime()}
                                         endTimeMs={
                                           activeSession.duration_minutes
                                             ? new Date(
-                                                activeSession.start_time
+                                                activeSession.start_time,
                                               ).getTime() +
                                               activeSession.duration_minutes *
                                                 60 *
@@ -8997,15 +9006,15 @@ const ActiveRentals: React.FC = () => {
                                           activeSession.duration_minutes
                                             ? "bg-purple-100 text-purple-700 border border-purple-300"
                                             : activeSession.is_voucher_used
-                                            ? "bg-yellow-100 text-yellow-700 border border-yellow-300"
-                                            : "bg-green-100 text-green-700 border border-green-300"
+                                              ? "bg-yellow-100 text-yellow-700 border border-yellow-300"
+                                              : "bg-green-100 text-green-700 border border-green-300"
                                         }`}
                                       >
                                         {activeSession.duration_minutes
                                           ? "BAYAR DIMUKA"
                                           : activeSession.is_voucher_used
-                                          ? "MEMBER CARD"
-                                          : "PAY AS YOU GO"}
+                                            ? "MEMBER CARD"
+                                            : "PAY AS YOU GO"}
                                       </span>
                                     </div>
                                     {/* Status Relay dan power tv command */}
@@ -9018,7 +9027,7 @@ const ActiveRentals: React.FC = () => {
                                     Mode persiapan akan berakhir pada:
                                     <span className="ml-1 font-semibold">
                                       {new Date(
-                                        preparationMode[console.id]!.endAtMs
+                                        preparationMode[console.id]!.endAtMs,
                                       ).toLocaleTimeString("id-ID", {
                                         hour: "2-digit",
                                         minute: "2-digit",
@@ -9111,7 +9120,7 @@ const ActiveRentals: React.FC = () => {
                                         }`}
                                         title="End Rental"
                                         disabled={endingSessionIds.has(
-                                          activeSession.id
+                                          activeSession.id,
                                         )}
                                       >
                                         <Square className="h-4 w-4" />
@@ -9148,43 +9157,43 @@ const ActiveRentals: React.FC = () => {
                                       if (console.power_tv_command) {
                                         try {
                                           const response = await fetch(
-                                            console.power_tv_command
+                                            console.power_tv_command,
                                           );
                                           if (response.ok) {
                                             Swal.fire(
                                               "Tes TV",
                                               "Perintah power ON dikirim ke TV.",
-                                              "success"
+                                              "success",
                                             );
                                           } else {
                                             const text = await response.text();
                                             console.error(
                                               "Tes TV error:",
                                               response.status,
-                                              text
+                                              text,
                                             );
                                             Swal.fire(
                                               "Tes TV",
                                               `Gagal mengirim perintah ke TV. Status: ${response.status}`,
-                                              "error"
+                                              "error",
                                             );
                                           }
                                         } catch (err) {
                                           console.error(
                                             "Tes TV fetch error:",
-                                            err
+                                            err,
                                           );
                                           Swal.fire(
                                             "Tes TV",
                                             "Gagal mengirim perintah ke TV (fetch error).",
-                                            "error"
+                                            "error",
                                           );
                                         }
                                       } else {
                                         Swal.fire(
                                           "Tes TV",
                                           "Perintah power ON tidak tersedia.",
-                                          "info"
+                                          "info",
                                         );
                                       }
                                     }}
@@ -9206,21 +9215,21 @@ const ActiveRentals: React.FC = () => {
                                             setSelectedVoucherId("");
                                             setVoucherQuantity(1);
                                             setScannedCardUID(
-                                              activeSession.card_uid!
+                                              activeSession.card_uid!,
                                             );
                                             await fetchCardData(
-                                              activeSession.card_uid!
+                                              activeSession.card_uid!,
                                             );
                                             setShowSellVoucherModal(true);
                                           } catch (e) {
                                             window.console.error(
                                               "Open Sell Voucher error:",
-                                              e
+                                              e,
                                             );
                                             Swal.fire(
                                               "Error",
                                               "Gagal membuka penjualan voucher",
-                                              "error"
+                                              "error",
                                             );
                                           }
                                         }}
@@ -9247,13 +9256,13 @@ const ActiveRentals: React.FC = () => {
                                             !activeSession.is_voucher_used
                                           ) {
                                             setShowProductModal(
-                                              activeSession.id
+                                              activeSession.id,
                                             );
                                           } else {
                                             Swal.fire(
                                               "Info",
                                               "Konsol harus dalam status aktif untuk menambahkan produk",
-                                              "info"
+                                              "info",
                                             );
                                           }
                                         }}
@@ -9308,7 +9317,7 @@ const ActiveRentals: React.FC = () => {
             : consoles.filter((c) => c.status === consoleFilter)
           )
             .filter((c) =>
-              c.name.toLowerCase().includes(searchConsole.toLowerCase())
+              c.name.toLowerCase().includes(searchConsole.toLowerCase()),
             )
             .sort((a, b) => {
               const sa = activeSessions.find((s) => s.console_id === a.id);
@@ -9328,8 +9337,8 @@ const ActiveRentals: React.FC = () => {
                   Number(session.duration_minutes) * 60 -
                     Math.floor(
                       (Date.now() - new Date(session.start_time).getTime()) /
-                        1000
-                    )
+                        1000,
+                    ),
                 );
               };
 
@@ -9343,7 +9352,7 @@ const ActiveRentals: React.FC = () => {
                   return 0;
                 }
                 return Math.floor(
-                  (Date.now() - new Date(session.start_time).getTime()) / 1000
+                  (Date.now() - new Date(session.start_time).getTime()) / 1000,
                 );
               };
 
@@ -9383,7 +9392,7 @@ const ActiveRentals: React.FC = () => {
             .map((console) => {
               // const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
-                (s) => s.console_id === console.id
+                (s) => s.console_id === console.id,
               );
               const rateProfile = getConsoleRateProfile(console.id);
               return (
@@ -9393,8 +9402,8 @@ const ActiveRentals: React.FC = () => {
                     console.status === "available"
                       ? "bg-green-50"
                       : console.status === "rented"
-                      ? "bg-blue-50"
-                      : "bg-red-50"
+                        ? "bg-blue-50"
+                        : "bg-red-50"
                   } rounded-lg transition-all`}
                 >
                   {/* Left: Status & Console Info */}
@@ -9405,8 +9414,8 @@ const ActiveRentals: React.FC = () => {
                           console.status === "available"
                             ? "bg-green-500"
                             : console.status === "rented"
-                            ? "bg-blue-500"
-                            : "bg-red-500"
+                              ? "bg-blue-500"
+                              : "bg-red-500"
                         }`}
                       ></div>
                       <h3 className="text-lg font-semibold text-gray-900 truncate">
@@ -9468,12 +9477,12 @@ const ActiveRentals: React.FC = () => {
                           <Countdown
                             sessionId={activeSession?.id}
                             startTimeMs={new Date(
-                              activeSession?.start_time
+                              activeSession?.start_time,
                             ).getTime()}
                             endTimeMs={
                               activeSession?.duration_minutes
                                 ? new Date(
-                                    activeSession?.start_time
+                                    activeSession?.start_time,
                                   ).getTime() +
                                   activeSession?.duration_minutes * 60 * 1000
                                 : null
@@ -9496,15 +9505,15 @@ const ActiveRentals: React.FC = () => {
                             activeSession.duration_minutes
                               ? "bg-purple-100 text-purple-800 border-purple-300"
                               : activeSession.is_voucher_used
-                              ? "bg-yellow-100 text-yellow-800 border-yellow-300"
-                              : "bg-green-100 text-green-800 border-green-300"
+                                ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                                : "bg-green-100 text-green-800 border-green-300"
                           }`}
                         >
                           {activeSession.duration_minutes
                             ? "BAYAR DIMUKA"
                             : activeSession.is_voucher_used
-                            ? "MEMBER CARD"
-                            : "PAY AS YOU GO"}
+                              ? "MEMBER CARD"
+                              : "PAY AS YOU GO"}
                         </span>
 
                         {/* Action Button */}
@@ -9539,7 +9548,7 @@ const ActiveRentals: React.FC = () => {
                               onClick={() => {
                                 if (!ensureCashierActive()) return;
                                 const rateProfile = getConsoleRateProfile(
-                                  console.id
+                                  console.id,
                                 );
                                 setShowAddTimeModal({
                                   session: activeSession,
@@ -9599,18 +9608,18 @@ const ActiveRentals: React.FC = () => {
                                     setVoucherQuantity(1);
                                     setScannedCardUID(activeSession.card_uid!);
                                     await fetchCardData(
-                                      activeSession.card_uid!
+                                      activeSession.card_uid!,
                                     );
                                     setShowSellVoucherModal(true);
                                   } catch (e) {
                                     window.console.error(
                                       "Open Sell Voucher error:",
-                                      e
+                                      e,
                                     );
                                     Swal.fire(
                                       "Error",
                                       "Gagal membuka penjualan voucher",
-                                      "error"
+                                      "error",
                                     );
                                   }
                                 }}
@@ -9630,7 +9639,7 @@ const ActiveRentals: React.FC = () => {
                             Mode persiapan akan berakhir pada:
                             <span className="ml-1 font-semibold">
                               {new Date(
-                                preparationMode[console.id]!.endAtMs
+                                preparationMode[console.id]!.endAtMs,
                               ).toLocaleString("id-ID")}
                             </span>
                           </div>
@@ -9696,7 +9705,7 @@ const ActiveRentals: React.FC = () => {
             : consoles.filter((c) => c.status === consoleFilter)
           )
             .filter((c) =>
-              c.name.toLowerCase().includes(searchConsole.toLowerCase())
+              c.name.toLowerCase().includes(searchConsole.toLowerCase()),
             )
             .sort((a, b) => {
               const sa = activeSessions.find((s) => s.console_id === a.id);
@@ -9716,8 +9725,8 @@ const ActiveRentals: React.FC = () => {
                   Number(session.duration_minutes) * 60 -
                     Math.floor(
                       (Date.now() - new Date(session.start_time).getTime()) /
-                        1000
-                    )
+                        1000,
+                    ),
                 );
               };
 
@@ -9731,7 +9740,7 @@ const ActiveRentals: React.FC = () => {
                   return 0;
                 }
                 return Math.floor(
-                  (Date.now() - new Date(session.start_time).getTime()) / 1000
+                  (Date.now() - new Date(session.start_time).getTime()) / 1000,
                 );
               };
 
@@ -9771,7 +9780,7 @@ const ActiveRentals: React.FC = () => {
             .map((console) => {
               const isActive = console.status === "rented";
               const activeSession = activeSessions.find(
-                (s) => s.console_id === console.id
+                (s) => s.console_id === console.id,
               );
               const rateProfile = getConsoleRateProfile(console.id);
               return (
@@ -9781,8 +9790,8 @@ const ActiveRentals: React.FC = () => {
                     console.status === "available"
                       ? "border-green-200 bg-white"
                       : console.status === "rented"
-                      ? "border-blue-200 bg-white"
-                      : "border-red-200 bg-white"
+                        ? "border-blue-200 bg-white"
+                        : "border-red-200 bg-white"
                   }`}
                 >
                   {/* Header */}
@@ -9893,8 +9902,8 @@ const ActiveRentals: React.FC = () => {
                           activeSession.duration_minutes
                             ? "bg-purple-50 border-purple-100"
                             : activeSession.is_voucher_used
-                            ? "bg-yellow-50 border-yellow-100"
-                            : "bg-green-50 border-green-100"
+                              ? "bg-yellow-50 border-yellow-100"
+                              : "bg-green-50 border-green-100"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -9909,15 +9918,15 @@ const ActiveRentals: React.FC = () => {
                               activeSession.duration_minutes
                                 ? "bg-purple-100 text-purple-800 border-purple-300"
                                 : activeSession.is_voucher_used
-                                ? "bg-yellow-100 text-yellow-800 border-yellow-300"
-                                : "bg-green-100 text-green-800 border-green-300"
+                                  ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                                  : "bg-green-100 text-green-800 border-green-300"
                             }`}
                           >
                             {activeSession.duration_minutes
                               ? "BAYAR DIMUKA"
                               : activeSession.is_voucher_used
-                              ? "MEMBER CARD"
-                              : "PAY AS YOU GO"}
+                                ? "MEMBER CARD"
+                                : "PAY AS YOU GO"}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
@@ -9925,7 +9934,7 @@ const ActiveRentals: React.FC = () => {
                             <span className="text-blue-600">Mulai:</span>
                             <p className="font-medium">
                               {new Date(
-                                activeSession.start_time
+                                activeSession.start_time,
                               ).toLocaleTimeString("id-ID", {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -9946,12 +9955,12 @@ const ActiveRentals: React.FC = () => {
                                     <Countdown
                                       sessionId={activeSession.id}
                                       startTimeMs={new Date(
-                                        activeSession.start_time
+                                        activeSession.start_time,
                                       ).getTime()}
                                       endTimeMs={
                                         activeSession.duration_minutes
                                           ? new Date(
-                                              activeSession.start_time
+                                              activeSession.start_time,
                                             ).getTime() +
                                             activeSession.duration_minutes *
                                               60 *
@@ -9974,12 +9983,12 @@ const ActiveRentals: React.FC = () => {
                                     <Countdown
                                       sessionId={activeSession.id}
                                       startTimeMs={new Date(
-                                        activeSession.start_time
+                                        activeSession.start_time,
                                       ).getTime()}
                                       endTimeMs={
                                         activeSession.duration_minutes
                                           ? new Date(
-                                              activeSession.start_time
+                                              activeSession.start_time,
                                             ).getTime() +
                                             activeSession.duration_minutes *
                                               60 *
@@ -10030,7 +10039,7 @@ const ActiveRentals: React.FC = () => {
                               Rp{" "}
                               {rateProfile
                                 ? rateProfile.hourly_rate.toLocaleString(
-                                    "id-ID"
+                                    "id-ID",
                                   )
                                 : "0"}
                             </p>
@@ -10053,12 +10062,12 @@ const ActiveRentals: React.FC = () => {
                             <Countdown
                               sessionId={activeSession.id}
                               startTimeMs={new Date(
-                                activeSession.start_time
+                                activeSession.start_time,
                               ).getTime()}
                               endTimeMs={
                                 activeSession.duration_minutes
                                   ? new Date(
-                                      activeSession.start_time
+                                      activeSession.start_time,
                                     ).getTime() +
                                     activeSession.duration_minutes * 60 * 1000
                                   : null
@@ -10077,7 +10086,7 @@ const ActiveRentals: React.FC = () => {
                         Mode persiapan akan berakhir pada:
                         <span className="ml-1 font-semibold">
                           {new Date(
-                            preparationMode[console.id]!.endAtMs
+                            preparationMode[console.id]!.endAtMs,
                           ).toLocaleString("id-ID")}
                         </span>
                       </div>
@@ -10160,7 +10169,7 @@ const ActiveRentals: React.FC = () => {
                               onClick={() => {
                                 if (!ensureCashierActive()) return;
                                 const rateProfile = getConsoleRateProfile(
-                                  console.id
+                                  console.id,
                                 );
                                 setShowAddTimeModal({
                                   session: activeSession,
@@ -10191,18 +10200,18 @@ const ActiveRentals: React.FC = () => {
                                     setVoucherQuantity(1);
                                     setScannedCardUID(activeSession.card_uid!);
                                     await fetchCardData(
-                                      activeSession.card_uid!
+                                      activeSession.card_uid!,
                                     );
                                     setShowSellVoucherModal(true);
                                   } catch (e) {
                                     window.console.error(
                                       "Open Sell Voucher error:",
-                                      e
+                                      e,
                                     );
                                     Swal.fire(
                                       "Error",
                                       "Gagal membuka penjualan voucher",
-                                      "error"
+                                      "error",
                                     );
                                   }
                                 }}
@@ -10266,7 +10275,7 @@ const ActiveRentals: React.FC = () => {
                               Swal.fire(
                                 "Info",
                                 "Konsol harus dalam status aktif untuk menambahkan produk",
-                                "info"
+                                "info",
                               );
                             }
                           }}
@@ -10313,15 +10322,16 @@ const ActiveRentals: React.FC = () => {
               </div>
               {(() => {
                 const session = activeSessions.find(
-                  (s) => s.id === showMoveModal.sessionId
+                  (s) => s.id === showMoveModal.sessionId,
                 );
                 const from = consoles.find(
-                  (c) => c.id === showMoveModal.fromConsoleId
+                  (c) => c.id === showMoveModal.fromConsoleId,
                 );
                 const targets = consoles.filter(
                   (c) =>
                     c.status === "available" &&
-                    c.id !== showMoveModal.fromConsoleId
+                    c.id !== showMoveModal.fromConsoleId &&
+                    c.equipment_type_id === from?.equipment_type_id,
                 );
                 return (
                   <>
@@ -10491,7 +10501,7 @@ const ActiveRentals: React.FC = () => {
                           onChange={(e) => {
                             const val = Math.max(
                               0,
-                              parseInt(e.target.value) || 0
+                              parseInt(e.target.value) || 0,
                             );
                             setRentalDurationHours(val);
                           }}
@@ -10507,7 +10517,7 @@ const ActiveRentals: React.FC = () => {
                           onChange={(e) => {
                             let val = Math.max(
                               0,
-                              Math.min(59, parseInt(e.target.value) || 0)
+                              Math.min(59, parseInt(e.target.value) || 0),
                             );
                             setRentalDurationMinutes(val);
                           }}
@@ -10660,11 +10670,11 @@ const ActiveRentals: React.FC = () => {
                       <span className="font-medium">
                         Rp{" "}
                         {selectedConsole?.rate_profile_id
-                          ? rateProfiles
+                          ? (rateProfiles
                               .find(
-                                (r) => r.id === selectedConsole.rate_profile_id
+                                (r) => r.id === selectedConsole.rate_profile_id,
                               )
-                              ?.hourly_rate.toLocaleString("id-ID") ?? "0"
+                              ?.hourly_rate.toLocaleString("id-ID") ?? "0")
                           : "0"}
                         /jam
                       </span>
@@ -10711,7 +10721,7 @@ const ActiveRentals: React.FC = () => {
                                 Swal.fire(
                                   "Isi Perintah perintah_cek_power_tv",
                                   `<pre style='text-align:left'>${selectedConsole.perintah_cek_power_tv}</pre>`,
-                                  "info"
+                                  "info",
                                 );
                               }}
                             >
@@ -10725,7 +10735,7 @@ const ActiveRentals: React.FC = () => {
                                 if (selectedConsole?.perintah_cek_power_tv) {
                                   try {
                                     const res = await fetch(
-                                      selectedConsole.perintah_cek_power_tv
+                                      selectedConsole.perintah_cek_power_tv,
                                     );
                                     const data = await res.json();
                                     setTvStatusJson(data);
@@ -10803,7 +10813,7 @@ const ActiveRentals: React.FC = () => {
                                 Swal.fire(
                                   "Isi Perintah relay_command_status",
                                   `<pre style='text-align:left'>${selectedConsole.relay_command_status}</pre>`,
-                                  "info"
+                                  "info",
                                 );
                               }}
                             >
@@ -10817,7 +10827,7 @@ const ActiveRentals: React.FC = () => {
                                 if (selectedConsole?.relay_command_status) {
                                   try {
                                     const res = await fetch(
-                                      selectedConsole.relay_command_status
+                                      selectedConsole.relay_command_status,
                                     );
                                     const data = await res.json();
                                     setRelayStatus(data);
@@ -10917,7 +10927,7 @@ const ActiveRentals: React.FC = () => {
                               ) {
                                 try {
                                   await fetch(
-                                    selectedConsole.relay_command_off
+                                    selectedConsole.relay_command_off,
                                   );
                                 } catch {}
                               }
@@ -10925,7 +10935,7 @@ const ActiveRentals: React.FC = () => {
                               if (selectedConsole?.perintah_cek_power_tv) {
                                 try {
                                   const res = await fetch(
-                                    selectedConsole.perintah_cek_power_tv
+                                    selectedConsole.perintah_cek_power_tv,
                                   );
                                   const data = await res.json();
                                   setTvStatusJson(data);
@@ -10937,7 +10947,7 @@ const ActiveRentals: React.FC = () => {
                               if (selectedConsole?.relay_command_status) {
                                 try {
                                   const res = await fetch(
-                                    selectedConsole.relay_command_status
+                                    selectedConsole.relay_command_status,
                                   );
                                   const data = await res.json();
                                   setRelayStatus(data);
@@ -10961,10 +10971,10 @@ const ActiveRentals: React.FC = () => {
                         <span className="text-green-600">
                           {(() => {
                             const hourlyRate = selectedConsole?.rate_profile_id
-                              ? rateProfiles.find(
+                              ? (rateProfiles.find(
                                   (r) =>
-                                    r.id === selectedConsole.rate_profile_id
-                                )?.hourly_rate ?? 0
+                                    r.id === selectedConsole.rate_profile_id,
+                                )?.hourly_rate ?? 0)
                               : 0;
                             const totalDurationMinutes =
                               rentalDurationHours * 60 + rentalDurationMinutes;
@@ -11010,8 +11020,8 @@ const ActiveRentals: React.FC = () => {
                       ? "Memproses..."
                       : "Memulai..."
                     : rentalType === "prepaid"
-                    ? "Bayar"
-                    : "Mulai Rental"}
+                      ? "Bayar"
+                      : "Mulai Rental"}
                 </button>
               </div>
             </div>
@@ -11080,7 +11090,7 @@ const ActiveRentals: React.FC = () => {
                                 try {
                                   await deleteSaleItem(
                                     prod.product_id,
-                                    prod.session_id
+                                    prod.session_id,
                                   );
                                   await loadData();
                                   // Refresh billingProducts
@@ -11093,13 +11103,13 @@ const ActiveRentals: React.FC = () => {
                                   Swal.fire(
                                     "Berhasil",
                                     "Produk berhasil dihapus dari billing.",
-                                    "success"
+                                    "success",
                                   );
                                 } catch (err) {
                                   Swal.fire(
                                     "Gagal",
                                     "Gagal menghapus produk dari database.",
-                                    "error"
+                                    "error",
                                   );
                                 }
                               }
@@ -11121,7 +11131,7 @@ const ActiveRentals: React.FC = () => {
                       {billingProducts
                         .reduce(
                           (total, prod) => total + prod.price * prod.quantity,
-                          0
+                          0,
                         )
                         .toLocaleString("id-ID")}
                     </span>
@@ -11180,7 +11190,7 @@ const ActiveRentals: React.FC = () => {
                     <div className="mb-3">
                       <span
                         className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(
-                          product.category
+                          product.category,
                         )}`}
                       >
                         {product.category}
@@ -11257,13 +11267,13 @@ const ActiveRentals: React.FC = () => {
                                 setCart((prev) =>
                                   prev.filter(
                                     (cartItem) =>
-                                      cartItem.productId !== item.productId
-                                  )
+                                      cartItem.productId !== item.productId,
+                                  ),
                                 );
                                 Swal.fire(
                                   "Berhasil",
                                   "Produk dihapus dari keranjang.",
-                                  "success"
+                                  "success",
                                 );
                               }
                             }}
@@ -11309,7 +11319,7 @@ const ActiveRentals: React.FC = () => {
                       {/* Tombol Tambahkan ke Billing hanya muncul untuk Pay As You Go dan billing belum dibayar */}
                       {(() => {
                         const session = activeSessions.find(
-                          (s) => s.id === showProductModal
+                          (s) => s.id === showProductModal,
                         );
                         if (
                           !session ||
@@ -11324,13 +11334,13 @@ const ActiveRentals: React.FC = () => {
                                   if (!session) {
                                     const productsTotal = cart.reduce(
                                       (sum, it) => sum + it.price * it.quantity,
-                                      0
+                                      0,
                                     );
                                     if (productsTotal <= 0) {
                                       await Swal.fire(
                                         "Info",
                                         "Keranjang kosong",
-                                        "info"
+                                        "info",
                                       );
                                       return;
                                     }
@@ -11344,7 +11354,7 @@ const ActiveRentals: React.FC = () => {
 
                                   for (const item of cart) {
                                     const existing = billingProducts.find(
-                                      (bp) => bp.product_id === item.productId
+                                      (bp) => bp.product_id === item.productId,
                                     );
                                     if (existing) {
                                       // Update quantity jika sudah ada
@@ -11391,14 +11401,14 @@ const ActiveRentals: React.FC = () => {
                                     Swal.fire(
                                       "Berhasil",
                                       "Produk berhasil ditambahkan ke billing.",
-                                      "success"
+                                      "success",
                                     );
                                   }
                                 } catch (err) {
                                   Swal.fire(
                                     "Gagal",
                                     "Gagal menambahkan produk ke billing.",
-                                    "error"
+                                    "error",
                                   );
                                 }
                               }}
@@ -11515,7 +11525,7 @@ const ActiveRentals: React.FC = () => {
                     <span className="font-medium">
                       Rp{" "}
                       {calculateCurrentCost(
-                        showPaymentModal.session
+                        showPaymentModal.session,
                       ).toLocaleString("id-ID")}
                     </span>
                   </div>
@@ -11524,7 +11534,7 @@ const ActiveRentals: React.FC = () => {
                     <span className="font-medium">
                       Rp{" "}
                       {(showPaymentModal.productsTotal ?? 0).toLocaleString(
-                        "id-ID"
+                        "id-ID",
                       )}
                     </span>
                   </div>
@@ -11539,7 +11549,7 @@ const ActiveRentals: React.FC = () => {
                     <span className="font-medium">
                       Rp{" "}
                       {(showPaymentModal.productsTotal ?? 0).toLocaleString(
-                        "id-ID"
+                        "id-ID",
                       )}
                     </span>
                   </div>
@@ -12012,7 +12022,7 @@ const ActiveRentals: React.FC = () => {
                         onClick={() =>
                           updateConsoleAutoShutdown(
                             console.id,
-                            !consoleAutoShutdownStates[console.id]
+                            !consoleAutoShutdownStates[console.id],
                           )
                         }
                         disabled={
@@ -12032,8 +12042,8 @@ const ActiveRentals: React.FC = () => {
                         {updatingConsoleIds.has(console.id)
                           ? "Updating..."
                           : consoleAutoShutdownStates[console.id]
-                          ? "Nonaktifkan"
-                          : "Aktifkan"}
+                            ? "Nonaktifkan"
+                            : "Aktifkan"}
                       </button>
                     </div>
                   ))}
