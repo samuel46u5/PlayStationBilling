@@ -445,6 +445,8 @@ const ActiveRentals: React.FC = () => {
   const [showConsoleHistoryModal, setShowConsoleHistoryModal] = useState(false);
   const [selectedConsoleForHistory, setSelectedConsoleForHistory] =
     useState<string>("");
+  const [protectionLogs, setProtectionLogs] = useState<any[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
   // State untuk modal paket
   const [showPackageModal, setShowPackageModal] = useState(false);
@@ -1301,6 +1303,31 @@ const ActiveRentals: React.FC = () => {
       if (updatingConsoleIds.has(consoleId)) {
         return;
       }
+
+      let reason = "";
+      if (!enabled) {
+        const { value: typedReason, isConfirmed } = await Swal.fire({
+          title: "Alasan Menonaktifkan Protection",
+          text: `Mengapa Anda menonaktifkan auto shutdown untuk ${
+            consoles.find((c) => c.id === consoleId)?.name || "console ini"
+          }?`,
+          input: "text",
+          inputPlaceholder: "Masukkan alasan...",
+          showCancelButton: true,
+          confirmButtonText: "Nonaktifkan",
+          cancelButtonText: "Batal",
+          inputValidator: (value) => {
+            if (!value) {
+              return "Alasan wajib diisi!";
+            }
+            return null;
+          },
+        });
+
+        if (!isConfirmed) return;
+        reason = typedReason;
+      }
+
       const originalStates = { ...consoleAutoShutdownStates };
       const originalGlobalState = autoShutdownEnabled;
 
@@ -1319,6 +1346,27 @@ const ActiveRentals: React.FC = () => {
 
         if (error) {
           throw error;
+        }
+
+        // Log if disabled
+        if (!enabled && reason) {
+          const targetConsole = consoles.find((c) => c.id === consoleId);
+          await logCashierTransaction({
+            type: "rental",
+            amount: 0,
+            paymentMethod: "cash",
+            referenceId: `SHUTDOWN-PROT-${Date.now()}`,
+            description: `[PROTECTION] Disabled: ${
+              targetConsole?.name || consoleId
+            }`,
+            details: {
+              action: "disable_auto_shutdown",
+              console_id: consoleId,
+              console_name: targetConsole?.name,
+              reason: reason,
+            },
+          });
+          fetchProtectionLogs();
         }
 
         Swal.fire(
@@ -1361,6 +1409,8 @@ const ActiveRentals: React.FC = () => {
       autoShutdownEnabled,
       updatingConsoleIds,
       triggerUnusedConsolesCheck,
+      consoles,
+      logCashierTransaction,
     ],
   );
 
@@ -1368,6 +1418,28 @@ const ActiveRentals: React.FC = () => {
     async (enabled: boolean) => {
       if (isUpdatingAutoShutdown) {
         return;
+      }
+
+      let reason = "";
+      if (!enabled) {
+        const { value: typedReason, isConfirmed } = await Swal.fire({
+          title: "Nonaktifkan Semua Protection",
+          text: "Berikan alasan mengapa Anda menonaktifkan perlindungan untuk SEMUA console?",
+          input: "text",
+          inputPlaceholder: "Masukkan alasan...",
+          showCancelButton: true,
+          confirmButtonText: "Nonaktifkan Semua",
+          cancelButtonText: "Batal",
+          inputValidator: (value) => {
+            if (!value) {
+              return "Alasan wajib diisi!";
+            }
+            return null;
+          },
+        });
+
+        if (!isConfirmed) return;
+        reason = typedReason;
       }
 
       setIsUpdatingAutoShutdown(true);
@@ -1390,6 +1462,23 @@ const ActiveRentals: React.FC = () => {
 
         if (error) {
           throw error;
+        }
+
+        // Log if disabled
+        if (!enabled && reason) {
+          await logCashierTransaction({
+            type: "rental",
+            amount: 0,
+            paymentMethod: "cash",
+            referenceId: `SHUTDOWN-PROT-ALL-${Date.now()}`,
+            description: `[PROTECTION] Disabled for ALL consoles`,
+            details: {
+              action: "disable_all_auto_shutdown",
+              reason: reason,
+              console_count: consoles.length,
+            },
+          });
+          fetchProtectionLogs();
         }
 
         try {
@@ -1424,8 +1513,40 @@ const ActiveRentals: React.FC = () => {
       autoShutdownEnabled,
       consoles,
       triggerUnusedConsolesCheck,
+      logCashierTransaction,
     ],
   );
+
+  const fetchProtectionLogs = useCallback(async () => {
+    setIsLoadingLogs(true);
+    try {
+      const { data, error } = await supabase
+        .from("cashier_transactions")
+        .select(
+          "id, timestamp, description, details, cashier_id, cashier_sessions(cashier_name)",
+        )
+        .ilike("description", "[PROTECTION]%")
+        .order("timestamp", { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error("Error fetching protection logs:", error);
+        return;
+      }
+
+      setProtectionLogs(data || []);
+    } catch (error) {
+      console.error("Error fetching protection logs:", error);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showAutoShutdownModal) {
+      fetchProtectionLogs();
+    }
+  }, [showAutoShutdownModal, fetchProtectionLogs]);
 
   // Function untuk sinkronisasi status console dan rental session
   const syncConsoleAndSessionStatus = async () => {
@@ -12048,6 +12169,79 @@ const ActiveRentals: React.FC = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Protection Logs History */}
+              <div className="mb-6 pt-6 border-t">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-medium text-gray-800">
+                    Riwayat Penonaktifan (Terbaru)
+                  </h3>
+                  <button
+                    onClick={fetchProtectionLogs}
+                    disabled={isLoadingLogs}
+                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    <RefreshCw
+                      className={`h-3 w-3 ${isLoadingLogs ? "animate-spin" : ""}`}
+                    />
+                    Refresh
+                  </button>
+                </div>
+
+                {isLoadingLogs ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
+                  </div>
+                ) : protectionLogs.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 text-sm italic">
+                    Belum ada riwayat penonaktifan protection.
+                  </div>
+                ) : (
+                  <div className="overflow-hidden border border-gray-200 rounded-lg">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Waktu
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Target / Deskripsi
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Kasir / Alasan
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {protectionLogs.map((log) => (
+                          <tr key={log.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
+                              {new Date(log.timestamp).toLocaleString("id-ID", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-xs font-medium text-gray-900">
+                                {log.description.replace("[PROTECTION] ", "")}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-xs text-gray-900 font-medium">
+                                {log.cashier_sessions?.cashier_name ||
+                                  "Unknown Cashier"}
+                              </div>
+                              <div className="text-xs text-gray-500 italic mt-1 bg-gray-50 p-1 rounded">
+                                "{log.details?.reason || "Tidak ada alasan"}"
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
