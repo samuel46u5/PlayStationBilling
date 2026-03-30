@@ -113,9 +113,10 @@ const Bookkeeping: React.FC = () => {
   const [rekapConsoleViewSubTab, setRekapConsoleViewSubTab] = useState<
     "detail" | "rekap"
   >("detail");
-  const [jurnalSubTab, setJurnalSubTab] = useState<"detail" | "rekap">(
+  const [jurnalSubTab, setJurnalSubTab] = useState<"detail" | "rekap" | "setoran">(
     "detail"
   );
+  const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
   const [chartData, setChartData] = useState<RevenueDataPoint[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
 
@@ -279,6 +280,16 @@ const Bookkeeping: React.FC = () => {
           >
             Rekap Jurnal Umum
           </button>
+          <button
+            onClick={() => setJurnalSubTab("setoran")}
+            className={`px-3 py-2 text-sm rounded ${
+              jurnalSubTab === "setoran"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Setoran
+          </button>
 
           {/* Search input for jurnal */}
           {activeView === "jurnal" && jurnalSubTab === "detail" && (
@@ -304,6 +315,7 @@ const Bookkeeping: React.FC = () => {
 
   // Laporan Kasir states
   const [sessions, setSessions] = useState<any[]>([]);
+  const [undepositedSessions, setUndepositedSessions] = useState<any[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -465,7 +477,6 @@ const Bookkeeping: React.FC = () => {
       let query = supabase
         .from("cashier_transactions")
         .select("*")
-        // .or("type.eq.sale,type.eq.rental")
         .order("timestamp", { ascending: false });
 
       if (activeView === "laba_rugi") {
@@ -856,31 +867,50 @@ const Bookkeeping: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Ambil daftar sesi saat masuk tab laporan_kasir
-  useEffect(() => {
-    const fetchSessions = async () => {
-      try {
-        if (activeView !== "laporan_kasir" && activeView !== "rekap_kasir")
-          return;
-        setLoading(true);
-        const { data, error } = await supabase
-          .from("cashier_sessions")
-          .select("*")
-          .order("start_time", { ascending: false });
-        // .limit(100);
-        if (error) throw error;
-        setSessions(data || []);
-        if (!selectedSessionId && (data || []).length > 0) {
-          setSelectedSessionId((data as any[])[0].id);
-        }
-      } catch (e) {
-        // ignore
-      } finally {
-        setLoading(false);
+  // Ambil daftar sesi
+  const fetchSessions = async () => {
+    try {
+      if (
+        activeView !== "laporan_kasir" &&
+        activeView !== "rekap_kasir" &&
+        jurnalSubTab !== "setoran"
+      )
+        return;
+
+      setLoading(true);
+      // Fetch all sessions for reports
+      const { data: allSessions, error: allErr } = await supabase
+        .from("cashier_sessions")
+        .select("*")
+        .order("start_time", { ascending: false });
+
+      if (allErr) throw allErr;
+      setSessions(allSessions || []);
+
+      if (!selectedSessionId && (allSessions || []).length > 0) {
+        setSelectedSessionId((allSessions as any[])[0].id);
       }
-    };
+
+      // Fetch undeposited sessions for "Setoran" tab
+      const { data: undeposited, error: undepErr } = await supabase
+        .from("cashier_sessions")
+        .select("*")
+        .eq("status", "closed")
+        .eq("is_deposited", false)
+        .order("end_time", { ascending: false });
+
+      if (undepErr) throw undepErr;
+      setUndepositedSessions(undeposited || []);
+    } catch (e) {
+      console.error("Error fetching sessions:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchSessions();
-  }, [activeView, selectedSessionId, activeTab]);
+  }, [activeView, selectedSessionId, activeTab, jurnalSubTab]);
 
   // Pagination
   const sourceList = useMemo(
@@ -1576,6 +1606,217 @@ const Bookkeeping: React.FC = () => {
     }
   };
 
+  // Handle deposit sessions
+  const handleDepositSessions = async () => {
+    if (selectedSessions.size === 0) {
+      Swal.fire("Info", "Pilih minimal satu sesi untuk disetor.", "info");
+      return;
+    }
+
+    const { isConfirmed } = await Swal.fire({
+      title: "Konfirmasi Setoran",
+      text: `Apakah Anda yakin ingin menyetor ${selectedSessions.size} sesi terpilih ke jurnal umum?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Ya, Setor",
+      cancelButtonText: "Batal",
+      confirmButtonColor: "#3b82f6",
+    });
+
+    if (!isConfirmed) return;
+
+    try {
+      setSaving(true);
+
+      const sessionsToDeposit = undepositedSessions.filter((s) =>
+        selectedSessions.has(s.id)
+      );
+
+      for (const session of sessionsToDeposit) {
+        const cafeRevenue = Number(session.total_sales || 0);
+        const rentalRevenue = Number(session.total_rentals || 0);
+        const voucherRevenue = Number(session.total_vouchers || 0);
+        const incomeRevenue = Number(session.total_income || 0);
+        const totalRevenue = Number(session.total_revenue || 0);
+
+        if (totalRevenue > 0) {
+          // Insert into bookkeeping_entries
+          const { error: insertError } = await supabase
+            .from("bookkeeping_entries")
+            .insert([
+              {
+                entry_date: new Date(session.end_time || new Date())
+                  .toISOString()
+                  .split("T")[0],
+                type: "income",
+                category: "rental",
+                description: `Pendapatan Sesi Kasir - ${session.cashier_name}`,
+                amount: totalRevenue,
+                reference: `SESSION-${session.id}`,
+                notes: `Cafe: Rp ${cafeRevenue.toLocaleString(
+                  "id-ID"
+                )} | Rental: Rp ${rentalRevenue.toLocaleString(
+                  "id-ID"
+                )} | Voucher: Rp ${voucherRevenue.toLocaleString(
+                  "id-ID"
+                )} | Modal/Lain: Rp ${incomeRevenue.toLocaleString("id-ID")}`,
+              },
+            ]);
+
+          if (insertError) throw insertError;
+        }
+
+        // Update session is_deposited status
+        const { error: updateError } = await supabase
+          .from("cashier_sessions")
+          .update({ is_deposited: true })
+          .eq("id", session.id);
+
+        if (updateError) throw updateError;
+      }
+
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: `${selectedSessions.size} sesi berhasil disetor ke jurnal umum!`,
+        confirmButtonColor: "#3b82f6",
+      });
+
+      setSelectedSessions(new Set());
+      await fetchEntries();
+      await fetchSessions();
+    } catch (err) {
+      console.error("Error depositing sessions:", err);
+      Swal.fire("Error", "Gagal melakukan setoran. Silakan coba lagi.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderSetoranTab = () => {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              Setoran Kasir Pending
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Daftar sesi kasir yang sudah ditutup tetapi belum dicatat di
+              jurnal umum.
+            </p>
+          </div>
+          <button
+            onClick={handleDepositSessions}
+            disabled={selectedSessions.size === 0 || saving}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <TrendingUp className="h-4 w-4" />
+            )}
+            Setor ke Jurnal Umum ({selectedSessions.size})
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={
+                      undepositedSessions.length > 0 &&
+                      selectedSessions.size === undepositedSessions.length
+                    }
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedSessions(
+                          new Set(undepositedSessions.map((s) => s.id))
+                        );
+                      } else {
+                        setSelectedSessions(new Set());
+                      }
+                    }}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Waktu Selesai
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Kasir
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Pendapatan
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Rincian (Cafe | Rental | Voucher)
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {undepositedSessions.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-12 text-center text-gray-500"
+                  >
+                    Tidak ada setoran pending.
+                  </td>
+                </tr>
+              ) : (
+                undepositedSessions.map((session) => {
+                  const cafe = Number(session.total_sales || 0);
+                  const rental = Number(session.total_rentals || 0);
+                  const voucher = Number(session.total_vouchers || 0);
+                  const total = Number(session.total_revenue || 0);
+
+                  return (
+                    <tr key={session.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedSessions.has(session.id)}
+                          onChange={() => {
+                            const next = new Set(selectedSessions);
+                            if (next.has(session.id)) next.delete(session.id);
+                            else next.add(session.id);
+                            setSelectedSessions(next);
+                          }}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(session.end_time).toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                        {session.cashier_name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-green-600">
+                        Rp {total.toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                        Cafe: Rp {cafe.toLocaleString("id-ID")} | Rental: Rp{" "}
+                        {rental.toLocaleString("id-ID")} | Voucher: Rp{" "}
+                        {voucher.toLocaleString("id-ID")} | Modal/Lain: Rp{" "}
+                        {Number(session.total_income || 0).toLocaleString(
+                          "id-ID"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   // Handle entry deletion
   const handleDeleteEntry = async (entryId: string) => {
     if (!confirm("Apakah Anda yakin ingin menghapus transaksi ini?")) return;
@@ -1880,7 +2121,8 @@ const Bookkeeping: React.FC = () => {
               rekapConsoleViewSubTab !== "rekap" &&
               transaksiKasirSubTab !== "rekap" &&
               labaRugiSubTab !== "rekap" &&
-              jurnalSubTab !== "rekap" && (
+              jurnalSubTab !== "rekap" &&
+              jurnalSubTab !== "setoran" && (
                 <div className="flex items-center gap-2">
                   <select
                     value={selectedPeriod}
@@ -1956,7 +2198,7 @@ const Bookkeeping: React.FC = () => {
               </div>
             )}
 
-            {activeView === "jurnal" && jurnalSubTab !== "rekap" && (
+            {activeView === "jurnal" && jurnalSubTab !== "rekap" && jurnalSubTab !== "setoran"  && (
               <button
                 onClick={() => setShowAddForm(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
@@ -2122,7 +2364,8 @@ const Bookkeeping: React.FC = () => {
       {rekapConsoleViewSubTab !== "rekap" &&
         labaRugiSubTab !== "rekap" &&
         transaksiKasirSubTab !== "rekap" &&
-        jurnalSubTab !== "rekap" && (
+        jurnalSubTab !== "rekap" &&
+        jurnalSubTab !== "setoran" && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between mb-4">
@@ -4884,6 +5127,8 @@ const Bookkeeping: React.FC = () => {
       {activeView == "jurnal" && jurnalSubTab === "rekap" && (
         <JournalCalendar />
       )}
+
+      {jurnalSubTab === "setoran" && renderSetoranTab()}
 
       {/* Pagination */}
       {activeTab !== "rekap" &&

@@ -130,18 +130,11 @@ const CashierSessionComponent: React.FC = () => {
         return;
       }
 
-      const start = new Date(currentSession.startTime);
-      const end = currentSession.endTime
-        ? new Date(currentSession.endTime)
-        : new Date();
-
       const [trxRes] = await Promise.all([
         supabase
           .from("cashier_transactions")
           .select("*")
           .eq("session_id", currentSession.id)
-          // .gte("timestamp", start.toISOString())
-          // .lt("timestamp", end.toISOString())
           .order("timestamp", { ascending: false }),
       ]);
 
@@ -491,6 +484,10 @@ const CashierSessionComponent: React.FC = () => {
       total_transfer: todayTransferSales,
       total_transactions: todayTransactions.length,
       total_revenue: todayTotalRevenue,
+      total_sales: todayTotalSales,
+      total_rentals: todayTotalRentals,
+      total_vouchers: todayTotalVouchers,
+      total_income: todayTotalIncome,
       total_expense: todayTotalExpenses,
       variance,
       end_time: new Date().toISOString(),
@@ -498,32 +495,6 @@ const CashierSessionComponent: React.FC = () => {
       updated_at: new Date().toISOString(),
     });
 
-    if (todayTotalRevenue > 0) {
-      const { error: bookkeepingError } = await supabase
-        .from("bookkeeping_entries")
-        .insert([
-          {
-            entry_date: new Date().toISOString().split("T")[0],
-            type: "income",
-            category: "rental",
-            description: `Pendapatan Sesi Kasir - ${currentSession.cashierName}`,
-            amount: todayTotalRevenue,
-            reference: `SESSION-${currentSession.id}`,
-            notes: `Cafe: Rp ${todayTotalSales.toLocaleString(
-              "id-ID"
-            )} | Rental: Rp ${todayTotalRentals.toLocaleString(
-              "id-ID"
-            )} | Voucher: Rp ${todayTotalVouchers.toLocaleString("id-ID")}`,
-          },
-        ]);
-
-      if (bookkeepingError) {
-        console.error(
-          "Error inserting revenue to bookkeeping:",
-          bookkeepingError
-        );
-      }
-    }
 
     const receiptData = {
       id: `SESSION-${currentSession.id}`,
