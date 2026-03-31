@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Plus,
   TrendingUp,
@@ -20,6 +20,7 @@ import {
   Banknote,
   User,
   Search,
+  RefreshCw,
 } from "lucide-react";
 import { supabase, db } from "../lib/supabase";
 import { BookkeepingEntry } from "../types";
@@ -37,6 +38,72 @@ type Summary = {
   totalIncome?: number;
   totalExpense?: number;
   netProfit: number;
+};
+
+export const getDateRange = (period: string, startDateStr?: string, endDateStr?: string) => {
+  let start: Date | null = null;
+  let end: Date | null = null;
+  const now = new Date();
+  switch (period) {
+    case "today": {
+      start = new Date();
+      start.setHours(0, 0, 0, 0);
+      end = new Date();
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "yesterday": {
+      start = new Date();
+      start.setDate(start.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "week": {
+      start = new Date();
+      const day = start.getDay();
+      const diff = (day === 0 ? -6 : 1) - day;
+      start.setDate(start.getDate() + diff);
+      start.setHours(0, 0, 0, 0);
+      end = new Date();
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "last_week": {
+      start = new Date();
+      start.setDate(start.getDate() - 7);
+      start.setHours(0, 0, 0, 0);
+      end = new Date();
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "month": {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "last_month": {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end = new Date(now.getFullYear(), now.getMonth(), 0);
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case "range": {
+      if (startDateStr) {
+        start = new Date(startDateStr);
+        start.setHours(0, 0, 0, 0);
+      }
+      if (endDateStr) {
+        end = new Date(endDateStr);
+        end.setHours(23, 59, 59, 999);
+      }
+      break;
+    }
+  }
+  return { start, end };
 };
 
 const Bookkeeping: React.FC = () => {
@@ -111,7 +178,7 @@ const Bookkeeping: React.FC = () => {
     "detail" | "rekap"
   >("detail");
   const [rekapConsoleViewSubTab, setRekapConsoleViewSubTab] = useState<
-    "detail" | "rekap"
+    "detail" | "rekap" | "protection_log"
   >("detail");
   const [jurnalSubTab, setJurnalSubTab] = useState<"detail" | "rekap" | "setoran">(
     "detail"
@@ -119,6 +186,118 @@ const Bookkeeping: React.FC = () => {
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
   const [chartData, setChartData] = useState<RevenueDataPoint[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+
+  const [protectionLogs, setProtectionLogs] = useState<any[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+  const fetchProtectionLogs = useCallback(async () => {
+    setIsLoadingLogs(true);
+    try {
+      let query = supabase
+        .from("cashier_transactions")
+        .select(
+          "id, timestamp, description, details, cashier_id, cashier_sessions(cashier_name)"
+        )
+        .ilike("description", "[PROTECTION]%")
+        .order("timestamp", { ascending: false });
+
+      if (selectedPeriod !== "all") {
+        const { start, end } = getDateRange(selectedPeriod, startDate, endDate);
+        if (start) query = query.gte("timestamp", start.toISOString());
+        if (end) query = query.lte("timestamp", end.toISOString());
+      } else {
+        query = query.limit(50);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Error fetching protection logs:", error);
+        return;
+      }
+
+      const logs = data || [];
+      const enableLogs = logs.filter((log) => {
+        const action = log.details?.action;
+        return action === "enable_auto_shutdown" || action === "enable_all_auto_shutdown";
+      });
+
+      let candidateDisables = logs.filter((log) => {
+        const action = log.details?.action;
+        return action === "disable_auto_shutdown" || action === "disable_all_auto_shutdown";
+      });
+
+      if (enableLogs.length > 0) {
+        // Optimizing with a single query fetching enough disable events before the most recent enable event
+        const maxTimestamp = new Date(
+          Math.max(...enableLogs.map((l) => new Date(l.timestamp).getTime()))
+        ).toISOString();
+
+        const { data: previousDisables } = await supabase
+          .from("cashier_transactions")
+          .select("id, timestamp, details")
+          .ilike("description", "[PROTECTION]%")
+          .in("details->>action", ["disable_auto_shutdown", "disable_all_auto_shutdown"])
+          .lte("timestamp", maxTimestamp)
+          .order("timestamp", { ascending: false })
+          .limit(200);
+
+        if (previousDisables) {
+          const existingIds = new Set(candidateDisables.map(log => log.id));
+          const newDisables = previousDisables.filter(log => !existingIds.has(log.id));
+          candidateDisables = [...candidateDisables, ...newDisables].sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+        }
+      }
+
+      const logsWithDuration = logs.map((log) => {
+        const action = log.details?.action;
+        if (
+          action === "enable_auto_shutdown" ||
+          action === "enable_all_auto_shutdown"
+        ) {
+          const consoleId = log.details?.console_id;
+          const logTimestamp = new Date(log.timestamp).getTime();
+
+          const pairData = candidateDisables.find((disableLog) => {
+            const disableTimestamp = new Date(disableLog.timestamp).getTime();
+            if (disableTimestamp >= logTimestamp) return false;
+
+            const disableAction = disableLog.details?.action;
+            if (action === "enable_auto_shutdown" && consoleId) {
+              return (
+                (disableAction === "disable_auto_shutdown" &&
+                  disableLog.details?.console_id === consoleId) ||
+                disableAction === "disable_all_auto_shutdown"
+              );
+            } else {
+              return disableAction === "disable_all_auto_shutdown";
+            }
+          });
+
+          if (pairData) {
+            const start = new Date(pairData.timestamp).getTime();
+            return { ...log, duration: logTimestamp - start };
+          }
+        }
+        return log;
+      });
+
+      setProtectionLogs(logsWithDuration);
+    } catch (error) {
+      console.error("Error fetching protection logs:", error);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [selectedPeriod]);
+
+  useEffect(() => {
+    if (activeView === "rekap_console" && rekapConsoleViewSubTab === "protection_log") {
+      fetchProtectionLogs();
+    }
+  }, [fetchProtectionLogs, activeView, rekapConsoleViewSubTab]);
+
 
   const fetchChartData = async () => {
     try {
@@ -252,6 +431,19 @@ const Bookkeeping: React.FC = () => {
             }`}
           >
             Rekap Console
+          </button>
+          <button
+            onClick={() => {
+              setRekapConsoleViewSubTab("protection_log");
+              fetchProtectionLogs();
+            }}
+            className={`px-3 py-2 text-sm rounded ${
+              rekapConsoleViewSubTab === "protection_log"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Protection Log
           </button>
         </div>
       );
@@ -4042,7 +4234,80 @@ const Bookkeeping: React.FC = () => {
                 )}
               </div>
             ) : activeView === "rekap_console" ? (
-              <div className="space-y-4">
+              rekapConsoleViewSubTab === "protection_log" ? (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                      <h3 className="font-semibold text-gray-800">
+                        Riwayat Protection Log
+                      </h3>
+                      <button
+                        onClick={fetchProtectionLogs}
+                        disabled={isLoadingLogs}
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 ${
+                            isLoadingLogs ? "animate-spin" : ""
+                          }`}
+                        />
+                        Refresh
+                      </button>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {isLoadingLogs ? (
+                        <div className="p-8 text-center text-gray-500">
+                          Memuat data log...
+                        </div>
+                      ) : protectionLogs.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">
+                          Tidak ada log ditemukan
+                        </div>
+                      ) : (
+                        protectionLogs.map((log) => (
+                          <div
+                            key={log.id}
+                            className="p-4 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="font-medium text-gray-900">
+                                {log.description}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(log.timestamp).toLocaleString(
+                                  "id-ID"
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+                              <span>
+                                Kasir:{" "}
+                                {log.cashier_sessions?.cashier_name || "System"}
+                              </span>
+                              {log.details?.reason && (
+                                <span className="text-red-600 font-medium italic">
+                                  Alasan: {log.details.reason}
+                                </span>
+                              )}
+                              {log.duration !== undefined && (
+                                <span className="text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded border border-orange-100">
+                                  Durasi Off:{" "}
+                                  {Math.floor(log.duration / 60000)}m{" "}
+                                  {Math.floor(
+                                    (log.duration % 60000) / 1000
+                                  )}
+                                  s
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
                 <div className="flex border-b border-gray-200">
                   <button
                     onClick={() => setRekapConsoleSubTab("per_tanggal")}
@@ -4546,7 +4811,8 @@ const Bookkeeping: React.FC = () => {
                   </div>
                 )}
               </div>
-            ) : activeView === "laporan_kasir" ? (
+            )
+          ) : activeView === "laporan_kasir" ? (
               <>
                 <div className="divide-y divide-gray-200 max-h-screen overflow-y-auto">
                   {paginatedData.length === 0 ? (
