@@ -3924,10 +3924,7 @@ const Bookkeeping: React.FC = () => {
               </div>
             ) : activeView === "rekap_kasir" ? (
               <div className="space-y-4">
-                {transaksiKasirSubTab === "rekap_tahunan" ? (
-                  renderRekapTahunan()
-                ) : (
-                  <>
+                <>
                     <div className="flex border-b border-gray-200">
                       <button
                         onClick={() => setRekapKasirSubTab("per_tanggal")}
@@ -4407,7 +4404,6 @@ const Bookkeeping: React.FC = () => {
                   </div>
                 )}
                   </>
-                )}
               </div>
             ) : activeView === "rekap_console" ? (
               rekapConsoleViewSubTab === "protection_log" ? (
