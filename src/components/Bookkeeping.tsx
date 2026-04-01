@@ -175,8 +175,39 @@ const Bookkeeping: React.FC = () => {
     "detail"
   );
   const [transaksiKasirSubTab, setTransaksiKasirSubTab] = useState<
-    "detail" | "rekap"
+    "detail" | "rekap" | "rekap_tahunan"
   >("detail");
+  const [rekapTahunanYear, setRekapTahunanYear] = useState<number>(new Date().getFullYear());
+  const [rekapTahunanData, setRekapTahunanData] = useState<any[]>([]);
+  const [rekapTahunanLoading, setRekapTahunanLoading] = useState(false);
+
+  const fetchRekapTahunanData = useCallback(async (year: number) => {
+    try {
+      setRekapTahunanLoading(true);
+      const startOfYear = new Date(year, 0, 1).toISOString();
+      const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).toISOString();
+
+      const { data, error } = await supabase
+        .from("cashier_transactions")
+        .select("amount, timestamp, type, payment_method")
+        .not("cashier_id", "is", null)
+        .gte("timestamp", startOfYear)
+        .lte("timestamp", endOfYear);
+
+      if (error) throw error;
+      setRekapTahunanData(data || []);
+    } catch (err) {
+      console.error("Error fetching rekap tahunan:", err);
+    } finally {
+      setRekapTahunanLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeView === "rekap_kasir" && transaksiKasirSubTab === "rekap_tahunan") {
+      fetchRekapTahunanData(rekapTahunanYear);
+    }
+  }, [activeView, transaksiKasirSubTab, rekapTahunanYear, fetchRekapTahunanData]);
   const [rekapConsoleViewSubTab, setRekapConsoleViewSubTab] = useState<
     "detail" | "rekap" | "protection_log"
   >("detail");
@@ -404,6 +435,16 @@ const Bookkeeping: React.FC = () => {
             }`}
           >
             Rekap Transaksi Kasir
+          </button>
+          <button
+            onClick={() => setTransaksiKasirSubTab("rekap_tahunan")}
+            className={`px-3 py-2 text-sm rounded ${
+              transaksiKasirSubTab === "rekap_tahunan"
+                ? "bg-blue-50 text-blue-700 border border-blue-100"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Rekap Tahunan
           </button>
         </div>
       );
@@ -2326,6 +2367,86 @@ const Bookkeeping: React.FC = () => {
     }
   };
 
+  const renderRekapTahunan = () => {
+    if (rekapTahunanLoading) {
+      return (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      );
+    }
+
+    const months = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+
+    const monthlyBreakdown = months.map(() => ({ total: 0 }));
+    let grandTotal = 0;
+
+    rekapTahunanData.forEach(tx => {
+      const d = new Date(tx.timestamp);
+      if (d.getFullYear() === rekapTahunanYear) {
+        const monthIndex = d.getMonth();
+        const val = Number(tx.amount || 0);
+        const amt = tx.type === "expense" ? -val : val;
+        monthlyBreakdown[monthIndex].total += amt;
+        grandTotal += amt;
+      }
+    });
+
+    return (
+      <div className="space-y-6 pt-2">
+        <div className="flex justify-between items-center px-6 py-4 bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="text-lg font-semibold text-gray-800">Rekap Tahunan</div>
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-600 font-medium">Pilih Tahun:</label>
+            <div className="relative">
+              <select
+                value={rekapTahunanYear}
+                onChange={(e) => setRekapTahunanYear(Number(e.target.value))}
+                className="appearance-none pl-4 pr-10 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer hover:bg-white"
+              >
+                {[...Array(10)].map((_, i) => {
+                  const y = new Date().getFullYear() - 5 + i;
+                  return (
+                    <option key={y} value={y}>{y}</option>
+                  );
+                })}
+              </select>
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                <Calendar className="h-4 w-4 text-gray-500" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {months.map((m, idx) => {
+            const data = monthlyBreakdown[idx];
+            return (
+              <div key={m} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center transition-transform hover:-translate-y-1 hover:shadow-md">
+                <div className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">{m}</div>
+                <div className={`text-xl font-bold ${data.total >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  Rp {data.total.toLocaleString("id-ID")}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg p-6 lg:p-8 mt-6 flex flex-col sm:flex-row sm:justify-between sm:items-center text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
+          <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-32 h-32 bg-indigo-900 opacity-20 rounded-full blur-xl"></div>
+          <div className="text-lg font-medium opacity-90 z-10 mb-2 sm:mb-0">Grand Total Tahun {rekapTahunanYear}</div>
+          <div className="text-4xl font-bold tracking-tight z-10 drop-shadow-sm">
+            Rp {grandTotal.toLocaleString("id-ID")}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -2354,7 +2475,8 @@ const Bookkeeping: React.FC = () => {
               transaksiKasirSubTab !== "rekap" &&
               labaRugiSubTab !== "rekap" &&
               jurnalSubTab !== "rekap" &&
-              jurnalSubTab !== "setoran" && (
+              jurnalSubTab !== "setoran" && 
+              transaksiKasirSubTab !== "rekap_tahunan" &&(
                 <div className="flex items-center gap-2">
                   <select
                     value={selectedPeriod}
@@ -2592,10 +2714,18 @@ const Bookkeeping: React.FC = () => {
       )} */}
       {renderDetailRekapNav()}
 
+      {/* Rekap Tahunan – rendered outside the main guarded block */}
+      {activeView === "rekap_kasir" && transaksiKasirSubTab === "rekap_tahunan" && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-6">
+          {renderRekapTahunan()}
+        </div>
+      )}
+
       {/* Transactions List */}
       {rekapConsoleViewSubTab !== "rekap" &&
         labaRugiSubTab !== "rekap" &&
         transaksiKasirSubTab !== "rekap" &&
+        transaksiKasirSubTab !== "rekap_tahunan" &&
         jurnalSubTab !== "rekap" &&
         jurnalSubTab !== "setoran" && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -3794,9 +3924,13 @@ const Bookkeeping: React.FC = () => {
               </div>
             ) : activeView === "rekap_kasir" ? (
               <div className="space-y-4">
-                <div className="flex border-b border-gray-200">
-                  <button
-                    onClick={() => setRekapKasirSubTab("per_tanggal")}
+                {transaksiKasirSubTab === "rekap_tahunan" ? (
+                  renderRekapTahunan()
+                ) : (
+                  <>
+                    <div className="flex border-b border-gray-200">
+                      <button
+                        onClick={() => setRekapKasirSubTab("per_tanggal")}
                     className={`flex items-center gap-2 py-2 px-4 border-b-2 font-medium text-sm ${
                       rekapKasirSubTab === "per_tanggal"
                         ? "border-blue-500 text-blue-600"
@@ -4271,6 +4405,8 @@ const Bookkeeping: React.FC = () => {
                       })
                     )}
                   </div>
+                )}
+                  </>
                 )}
               </div>
             ) : activeView === "rekap_console" ? (
