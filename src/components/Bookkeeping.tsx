@@ -1886,6 +1886,11 @@ const Bookkeeping: React.FC = () => {
   };
 
   const renderSetoranTab = () => {
+    const selectedSessionsData = undepositedSessions.filter(s => selectedSessions.has(s.id));
+    const grandTotal = selectedSessionsData.reduce((sum, s) => sum + Number(s.total_revenue || 0), 0);
+    const grandTotalCash = selectedSessionsData.reduce((sum, s) => sum + Number(s.total_cash || 0), 0);
+    const grandTotalNonCash = selectedSessionsData.reduce((sum, s) => sum + Number(s.total_card || 0) + Number(s.total_transfer || 0), 0);
+
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
@@ -1898,18 +1903,32 @@ const Bookkeeping: React.FC = () => {
               jurnal umum.
             </p>
           </div>
-          <button
-            onClick={handleDepositSessions}
-            disabled={selectedSessions.size === 0 || saving}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <TrendingUp className="h-4 w-4" />
+          <div className="flex items-center gap-6">
+            {selectedSessions.size > 0 && (
+              <div className="text-right border-r border-gray-200 pr-6">
+                <p className="text-sm text-gray-500 font-medium tracking-wide">Grand Total Terpilih</p>
+                <div className="flex gap-4 mt-1">
+                  <span className="text-xl font-bold text-green-600">Rp {grandTotal.toLocaleString("id-ID")}</span>
+                  <div className="flex flex-col text-xs text-gray-500 justify-center">
+                    <span>Cash: Rp {grandTotalCash.toLocaleString("id-ID")}</span>
+                    <span>QRIS: Rp {grandTotalNonCash.toLocaleString("id-ID")}</span>
+                  </div>
+                </div>
+              </div>
             )}
-            Setor ke Jurnal Umum ({selectedSessions.size})
-          </button>
+            <button
+              onClick={handleDepositSessions}
+              disabled={selectedSessions.size === 0 || saving}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <TrendingUp className="h-4 w-4" />
+              )}
+              Setor ke Jurnal Umum ({selectedSessions.size})
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -1944,6 +1963,15 @@ const Bookkeeping: React.FC = () => {
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total Pendapatan
                 </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Cash
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Non-Cash (QRIS)
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-red-500 uppercase tracking-wider">
+                  Pengeluaran
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Rincian (Cafe | Rental | Voucher)
                 </th>
@@ -1953,7 +1981,7 @@ const Bookkeeping: React.FC = () => {
               {undepositedSessions.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={8}
                     className="px-6 py-12 text-center text-gray-500"
                   >
                     Tidak ada setoran pending.
@@ -1964,7 +1992,10 @@ const Bookkeeping: React.FC = () => {
                   const cafe = Number(session.total_sales || 0);
                   const rental = Number(session.total_rentals || 0);
                   const voucher = Number(session.total_vouchers || 0);
-                  const total = Number(session.total_revenue || 0);
+                  const total = Number(session.total_revenue || 0) - Number(session.total_expense || 0);
+                  const expense = Number(session.total_expense || 0);
+                  const cash = Number(session.total_cash || 0);
+                  const nonCash = Number(session.total_card || 0) + Number(session.total_transfer || 0);
 
                   return (
                     <tr key={session.id} className="hover:bg-gray-50">
@@ -1989,6 +2020,15 @@ const Bookkeeping: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-green-600">
                         Rp {total.toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                        Rp {cash.toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600">
+                        Rp {nonCash.toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-red-500">
+                        Rp {expense.toLocaleString("id-ID")}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
                         Cafe: Rp {cafe.toLocaleString("id-ID")} | Rental: Rp{" "}
