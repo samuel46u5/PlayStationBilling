@@ -64,6 +64,7 @@ const CashierSessionComponent: React.FC = () => {
   const [notes, setNotes] = useState<string>("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [typeTransaction, setTypeTransaction] = useState<string>("income");
   const [totalAmount, setTotalAmount] = useState<number>(0);
@@ -257,14 +258,14 @@ const CashierSessionComponent: React.FC = () => {
       return;
     }
 
-    if (!currentSession || !user) return;
+    if (!currentSession || !user || isSubmitting) return;
 
+    setIsSubmitting(true);
     try {
       await supabase.from("cashier_transactions").insert({
         session_id: currentSession.id,
         type: typeTransaction,
         amount: totalAmount,
-        // payment_method: "cash",
         payment_method: typeTransaction === "income" ? paymentMethod : "cash",
         reference_id:
           typeTransaction === "expense"
@@ -274,60 +275,49 @@ const CashierSessionComponent: React.FC = () => {
         cashier_id: user.id,
       });
 
-      // Refresh data
-      const [trxRes] = await Promise.all([
-        supabase
-          .from("cashier_transactions")
-          .select("*")
-          .eq("session_id", currentSession.id)
-          .order("timestamp", { ascending: false }),
-      ]);
-
-      if (trxRes.error) throw trxRes.error;
-
-      setTodayTransactions(trxRes.data || []);
-      setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
-      setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
-      setTodayVouchers(trxRes.data.filter((t: any) => t.type === "voucher"));
-      setTodayExpenses(trxRes.data.filter((t: any) => t.type === "expense"));
-      setTodayIncome(trxRes.data.filter((t: any) => t.type === "income"));
+      await refreshTodayTransactions(currentSession.id);
 
       setShowAddModal(false);
       setTotalAmount(0);
       setTransactionDescription("");
+      setPaymentMethod("cash");
 
       Swal.fire({
         icon: "success",
         title: "Transaksi berhasil ditambahkan!",
         text: `Jumlah: Rp ${totalAmount.toLocaleString("id-ID")}`,
       });
-
-      setPaymentMethod("cash");
     } catch (error) {
-      console.error("Error adding expense:", error);
+      console.error("Error adding transaction:", error);
       Swal.fire({
         icon: "error",
         title: "Gagal!",
         text: "Gagal menambahkan transaksi",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const refreshTodayTransactions = async (sessionId: string) => {
-    const [trxRes] = await Promise.all([
-      supabase
-        .from("cashier_transactions")
-        .select("*")
-        .eq("session_id", sessionId)
-        .order("timestamp", { ascending: false }),
-    ]);
-    if (trxRes.error) throw trxRes.error;
-    setTodayTransactions(trxRes.data || []);
-    setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
-    setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
-    setTodayVouchers(trxRes.data.filter((t: any) => t.type === "voucher"));
-    setTodayExpenses(trxRes.data.filter((t: any) => t.type === "expense"));
-    setTodayIncome(trxRes.data.filter((t: any) => t.type === "income"));
+    try {
+      const [trxRes] = await Promise.all([
+        supabase
+          .from("cashier_transactions")
+          .select("*")
+          .eq("session_id", sessionId)
+          .order("timestamp", { ascending: false }),
+      ]);
+      if (trxRes.error) throw trxRes.error;
+      setTodayTransactions(trxRes.data || []);
+      setTodaySales(trxRes.data.filter((t: any) => t.type === "sale"));
+      setTodayRentals(trxRes.data.filter((t: any) => t.type === "rental"));
+      setTodayVouchers(trxRes.data.filter((t: any) => t.type === "voucher"));
+      setTodayExpenses(trxRes.data.filter((t: any) => t.type === "expense"));
+      setTodayIncome(trxRes.data.filter((t: any) => t.type === "income"));
+    } catch (error) {
+      console.error("Error refreshing transactions:", error);
+    }
   };
 
   const openChangePayment = (transaction: any) => {
@@ -431,51 +421,100 @@ const CashierSessionComponent: React.FC = () => {
   };
 
   const handleOpenSession = async () => {
-    if (!user) return;
+    if (!user || isSubmitting) return;
 
-    const nowIso = new Date().toISOString();
-    const row = await db.cashierSessions.create({
-      start_time: nowIso,
-      opening_cash: openingCash,
-      status: "active",
-      notes,
-      created_at: nowIso,
-      updated_at: nowIso,
-      cashier_name: user?.full_name,
+    // Dialog konfirmasi sebelum membuka sesi
+    const confirm = await Swal.fire({
+      icon: "question",
+      title: "Konfirmasi Buka Kasir",
+      html: `
+        <div style="text-align:left; font-size:14px; line-height:1.8">
+          <p><strong>Kasir:</strong> ${user.full_name}</p>
+          <p><strong>Waktu:</strong> ${new Date().toLocaleString("id-ID")}</p>
+          <p><strong>Saldo Awal:</strong> Rp ${openingCash.toLocaleString("id-ID")}</p>
+          ${notes ? `<p><strong>Catatan:</strong> ${notes}</p>` : ""}
+        </div>
+        <p style="margin-top:12px; color:#6b7280; font-size:13px">Pastikan data sudah benar sebelum membuka sesi.</p>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Ya, Buka Kasir",
+      cancelButtonText: "Batal",
+      confirmButtonColor: "#16a34a",
     });
 
-    await supabase.from("cashier_transactions").insert({
-      session_id: row.id,
-      type: "income",
-      amount: row.opening_cash,
-      payment_method: "cash",
-      reference_id: "OPENING-CASH",
-      description: "Saldo Awal dari Bos",
-      cashier_id: row.cashier_id,
-    });
+    if (!confirm.isConfirmed) return;
 
-    setCurrentSession(mapDbSession(row));
-    setShowOpenModal(false);
-    setNotes("");
+    setIsSubmitting(true);
+    try {
+      // Re-check DB: pastikan tidak ada sesi aktif lain (anti double-session)
+      const existing = await db.cashierSessions.getCurrent(user.id);
+      if (existing) {
+        setCurrentSession(mapDbSession(existing));
+        setShowOpenModal(false);
+        Swal.fire({
+          icon: "warning",
+          title: "Sesi Sudah Aktif!",
+          text: "Terdapat sesi kasir yang masih aktif. Silakan tutup sesi sebelumnya terlebih dahulu.",
+        });
+        return;
+      }
 
-    Swal.fire({
-      icon: "success",
-      title: "Sesi kasir berhasil dibuka!",
-      text: `Saldo awal: Rp ${openingCash.toLocaleString("id-ID")}`,
-    });
+      const nowIso = new Date().toISOString();
+      const row = await db.cashierSessions.create({
+        start_time: nowIso,
+        opening_cash: openingCash,
+        status: "active",
+        notes,
+        created_at: nowIso,
+        updated_at: nowIso,
+        cashier_name: user?.full_name,
+      });
+
+      if (openingCash > 0) {
+        await supabase.from("cashier_transactions").insert({
+          session_id: row.id,
+          type: "income",
+          amount: row.opening_cash,
+          payment_method: "cash",
+          reference_id: "OPENING-CASH",
+          description: "Saldo Awal dari Bos",
+          cashier_id: row.cashier_id,
+        });
+      }
+
+      setCurrentSession(mapDbSession(row));
+      setShowOpenModal(false);
+      setNotes("");
+
+      Swal.fire({
+        icon: "success",
+        title: "Sesi kasir berhasil dibuka!",
+        text: `Saldo awal: Rp ${openingCash.toLocaleString("id-ID")}`,
+      });
+    } catch (error) {
+      console.error("Error opening session:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Gagal!",
+        text: "Gagal membuka sesi kasir. Silakan coba lagi.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCloseSession = async () => {
-    if (!currentSession) return;
+    if (!currentSession || isSubmitting) return;
 
     if (closingCash <= 0) {
       alert("Jumlah setoran harus lebih dari 0");
       return;
     }
 
-    // const expectedCash = calculateExpectedCash(currentSession);
     const variance = closingCash - expectedCash;
 
+    setIsSubmitting(true);
+    try {
     await db.cashierSessions.close(currentSession.id, {
       closing_cash: closingCash,
       expected_cash: expectedCash,
@@ -603,6 +642,16 @@ const CashierSessionComponent: React.FC = () => {
     setShowCloseModal(false);
     setClosingCash(0);
     setNotes("");
+    } catch (error) {
+      console.error("Error closing session:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Gagal!",
+        text: "Gagal menutup sesi kasir. Silakan coba lagi.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Calculate today's totals
@@ -698,7 +747,8 @@ const CashierSessionComponent: React.FC = () => {
               {!currentSession ? (
                 <button
                   onClick={() => setShowOpenModal(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  disabled={isSubmitting}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
                 >
                   <ArrowUpCircle className="h-5 w-5" />
                   Buka Kasir
@@ -932,7 +982,7 @@ const CashierSessionComponent: React.FC = () => {
                     .length +
                     todayRentals.filter((r) => r.payment_method === "transfer")
                       .length +
-                    todayVouchers.filter((v) => v.payment_method === "trasnfer")
+                    todayVouchers.filter((v) => v.payment_method === "transfer")
                       .length}{" "}
                   transaksi hari ini
                 </p>
@@ -1457,9 +1507,17 @@ const CashierSessionComponent: React.FC = () => {
                 </button>
                 <button
                   onClick={handleAddTransaction}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                 >
-                  Simpan
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    "Simpan"
+                  )}
                 </button>
               </div>
             </div>
@@ -1547,10 +1605,17 @@ const CashierSessionComponent: React.FC = () => {
                 </button>
                 <button
                   onClick={handleOpenSession}
-                  // disabled={openingCash <= 0}
-                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                 >
-                  Buka Kasir
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Memproses...
+                    </>
+                  ) : (
+                    "Buka Kasir"
+                  )}
                 </button>
               </div>
             </div>
@@ -1704,10 +1769,17 @@ const CashierSessionComponent: React.FC = () => {
                 </button>
                 <button
                   onClick={handleCloseSession}
-                  disabled={closingCash <= 0}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  disabled={closingCash <= 0 || isSubmitting}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                 >
-                  Tutup Kasir
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Memproses...
+                    </>
+                  ) : (
+                    "Tutup Kasir"
+                  )}
                 </button>
               </div>
             </div>
