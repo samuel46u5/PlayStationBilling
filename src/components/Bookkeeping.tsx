@@ -4464,11 +4464,9 @@ const Bookkeeping: React.FC = () => {
                               {log.duration !== undefined && (
                                 <span className="text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded border border-orange-100">
                                   Durasi Off:{" "}
-                                  {Math.floor(log.duration / 60000)}m{" "}
-                                  {Math.floor(
-                                    (log.duration % 60000) / 1000
-                                  )}
-                                  s
+                                  {Math.floor(log.duration / 3600000)}h{" "}
+                                  {Math.floor((log.duration % 3600000) / 60000)}m{" "}
+                                  {Math.floor((log.duration % 60000) / 1000)}s
                                 </span>
                               )}
                             </div>
