@@ -9,6 +9,7 @@ import {
   History,
   RefreshCw,
   Loader2,
+  Search,
 } from "lucide-react";
 import { deleteSaleItem } from "../lib/deleteSaleItem";
 import React, {
@@ -23,7 +24,7 @@ import Countdown from "./Countdown";
 import { printReceipt, printRentalProof } from "../utils/receipt";
 import { useTimer } from "../contexts/TimerContext";
 import { useRFIDReader } from "../hooks/useRFIDReader";
-import type { CardUsageLog } from "../types";
+import type { CardUsageLog, Game } from "../types";
 import paketService from "../lib/paketService";
 import { useAuth } from "../contexts/AuthContext";
 // import { useMemberCardBilling } from "../hooks/useMemberCardBilling";
@@ -452,6 +453,31 @@ const ActiveRentals: React.FC = () => {
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [packageLoading, setPackageLoading] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+
+  // Game Search Feature State
+  const [showGameSearchModal, setShowGameSearchModal] = useState(false);
+  const [catalogGames, setCatalogGames] = useState<Game[]>([]);
+  const [catalogConsoles, setCatalogConsoles] = useState<any[]>([]);
+  const [gameSearchTerm, setGameSearchTerm] = useState("");
+  const [gameSearchLoading, setGameSearchLoading] = useState(false);
+
+  const handleOpenGameSearch = async () => {
+    setShowGameSearchModal(true);
+    setGameSearchLoading(true);
+    try {
+      const [gamesData, consolesData] = await Promise.all([
+        db.games.getAll(),
+        db.consoles.getAll(),
+      ]);
+      setCatalogGames(gamesData || []);
+      setCatalogConsoles(consolesData || []);
+    } catch (error) {
+      console.error("Error loading games data:", error);
+      Swal.fire("Error", "Gagal memuat data game", "error");
+    } finally {
+      setGameSearchLoading(false);
+    }
+  };
 
   const fetchCardData = async (uid: string) => {
     if (!uid) {
@@ -6771,6 +6797,17 @@ const ActiveRentals: React.FC = () => {
             )}
           </div>
 
+          <button
+            onClick={() => {
+              handleOpenGameSearch();
+            }}
+            className={` bg-teal-500 hover:bg-teal-600 text-white py-3 px-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-sm`}
+            title="Cari Game di Console"
+          >
+            <Search className="h-5 w-5" />
+            <span className="hidden sm:inline">Cari Game</span>
+          </button>
+
           {/* Add Product */}
           <button
             onClick={() => {
@@ -12175,6 +12212,97 @@ const ActiveRentals: React.FC = () => {
                   Tutup
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Game Search Modal */}
+      {showGameSearchModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <Gamepad2 className="h-6 w-6 text-blue-600" />
+                Cari Game di Console
+              </h2>
+              <button
+                onClick={() => setShowGameSearchModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 border-b bg-gray-50 flex flex-col sm:flex-row gap-4 items-center">
+              <div className="relative flex-1">
+                <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Ketik judul game..."
+                  value={gameSearchTerm}
+                  onChange={(e) => setGameSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-3 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
+              {gameSearchLoading ? (
+                <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+                  <Loader2 className="h-8 w-8 animate-spin mb-4" />
+                  <p>Memuat data game...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {catalogGames
+                    .filter((g) => g.is_active && g.title.toLowerCase().includes(gameSearchTerm.toLowerCase()))
+                    .map((game) => {
+                      const availableConsoles = catalogConsoles.filter((c) => c.installed_games && c.installed_games.includes(game.id));
+                      
+                      return (
+                        <div key={game.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
+                          {game.cover_image_url ? (
+                            <div className="aspect-[3/4] w-full bg-gray-100 overflow-hidden shrink-0">
+                              <img src={game.cover_image_url} alt={game.title} className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                          ) : (
+                            <div className="aspect-[3/4] w-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shrink-0">
+                              <Gamepad2 className="h-12 w-12 text-blue-300" />
+                            </div>
+                          )}
+                          <div className="p-4 flex flex-col flex-1">
+                            <h3 className="font-semibold text-base text-gray-900 mb-1 line-clamp-2">{game.title}</h3>
+                            <p className="text-xs text-gray-500 mb-3 line-clamp-1">{game.genre?.join(', ')}</p>
+                            
+                            <div className="mt-auto pt-3 border-t border-gray-100">
+                              <p className="text-xs font-medium text-gray-700 mb-2">Tersedia di:</p>
+                              {availableConsoles.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {availableConsoles.map(c => (
+                                    <span key={c.id} className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded border border-blue-200">
+                                      {c.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-red-500 font-medium tracking-tight">Belum diinstall</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    
+                  {catalogGames.length > 0 && catalogGames.filter((g) => g.is_active && g.title.toLowerCase().includes(gameSearchTerm.toLowerCase())).length === 0 && (
+                    <div className="col-span-full py-12 text-center text-gray-500 border border-dashed border-gray-300 rounded-lg">
+                      <Gamepad2 className="h-12 w-12 mx-auto text-gray-300 mb-3" />
+                      <p>Tidak ada game yang cocok dengan pencarian '{gameSearchTerm}'</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
