@@ -6254,6 +6254,114 @@ const ActiveRentals: React.FC = () => {
         });
         break;
       }
+      case "Cek Status IP (Relay & TV)": {
+        const results = await Promise.allSettled(
+          selectedConsoles.map(async (device) => {
+            let relayStatus = "Error";
+            let tvStatus = "Error";
+
+            try {
+              if (device.relay_command_status) {
+                const res = await fetch(device.relay_command_status);
+                if (res.ok) {
+                  const data = await res.json();
+                  relayStatus = data.POWER === "ON" ? "ON" : "OFF";
+                }
+              } else {
+                relayStatus = "N/A";
+              }
+            } catch (e) {
+              relayStatus = "Error";
+            }
+
+            try {
+              if (device.perintah_cek_power_tv) {
+                const res = await fetch(device.perintah_cek_power_tv);
+                if (res.ok) {
+                  const data = await res.json();
+                  tvStatus = data.status === "on" ? "ON" : "OFF";
+                }
+              } else {
+                tvStatus = "N/A";
+              }
+            } catch (e) {
+              tvStatus = "Error";
+            }
+
+            const passed = relayStatus !== "Error" && tvStatus !== "Error";
+            return { device, relayStatus, tvStatus, passed };
+          }),
+        );
+
+        const summary = results.map((r, i) => {
+          if (r.status === "fulfilled") return r.value;
+          return {
+            device: selectedConsoles[i],
+            relayStatus: "Error",
+            tvStatus: "Error",
+            passed: false,
+          };
+        });
+
+        await Swal.fire({
+          title: "Hasil Cek Status IP",
+          width: "600px",
+          html: `
+            <div class="text-left">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b">
+                    <th class="py-2 text-left font-semibold text-gray-700">Unit</th>
+                    <th class="py-2 text-center font-semibold text-gray-700">Relay</th>
+                    <th class="py-2 text-center font-semibold text-gray-700">TV</th>
+                    <th class="py-2 text-right font-semibold text-gray-700">Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${summary
+                    .map(
+                      (item) => `
+                    <tr class="border-b hover:bg-gray-50 transition-colors">
+                      <td class="py-3 font-medium text-gray-900">${item.device.name}</td>
+                      <td class="py-3 text-center">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shadow-sm ${
+                          item.relayStatus === "ON"
+                            ? "bg-green-100 text-green-800 border border-green-200"
+                            : item.relayStatus === "OFF"
+                              ? "bg-red-100 text-red-800 border border-red-200"
+                              : "bg-gray-100 text-gray-800 border border-gray-200"
+                        }">${item.relayStatus}</span>
+                      </td>
+                      <td class="py-3 text-center">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shadow-sm ${
+                          item.tvStatus === "ON"
+                            ? "bg-green-100 text-green-800 border border-green-200"
+                            : item.tvStatus === "OFF"
+                              ? "bg-red-100 text-red-800 border border-red-200"
+                              : "bg-gray-100 text-gray-800 border border-gray-200"
+                        }">${item.tvStatus}</span>
+                      </td>
+                      <td class="py-3 text-right">
+                        ${
+                          item.passed
+                            ? '<span class="inline-flex items-center text-green-600 font-bold"><svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>PASSED</span>'
+                            : '<span class="inline-flex items-center text-red-600 font-bold"><svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>ERROR</span>'
+                        }
+                      </td>
+                    </tr>
+                  `,
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+          `,
+          icon: summary.every((s) => s.passed) ? "success" : "warning",
+          confirmButtonText: "Tutup",
+          scrollbarPadding: false,
+        });
+        break;
+      }
     }
   };
 
@@ -8551,6 +8659,7 @@ const ActiveRentals: React.FC = () => {
                     <option value="Nyalakan Nomor">Nyalakan Nomor</option>
                     <option value="Set volume TV">Set volume TV</option>
                     <option value="Set mute TV">Set mute TV</option>
+                    <option value="Cek Status IP (Relay & TV)">Cek Status IP (Relay & TV)</option>
                   </select>
 
                   {selectedCommand === "Set volume TV" && (
@@ -9562,6 +9671,23 @@ const ActiveRentals: React.FC = () => {
                   {/* Left: Status & Console Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedConsoleIds.includes(console.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedConsoleIds((prev) => [
+                              ...prev,
+                              console.id,
+                            ]);
+                          } else {
+                            setSelectedConsoleIds((prev) =>
+                              prev.filter((id) => id !== console.id),
+                            );
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
                       <div
                         className={`w-3 h-3 rounded-full ${
                           console.status === "available"
@@ -9955,6 +10081,24 @@ const ActiveRentals: React.FC = () => {
                   >
                     <div className="flex items-center gap-3 justify-between">
                       <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedConsoleIds.includes(console.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedConsoleIds((prev) => [
+                                ...prev,
+                                console.id,
+                              ]);
+                            } else {
+                              setSelectedConsoleIds((prev) =>
+                                prev.filter((id) => id !== console.id),
+                              );
+                            }
+                          }}
+                          className="h-5 w-5 rounded border-white/30 bg-transparent text-white focus:ring-white"
+                          onClick={(e) => e.stopPropagation()}
+                        />
                         <Gamepad2 className="h-6 w-6" />
                         <h3 className="font-semibold text-lg">
                           {console.name}

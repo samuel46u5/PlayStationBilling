@@ -42,6 +42,7 @@ const DevicesMaintenance: React.FC = () => {
   const [showAdd, setShowAdd] = React.useState(false);
   const [editDevice, setEditDevice] = React.useState<any | null>(null);
   const [detailDevice, setDetailDevice] = React.useState<any | null>(null);
+  const [selectedDevices, setSelectedDevices] = React.useState<string[]>([]);
   const [selectedCommand, setSelectedCommand] = React.useState("");
   const [volume, setVolume] = React.useState<number>(10);
 
@@ -209,6 +210,14 @@ const DevicesMaintenance: React.FC = () => {
   };
 
   const runCommand = async () => {
+    if (selectedDevices.length === 0) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Pilih console terlebih dahulu",
+        text: "Gunakan checkbox pada console yang ingin Anda pilih.",
+      });
+      return;
+    }
     if (!selectedCommand) {
       await Swal.fire({
         icon: "warning",
@@ -218,11 +227,14 @@ const DevicesMaintenance: React.FC = () => {
     }
     const r = await Swal.fire({
       title: `Jalankan: ${selectedCommand}?`,
+      text: `Akan dijalankan pada ${selectedDevices.length} console yang dipilih.`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Run",
     });
     if (!r.isConfirmed) return;
+
+    const targetDevices = devices.filter((d) => selectedDevices.includes(d.id));
 
     // apply to local state as a visual feedback; do not modify DB unless required
     // setDevices((s) => s.map((d) => ({ ...d, last_command: selectedCommand })));
@@ -231,9 +243,9 @@ const DevicesMaintenance: React.FC = () => {
       case "Matikan semua TV":
         {
           const results = await Promise.allSettled(
-            devices.map(async (device) => {
+            targetDevices.map(async (device) => {
               // Cek status TV terlebih dahulu
-              const statusRes = await fetch(device.perintah_cek_power_tv);
+              const statusRes = await fetch(device.cmd_check_power_tv || device.perintah_cek_power_tv);
 
               if (!statusRes.ok) {
                 throw new Error(`HTTP ${statusRes.status}`);
@@ -247,7 +259,7 @@ const DevicesMaintenance: React.FC = () => {
               }
 
               // Jika status "off"
-              const res = await fetch(device.power_tv_command);
+              const res = await fetch(device.cmd_power_tv || device.power_tv_command);
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               return { device, status: "success" };
             })
@@ -284,7 +296,7 @@ const DevicesMaintenance: React.FC = () => {
                 .filter(
                   (r): r is PromiseRejectedResult => r.status === "rejected"
                 )
-                .map((_, i) => devices[i])
+                .map((_, i) => targetDevices[i])
             );
 
           // Menampilkan SweetAlert
@@ -317,9 +329,9 @@ const DevicesMaintenance: React.FC = () => {
       case "Nyalakan semua TV":
         {
           const results = await Promise.allSettled(
-            devices.map(async (device) => {
+            targetDevices.map(async (device) => {
               // Cek status TV terlebih dahulu
-              const statusRes = await fetch(device.perintah_cek_power_tv);
+              const statusRes = await fetch(device.cmd_check_power_tv || device.perintah_cek_power_tv);
 
               if (!statusRes.ok) {
                 throw new Error(`HTTP ${statusRes.status}`);
@@ -333,7 +345,7 @@ const DevicesMaintenance: React.FC = () => {
               }
 
               // Jika status "off"
-              const res = await fetch(device.power_tv_command);
+              const res = await fetch(device.cmd_power_tv || device.power_tv_command);
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               return { device, status: "success" };
             })
@@ -370,7 +382,7 @@ const DevicesMaintenance: React.FC = () => {
                 .filter(
                   (r): r is PromiseRejectedResult => r.status === "rejected"
                 )
-                .map((_, i) => devices[i])
+                .map((_, i) => targetDevices[i])
             );
 
           // Menampilkan SweetAlert
@@ -401,7 +413,7 @@ const DevicesMaintenance: React.FC = () => {
       case "Matikan semua Nomor":
         {
           const results = await Promise.allSettled(
-            devices.map(async (device) => {
+            targetDevices.map(async (device) => {
               // Cek status lampu terlebih dahulu
               const statusRes = await fetch(device.cmd_relay_status);
 
@@ -416,7 +428,7 @@ const DevicesMaintenance: React.FC = () => {
               }
 
               // Jika status "on", lakukan perintah untuk mematikan
-              const res = await fetch(device.relay_command_off);
+              const res = await fetch(device.cmd_relay_off || device.relay_command_off);
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               
               const resData = await res.json();
@@ -460,7 +472,7 @@ const DevicesMaintenance: React.FC = () => {
                 .filter(
                   (r): r is PromiseRejectedResult => r.status === "rejected"
                 )
-                .map((_, i) => devices[i])
+                .map((_, i) => targetDevices[i])
             );
 
           await Swal.fire({
@@ -494,7 +506,7 @@ const DevicesMaintenance: React.FC = () => {
       case "Nyalakan semua Nomor":
         {
           const results = await Promise.allSettled(
-            devices.map(async (device) => {
+            targetDevices.map(async (device) => {
               // Cek status lampu terlebih dahulu
               const statusRes = await fetch(device.cmd_relay_status);
 
@@ -509,7 +521,7 @@ const DevicesMaintenance: React.FC = () => {
               }
 
               // Jika status "off", lakukan perintah untuk menyalakan
-              const res = await fetch(device.relay_command_on);
+              const res = await fetch(device.cmd_relay_on || device.relay_command_on);
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
               const resData = await res.json();
@@ -554,7 +566,7 @@ const DevicesMaintenance: React.FC = () => {
                 .filter(
                   (r): r is PromiseRejectedResult => r.status === "rejected"
                 )
-                .map((_, i) => devices[i])
+                .map((_, i) => targetDevices[i])
             );
 
           await Swal.fire({
@@ -588,7 +600,7 @@ const DevicesMaintenance: React.FC = () => {
       case "Set Volume":
         {
           const results = await Promise.allSettled(
-            devices.map((device) =>
+            targetDevices.map((device) =>
               fetch(
                 `http://localhost:3001/tv/${device.ip_address_tv}/volume/${volume}?port=5555&method=adb`
               )
@@ -636,7 +648,7 @@ const DevicesMaintenance: React.FC = () => {
         break;
       case "Mute Volume": {
         const results = await Promise.allSettled(
-          devices.map((device) =>
+          targetDevices.map((device) =>
             fetch(`http://localhost:3001/tv/${device.ip_address_tv}/volume/0?port=5555&method=adb`)
               .then((res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -661,7 +673,7 @@ const DevicesMaintenance: React.FC = () => {
               .filter(
                 (r): r is PromiseRejectedResult => r.status === "rejected"
               )
-              .map((_, i) => devices[i])
+              .map((_, i) => targetDevices[i])
           );
 
         console.log("URL Gagal:", failed);
@@ -676,6 +688,70 @@ const DevicesMaintenance: React.FC = () => {
               .catch((err) => ({ url, status: "failed", error: err.message }))
           )
         );
+        break;
+      }
+      case "Cek Status IP": {
+        const results = await Promise.allSettled(
+          targetDevices.map(async (device) => {
+            const relayCmd = device.cmd_relay_status;
+            const tvCmd = device.cmd_check_power_tv || device.perintah_cek_power_tv;
+            
+            let relayStatus = "Error";
+            let tvStatus = "Error";
+
+            if (relayCmd) {
+              try {
+                const res = await fetch(relayCmd);
+                if (res.ok) relayStatus = "Passed";
+              } catch (e) {}
+            }
+            if (tvCmd) {
+              try {
+                const res = await fetch(tvCmd);
+                if (res.ok) tvStatus = "Passed";
+              } catch (e) {}
+            }
+
+            return {
+              device,
+              relay: relayStatus,
+              tv: tvStatus,
+              isOk: relayStatus === "Passed" && tvStatus === "Passed"
+            };
+          })
+        );
+
+        const passed = results
+          .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled' && r.value.isOk)
+          .map(r => r.value.device);
+        
+        const partial = results
+          .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled' && !r.value.isOk)
+          .map(r => r.value);
+
+        Swal.fire({
+          title: "Hasil Cek Status IP",
+          html: `
+            <div style='text-align: left'>
+              <h4 style="font-weight: bold; color: green;">Passed (${passed.length}):</h4>
+              <ul>
+                ${passed.map(d => `<li>${d.name}</li>`).join('')}
+              </ul>
+              <h4 style="font-weight: bold; color: red; margin-top: 10px;">Error / Partial (${partial.length}):</h4>
+              <ul>
+                ${partial.map(p => `
+                  <li>
+                    <strong>${p.device.name}</strong>: 
+                    Relay (${p.relay === 'Passed' ? '✅' : '❌'}), 
+                    TV (${p.tv === 'Passed' ? '✅' : '❌'})
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          `,
+          icon: "info",
+          confirmButtonText: "Tutup"
+        });
         break;
       }
     }
@@ -722,6 +798,25 @@ const DevicesMaintenance: React.FC = () => {
                 placeholder="Cari nama console..."
                 className="border border-gray-200 rounded px-3 py-2 w-64 text-sm"
               />
+            </div>
+
+            <div className="ml-6 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="select-all-checkbox"
+                checked={displayedDevices.length > 0 && selectedDevices.length === displayedDevices.length}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedDevices(displayedDevices.map(d => d.id));
+                  } else {
+                    setSelectedDevices([]);
+                  }
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              <label htmlFor="select-all-checkbox" className="text-sm font-medium text-gray-700 cursor-pointer">
+                Pilih Semua
+              </label>
             </div>
           </div>
 
@@ -813,6 +908,7 @@ const DevicesMaintenance: React.FC = () => {
             <option value="Nyalakan semua Nomor">Nyalakan semua Nomor</option>
             <option value="Set Volume">Set volume semua TV</option>
             <option value="Mute Volume">Set mute semua TV</option>
+            <option value="Cek Status IP">Cek Status IP (Relay & TV)</option>
           </select>
           {selectedCommand === "Set Volume" && (
             <>
@@ -863,6 +959,18 @@ const DevicesMaintenance: React.FC = () => {
                   <span className="text-white font-semibold text-sm flex-1">
                     {d.name}
                   </span>
+                  <input
+                    type="checkbox"
+                    checked={selectedDevices.includes(d.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedDevices(prev => [...prev, d.id]);
+                      } else {
+                        setSelectedDevices(prev => prev.filter(id => id !== d.id));
+                      }
+                    }}
+                    className="h-5 w-5 rounded border-transparent text-blue-600 focus:ring-offset-purple-500 focus:ring-blue-500 cursor-pointer"
+                  />
                 </div>
                 {/* Commands panel (green) - inputs with arrow buttons like the Consoles form */}
                 <div className="px-4 pt-3 pb-2">
@@ -1419,9 +1527,23 @@ const DevicesMaintenance: React.FC = () => {
                       </div>
                       <div className="font-semibold">{d.name}</div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm">Total</div>
-                      <div className="text-lg font-bold">Rp {displayTotal}</div>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedDevices.includes(d.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedDevices(prev => [...prev, d.id]);
+                          } else {
+                            setSelectedDevices(prev => prev.filter(id => id !== d.id));
+                          }
+                        }}
+                        className="h-5 w-5 rounded border-transparent text-blue-600 focus:ring-offset-purple-500 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div className="text-right">
+                        <div className="text-sm">Total</div>
+                        <div className="text-lg font-bold">Rp {displayTotal}</div>
+                      </div>
                     </div>
                   </div>
 
@@ -1544,6 +1666,20 @@ const DevicesMaintenance: React.FC = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <input
+                      type="checkbox"
+                      checked={displayedDevices.length > 0 && selectedDevices.length === displayedDevices.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDevices(displayedDevices.map(d => d.id));
+                        } else {
+                          setSelectedDevices([]);
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Name
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -1560,19 +1696,33 @@ const DevicesMaintenance: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-gray-500">
+                    <td colSpan={5} className="text-center py-8 text-gray-500">
                       Loading...
                     </td>
                   </tr>
                 ) : displayedDevices.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-gray-500">
+                    <td colSpan={5} className="text-center py-8 text-gray-500">
                       No devices found
                     </td>
                   </tr>
                 ) : (
                   displayedDevices.map((d) => (
                     <tr key={d.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedDevices.includes(d.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedDevices(prev => [...prev, d.id]);
+                            } else {
+                              setSelectedDevices(prev => prev.filter(id => id !== d.id));
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </td>
                       <td className="px-6 py-4">{d.name}</td>
                       <td className="px-6 py-4">
                         {d.equipment_types?.name || d.type || "-"}
