@@ -1996,7 +1996,7 @@ const Bookkeeping: React.FC = () => {
                   />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Waktu Selesai
+                  Waktu Mulai
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Kasir
@@ -2054,7 +2054,7 @@ const Bookkeeping: React.FC = () => {
                         />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(session.end_time).toLocaleString("id-ID")}
+                        {new Date(session.start_time).toLocaleString("id-ID")}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                         {session.cashier_name}
