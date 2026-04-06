@@ -2084,6 +2084,20 @@ const Bookkeeping: React.FC = () => {
                 })
               )}
             </tbody>
+            <div className="p-2">
+              {selectedSessions.size > 0 && (
+                <div className="text-left border-r border-gray-200 pr-6">
+                  <p className="text-sm text-gray-500 font-medium tracking-wide">Grand Total Terpilih</p>
+                  <div className="flex gap-4 mt-1">
+                    <span className="text-xl font-bold text-green-600">Rp {grandTotal.toLocaleString("id-ID")}</span>
+                    <div className="flex flex-col text-xs text-gray-500 justify-center">
+                      <span>Cash: Rp {grandTotalCash.toLocaleString("id-ID")}</span>
+                      <span>QRIS: Rp {grandTotalNonCash.toLocaleString("id-ID")}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </table>
         </div>
       </div>
