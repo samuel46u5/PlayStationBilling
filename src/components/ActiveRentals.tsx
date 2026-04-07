@@ -7005,16 +7005,6 @@ const ActiveRentals: React.FC = () => {
             Maintenance (
             {consoles.filter((c) => c.status === "maintenance").length})
           </button>
-          <button
-            className="px-4 py-2 rounded-lg font-medium border border-gray-400 bg-white text-gray-700 hover:bg-gray-100 ml-2"
-            onClick={() => {
-              setShowHistoryModal(true);
-              loadHistorySessions(historyStartDate, historyEndDate);
-            }}
-            type="button"
-          >
-            Lihat History
-          </button>
           {/* View Mode Toggle */}
           <div className="ml-2 flex gap-1">
             <button
@@ -7050,6 +7040,16 @@ const ActiveRentals: React.FC = () => {
             >
               List
             </button>
+            <button
+            className="px-4 py-2 rounded-lg font-medium border border-gray-400 bg-white text-gray-700 hover:bg-gray-100 ml-2"
+            onClick={() => {
+              setShowHistoryModal(true);
+              loadHistorySessions(historyStartDate, historyEndDate);
+            }}
+            type="button"
+          >
+            Lihat History
+          </button>
           </div>
         </div>
       </div>
