@@ -209,6 +209,300 @@ const DevicesMaintenance: React.FC = () => {
     }
   };
 
+  const runIpCheckModal = async () => {
+    const targetDevices =
+      selectedDevices.length > 0
+        ? devices.filter((d) => selectedDevices.includes(d.id))
+        : displayedDevices;
+
+    if (targetDevices.length === 0) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Tidak ada unit untuk dicek",
+        text: "Pilih unit terlebih dahulu atau ubah filter pencarian.",
+      });
+      return;
+    }
+
+    const rows = targetDevices.map((device) => ({
+      unit: device.name || "-",
+      ipTv: device.ip_address_tv || "-",
+      ipRelay: device.ip_address || "-",
+      tvCmd: device.cmd_check_power_tv || device.perintah_cek_power_tv || null,
+      relayCmd: device.cmd_relay_status || device.relay_command_status || null,
+    }));
+
+    const checkSingleRow = async (row: {
+      tvCmd: string | null;
+      relayCmd: string | null;
+    }) => {
+      const fetchWithTimeout = async (url: string, timeoutMs: number) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          return { response, timedOut: false };
+        } catch (err: any) {
+          if (err?.name === "AbortError") {
+            return { response: null, timedOut: true };
+          }
+          throw err;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      let tvStatus = "Error";
+      let relayStatus = "Error";
+      let tvReachable = false;
+      let relayReachable = false;
+
+      if (!row.tvCmd) {
+        tvStatus = "No Command";
+      } else {
+        try {
+          const tvReq = await fetchWithTimeout(row.tvCmd, 10000);
+          if (tvReq.timedOut) {
+            tvStatus = "Timeout";
+          } else if (tvReq.response?.ok) {
+            tvReachable = true;
+            let tvData: any = null;
+            try {
+              tvData = await tvReq.response.json();
+            } catch (_err) {
+              tvData = null;
+            }
+
+            if (tvData?.status === "on") {
+              tvStatus = "ON";
+            } else if (tvData?.status === "off") {
+              tvStatus = "OFF";
+            } else {
+              tvStatus = "Passed";
+            }
+          } else {
+            tvStatus = "Error";
+          }
+        } catch (_err) {
+          tvStatus = "Error";
+        }
+      }
+
+      if (!row.relayCmd) {
+        relayStatus = "No Command";
+      } else {
+        try {
+          const relayReq = await fetchWithTimeout(row.relayCmd, 10000);
+          if (relayReq.timedOut) {
+            relayStatus = "Timeout";
+          } else if (relayReq.response?.ok) {
+            relayReachable = true;
+            let relayData: any = null;
+            try {
+              relayData = await relayReq.response.json();
+            } catch (_err) {
+              relayData = null;
+            }
+
+            if (relayData?.POWER === "ON") {
+              relayStatus = "ON";
+            } else if (relayData?.POWER === "OFF") {
+              relayStatus = "OFF";
+            } else if (relayData?.status === "on") {
+              relayStatus = "ON";
+            } else if (relayData?.status === "off") {
+              relayStatus = "OFF";
+            } else {
+              relayStatus = "Passed";
+            }
+          } else {
+            relayStatus = "Error";
+          }
+        } catch (_err) {
+          relayStatus = "Error";
+        }
+      }
+
+      const passedCount = [tvReachable, relayReachable].filter(Boolean).length;
+      const result =
+        passedCount === 2
+          ? "Passed"
+          : passedCount === 1
+          ? "Partial"
+          : "Error";
+
+      return { tvStatus, relayStatus, result };
+    };
+
+    const rowHtml = rows
+      .map(
+        (r, idx) => `
+          <tr>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:left;">${r.unit}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:left;">${r.ipTv}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;">
+              <span id="ip-check-tv-${idx}" style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#334155;font-weight:600;">-</span>
+            </td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:left;">${r.ipRelay}</td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;">
+              <span id="ip-check-relay-${idx}" style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#334155;font-weight:600;">-</span>
+            </td>
+            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;font-weight:600;">
+              <div>
+                <span id="ip-check-result-${idx}" style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#334155;font-weight:700;">Belum dicek</span>
+              </div>
+              <button
+                type="button"
+                data-ip-check-row="${idx}"
+                style="margin-top:6px;padding:4px 10px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;"
+              >
+                Cek
+              </button>
+            </td>
+          </tr>
+        `
+      )
+      .join("");
+
+    await Swal.fire({
+      title: `Hasil IP Check (${rows.length} Unit)`,
+      width: 1100,
+      html: `
+        <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+          <button
+            type="button"
+            id="ip-check-all-button"
+            style="padding:6px 12px;border:1px solid #1d4ed8;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font-size:12px;font-weight:600;"
+          >
+            Check All
+          </button>
+        </div>
+        <div style="max-height:60vh;overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;">Unit</th>
+                <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;">Ip Tv</th>
+                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;">Status Tv</th>
+                <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;">Ip Relay</th>
+                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;">Status Relay</th>
+                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowHtml}
+            </tbody>
+          </table>
+        </div>
+      `,
+      icon: "info",
+      confirmButtonText: "Tutup",
+      scrollbarPadding: false,
+      didOpen: () => {
+        const popup = Swal.getPopup();
+        if (!popup) return;
+
+        const applyBadgeStyle = (el: HTMLElement, value: string) => {
+          let bg = "#f3f4f6";
+          let color = "#334155";
+
+          if (value === "Passed" || value === "ON") {
+            bg = "#dcfce7";
+            color = "#166534";
+          } else if (value === "Partial") {
+            bg = "#fef3c7";
+            color = "#92400e";
+          } else if (value === "Error") {
+            bg = "#fee2e2";
+            color = "#991b1b";
+          } else if (value === "OFF") {
+            bg = "#e0f2fe";
+            color = "#075985";
+          } else if (value === "No Command") {
+            bg = "#ede9fe";
+            color = "#5b21b6";
+          } else if (value === "Timeout") {
+            bg = "#ffedd5";
+            color = "#9a3412";
+          } else if (value === "Checking...") {
+            bg = "#dbeafe";
+            color = "#1d4ed8";
+          }
+
+          el.style.background = bg;
+          el.style.color = color;
+        };
+
+        const buttons = popup.querySelectorAll<HTMLButtonElement>(
+          "button[data-ip-check-row]"
+        );
+
+        const runSingleCheck = async (idx: number, btn?: HTMLButtonElement) => {
+          const row = rows[idx];
+          if (!row) return;
+
+          const tvEl = popup.querySelector<HTMLElement>(`#ip-check-tv-${idx}`);
+          const relayEl = popup.querySelector<HTMLElement>(`#ip-check-relay-${idx}`);
+          const resultEl = popup.querySelector<HTMLElement>(`#ip-check-result-${idx}`);
+
+          if (!tvEl || !relayEl || !resultEl) return;
+
+          tvEl.textContent = "Checking...";
+          relayEl.textContent = "Checking...";
+          resultEl.textContent = "Checking...";
+          applyBadgeStyle(tvEl, "Checking...");
+          applyBadgeStyle(relayEl, "Checking...");
+          applyBadgeStyle(resultEl, "Checking...");
+          if (btn) btn.disabled = true;
+
+          const checkResult = await checkSingleRow(row);
+
+          tvEl.textContent = checkResult.tvStatus;
+          relayEl.textContent = checkResult.relayStatus;
+          resultEl.textContent = checkResult.result;
+          applyBadgeStyle(tvEl, checkResult.tvStatus);
+          applyBadgeStyle(relayEl, checkResult.relayStatus);
+          applyBadgeStyle(resultEl, checkResult.result);
+          if (btn) btn.disabled = false;
+        };
+
+        const checkAllBtn = popup.querySelector<HTMLButtonElement>(
+          "#ip-check-all-button"
+        );
+
+        if (checkAllBtn) {
+          checkAllBtn.onclick = async () => {
+            checkAllBtn.disabled = true;
+            checkAllBtn.textContent = "Checking All...";
+            buttons.forEach((b) => {
+              b.disabled = true;
+            });
+
+            await Promise.all(
+              Array.from(buttons).map((b) => {
+                const idx = Number(b.getAttribute("data-ip-check-row"));
+                return runSingleCheck(idx);
+              })
+            );
+
+            buttons.forEach((b) => {
+              b.disabled = false;
+            });
+            checkAllBtn.textContent = "Check All";
+            checkAllBtn.disabled = false;
+          };
+        }
+
+        buttons.forEach((btn) => {
+          btn.onclick = async () => {
+            const idx = Number(btn.getAttribute("data-ip-check-row"));
+            await runSingleCheck(idx, btn);
+          };
+        });
+      },
+    });
+  };
+
   const runCommand = async () => {
     if (selectedDevices.length === 0) {
       await Swal.fire({
@@ -823,6 +1117,12 @@ const DevicesMaintenance: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <button
+                onClick={runIpCheckModal}
+                className="px-4 py-2 rounded-md text-sm bg-white border border-gray-200"
+              >
+                IP Check
+              </button>
+              <button
                 onClick={() => setFilter("all")}
                 className={`px-4 py-2 rounded-md text-sm ${
                   filter === "all"
@@ -909,6 +1209,7 @@ const DevicesMaintenance: React.FC = () => {
             <option value="Set Volume">Set volume semua TV</option>
             <option value="Mute Volume">Set mute semua TV</option>
             <option value="Cek Status IP">Cek Status IP (Relay & TV)</option>
+            
           </select>
           {selectedCommand === "Set Volume" && (
             <>
