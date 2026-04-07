@@ -1846,9 +1846,16 @@ const Bookkeeping: React.FC = () => {
       return;
     }
 
+    const selectedSetoranTotal = undepositedSessions
+      .filter((s) => selectedSessions.has(s.id))
+      .reduce(
+        (sum, s) => sum + (Number(s.total_cash || 0) - Number(s.total_expense || 0)),
+        0
+      );
+
     const { isConfirmed } = await Swal.fire({
       title: "Konfirmasi Setoran",
-      text: `Apakah Anda yakin ingin menyetor ${selectedSessions.size} sesi terpilih ke jurnal umum?`,
+      html: `<p>Apakah Anda yakin ingin menyetor ${selectedSessions.size} sesi terpilih ke jurnal umum?</p><p style="margin-top:8px;"><strong>Total Setoran: Rp ${selectedSetoranTotal.toLocaleString("id-ID")}</strong></p>`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Ya, Setor",
@@ -1931,6 +1938,49 @@ const Bookkeeping: React.FC = () => {
     const grandTotal = selectedSessionsData.reduce((sum, s) => sum + Number(s.total_revenue || 0), 0);
     const grandTotalCash = selectedSessionsData.reduce((sum, s) => sum + Number(s.total_cash || 0), 0);
     const grandTotalNonCash = selectedSessionsData.reduce((sum, s) => sum + Number(s.total_card || 0) + Number(s.total_transfer || 0), 0);
+    const grandTotalExpense = selectedSessionsData.reduce((sum, s) => sum + Number(s.total_expense || 0), 0);
+    const grandTotalSetoran = selectedSessionsData.reduce(
+      (sum, s) => sum + (Number(s.total_cash || 0) - Number(s.total_expense || 0)),
+      0
+    );
+    const footerSummary = selectedSessionsData.reduce(
+      (summary, session) => {
+        const cafe = Number(session.total_sales || 0);
+        const rental = Number(session.total_rentals || 0);
+        const voucher = Number(session.total_vouchers || 0);
+        const otherIncome = Number(session.total_income || 0);
+        const expense = Number(session.total_expense || 0);
+        const cash = Number(session.total_cash || 0);
+        const nonCash =
+          Number(session.total_card || 0) + Number(session.total_transfer || 0);
+        const total = Number(session.total_revenue || 0) - expense;
+        const setoran = cash - expense;
+
+        return {
+          total: summary.total + total,
+          cash: summary.cash + cash,
+          nonCash: summary.nonCash + nonCash,
+          expense: summary.expense + expense,
+          setoran: summary.setoran + setoran,
+          cafe: summary.cafe + cafe,
+          rental: summary.rental + rental,
+          voucher: summary.voucher + voucher,
+          otherIncome: summary.otherIncome + otherIncome,
+        };
+      },
+      {
+        total: 0,
+        cash: 0,
+        nonCash: 0,
+        expense: 0,
+        setoran: 0,
+        cafe: 0,
+        rental: 0,
+        voucher: 0,
+        otherIncome: 0,
+      }
+    );
+    
 
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1953,6 +2003,8 @@ const Bookkeeping: React.FC = () => {
                   <div className="flex flex-col text-xs text-gray-500 justify-center">
                     <span>Cash: Rp {grandTotalCash.toLocaleString("id-ID")}</span>
                     <span>QRIS: Rp {grandTotalNonCash.toLocaleString("id-ID")}</span>
+                    <span>Pengeluaran: Rp {grandTotalExpense.toLocaleString("id-ID")}</span>
+                    <span>Setoran: Rp {grandTotalSetoran.toLocaleString("id-ID")}</span>
                   </div>
                 </div>
               </div>
@@ -2005,17 +2057,21 @@ const Bookkeeping: React.FC = () => {
                   Total Pendapatan
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cash
+                  Non-Cash (QRIS)
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Non-Cash (QRIS)
+                  Cash
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-red-500 uppercase tracking-wider">
                   Pengeluaran
                 </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Setoran
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Rincian (Cafe | Rental | Voucher)
                 </th>
+                
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -2037,6 +2093,7 @@ const Bookkeeping: React.FC = () => {
                   const expense = Number(session.total_expense || 0);
                   const cash = Number(session.total_cash || 0);
                   const nonCash = Number(session.total_card || 0) + Number(session.total_transfer || 0);
+                  const setoran = Number(session.total_cash || 0) - Number(session.total_expense || 0);
 
                   return (
                     <tr key={session.id} className="hover:bg-gray-50">
@@ -2062,14 +2119,17 @@ const Bookkeeping: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-green-600">
                         Rp {total.toLocaleString("id-ID")}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
-                        Rp {cash.toLocaleString("id-ID")}
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600">
                         Rp {nonCash.toLocaleString("id-ID")}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                        Rp {cash.toLocaleString("id-ID")}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-red-500">
                         Rp {expense.toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-black-500">
+                        Rp {setoran.toLocaleString("id-ID")}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
                         Cafe: Rp {cafe.toLocaleString("id-ID")} | Rental: Rp{" "}
@@ -2084,20 +2144,36 @@ const Bookkeeping: React.FC = () => {
                 })
               )}
             </tbody>
-            <div className="p-2">
-              {selectedSessions.size > 0 && (
-                <div className="text-left border-r border-gray-200 pr-6">
-                  <p className="text-sm text-gray-500 font-medium tracking-wide">Grand Total Terpilih</p>
-                  <div className="flex gap-4 mt-1">
-                    <span className="text-xl font-bold text-green-600">Rp {grandTotal.toLocaleString("id-ID")}</span>
-                    <div className="flex flex-col text-xs text-gray-500 justify-center">
-                      <span>Cash: Rp {grandTotalCash.toLocaleString("id-ID")}</span>
-                      <span>QRIS: Rp {grandTotalNonCash.toLocaleString("id-ID")}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            {undepositedSessions.length > 0 && (
+              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                <tr>
+                  <td colSpan={3} className="px-6 py-4 text-sm font-semibold text-gray-900">
+                    Grand Total Terpilih
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-green-700">
+                    Rp {footerSummary.total.toLocaleString("id-ID")}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-blue-700">
+                    Rp {footerSummary.nonCash.toLocaleString("id-ID")}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                    Rp {footerSummary.cash.toLocaleString("id-ID")}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-red-600">
+                    Rp {footerSummary.expense.toLocaleString("id-ID")}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                    Rp {footerSummary.setoran.toLocaleString("id-ID")}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-xs font-medium text-gray-600">
+                    Cafe: Rp {footerSummary.cafe.toLocaleString("id-ID")} | Rental: Rp{" "}
+                    {footerSummary.rental.toLocaleString("id-ID")} | Voucher: Rp{" "}
+                    {footerSummary.voucher.toLocaleString("id-ID")} | Modal/Lain: Rp{" "}
+                    {footerSummary.otherIncome.toLocaleString("id-ID")}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
