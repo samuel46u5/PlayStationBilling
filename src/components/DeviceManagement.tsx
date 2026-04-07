@@ -209,6 +209,386 @@ const DevicesMaintenance: React.FC = () => {
     }
   };
 
+  const runCommandCheckModal = async () => {
+    const targetDevices =
+      selectedDevices.length > 0
+        ? devices.filter((d) => selectedDevices.includes(d.id))
+        : displayedDevices;
+
+    if (targetDevices.length === 0) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Tidak ada unit untuk dicek",
+        text: "Pilih unit terlebih dahulu atau ubah filter pencarian.",
+      });
+      return;
+    }
+
+    const validateCommandUrl = (value: string | null | undefined) => {
+      if (!value || typeof value !== "string") {
+        return "Error";
+      }
+
+      const trimmedValue = value.trim();
+      if (trimmedValue === "") {
+        return "Error";
+      }
+
+      // Reject malformed authorities like `http:///host/path` before URL normalization.
+      const strictHttpUrlPattern = /^https?:\/\/[^\s/?#]+(?:[/?#]|$)/i;
+      if (!strictHttpUrlPattern.test(trimmedValue)) {
+        return "Error";
+      }
+
+      try {
+        const parsed = new URL(trimmedValue);
+        const isHttp = parsed.protocol === "http:" || parsed.protocol === "https:";
+
+        if (!isHttp || !parsed.hostname) {
+          return "Error";
+        }
+
+        if (/^https?:\/\/\//i.test(trimmedValue)) {
+          return "Error";
+        }
+
+        return "OK";
+      } catch (_err) {
+        return "Error";
+      }
+    };
+
+    const escapeHtml = (value: string | null | undefined) => {
+      const str = String(value || "-");
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    };
+
+    const rows = [...targetDevices]
+      .sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""), "id", {
+          sensitivity: "base",
+        })
+      )
+      .map((device) => {
+        const relayOnCommand =
+          device.cmd_relay_on ||
+          device.relay_command_on ||
+          device.relay_command ||
+          device.relay_on ||
+          "";
+        const relayOffCommand =
+          device.cmd_relay_off || device.relay_command_off || device.relay_off || "";
+        const relayStatusCommand =
+          device.cmd_relay_status ||
+          device.relay_command_status ||
+          device.relay_status ||
+          "";
+        const powerTvCommand =
+          device.cmd_power_tv || device.power_tv_command || device.power_command || "";
+        const checkPowerTvCommand =
+          device.cmd_check_power_tv ||
+          device.perintah_cek_power_tv ||
+          device.check_power_tv ||
+          "";
+
+        return {
+          unit: device.name || "-",
+          commands: [
+            {
+              key: "relay-on",
+              label: "Perintah Relay ON",
+              command: relayOnCommand,
+              status: validateCommandUrl(relayOnCommand),
+            },
+            {
+              key: "relay-off",
+              label: "Perintah Relay OFF",
+              command: relayOffCommand,
+              status: validateCommandUrl(relayOffCommand),
+            },
+            {
+              key: "relay-status",
+              label: "Perintah Relay STATUS",
+              command: relayStatusCommand,
+              status: validateCommandUrl(relayStatusCommand),
+            },
+            {
+              key: "power-tv",
+              label: "Perintah Power TV",
+              command: powerTvCommand,
+              status: validateCommandUrl(powerTvCommand),
+            },
+            {
+              key: "check-power-tv",
+              label: "Perintah Cek Power TV",
+              command: checkPowerTvCommand,
+              status: validateCommandUrl(checkPowerTvCommand),
+            },
+          ],
+        };
+      });
+
+    const totalCommands = rows.reduce((sum, row) => sum + row.commands.length, 0);
+    const totalOk = rows.reduce(
+      (sum, row) =>
+        sum + row.commands.filter((item) => item.status === "OK").length,
+      0
+    );
+    const totalError = totalCommands - totalOk;
+    const totalUnitsWithError = rows.filter((row) =>
+      row.commands.some((item) => item.status === "Error")
+    ).length;
+
+    const renderStatus = (status: string) => {
+      const bg = status === "OK" ? "#dcfce7" : "#fee2e2";
+      const color = status === "OK" ? "#166534" : "#991b1b";
+      return `<span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${bg};color:${color};font-weight:700;font-size:12px;">${status}</span>`;
+    };
+
+    const contentHtml = rows
+      .map((row) => {
+        const errorCount = row.commands.filter(
+          (item) => item.status === "Error"
+        ).length;
+
+        const commandRows = row.commands
+          .map(
+            (item, commandIndex) => {
+              const rowId = `${escapeHtml(row.unit)}-${item.key}-${commandIndex}`
+                .toLowerCase()
+                .replace(/[^a-z0-9-]/g, "-");
+
+              return `
+              <tr class="hover:bg-gray-50 command-row" data-command-status="${item.status}" data-command-row="${rowId}">
+                <td class="px-4 py-3 text-sm font-medium text-gray-700 whitespace-nowrap">${item.label}</td>
+                <td class="px-4 py-3 text-sm text-gray-600" style="word-break:break-all;">${escapeHtml(item.command)}</td>
+                <td class="px-4 py-3 text-center">${renderStatus(item.status)}</td>
+                <td class="px-4 py-3 text-center">
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    data-run-command="${rowId}"
+                    data-command-url="${escapeHtml(item.command)}"
+                    data-command-status="${item.status}"
+                  >
+                    Run
+                  </button>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500" id="command-run-result-${rowId}">-</td>
+              </tr>
+            `;
+            }
+          )
+          .join("");
+
+        return `
+          <div class="border-b border-gray-200 last:border-b-0 command-section" data-section-error-count="${errorCount}">
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-4">
+              <div>
+                <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Unit</div>
+                <div class="text-base font-semibold text-gray-900">${escapeHtml(row.unit)}</div>
+              </div>
+              <div class="text-sm text-gray-500">${row.commands.length} perintah diperiksa${errorCount > 0 ? ` • ${errorCount} error` : ""}</div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-white">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Jenis Perintah</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">URL</th>
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksi</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Hasil Run</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100">
+                  ${commandRows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    await Swal.fire({
+      title: `Check Perintah (${rows.length} Unit)`,
+      width: 1000,
+      html: `
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden text-left">
+          <div class="p-6 border-b border-gray-200">
+            <div class="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">Validasi Perintah URL</h3>
+                <p class="text-sm text-gray-600 mt-1">Pengecekan ini memvalidasi format URL perintah dari data console dan dapat menjalankan perintah satu per satu.</p>
+              </div>
+              <button
+                type="button"
+                id="toggle-command-error-filter"
+                class="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100"
+              >
+                Hanya tampilkan error
+              </button>
+            </div>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+                <div class="text-xs font-semibold uppercase tracking-wider text-green-700">Total OK</div>
+                <div class="mt-1 text-2xl font-bold text-green-800">${totalOk}</div>
+              </div>
+              <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                <div class="text-xs font-semibold uppercase tracking-wider text-red-700">Total Error</div>
+                <div class="mt-1 text-2xl font-bold text-red-800">${totalError}</div>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <div class="text-xs font-semibold uppercase tracking-wider text-slate-600">Unit Dengan Error</div>
+                <div class="mt-1 text-2xl font-bold text-slate-800">${totalUnitsWithError}</div>
+              </div>
+            </div>
+          </div>
+          <div style="max-height:60vh;overflow:auto;">
+            ${contentHtml}
+          </div>
+        </div>
+      `,
+      icon: "info",
+      confirmButtonText: "Tutup",
+      scrollbarPadding: false,
+      didOpen: () => {
+        const popup = Swal.getPopup();
+        if (!popup) return;
+
+        const toggleBtn = popup.querySelector<HTMLButtonElement>(
+          "#toggle-command-error-filter"
+        );
+        const sections = popup.querySelectorAll<HTMLElement>(".command-section");
+        let errorsOnly = false;
+
+        const updateFilterState = () => {
+          sections.forEach((section) => {
+            const rowsInSection = section.querySelectorAll<HTMLElement>(
+              ".command-row"
+            );
+            let visibleCount = 0;
+
+            rowsInSection.forEach((rowEl) => {
+              const isError = rowEl.getAttribute("data-command-status") === "Error";
+              const shouldShow = !errorsOnly || isError;
+              rowEl.style.display = shouldShow ? "" : "none";
+              if (shouldShow) visibleCount += 1;
+            });
+
+            section.style.display = visibleCount > 0 ? "" : "none";
+          });
+
+          if (toggleBtn) {
+            toggleBtn.textContent = errorsOnly
+              ? "Tampilkan semua"
+              : "Hanya tampilkan error";
+          }
+        };
+
+        const fetchRunResult = async (url: string) => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+          try {
+            const response = await fetch(url, { signal: controller.signal });
+            const rawText = await response.text();
+
+            let formatted = rawText;
+            try {
+              const parsed = rawText ? JSON.parse(rawText) : null;
+              formatted = parsed ? JSON.stringify(parsed) : rawText || "(empty)";
+            } catch (_err) {
+              formatted = rawText || "(empty)";
+            }
+
+            return {
+              ok: response.ok,
+              text: formatted,
+              statusCode: response.status,
+            };
+          } catch (err: any) {
+            if (err?.name === "AbortError") {
+              return {
+                ok: false,
+                text: "Timeout setelah 10 detik",
+                statusCode: 408,
+              };
+            }
+
+            return {
+              ok: false,
+              text: err?.message || "Request gagal",
+              statusCode: 500,
+            };
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        };
+
+        if (toggleBtn) {
+          toggleBtn.onclick = () => {
+            errorsOnly = !errorsOnly;
+            updateFilterState();
+          };
+        }
+
+        const runButtons = popup.querySelectorAll<HTMLButtonElement>(
+          "button[data-run-command]"
+        );
+
+        runButtons.forEach((button) => {
+          button.onclick = async () => {
+            const rowId = button.getAttribute("data-run-command");
+            const commandUrl = button.getAttribute("data-command-url") || "";
+            const commandStatus = button.getAttribute("data-command-status");
+
+            if (!rowId) return;
+
+            const resultEl = popup.querySelector<HTMLElement>(
+              `#command-run-result-${rowId}`
+            );
+
+            if (!resultEl) return;
+
+            if (commandStatus !== "OK") {
+              resultEl.innerHTML = '<span style="display:inline-block;padding:2px 10px;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:700;font-size:12px;">URL tidak valid</span>';
+              return;
+            }
+
+            button.disabled = true;
+            button.textContent = "Running...";
+            resultEl.innerHTML = '<span style="color:#2563eb;font-weight:600;">Menjalankan...</span>';
+
+            const runResult = await fetchRunResult(commandUrl);
+            const badge = runResult.ok
+              ? '<span style="display:inline-block;padding:2px 10px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;font-size:12px;">Success</span>'
+              : '<span style="display:inline-block;padding:2px 10px;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:700;font-size:12px;">Error</span>';
+            const resultText = escapeHtml(runResult.text).slice(0, 300);
+
+            resultEl.innerHTML = `
+              <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+                <div>${badge} <span style="font-size:12px;color:#6b7280;">HTTP ${runResult.statusCode}</span></div>
+                <div style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;color:#374151;white-space:pre-wrap;word-break:break-word;">${resultText || "(empty)"}</div>
+              </div>
+            `;
+
+            button.disabled = false;
+            button.textContent = "Run";
+          };
+        });
+
+        updateFilterState();
+      },
+    });
+  };
+
   const runIpCheckModal = async () => {
     const targetDevices =
       selectedDevices.length > 0
@@ -224,13 +604,19 @@ const DevicesMaintenance: React.FC = () => {
       return;
     }
 
-    const rows = targetDevices.map((device) => ({
-      unit: device.name || "-",
-      ipTv: device.ip_address_tv || "-",
-      ipRelay: device.ip_address || "-",
-      tvCmd: device.cmd_check_power_tv || device.perintah_cek_power_tv || null,
-      relayCmd: device.cmd_relay_status || device.relay_command_status || null,
-    }));
+    const rows = [...targetDevices]
+      .sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""), "id", {
+          sensitivity: "base",
+        })
+      )
+      .map((device) => ({
+        unit: device.name || "-",
+        ipTv: device.ip_address_tv || "-",
+        ipRelay: device.ip_address || "-",
+        tvCmd: device.cmd_check_power_tv || device.perintah_cek_power_tv || null,
+        relayCmd: device.cmd_relay_status || device.relay_command_status || null,
+      }));
 
     const checkSingleRow = async (row: {
       tvCmd: string | null;
@@ -337,24 +723,24 @@ const DevicesMaintenance: React.FC = () => {
     const rowHtml = rows
       .map(
         (r, idx) => `
-          <tr>
-            <td style="padding:8px;border:1px solid #e5e7eb;text-align:left;">${r.unit}</td>
-            <td style="padding:8px;border:1px solid #e5e7eb;text-align:left;">${r.ipTv}</td>
-            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;">
+          <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${r.unit}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${r.ipTv}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
               <span id="ip-check-tv-${idx}" style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#334155;font-weight:600;">-</span>
             </td>
-            <td style="padding:8px;border:1px solid #e5e7eb;text-align:left;">${r.ipRelay}</td>
-            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${r.ipRelay}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
               <span id="ip-check-relay-${idx}" style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#334155;font-weight:600;">-</span>
             </td>
-            <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;font-weight:600;">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-medium">
               <div>
                 <span id="ip-check-result-${idx}" style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#334155;font-weight:700;">Belum dicek</span>
               </div>
               <button
                 type="button"
                 data-ip-check-row="${idx}"
-                style="margin-top:6px;padding:4px 10px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;"
+                class="mt-2 bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded-md text-xs font-medium hover:bg-gray-50"
               >
                 Cek
               </button>
@@ -368,31 +754,37 @@ const DevicesMaintenance: React.FC = () => {
       title: `Hasil IP Check (${rows.length} Unit)`,
       width: 1100,
       html: `
-        <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
-          <button
-            type="button"
-            id="ip-check-all-button"
-            style="padding:6px 12px;border:1px solid #1d4ed8;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font-size:12px;font-weight:600;"
-          >
-            Check All
-          </button>
-        </div>
-        <div style="max-height:60vh;overflow:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead>
-              <tr style="background:#f8fafc;">
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;">Unit</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;">Ip Tv</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;">Status Tv</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;">Ip Relay</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;">Status Relay</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;">Result</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden text-left">
+          <div class="p-6 border-b border-gray-200 flex items-center justify-between gap-4">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">IP Check Console</h3>
+              <p class="text-sm text-gray-600 mt-1">Daftar unit yang siap dicek untuk TV dan relay.</p>
+            </div>
+            <button
+              type="button"
+              id="ip-check-all-button"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              Check All
+            </button>
+          </div>
+          <div class="overflow-x-auto" style="max-height:60vh;">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ip Tv</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status Tv</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ip Relay</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status Relay</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Result</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
               ${rowHtml}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       `,
       icon: "info",
@@ -1121,6 +1513,12 @@ const DevicesMaintenance: React.FC = () => {
                 className="px-4 py-2 rounded-md text-sm bg-white border border-gray-200"
               >
                 IP Check
+              </button>
+              <button
+                onClick={runCommandCheckModal}
+                className="px-4 py-2 rounded-md text-sm bg-white border border-gray-200"
+              >
+                Check Perintah
               </button>
               <button
                 onClick={() => setFilter("all")}
