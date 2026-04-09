@@ -6,6 +6,7 @@ export const NAV_ITEMS = [
   // { id: "bookings", label: "Scheduled Bookings" },
   // { id: "customers", label: "Customers" },
   { id: "products", label: "Products" },
+  { id: "pembelian", label: "Pembelian" },
   { id: "assembly", label:"Assembly" },
   { id: "games", label: "Master Game" },
   { id: "sales", label: "Sales Report" },

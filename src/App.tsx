@@ -7,6 +7,7 @@ import CashierSession from "./components/CashierSession";
 import ActiveRentals from "./components/ActiveRentals";
 import ScheduledBookings from "./components/ScheduledBookings";
 import Customers from "./components/Customers";
+import Pembelian from "./components/Pembelian";
 import Products from "./components/Products";
 import Sales from "./components/Sales";
 import Payments from "./components/Payments";
@@ -62,6 +63,8 @@ const AppLayout: React.FC = () => {
         return <CashierSession />;
       case "rentals":
         return <ActiveRentals />;
+      case "pembelian":
+        return <Pembelian />;
       case "bookings":
         return <ScheduledBookings />;
       // case "customers":

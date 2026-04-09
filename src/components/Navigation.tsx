@@ -68,6 +68,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
     // bookings: Calendar,
     // customers: Users,
     products: Package,
+    pembelian: Package,
     assembly: Puzzle,
     games: Gamepad,
     sales: ShoppingCart,

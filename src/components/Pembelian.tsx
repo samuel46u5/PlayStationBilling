@@ -1,0 +1,979 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-case-declarations */
+import React, { useState, useEffect } from "react";
+import {
+  Plus,
+  Search,
+  Package,
+  Edit,
+  Trash2,
+  RefreshCw,
+  ChevronRight,
+  ShoppingCart,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
+import { db, supabase } from "../lib/supabase";
+import Swal from "sweetalert2";
+import PurchaseFilters from "./PurchaseFilters";
+
+const Pembelian: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"purchases" | "purchaseList">("purchases");
+  const [showPurchaseForm, setShowPurchaseForm] = useState(false);
+  const [isSavingPurchase, setIsSavingPurchase] = useState(false);
+  const [editingPoId, setEditingPoId] = useState<string | null>(null);
+  
+  const [newPurchase, setNewPurchase] = useState({
+    supplierId: "",
+    items: [] as Array<{
+      id?: string;
+      productId: string;
+      productName: string;
+      quantity: number;
+      unitCost: number;
+      total: number;
+    }>,
+    notes: "",
+    expectedDate: new Date().toISOString().split("T")[0],
+    orderDate: new Date().toISOString(),
+  });
+
+  const [purchaseTotal, setPurchaseTotal] = useState(0);
+  const [purchaseSubtotal, setPurchaseSubtotal] = useState(0);
+
+  const [products, setProducts] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+
+  const [poDetail, setPoDetail] = useState<any | null>(null);
+  const [expandedPoId, setExpandedPoId] = useState<string | null>(null);
+
+  const [purchaseTabView, setPurchaseTabView] = useState<"daftar" | "rekapTanggalBarang" | "rekapPerBarang">("daftar");
+  const [daftarSearch, setDaftarSearch] = useState("");
+  const [daftarPeriod, setDaftarPeriod] = useState<string>("week");
+  const [daftarDateRange, setDaftarDateRange] = useState({ start: "", end: "" });
+
+  const [rekapTanggalSearch, setRekapTanggalSearch] = useState("");
+  const [rekapTanggalPeriod, setRekapTanggalPeriod] = useState<string>("week");
+  const [rekapTanggalDateRange, setRekapTanggalDateRange] = useState({ start: "", end: "" });
+
+  const [rekapPerBarangSearch, setRekapPerBarangSearch] = useState("");
+  const [rekapPerBarangPeriod, setRekapPerBarangPeriod] = useState<string>("week");
+  const [rekapPerBarangDateRange, setRekapPerBarangDateRange] = useState({ start: "", end: "" });
+
+  const [rekapTanggalData, setRekapTanggalData] = useState<Record<string, any>>({});
+  const [rekapTanggalLoading, setRekapTanggalLoading] = useState(false);
+  const [rekapTanggalError, setRekapTanggalError] = useState<string | null>(null);
+
+  const [rekapPerBarangData, setRekapPerBarangData] = useState<Record<string, any>>({});
+  const [rekapPerBarangLoading, setRekapPerBarangLoading] = useState(false);
+  const [rekapPerBarangError, setRekapPerBarangError] = useState<string | null>(null);
+
+  const [showSupplierSelectModal, setShowSupplierSelectModal] = useState(false);
+  const [showProductSelectModal, setShowProductSelectModal] = useState<{ open: boolean; index: number | null }>({ open: false, index: null });
+  const [supplierSearchTerm, setSupplierSearchTerm] = useState("");
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+
+  // Fetch Data
+  useEffect(() => {
+    fetchProducts();
+    fetchSuppliers();
+    fetchPurchaseOrders();
+  }, []);
+
+  const fetchProducts = async () => {
+    const data = await db.products.getAll();
+    setProducts(data || []);
+  };
+
+  const fetchSuppliers = async () => {
+    const data = await db.suppliers.getAll();
+    setSuppliers(data || []);
+  };
+
+  const fetchPurchaseOrders = async () => {
+    const data = await db.purchases.getAll();
+    setPurchaseOrders(data || []);
+  };
+
+  useEffect(() => {
+    if ((window as any)) {
+      (window as any).refreshPurchases = fetchPurchaseOrders;
+    }
+  }, []);
+
+  // Update totals when items change
+  useEffect(() => {
+    const subtotal = newPurchase.items.reduce((sum, item) => sum + item.total, 0);
+    setPurchaseSubtotal(subtotal);
+    setPurchaseTotal(subtotal);
+  }, [newPurchase.items]);
+
+  // Load Rekap data
+  useEffect(() => {
+    const loadRekapTanggal = async () => {
+      if (purchaseTabView !== "rekapTanggalBarang") return;
+      setRekapTanggalLoading(true);
+      setRekapTanggalError(null);
+      try {
+        let start: string | null = null;
+        let end: string | null = null;
+        const now = new Date();
+        switch (rekapTanggalPeriod) {
+          case "today":
+            start = now.toISOString().slice(0, 10);
+            end = now.toISOString().slice(0, 10);
+            break;
+          case "yesterday":
+            const yest = new Date();
+            yest.setDate(yest.getDate() - 1);
+            start = yest.toISOString().slice(0, 10);
+            end = yest.toISOString().slice(0, 10);
+            break;
+          case "week":
+            const d = now.getDay();
+            const diff = (d === 0 ? -6 : 1) - d;
+            const s = new Date(now);
+            s.setDate(s.getDate() + diff);
+            start = s.toISOString().slice(0, 10);
+            end = now.toISOString().slice(0, 10);
+            break;
+          case "month":
+            start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+            end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+            break;
+          case "range":
+            if (rekapTanggalDateRange.start) start = rekapTanggalDateRange.start;
+            if (rekapTanggalDateRange.end) end = rekapTanggalDateRange.end;
+            break;
+        }
+
+        let query = supabase.from("purchase_orders").select("*");
+        if (start) query = query.gte("order_date", start);
+        if (end) query = query.lte("order_date", end);
+        const { data: pos, error } = await query.order("order_date", { ascending: false });
+        if (error) throw error;
+
+        let filteredPos = pos || [];
+        if (rekapTanggalSearch) {
+          const st = rekapTanggalSearch.toLowerCase();
+          const { data: supMatches } = await supabase.from("suppliers").select("id").ilike("name", `%${st}%`);
+          const supplierIds = (supMatches || []).map((s: any) => s.id);
+          filteredPos = filteredPos.filter((p: any) => p.po_number?.toLowerCase().includes(st) || supplierIds.includes(p.supplier_id));
+        }
+
+        const poIds = filteredPos.map((p: any) => p.id);
+        let items: any[] = [];
+        if (poIds.length > 0) {
+          const { data, error: err2 } = await supabase.from("purchase_order_items").select("*").in("po_id", poIds);
+          if (err2) throw err2;
+          items = data || [];
+        }
+
+        const map: Record<string, any> = {};
+        for (const item of items) {
+          const po = filteredPos.find((p: any) => p.id === item.po_id);
+          const date = po.order_date ? po.order_date.slice(0, 10) : "unknown";
+          if (!map[date]) map[date] = { products: {}, dateTotal: 0 };
+          
+          const productId = item.product_id;
+          const productName = item.product_name || products.find(p => p.id === productId)?.name || "Unknown";
+          const qty = Number(item.quantity) || 0;
+          const total = Number(item.total) || 0;
+
+          if (!map[date].products[productId || productName]) {
+            map[date].products[productId || productName] = { name: productName, qty: 0, total: 0, lines: [] };
+          }
+          const pEntry = map[date].products[productId || productName];
+          pEntry.qty += qty;
+          pEntry.total += total;
+          pEntry.lines.push({ poId: item.po_id, qty, total, supplierName: suppliers.find(s => s.id === po.supplier_id)?.name || "" });
+          map[date].dateTotal += total;
+        }
+        setRekapTanggalData(map);
+      } catch (err: any) {
+        setRekapTanggalError(err.message);
+      } finally {
+        setRekapTanggalLoading(false);
+      }
+    };
+    loadRekapTanggal();
+  }, [purchaseTabView, rekapTanggalPeriod, rekapTanggalDateRange, rekapTanggalSearch]);
+
+  useEffect(() => {
+    const loadRekapPerBarang = async () => {
+      if (purchaseTabView !== "rekapPerBarang") return;
+      setRekapPerBarangLoading(true);
+      setRekapPerBarangError(null);
+      try {
+        let start: string | null = null;
+        let end: string | null = null;
+        const now = new Date();
+        switch (rekapPerBarangPeriod) {
+          case "today":
+            start = now.toISOString().slice(0, 10);
+            end = now.toISOString().slice(0, 10);
+            break;
+          case "yesterday":
+            const yest = new Date();
+            yest.setDate(yest.getDate() - 1);
+            start = yest.toISOString().slice(0, 10);
+            end = yest.toISOString().slice(0, 10);
+            break;
+          case "week":
+            const d = now.getDay();
+            const diff = (d === 0 ? -6 : 1) - d;
+            const s = new Date(now);
+            s.setDate(s.getDate() + diff);
+            start = s.toISOString().slice(0, 10);
+            end = now.toISOString().slice(0, 10);
+            break;
+          case "month":
+            start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+            end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+            break;
+          case "range":
+            if (rekapPerBarangDateRange.start) start = rekapPerBarangDateRange.start;
+            if (rekapPerBarangDateRange.end) end = rekapPerBarangDateRange.end;
+            break;
+        }
+
+        let query = supabase.from("purchase_orders").select("*");
+        if (start) query = query.gte("order_date", start);
+        if (end) query = query.lte("order_date", end);
+        const { data: pos, error } = await query.order("order_date", { ascending: false });
+        if (error) throw error;
+
+        let filteredPos = pos || [];
+        if (rekapPerBarangSearch) {
+          const st = rekapPerBarangSearch.toLowerCase();
+          const { data: supMatches } = await supabase.from("suppliers").select("id").ilike("name", `%${st}%`);
+          const supplierIds = (supMatches || []).map((s: any) => s.id);
+          filteredPos = filteredPos.filter((p: any) => p.po_number?.toLowerCase().includes(st) || supplierIds.includes(p.supplier_id));
+        }
+
+        const poIds = filteredPos.map((p: any) => p.id);
+        let items: any[] = [];
+        if (poIds.length > 0) {
+          const { data, error: err2 } = await supabase.from("purchase_order_items").select("*").in("po_id", poIds);
+          if (err2) throw err2;
+          items = data || [];
+        }
+
+        const map: Record<string, any> = {};
+        for (const item of items) {
+          const po = filteredPos.find((p: any) => p.id === item.po_id);
+          const productId = item.product_id;
+          const productName = item.product_name || products.find(p => p.id === productId)?.name || "Unknown";
+          const qty = Number(item.quantity) || 0;
+          const total = Number(item.total) || 0;
+
+          if (!map[productId || productName]) {
+            map[productId || productName] = { name: productName, qty: 0, total: 0, dates: {} };
+          }
+          const pEntry = map[productId || productName];
+          pEntry.qty += qty;
+          pEntry.total += total;
+          
+          const date = po.order_date ? po.order_date.slice(0, 10) : "unknown";
+          if (!pEntry.dates[date]) pEntry.dates[date] = { qty: 0, total: 0, pos: [] };
+          pEntry.dates[date].qty += qty;
+          pEntry.dates[date].total += total;
+          pEntry.dates[date].pos.push({ poId: item.po_id, poNumber: po.po_number, supplierName: suppliers.find(s => s.id === po.supplier_id)?.name || "" });
+        }
+        setRekapPerBarangData(map);
+      } catch (err: any) {
+        setRekapPerBarangError(err.message);
+      } finally {
+        setRekapPerBarangLoading(false);
+      }
+    };
+    loadRekapPerBarang();
+  }, [purchaseTabView, rekapPerBarangPeriod, rekapPerBarangDateRange, rekapPerBarangSearch]);
+
+  const addItemToPurchase = () => {
+    setNewPurchase(prev => ({
+      ...prev,
+      items: [...prev.items, { productId: "", productName: "", quantity: 1, unitCost: 0, total: 0 }]
+    }));
+  };
+
+  const updatePurchaseItem = (index: number, field: string, value: any) => {
+    setNewPurchase(prev => {
+      const items = [...prev.items];
+      const item = { ...items[index] };
+      (item as any)[field] = value;
+      if (field === "productId") {
+        const p = products.find(prod => prod.id === value);
+        if (p) {
+          item.productName = p.name;
+          item.unitCost = p.cost;
+          item.total = item.quantity * p.cost;
+        }
+      }
+      if (field === "quantity" || field === "unitCost") {
+        item.total = item.quantity * item.unitCost;
+      }
+      items[index] = item;
+      return { ...prev, items };
+    });
+  };
+
+  const removePurchaseItem = (index: number) => {
+    setNewPurchase(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSavePurchase = async () => {
+    if (!newPurchase.supplierId) {
+      Swal.fire("Error", "Pilih supplier terlebih dahulu", "error");
+      return;
+    }
+    if (newPurchase.items.length === 0) {
+      Swal.fire("Error", "Tambah minimal satu item", "error");
+      return;
+    }
+
+    setIsSavingPurchase(true);
+    try {
+      let poId: string;
+      let poData: any;
+
+      if (editingPoId) {
+        poData = await db.purchases.update(editingPoId, {
+          supplier_id: newPurchase.supplierId,
+          items: newPurchase.items,
+          notes: newPurchase.notes,
+          expected_date: newPurchase.expectedDate,
+          order_date: newPurchase.orderDate,
+          subtotal: purchaseSubtotal,
+          total_amount: purchaseTotal,
+        });
+        poId = editingPoId;
+      } else {
+        poData = await db.purchases.create({
+          supplier_id: newPurchase.supplierId,
+          items: newPurchase.items,
+          notes: newPurchase.notes,
+          expected_date: newPurchase.expectedDate,
+          order_date: newPurchase.orderDate,
+          subtotal: purchaseSubtotal,
+          total_amount: purchaseTotal,
+        });
+        poId = poData.id;
+      }
+
+      // Sync with bookkeeping
+      const reference = `PO-${poId}`;
+      const supplier = suppliers.find(s => s.id === newPurchase.supplierId);
+      const { data: existing } = await supabase.from("bookkeeping_entries").select("id").eq("reference", reference).single();
+      
+      const bookkeepingData = {
+        entry_date: newPurchase.orderDate.split("T")[0],
+        type: "expense",
+        category: "inventory",
+        description: `Purchase Order - ${supplier?.name || "Unknown"}`,
+        amount: purchaseTotal,
+        reference: reference,
+        notes: `${poData.po_number || poId}${newPurchase.notes ? ` - ${newPurchase.notes}` : ""}`,
+      };
+
+      if (existing) {
+        await supabase.from("bookkeeping_entries").update(bookkeepingData).eq("id", existing.id);
+      } else {
+        await supabase.from("bookkeeping_entries").insert([bookkeepingData]);
+      }
+
+      Swal.fire("Berhasil", "Purchase Order berhasil disimpan", "success");
+      setShowPurchaseForm(false);
+      setEditingPoId(null);
+      setNewPurchase({
+        supplierId: "",
+        items: [],
+        notes: "",
+        expectedDate: new Date().toISOString().split("T")[0],
+        orderDate: new Date().toISOString(),
+      });
+      fetchPurchaseOrders();
+    } catch (err: any) {
+      Swal.fire("Gagal", err.message, "error");
+    } finally {
+      setIsSavingPurchase(false);
+    }
+  };
+
+  const openPoDetail = async (po: any) => {
+    try {
+      const { data: items } = await supabase.from("purchase_order_items").select("*").eq("po_id", po.id);
+      setPoDetail({ ...po, items: items || [] });
+      setExpandedPoId(expandedPoId === po.id ? null : po.id);
+    } catch (err: any) {
+      Swal.fire("Error", "Gagal memuat detail", "error");
+    }
+  };
+
+  const filteredSuppliersForModal = suppliers.filter(s => s.name.toLowerCase().includes(supplierSearchTerm.toLowerCase()));
+  const filteredProductsForModal = products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()));
+
+  const filteredPurchaseOrdersForDaftar = purchaseOrders.filter(po => {
+    let match = true;
+    if (daftarSearch) {
+      const sup = suppliers.find(s => s.id === po.supplier_id);
+      match = po.po_number?.toLowerCase().includes(daftarSearch.toLowerCase()) || sup?.name.toLowerCase().includes(daftarSearch.toLowerCase());
+    }
+    // Date filtering...
+    return match;
+  });
+
+  const renderPurchasesTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Purchase Orders</h2>
+          <p className="text-gray-600">Buat dan kelola pesanan pembelian stok</p>
+        </div>
+        <button
+          onClick={() => {
+            setEditingPoId(null);
+            setNewPurchase({
+              supplierId: "",
+              items: [],
+              notes: "",
+              expectedDate: new Date().toISOString().split("T")[0],
+              orderDate: new Date().toISOString(),
+            });
+            setShowPurchaseForm(true);
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+        >
+          <Plus className="h-5 w-5" />
+          Buat Purchase Order
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="p-3 bg-blue-100 rounded-lg text-blue-600">
+            <ShoppingCart className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Total Orders</p>
+            <h3 className="text-2xl font-bold text-gray-900">{purchaseOrders.length}</h3>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+          <h3 className="font-semibold text-gray-900">Purchase History</h3>
+          <button onClick={fetchPurchaseOrders} className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+        </div>
+        {/* Render list similar to Products.tsx but cleaned up */}
+        <div className="overflow-x-auto">
+           <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Number</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {purchaseOrders.slice(0, 10).map((po) => (
+                  <React.Fragment key={po.id}>
+                    <tr className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-blue-600">{po.po_number || po.id}</td>
+                      <td className="px-6 py-4">{suppliers.find(s => s.id === po.supplier_id)?.name || "-"}</td>
+                      <td className="px-6 py-4 text-gray-500">{new Date(po.order_date).toLocaleDateString("id-ID")}</td>
+                      <td className="px-6 py-4 text-right font-semibold">Rp {Number(po.total_amount).toLocaleString("id-ID")}</td>
+                      <td className="px-6 py-4 text-center">
+                        <button onClick={() => openPoDetail(po)} className="text-gray-400 hover:text-blue-600 p-1">
+                          <ChevronRight className={`h-5 w-5 transform transition-transform ${expandedPoId === po.id ? 'rotate-90' : ''}`} />
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedPoId === po.id && poDetail && (
+                      <tr className="bg-gray-50">
+                        <td colSpan={5} className="px-6 py-4">
+                          <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                               <Package className="h-4 w-4 text-blue-500" /> Detail Barang
+                            </h4>
+                            <table className="min-w-full text-sm">
+                              <thead className="text-gray-500 uppercase text-[10px] font-bold tracking-wider">
+                                <tr className="border-b">
+                                  <th className="text-left py-2">Produk</th>
+                                  <th className="text-right py-2">Qty</th>
+                                  <th className="text-right py-2">Harga</th>
+                                  <th className="text-right py-2">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {poDetail.items.map((it: any) => (
+                                  <tr key={it.id}>
+                                    <td className="py-2">{it.product_name}</td>
+                                    <td className="text-right py-2">{it.quantity}</td>
+                                    <td className="text-right py-2">Rp {Number(it.unit_cost).toLocaleString()}</td>
+                                    <td className="text-right py-2 font-medium">Rp {Number(it.total).toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {poDetail.notes && (
+                              <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-600">
+                                 <span className="font-bold">Catatan:</span> {poDetail.notes}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+           </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPurchaseListTab = () => (
+    <div className="space-y-6">
+      <div className="flex bg-white rounded-lg p-1 border shadow-sm w-fit">
+        <button
+          onClick={() => setPurchaseTabView("daftar")}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${purchaseTabView === "daftar" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          Daftar Pembelian
+        </button>
+        <button
+          onClick={() => setPurchaseTabView("rekapTanggalBarang")}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${purchaseTabView === "rekapTanggalBarang" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          Rekap Per Tanggal
+        </button>
+        <button
+          onClick={() => setPurchaseTabView("rekapPerBarang")}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${purchaseTabView === "rekapPerBarang" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          Rekap Per Barang
+        </button>
+      </div>
+
+      {purchaseTabView === "daftar" && (
+        <div className="bg-white rounded-xl shadow-sm border p-4">
+          <PurchaseFilters search={daftarSearch} onSearch={setDaftarSearch} period={daftarPeriod} onPeriodChange={setDaftarPeriod} dateRange={daftarDateRange} onDateRangeChange={setDaftarDateRange} />
+          <div className="mt-4 overflow-x-auto">
+             <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left">PO #</th>
+                    <th className="px-4 py-2 text-left">Tanggal</th>
+                    <th className="px-4 py-2 text-left">Supplier</th>
+                    <th className="px-4 py-2 text-right">Total</th>
+                    <th className="px-4 py-2 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPurchaseOrdersForDaftar.map(po => (
+                    <tr key={po.id}>
+                      <td className="px-4 py-2">{po.po_number}</td>
+                      <td className="px-4 py-2">{new Date(po.order_date).toLocaleDateString()}</td>
+                      <td className="px-4 py-2">{suppliers.find(s => s.id === po.supplier_id)?.name}</td>
+                      <td className="px-4 py-2 text-right font-medium">Rp {Number(po.total_amount).toLocaleString()}</td>
+                      <td className="px-4 py-2 text-center">
+                        <div className="flex justify-center gap-2">
+                          <button onClick={() => {
+                            setNewPurchase({
+                              supplierId: po.supplier_id,
+                              items: [], // Fetch items then populate
+                              notes: po.notes || "",
+                              expectedDate: po.expected_date ? po.expected_date.split('T')[0] : "",
+                              orderDate: po.order_date
+                            });
+                            setEditingPoId(po.id);
+                            setShowPurchaseForm(true);
+                          }} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Edit className="h-4 w-4" /></button>
+                          <button onClick={async () => {
+                            const res = await Swal.fire({ title: "Hapus?", text: "Stok akan dikurangi!", icon: "warning", showCancelButton: true });
+                            if (res.isConfirmed) {
+                              await db.purchases.delete(po.id);
+                              fetchPurchaseOrders();
+                              Swal.fire("Dihapus", "PO berhasil dihapus", "success");
+                            }
+                          }} className="text-red-600 hover:bg-red-50 p-1 rounded"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+             </table>
+          </div>
+        </div>
+      )}
+
+      {purchaseTabView === "rekapTanggalBarang" && (
+        <div className="space-y-4">
+          <PurchaseFilters search={rekapTanggalSearch} onSearch={setRekapTanggalSearch} period={rekapTanggalPeriod} onPeriodChange={setRekapTanggalPeriod} dateRange={rekapTanggalDateRange} onDateRangeChange={setRekapTanggalDateRange} />
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+             {rekapTanggalLoading ? <div className="text-center py-10">Memuat...</div> : 
+              Object.keys(rekapTanggalData).length === 0 ? <div className="text-center py-10 text-gray-400">Tidak ada data</div> :
+              Object.entries(rekapTanggalData).map(([date, data]: [string, any]) => (
+                <div key={date} className="mb-6 border-b pb-4 last:border-0">
+                  <div className="flex justify-between items-center mb-2 bg-gray-50 p-2 rounded">
+                    <h4 className="font-bold text-gray-900">{new Date(date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h4>
+                    <span className="font-bold text-blue-700">Total: Rp {data.dateTotal.toLocaleString()}</span>
+                  </div>
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-gray-500 border-b">
+                        <th className="text-left py-1">Produk</th>
+                        <th className="text-right py-1">Qty</th>
+                        <th className="text-right py-1">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(data.products).map(([id, p]: [string, any]) => (
+                        <tr key={id} className="border-b border-gray-50">
+                          <td className="py-2">{p.name}</td>
+                          <td className="text-right py-2">{p.qty}</td>
+                          <td className="text-right py-2 font-medium">Rp {p.total.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {purchaseTabView === "rekapPerBarang" && (
+         <div className="space-y-4">
+            <PurchaseFilters search={rekapPerBarangSearch} onSearch={setRekapPerBarangSearch} period={rekapPerBarangPeriod} onPeriodChange={setRekapPerBarangPeriod} dateRange={rekapPerBarangDateRange} onDateRangeChange={setRekapPerBarangDateRange} />
+            <div className="bg-white rounded-xl shadow-sm border p-4">
+              {rekapPerBarangLoading ? <div className="text-center py-10">Memuat...</div> :
+                Object.keys(rekapPerBarangData).length === 0 ? <div className="text-center py-10 text-gray-400">Tidak ada data</div> :
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-4 py-2">Nama Produk</th>
+                      <th className="text-right px-4 py-2">Total Qty</th>
+                      <th className="text-right px-4 py-2">Total Pembelian</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(rekapPerBarangData).map(([id, p]: [string, any]) => (
+                      <tr key={id} className="border-b hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">{p.name}</td>
+                        <td className="px-4 py-3 text-right">{p.qty}</td>
+                        <td className="px-4 py-3 text-right font-bold text-blue-700">Rp {p.total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              }
+            </div>
+         </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Manajemen Pembelian</h1>
+        <p className="text-gray-600">Kelola stok masuk, purchase order, dan riwayat pembelian</p>
+      </div>
+
+      <div className="flex gap-4 mb-6 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab("purchases")}
+          className={`pb-4 px-2 font-medium transition-colors relative ${activeTab === "purchases" ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+        >
+          Input PO
+          {activeTab === "purchases" && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600" />}
+        </button>
+        <button
+          onClick={() => setActiveTab("purchaseList")}
+          className={`pb-4 px-2 font-medium transition-colors relative ${activeTab === "purchaseList" ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+        >
+          Riwayat & Rekap
+          {activeTab === "purchaseList" && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600" />}
+        </button>
+      </div>
+
+      <div className="mt-6">
+        {activeTab === "purchases" && renderPurchasesTab()}
+        {activeTab === "purchaseList" && renderPurchaseListTab()}
+      </div>
+
+      {/* Form Purchase Order Modal */}
+      {showPurchaseForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+              <h2 className="text-xl font-bold text-gray-900">{editingPoId ? "Edit Purchase Order" : "Buat Purchase Order Baru"}</h2>
+              <button 
+                onClick={() => setShowPurchaseForm(false)}
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+              >
+                <Plus className="h-6 w-6 transform rotate-45 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Supplier *</label>
+                  <button
+                    onClick={() => setShowSupplierSelectModal(true)}
+                    className="w-full flex justify-between items-center px-4 py-3 border border-gray-300 rounded-xl hover:border-blue-400 transition-colors bg-white text-left"
+                  >
+                    <span className={newPurchase.supplierId ? "text-gray-900 font-medium" : "text-gray-400"}>
+                      {newPurchase.supplierId ? suppliers.find(s => s.id === newPurchase.supplierId)?.name : "Pilih Supplier..."}
+                    </span>
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Tanggal Order</label>
+                  <input
+                    type="date"
+                    value={newPurchase.orderDate.split('T')[0]}
+                    onChange={(e) => setNewPurchase({ ...newPurchase, orderDate: new Date(e.target.value).toISOString() })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-bold text-slate-800">Daftar Barang</h3>
+                  <button
+                    onClick={addItemToPurchase}
+                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95"
+                  >
+                    <Plus className="h-4 w-4" /> Tambah Barang
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {newPurchase.items.map((item, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-4 items-end bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="col-span-12 md:col-span-5">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Produk</label>
+                        <button
+                          onClick={() => setShowProductSelectModal({ open: true, index })}
+                          className="w-full text-left px-4 py-2.5 border border-slate-200 rounded-lg hover:border-blue-400 transition-colors flex justify-between items-center h-11"
+                        >
+                          <span className={item.productId ? "text-slate-900 font-medium truncate" : "text-slate-400"}>
+                            {item.productId ? item.productName : "Pilih Produk..."}
+                          </span>
+                          <Search className="h-4 w-4 text-slate-400 shrink-0 ml-2" />
+                        </button>
+                      </div>
+                      <div className="col-span-4 md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Jumlah</label>
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          min="1"
+                          onChange={(e) => updatePurchaseItem(index, "quantity", Number(e.target.value))}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-11"
+                        />
+                      </div>
+                      <div className="col-span-8 md:col-span-3">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Harga Beli</label>
+                        <input
+                          type="number"
+                          value={item.unitCost}
+                          onChange={(e) => updatePurchaseItem(index, "unitCost", Number(e.target.value))}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-11"
+                        />
+                      </div>
+                      <div className="col-span-12 md:col-span-2 flex items-center gap-2">
+                        <div className="flex-1">
+                           <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Subtotal</label>
+                           <div className="h-11 flex items-center font-bold text-slate-900">Rp {item.total.toLocaleString()}</div>
+                        </div>
+                        <button 
+                          onClick={() => removePurchaseItem(index)}
+                          className="h-11 w-11 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {newPurchase.items.length > 0 && (
+                  <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-end">
+                    <div className="text-slate-500 font-medium uppercase text-xs mb-1">Total Biaya</div>
+                    <div className="text-4xl font-black text-slate-900">Rp {purchaseTotal.toLocaleString()}</div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Catatan Tambahan</label>
+                <textarea
+                  value={newPurchase.notes}
+                  onChange={(e) => setNewPurchase({ ...newPurchase, notes: e.target.value })}
+                  placeholder="Opsional: Keterangan PO..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  rows={2}
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-6 border-t flex gap-4 bg-gray-50">
+              <button
+                onClick={() => setShowPurchaseForm(false)}
+                className="flex-1 py-4 border border-gray-300 rounded-2xl font-bold text-gray-700 hover:bg-white transition-all shadow-sm active:scale-95"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSavePurchase}
+                disabled={isSavingPurchase}
+                className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-3"
+              >
+                {isSavingPurchase ? <RefreshCw className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                {editingPoId ? "Simpan Perubahan" : "Konfirmasi Pesanan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Supplier Selection Modal */}
+      {showSupplierSelectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-200">
+             <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                   <h3 className="text-xl font-bold text-slate-900">Pilih Supplier</h3>
+                   <button onClick={() => setShowSupplierSelectModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                      <Plus className="h-6 w-6 transform rotate-45 text-slate-400" />
+                   </button>
+                </div>
+                <div className="relative mb-6">
+                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
+                   <input
+                      autoFocus
+                      type="text"
+                      placeholder="Cari supplier..."
+                      value={supplierSearchTerm}
+                      onChange={(e) => setSupplierSearchTerm(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                   />
+                </div>
+                <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                   {filteredSuppliersForModal.map(s => (
+                      <button
+                         key={s.id}
+                         onClick={() => {
+                            setNewPurchase({ ...newPurchase, supplierId: s.id });
+                            setShowSupplierSelectModal(false);
+                            setSupplierSearchTerm("");
+                         }}
+                         className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all text-left"
+                      >
+                         <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0 uppercase font-bold">
+                            {s.name.charAt(0)}
+                         </div>
+                         <div className="flex-1">
+                            <div className="font-bold text-slate-900">{s.name}</div>
+                            <div className="text-xs text-slate-500">{s.contact_person || 'Tanpa Kontak'}</div>
+                         </div>
+                         <ChevronRight className="h-4 w-4 text-slate-300" />
+                      </button>
+                   ))}
+                   {filteredSuppliersForModal.length === 0 && (
+                      <div className="py-10 text-center">
+                         <AlertCircle className="h-10 w-10 text-slate-200 mx-auto mb-3" />
+                         <p className="text-slate-400 text-sm">Supplier tidak ditemukan</p>
+                      </div>
+                   )}
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Product Selection Modal */}
+      {showProductSelectModal.open && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl animate-in fade-in zoom-in duration-200">
+             <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                   <h3 className="text-xl font-bold text-slate-900">Pilih Produk</h3>
+                   <button onClick={() => setShowProductSelectModal({ open: false, index: null })} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                      <Plus className="h-6 w-6 transform rotate-45 text-slate-400" />
+                   </button>
+                </div>
+                <div className="relative mb-6">
+                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
+                   <input
+                      autoFocus
+                      type="text"
+                      placeholder="Cari nama produk atau barcode..."
+                      value={productSearchTerm}
+                      onChange={(e) => setProductSearchTerm(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                   />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                   {filteredProductsForModal.map(p => (
+                      <button
+                         key={p.id}
+                         onClick={() => {
+                            if (showProductSelectModal.index !== null) {
+                               updatePurchaseItem(showProductSelectModal.index, "productId", p.id);
+                            }
+                            setShowProductSelectModal({ open: false, index: null });
+                            setProductSearchTerm("");
+                         }}
+                         className="flex items-center gap-3 p-3 rounded-xl hover:bg-blue-50 border border-slate-100 hover:border-blue-100 transition-all text-left group"
+                      >
+                         <div className="h-12 w-12 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 shrink-0 group-hover:bg-white transition-colors">
+                            <Package className="h-6 w-6" />
+                         </div>
+                         <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 truncate text-sm">{p.name}</div>
+                            <div className="text-xs text-slate-500 font-medium">Stok: {p.stock} {p.unit}</div>
+                            <div className="text-blue-600 font-bold text-xs mt-0.5">Rp {p.cost.toLocaleString()}</div>
+                         </div>
+                         <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400" />
+                      </button>
+                   ))}
+                </div>
+                {filteredProductsForModal.length === 0 && (
+                   <div className="py-12 text-center bg-slate-50 rounded-2xl mt-4">
+                      <Package className="h-12 w-12 text-slate-200 mx-auto mb-3" />
+                      <p className="text-slate-400 text-sm">Produk tidak ditemukan</p>
+                   </div>
+                )}
+             </div>
+          </div>
+        </div>
+      )}
+      
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
+    </div>
+  );
+};
+
+export default Pembelian;
