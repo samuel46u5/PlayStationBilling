@@ -417,13 +417,72 @@ const Pembelian: React.FC = () => {
   const filteredProductsForModal = products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()));
 
   const filteredPurchaseOrdersForDaftar = purchaseOrders.filter(po => {
-    let match = true;
+    // Hitung periode tanggal 
+    let start: Date | null = null;
+    let end: Date | null = null;
+    const now = new Date();
+    switch (daftarPeriod) {
+      case "today": {
+        start = new Date();
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "yesterday": {
+        start = new Date();
+        start.setDate(start.getDate() - 1);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "week": {
+        start = new Date();
+        const day = start.getDay();
+        const diff = (day === 0 ? -6 : 1) - day; 
+        start.setDate(start.getDate() + diff);
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "month": {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case "range": {
+        if (daftarDateRange.start) {
+          start = new Date(daftarDateRange.start);
+          start.setHours(0, 0, 0, 0);
+        }
+        if (daftarDateRange.end) {
+          end = new Date(daftarDateRange.end);
+          end.setHours(23, 59, 59, 999);
+        }
+        break;
+      }
+    }
+
+    // Filter tanggal order
+    let dateMatch = true;
+    const orderDate = po.order_date ? new Date(po.order_date) : null;
+    if (orderDate) {
+      if (start && orderDate < start) dateMatch = false;
+      if (end && orderDate > end) dateMatch = false;
+    }
+
+    // Filter search
+    let searchMatch = true;
     if (daftarSearch) {
       const sup = suppliers.find(s => s.id === po.supplier_id);
-      match = po.po_number?.toLowerCase().includes(daftarSearch.toLowerCase()) || sup?.name.toLowerCase().includes(daftarSearch.toLowerCase());
+      searchMatch = po.po_number?.toLowerCase().includes(daftarSearch.toLowerCase()) || 
+                    sup?.name.toLowerCase().includes(daftarSearch.toLowerCase());
     }
-    // Date filtering...
-    return match;
+
+    return dateMatch && searchMatch;
   });
 
   const renderPurchasesTab = () => (
