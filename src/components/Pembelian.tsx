@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-case-declarations */
 import React, { useState, useEffect } from "react";
 import {
   Plus,
@@ -43,6 +42,8 @@ const Pembelian: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [poDetail, setPoDetail] = useState<any | null>(null);
   const [expandedPoId, setExpandedPoId] = useState<string | null>(null);
@@ -91,8 +92,17 @@ const Pembelian: React.FC = () => {
   };
 
   const fetchPurchaseOrders = async () => {
-    const data = await db.purchases.getAll();
-    setPurchaseOrders(data || []);
+    try {
+      const { data, error } = await supabase
+        .from('purchase_orders')
+        .select('*')
+        .order('order_date', { ascending: false });
+      
+      if (error) throw error;
+      setPurchaseOrders(data || []);
+    } catch (error: any) {
+      console.error("Gagal memuat PO:", error.message);
+    }
   };
 
   useEffect(() => {
@@ -413,6 +423,36 @@ const Pembelian: React.FC = () => {
     }
   };
 
+  const handleEditClick = async (po: any) => {
+    try {
+      const { data: items, error } = await supabase
+        .from("purchase_order_items")
+        .select("*")
+        .eq("po_id", po.id);
+      
+      if (error) throw error;
+
+      setNewPurchase({
+        supplierId: po.supplier_id,
+        items: (items || []).map((it: any) => ({
+          id: it.id,
+          productId: it.product_id,
+          productName: it.product_name,
+          quantity: it.quantity,
+          unitCost: it.unit_cost,
+          total: it.total
+        })),
+        notes: po.notes || "",
+        expectedDate: po.expected_date ? po.expected_date.split('T')[0] : "",
+        orderDate: po.order_date
+      });
+      setEditingPoId(po.id);
+      setShowPurchaseForm(true);
+    } catch (err: any) {
+      Swal.fire("Error", "Gagal memuat detail barang: " + err.message, "error");
+    }
+  };
+
   const filteredSuppliersForModal = suppliers.filter(s => s.name.toLowerCase().includes(supplierSearchTerm.toLowerCase()));
   const filteredProductsForModal = products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()));
 
@@ -543,60 +583,91 @@ const Pembelian: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {purchaseOrders.slice(0, 10).map((po) => (
-                  <React.Fragment key={po.id}>
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-blue-600">{po.po_number || po.id}</td>
-                      <td className="px-6 py-4">{suppliers.find(s => s.id === po.supplier_id)?.name || "-"}</td>
-                      <td className="px-6 py-4 text-gray-500">{new Date(po.order_date).toLocaleDateString("id-ID")}</td>
-                      <td className="px-6 py-4 text-right font-semibold">Rp {Number(po.total_amount).toLocaleString("id-ID")}</td>
-                      <td className="px-6 py-4 text-center">
-                        <button onClick={() => openPoDetail(po)} className="text-gray-400 hover:text-blue-600 p-1">
-                          <ChevronRight className={`h-5 w-5 transform transition-transform ${expandedPoId === po.id ? 'rotate-90' : ''}`} />
-                        </button>
-                      </td>
-                    </tr>
-                    {expandedPoId === po.id && poDetail && (
-                      <tr className="bg-gray-50">
-                        <td colSpan={5} className="px-6 py-4">
-                          <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-                            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                               <Package className="h-4 w-4 text-blue-500" /> Detail Barang
-                            </h4>
-                            <table className="min-w-full text-sm">
-                              <thead className="text-gray-500 uppercase text-[10px] font-bold tracking-wider">
-                                <tr className="border-b">
-                                  <th className="text-left py-2">Produk</th>
-                                  <th className="text-right py-2">Qty</th>
-                                  <th className="text-right py-2">Harga</th>
-                                  <th className="text-right py-2">Total</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {poDetail.items.map((it: any) => (
-                                  <tr key={it.id}>
-                                    <td className="py-2">{it.product_name}</td>
-                                    <td className="text-right py-2">{it.quantity}</td>
-                                    <td className="text-right py-2">Rp {Number(it.unit_cost).toLocaleString()}</td>
-                                    <td className="text-right py-2 font-medium">Rp {Number(it.total).toLocaleString()}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                            {poDetail.notes && (
-                              <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-600">
-                                 <span className="font-bold">Catatan:</span> {poDetail.notes}
-                              </div>
-                            )}
-                          </div>
+                {(() => {
+                  const totalPages = Math.ceil(purchaseOrders.length / itemsPerPage);
+                  const startIndex = (historyPage - 1) * itemsPerPage;
+                  const currentOrders = purchaseOrders.slice(startIndex, startIndex + itemsPerPage);
+                  
+                  return currentOrders.map((po) => (
+                    <React.Fragment key={po.id}>
+                      <tr className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 font-medium text-blue-600">{po.po_number || po.id}</td>
+                        <td className="px-6 py-4">{suppliers.find(s => s.id === po.supplier_id)?.name || "-"}</td>
+                        <td className="px-6 py-4 text-gray-500">{new Date(po.order_date).toLocaleDateString("id-ID")}</td>
+                        <td className="px-6 py-4 text-right font-semibold">Rp {Number(po.total_amount).toLocaleString("id-ID")}</td>
+                        <td className="px-6 py-4 text-center">
+                          <button onClick={() => openPoDetail(po)} className="text-gray-400 hover:text-blue-600 p-1">
+                            <ChevronRight className={`h-5 w-5 transform transition-transform ${expandedPoId === po.id ? 'rotate-90' : ''}`} />
+                          </button>
                         </td>
                       </tr>
-                    )}
-                  </React.Fragment>
-                ))}
+                      {expandedPoId === po.id && poDetail && (
+                        <tr className="bg-gray-50">
+                          <td colSpan={5} className="px-6 py-4">
+                            <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                              <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                 <Package className="h-4 w-4 text-blue-500" /> Detail Barang
+                              </h4>
+                              <table className="min-w-full text-sm">
+                                <thead className="text-gray-500 uppercase text-[10px] font-bold tracking-wider">
+                                  <tr className="border-b">
+                                    <th className="text-left py-2">Produk</th>
+                                    <th className="text-right py-2">Qty</th>
+                                    <th className="text-right py-2">Harga</th>
+                                    <th className="text-right py-2">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {poDetail.items.map((it: any) => (
+                                    <tr key={it.id}>
+                                      <td className="py-2">{it.product_name}</td>
+                                      <td className="text-right py-2">{it.quantity}</td>
+                                      <td className="text-right py-2">Rp {Number(it.unit_cost).toLocaleString()}</td>
+                                      <td className="text-right py-2 font-medium">Rp {Number(it.total).toLocaleString()}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {poDetail.notes && (
+                                <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-600">
+                                   <span className="font-bold">Catatan:</span> {poDetail.notes}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ));
+                })()}
               </tbody>
            </table>
         </div>
+        
+        {/* Pagination Controls */}
+        {purchaseOrders.length > itemsPerPage && (
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Showing <span className="font-medium">{(historyPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(historyPage * itemsPerPage, purchaseOrders.length)}</span> of <span className="font-medium">{purchaseOrders.length}</span> results
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
+                disabled={historyPage === 1}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium disabled:opacity-50 hover:bg-white"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setHistoryPage(prev => Math.min(Math.ceil(purchaseOrders.length / itemsPerPage), prev + 1))}
+                disabled={historyPage >= Math.ceil(purchaseOrders.length / itemsPerPage)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium disabled:opacity-50 hover:bg-white"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -647,17 +718,12 @@ const Pembelian: React.FC = () => {
                       <td className="px-4 py-2 text-right font-medium">Rp {Number(po.total_amount).toLocaleString()}</td>
                       <td className="px-4 py-2 text-center">
                         <div className="flex justify-center gap-2">
-                          <button onClick={() => {
-                            setNewPurchase({
-                              supplierId: po.supplier_id,
-                              items: [], // Fetch items then populate
-                              notes: po.notes || "",
-                              expectedDate: po.expected_date ? po.expected_date.split('T')[0] : "",
-                              orderDate: po.order_date
-                            });
-                            setEditingPoId(po.id);
-                            setShowPurchaseForm(true);
-                          }} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Edit className="h-4 w-4" /></button>
+                          <button 
+                            onClick={() => handleEditClick(po)} 
+                            className="text-blue-600 hover:bg-blue-50 p-1 rounded"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
                           <button onClick={async () => {
                             const res = await Swal.fire({ title: "Hapus?", text: "Stok akan dikurangi!", icon: "warning", showCancelButton: true });
                             if (res.isConfirmed) {
