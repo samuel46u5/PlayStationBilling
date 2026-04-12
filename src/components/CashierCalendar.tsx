@@ -353,7 +353,7 @@ const CashierCalendar: React.FC = () => {
                 .reduce((sum, d) => sum + d.totalAmount, 0)
                 .toLocaleString("id-ID")}
             </h3>
-            <p className="text-gray-600 text-sm">Total Transaksi Bulan Ini</p>
+            <p className="text-gray-600 text-sm">Total Transaksi Bersih Bulan Ini</p>
 
             {/* Session Details */}
             <div className="mt-4 pt-4 border-t border-gray-200">

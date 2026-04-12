@@ -342,7 +342,7 @@ const Bookkeeping: React.FC = () => {
       const { data: transactions, error } = await supabase
         .from("cashier_transactions")
         .select("amount, timestamp")
-        // .in("type", ["sale", "rental", "voucher"])
+        .in("type", ["sale", "rental", "voucher", "income"])
         .gte("timestamp", startDate.toISOString())
         .lte("timestamp", endDate.toISOString())
         .order("timestamp", { ascending: true });
